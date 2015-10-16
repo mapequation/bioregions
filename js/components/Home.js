@@ -10,10 +10,12 @@ class Home extends Component {
     const actions = bindActionCreators(HomeActions, dispatch);
     return (
       <main>
-        <h1 className={styles.text}>Welcome {title}!</h1>
-        <button onClick={e => actions.changeTitle(prompt())}>
-          Update Title
-        </button>
+        <div className="ui container">
+          <h1 className={styles.text}>Welcome {title}!</h1>
+          <button className="ui button" onClick={e => actions.changeTitle(prompt())}>
+            Update Title
+          </button>
+        </div>
       </main>
     );
   }
