@@ -1,4 +1,8 @@
 export const DATA_FETCHED = 'DATA_FETCHED';
 export const DATA_SUCCEEDED = 'DATA_SUCCEEDED';
 export const DATA_FAILED = 'DATA_FAILED';
-export const TITLE_CHANGED = 'TITLE_CHANGED';
+
+export const RESET_ERROR_MESSAGE = 'RESET_ERROR_MESSAGE';
+
+export const LOAD_FILES = 'LOAD_FILES';
+export const LOAD_SAMPLE_FILE = 'LOAD_SAMPLE_FILE';

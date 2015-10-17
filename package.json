@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "dependencies": {
     "babel-runtime": "^5.8.25",
+    "jquery": "^2.1.4",
     "lodash": "^3.10.1",
     "react": "^0.14.0",
     "react-dom": "^0.14.0",

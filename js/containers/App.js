@@ -1,25 +1,45 @@
-import React from 'react';
-import {Provider} from 'react-redux';
-import configureStore from '../store/configureStore';
-import Home from '../components/Home';
-import {renderDevTools} from '../utils/devTools';
+import React, {Component, PropTypes} from 'react';
+import {connect} from 'react-redux';
+import {bindActionCreators} from 'redux';
+import FileLoader from './FileLoader';
+import * as fileLoaderActions from '../actions/FileLoaderActions';
 
-const store = configureStore();
+class App extends Component {
+  constructor(props) {
+    super(props);
+  }
 
-export default React.createClass({
   render() {
+    const {data, files, errorMessage, actions} = this.props;
     return (
-      <div>
-
-        {/* <Home /> is your app entry point */}
-        <Provider store={store}>
-          <Home />
-        </Provider>
-
-        {/* only renders when running in DEV mode */
-          renderDevTools(store)
-        }
+      <div className="ui container">
+        <header><i className="globe icon"></i> Infomap Bioregions</header>
+        <main>
+          <FileLoader {...files} {...actions} />
+        </main>
       </div>
     );
   }
-});
+}
+
+App.propTypes = {
+  files: PropTypes.object.isRequired,
+  data: PropTypes.object.isRequired,
+  errorMessage: PropTypes.string,
+  actions: PropTypes.object.isRequired,
+};
+
+function mapStateToProps(state) {
+  return state;
+}
+
+function mapDispatchToProps(dispatch) {
+  return {
+    actions: bindActionCreators(Object.assign({}, fileLoaderActions), dispatch)
+  };
+}
+
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(App);

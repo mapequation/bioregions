@@ -1,7 +1,7 @@
-import {createStore, applyMiddleware, combineReducers, compose} from 'redux';
+import {createStore, applyMiddleware, compose} from 'redux';
 import thunkMiddleware from 'redux-thunk';
 import {devTools, persistState} from 'redux-devtools';
-import * as reducers from '../reducers/index';
+import rootReducer from '../reducers';
 
 let createStoreWithMiddleware;
 
@@ -16,8 +16,16 @@ if (__DEV__) {
   createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore);
 }
 
-const rootReducer = combineReducers(reducers);
-
 export default function configureStore(initialState) {
-  return createStoreWithMiddleware(rootReducer, initialState);
+  const store = createStoreWithMiddleware(rootReducer, initialState);
+
+  if (module.hot) {
+    // Enable Webpack hot module replacement for reducers
+    module.hot.accept('../reducers', () => {
+      const nextRootReducer = require('../reducers/index');
+      store.replaceReducer(nextRootReducer);
+    });
+  }
+
+  return store;
 }

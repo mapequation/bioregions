@@ -1,5 +1,23 @@
+import 'babel-core/polyfill';
 import React from 'react';
-import ReactDOM from 'react-dom';
+import { render } from 'react-dom';
+import { Provider } from 'react-redux';
 import App from './containers/App';
+import configureStore from './store/configureStore';
+import {renderDevTools} from './utils/devTools';
 
-ReactDOM.render(<App />, document.getElementById('main'));
+const store = configureStore();
+
+render(
+  <div>
+    {/* <App /> is your app entry point */}
+    <Provider store={store}>
+      <App />
+    </Provider>
+
+    {/* only renders when running in DEV mode */
+      renderDevTools(store)
+    }
+  </div>,
+  document.getElementById('root')
+);
