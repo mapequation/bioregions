@@ -13,7 +13,7 @@ class FileLoader extends Component {
     return (
       <div>
         <FileInput {...other} />
-        {this.props.loadedFiles.map((file) => (<p>{file}</p>))}
+        {this.props.loadedFiles.map((file) => (<p key={file}>{file}</p>))}
       </div>
     );
   }

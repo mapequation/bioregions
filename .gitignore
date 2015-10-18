@@ -2,3 +2,6 @@
 dist/**
 node_modules/
 semantic/dist
+data
+Infomap-worker.js
+maps/physical

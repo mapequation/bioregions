@@ -2,6 +2,7 @@ import React, {Component, PropTypes} from 'react';
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import FileLoader from './FileLoader';
+import WorldMap from '../components/WorldMap';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
 
 class App extends Component {
@@ -10,12 +11,13 @@ class App extends Component {
   }
 
   render() {
-    const {data, files, errorMessage, actions} = this.props;
+    const {data, files, worldmap, errorMessage, actions} = this.props;
     return (
       <div className="ui container">
         <header><i className="globe icon"></i> Infomap Bioregions</header>
         <main>
           <FileLoader {...files} {...actions} />
+          <WorldMap {...worldmap} />
         </main>
       </div>
     );
@@ -25,6 +27,7 @@ class App extends Component {
 App.propTypes = {
   files: PropTypes.object.isRequired,
   data: PropTypes.object.isRequired,
+  worldmap: PropTypes.object.isRequired,
   errorMessage: PropTypes.string,
   actions: PropTypes.object.isRequired,
 };
