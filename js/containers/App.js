@@ -17,7 +17,7 @@ class App extends Component {
         <header><i className="globe icon"></i> Infomap Bioregions</header>
         <main>
           <FileLoader {...files} {...actions} />
-          <WorldMap {...worldmap} />
+          <WorldMap {...worldmap} {...data} />
         </main>
       </div>
     );

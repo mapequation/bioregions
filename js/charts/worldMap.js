@@ -1,6 +1,7 @@
-import $ from "jquery"
-import d3 from "d3"
-import topojson from "topojson"
+import $ from 'jquery'
+import d3 from 'd3'
+import topojson from 'topojson'
+import quadtree from '../utils/quadtree'
 
 var world = {};
 
@@ -74,6 +75,7 @@ world.update = function(el, props) {
 
 
   var path = d3.geo.path()
+    .pointRadius(1)
     .projection(props.projection);
 
   svg.call(zoom)
@@ -105,8 +107,82 @@ world.update = function(el, props) {
     }
 
     var defsPath = g.select("defs").select("path");
-    defsPath.datum(topojson.feature(world.topology, world.topology.objects.land))
-      .attr("d", path);
+    if (!defsPath.datum()) {
+      console.log("Render world...");
+      defsPath
+        .datum(topojson.feature(world.topology, world.topology.objects.land))
+        .attr("d", path);
+    }
+
+    console.log("Draw features...");
+    let testFeatures = props.features.slice(0, 10);
+
+    let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
+    svgFeature.exit().remove();
+    svgFeature.enter().append("path").attr("class", "feature");
+    svgFeature.attr("d", path)
+      .style("fill", "none")
+      .style("stroke", "red");
+
+    // draw quadtree
+    let points = testFeatures.map((feature) => {
+      return feature.geometry.coordinates;
+    });
+    // Collapse the quadtree into an array of rectangles.
+    function nodes(quadtree) {
+      var nodes = [];
+      quadtree.visit(function(node, x1, y1, x2, y2) {
+        // nodes.push({x: x1, y: y1, width: x2 - x1, height: y2 - y1});
+        // if (y2 <= 90) {
+          nodes.push({
+            type: 'Feature',
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[[x1,y1], [x2,y1], [x2,y2], [x1,y2], [x1,y1]]]
+            }
+          });
+        // }
+      });
+      return nodes;
+    }
+    // make extent a square but hide bottom two sub squares
+    let qtree = quadtree()
+      .extent([[-180, -90], [180, 90+180]])
+      (points);
+    console.log("qtree nodes:", nodes(qtree));
+    // console.log("projection:", props.projection([-180, -90])); // [0, 225]
+    // console.log("projection:", props.projection([180, 90])); // [300, 75]
+    // console.log("invert:", props.projection.invert([0, 0])); // [-180, 180]
+    // console.log("invert:", props.projection.invert([300, 300])); // [180, -180]
+
+    var quadNodes = g.selectAll(".quadnode")
+        .data(nodes(qtree));
+
+    quadNodes.enter()
+      .append("path")
+      .attr("class", "quadnode");
+
+    quadNodes.exit().remove();
+
+    quadNodes
+      .attr("d", path)
+      .style("fill", "none")
+      .style("stroke", "#ccc");
+
+    // var grid = g.selectAll(".node")
+    //     .data(nodes(qtree));
+    //
+    // grid.enter().append("rect")
+    //   .attr("class", "node");
+    //
+    // grid
+    //   .style("fill", "none")
+    //   .style("stroke", "#ccc")
+    //   .attr("x", function(d) { return d.x; })
+    //   .attr("y", function(d) { return d.y; })
+    //   .attr("width", function(d) { return d.width; })
+    //   .attr("height", function(d) { return d.height; });
+
   }
 
   function loadWorld() {
@@ -142,7 +218,6 @@ world.update = function(el, props) {
   }
 
   function onZoom() {
-
     if (!world.topology)
     return;
 
