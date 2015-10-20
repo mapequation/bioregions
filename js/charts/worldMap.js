@@ -1,7 +1,7 @@
 import $ from 'jquery'
 import d3 from 'd3'
 import topojson from 'topojson'
-import quadtree from '../utils/quadtree'
+import QuadtreeBinner from '../utils/QuadtreeBinner'
 
 var world = {};
 
@@ -115,7 +115,7 @@ world.update = function(el, props) {
     }
 
     console.log("Draw features...");
-    let testFeatures = props.features.slice(0, 10);
+    let testFeatures = props.features.slice(0, 100);
 
     let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
     svgFeature.exit().remove();
@@ -125,63 +125,22 @@ world.update = function(el, props) {
       .style("stroke", "red");
 
     // draw quadtree
-    let points = testFeatures.map((feature) => {
-      return feature.geometry.coordinates;
-    });
-    // Collapse the quadtree into an array of rectangles.
-    function nodes(quadtree) {
-      var nodes = [];
-      quadtree.visit(function(node, x1, y1, x2, y2) {
-        // nodes.push({x: x1, y: y1, width: x2 - x1, height: y2 - y1});
-        // if (y2 <= 90) {
-          nodes.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [[[x1,y1], [x2,y1], [x2,y2], [x1,y2], [x1,y1]]]
-            }
-          });
-        // }
-      });
-      return nodes;
-    }
-    // make extent a square but hide bottom two sub squares
-    let qtree = quadtree()
-      .extent([[-180, -90], [180, 90+180]])
-      (points);
-    console.log("qtree nodes:", nodes(qtree));
-    // console.log("projection:", props.projection([-180, -90])); // [0, 225]
-    // console.log("projection:", props.projection([180, 90])); // [300, 75]
-    // console.log("invert:", props.projection.invert([0, 0])); // [-180, 180]
-    // console.log("invert:", props.projection.invert([300, 300])); // [180, -180]
+    let quadtree = new QuadtreeBinner()
+      .x((point) => point.geometry.coordinates[0])
+      .y((point) => point.geometry.coordinates[1])
+      .extent([[-180, -90], [180, 90]]);
 
-    var quadNodes = g.selectAll(".quadnode")
-        .data(nodes(qtree));
+    quadtree.addPoints(testFeatures);
 
-    quadNodes.enter()
-      .append("path")
-      .attr("class", "quadnode");
 
+    console.log("quad nodes:", quadtree.bins());
+    var quadNodes = g.select(".overlay").selectAll(".quadnode")
+        .data(quadtree.bins());
     quadNodes.exit().remove();
-
-    quadNodes
-      .attr("d", path)
+    quadNodes.enter().append("path").attr("class", "quadnode");
+    quadNodes.attr("d", path)
       .style("fill", "none")
       .style("stroke", "#ccc");
-
-    // var grid = g.selectAll(".node")
-    //     .data(nodes(qtree));
-    //
-    // grid.enter().append("rect")
-    //   .attr("class", "node");
-    //
-    // grid
-    //   .style("fill", "none")
-    //   .style("stroke", "#ccc")
-    //   .attr("x", function(d) { return d.x; })
-    //   .attr("y", function(d) { return d.y; })
-    //   .attr("width", function(d) { return d.width; })
-    //   .attr("height", function(d) { return d.height; });
 
   }
 
@@ -240,6 +199,7 @@ world.update = function(el, props) {
 
     //adjust the country hover stroke width based on zoom level
     g.select("#land").style("stroke-width", 1.5 / s);
+    g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
 
   }
 
