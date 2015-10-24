@@ -152,14 +152,8 @@ export default class QuadtreeBinner {
     var nodes = [];
     this.visit(function(points, x1, y1, x2, y2) {
       nodes.push({
-        type: 'Feature',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[[x1,y1], [x2,y1], [x2,y2], [x1,y2], [x1,y1]]]
-        },
-        properties: {
-          points
-        }
+        coordinates: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]],
+        points
       });
     });
     return nodes;
@@ -167,7 +161,7 @@ export default class QuadtreeBinner {
 
   renderer(projection) {
     return function(d) {
-      return "M" + d.geometry.coordinates[0].slice(0,4).map((point) => projection(point)).join("L") + "Z";
+      return "M" + d.coordinates.map((point) => projection(point)).join("L") + "Z";
     };
   }
 }

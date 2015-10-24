@@ -159,7 +159,7 @@ world.update = function(el, props) {
     quadNodes.exit().remove();
     quadNodes.enter().append("path").attr("class", "quadnode");
     quadNodes.attr("d", quadtree.renderer(props.projection))
-      .style("fill", (d) => color(d.properties.points.length))
+      .style("fill", (d) => color(d.points.length))
       .style("stroke", "#ccc");
 
   }
