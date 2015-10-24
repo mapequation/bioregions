@@ -2,6 +2,7 @@ import $ from 'jquery'
 import d3 from 'd3'
 import topojson from 'topojson'
 import QuadtreeBinner from '../utils/QuadtreeBinner'
+import colorbrewer from 'colorbrewer'
 
 var world = {};
 
@@ -115,7 +116,7 @@ world.update = function(el, props) {
     }
 
     console.log("Draw features...");
-    let testFeatures = props.features.slice(0, 100);
+    let testFeatures = props.features.slice(0);
 
 
     // let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
@@ -136,11 +137,29 @@ world.update = function(el, props) {
 
     let bins = quadtree.bins();
 
+    var maxCount = d3.max(bins.map((feature) => feature.properties.points.length));
+    var domainMax = + maxCount + (8 - maxCount % 8);
+    console.log("domainMax:", domainMax);
+    var domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
+    domain.push(domainMax);
+    domain[0] = 1; // Make a threshold between non-empty and empty bins
+    domain.unshift(0.5);
+    console.log("Color domain:", domain.length, domain);
+
+    var colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
+    colorRange.unshift("#eeeeee");
+    console.log("Color range:", colorRange.length, colorRange);
+    var color = d3.scale.threshold()
+        .domain(domain)
+        .range(colorRange);
+
+    // console.log("quad nodes:", quadtree.bins());
     var quadNodes = g.select(".overlay").selectAll(".quadnode")
         .data(bins);
     quadNodes.exit().remove();
     quadNodes.enter().append("path").attr("class", "quadnode");
     quadNodes.attr("d", quadtree.renderer(props.projection))
+      .style("fill", (d) => color(d.properties.points.length))
       .style("stroke", "#ccc");
 
   }
