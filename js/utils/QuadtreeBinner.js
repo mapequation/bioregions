@@ -23,7 +23,6 @@ class Node {
 
     let width = this.x2 - this.x1;
 
-    console.log("Add point at size:", width, ">", maxNodeSize, width > maxNodeSize);
     // Force create children
     if (width > maxNodeSize) {
       return this.addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
@@ -81,7 +80,7 @@ export default class QuadtreeBinner {
   constructor() {
     this._extent = [[-180, -90], [180, 90]];
     this._maxNodeSize = 10;
-    this._minNodeSize = 0.1;
+    this._minNodeSize = 1;
     this._densityThreshold = 10;
     this._x = pointX;
     this._y = pointY;
@@ -164,5 +163,11 @@ export default class QuadtreeBinner {
       });
     });
     return nodes;
+  }
+
+  renderer(projection) {
+    return function(d) {
+      return "M" + d.geometry.coordinates[0].slice(0,4).map((point) => projection(point)).join("L") + "Z";
+    };
   }
 }

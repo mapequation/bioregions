@@ -117,29 +117,30 @@ world.update = function(el, props) {
     console.log("Draw features...");
     let testFeatures = props.features.slice(0, 100);
 
-    let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
-    svgFeature.exit().remove();
-    svgFeature.enter().append("path").attr("class", "feature");
-    svgFeature.attr("d", path)
-      .style("fill", "none")
-      .style("stroke", "red");
+
+    // let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
+    // svgFeature.exit().remove();
+    // svgFeature.enter().append("path").attr("class", "feature");
+    // svgFeature.attr("d", path)
+    //   .style("fill", "none")
+    //   .style("stroke", "red");
 
     // draw quadtree
     let quadtree = new QuadtreeBinner()
       .x((point) => point.geometry.coordinates[0])
       .y((point) => point.geometry.coordinates[1])
-      .extent([[-180, -90], [180, 90]]);
+      .extent([[-180, -90], [180, 90]])
+      .minNodeSize(1);
 
     quadtree.addPoints(testFeatures);
 
+    let bins = quadtree.bins();
 
-    console.log("quad nodes:", quadtree.bins());
     var quadNodes = g.select(".overlay").selectAll(".quadnode")
-        .data(quadtree.bins());
+        .data(bins);
     quadNodes.exit().remove();
     quadNodes.enter().append("path").attr("class", "quadnode");
-    quadNodes.attr("d", path)
-      .style("fill", "none")
+    quadNodes.attr("d", quadtree.renderer(props.projection))
       .style("stroke", "#ccc");
 
   }
@@ -199,7 +200,7 @@ world.update = function(el, props) {
 
     //adjust the country hover stroke width based on zoom level
     g.select("#land").style("stroke-width", 1.5 / s);
-    g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
+    // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
 
   }
 
