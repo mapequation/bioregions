@@ -1,7 +1,5 @@
 import React, {Component, PropTypes} from 'react';
-import {connect} from 'react-redux';
-import {bindActionCreators} from 'redux';
-import FileInput from '../components/FileInput'
+import FileInput from './FileInput'
 
 class FileLoader extends Component {
   constructor(props) {
