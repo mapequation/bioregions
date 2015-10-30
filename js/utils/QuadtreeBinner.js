@@ -66,13 +66,41 @@ class Node {
     child.add(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
   }
 
-  visit(callback) {
+  visitNonEmpty(callback) {
     if (this.points.length > 0) {
-      if (callback(this.points, this.x1, this.y1, this.x2, this.y2))
+      if (callback(this))
         return; // early exit if callback returns true
     }
     for (let i = 0; i < 4; ++i)
+      this.children[i] && this.children[i].visitNonEmpty(callback);
+  }
+
+  visit(callback) {
+    if (callback(this))
+      return; // early exit if callback returns true
+    for (let i = 0; i < 4; ++i)
       this.children[i] && this.children[i].visit(callback);
+  }
+
+  patchPartiallyEmptyNodes(maxNodeSize) {
+    if (this.isLeaf)
+      return this.points;
+    // Already patched if points at non-leaf node.
+    if (this.points.length > 0) {
+      return this.points;
+    }
+    let nonEmptyChildren = this.children.filter((child) => child !== undefined);
+    let size = this.x2 - this.x1;
+    let doPatch = (size < maxNodeSize) && this.points.length === 0 && nonEmptyChildren.length < 4;
+    let aggregatedPoints = [];
+    nonEmptyChildren.forEach((child) => {
+      const childPoints = child.patchPartiallyEmptyNodes(maxNodeSize);
+      aggregatedPoints = aggregatedPoints.concat(...childPoints);
+    });
+    if (doPatch) {
+      this.points = aggregatedPoints;
+    }
+    return aggregatedPoints;
   }
 }
 
@@ -133,6 +161,10 @@ export default class QuadtreeBinner {
     return this._root.visit(callback);
   }
 
+  visitNonEmpty(callback) {
+    return this._root.visitNonEmpty(callback);
+  }
+
   addPoints(points) {
     points.forEach((point) => {
       let x = +this._x(point);
@@ -145,23 +177,34 @@ export default class QuadtreeBinner {
 
   /**
   * Get all non-empty grid cells
-  * @return an Array of GeoJSON Polygon features
-  * with the collected 'points' array in the properties
+  * @return an Array of quadtree nodes
+  */
+  binsNonEmpty() {
+    var nodes = [];
+    this.visitNonEmpty(function(node) {
+      nodes.push(node);
+    });
+    return nodes;
+  }
+
+  /**
+  * Get all bins less than maxNodeSize
+  * If the bin have partially filled children (1-3 children non-empty)
+  * the points array of that bin is an aggregation of the points below
+  * @return an Array of quadtree nodes
   */
   bins() {
+    this._root.patchPartiallyEmptyNodes(this._maxNodeSize);
     var nodes = [];
-    this.visit(function(points, x1, y1, x2, y2) {
-      nodes.push({
-        coordinates: [[x1,y1], [x2,y1], [x2,y2], [x1,y2]],
-        points
-      });
+    this.visitNonEmpty(function(node) {
+      nodes.push(node);
     });
     return nodes;
   }
 
   renderer(projection) {
     return function(d) {
-      return "M" + d.coordinates.map((point) => projection(point)).join("L") + "Z";
+      return "M" + [[d.x1,d.y1], [d.x2,d.y1], [d.x2,d.y2], [d.x1,d.y2]].map((point) => projection(point)).join("L") + "Z";
     };
   }
 }

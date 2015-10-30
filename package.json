@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "dependencies": {
     "babel-runtime": "^5.8.25",
+    "colorbrewer": "0.0.2",
     "d3": "^3.5.6",
     "jquery": "^2.1.4",
     "lodash": "^3.10.1",

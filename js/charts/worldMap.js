@@ -137,7 +137,7 @@ world.update = function(el, props) {
 
     let bins = quadtree.bins();
 
-    var maxCount = d3.max(bins.map((feature) => feature.properties.points.length));
+    var maxCount = d3.max(bins.map((bin) => bin.points.length));
     var domainMax = + maxCount + (8 - maxCount % 8);
     console.log("domainMax:", domainMax);
     var domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
@@ -160,7 +160,7 @@ world.update = function(el, props) {
     quadNodes.enter().append("path").attr("class", "quadnode");
     quadNodes.attr("d", quadtree.renderer(props.projection))
       .style("fill", (d) => color(d.points.length))
-      .style("stroke", "#ccc");
+      .style("stroke", "none");
 
   }
 
