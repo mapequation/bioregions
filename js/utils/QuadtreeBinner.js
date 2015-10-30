@@ -17,6 +17,11 @@ class Node {
     this.children = []; // at index 0,1,2,3
   }
 
+  size() {
+    const dx = this.x2 - this.x1;
+    return dx * dx;
+  }
+
   add(point, x, y, maxNodeSize, minNodeSize, densityThreshold) {
     if (!this.isLeaf)
       return this.addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
