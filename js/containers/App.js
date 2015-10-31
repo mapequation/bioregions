@@ -16,8 +16,14 @@ class App extends Component {
       <div className="ui container">
         <header><i className="globe icon"></i> Infomap Bioregions</header>
         <main>
-          <ControlPanel {...{files, actions}} />
-          <WorldMap {...worldmap} {...data} />
+          <div className="ui two column stackable grid">
+            <div className="four wide column">
+              <ControlPanel {...{files, data, actions}} />
+            </div>
+            <div className="twelve wide column">
+              <WorldMap {...worldmap} {...data} />
+            </div>
+          </div>
         </main>
       </div>
     );

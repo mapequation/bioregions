@@ -33,6 +33,8 @@ WorldMap.propTypes = {
   projection: PropTypes.func.isRequired,
   havePolygons: PropTypes.bool.isRequired,
   features: PropTypes.array.isRequired,
+  binner: PropTypes.object.isRequired,
+  bins: PropTypes.array.isRequired,
 };
 
 export default WorldMap;

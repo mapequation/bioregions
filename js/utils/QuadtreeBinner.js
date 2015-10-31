@@ -118,10 +118,10 @@ export default class QuadtreeBinner {
     this._x = pointX;
     this._y = pointY;
     this._root = null;
-    this.setRoot();
+    this.initRoot();
   }
 
-  setRoot() {
+  initRoot() {
     this._root = new Node(this._extent[0][0], this._extent[0][1], this._extent[1][0], this._extent[1][1]);
   }
 
@@ -138,7 +138,7 @@ export default class QuadtreeBinner {
       else x2 = x1 + dy;
     }
     this._extent = [[x1, y1], [x2, y2]];
-    this.setRoot();
+    this.initRoot();
     return this;
   }
 
@@ -180,6 +180,10 @@ export default class QuadtreeBinner {
     return this;
   }
 
+  clear() {
+    this.initRoot();
+  }
+
   /**
   * Get all non-empty grid cells
   * @return an Array of quadtree nodes
@@ -196,14 +200,23 @@ export default class QuadtreeBinner {
   * Get all bins less than maxNodeSize
   * If the bin have partially filled children (1-3 children non-empty)
   * the points array of that bin is an aggregation of the points below
+  * @param points The points to bin, else assume added by addPoints
   * @return an Array of quadtree nodes
   */
-  bins() {
+  bins(points = null) {
+    if (points) {
+      this.clear();
+      this.addPoints(points);
+    }
     this._root.patchPartiallyEmptyNodes(this._maxNodeSize);
     var nodes = [];
     this.visitNonEmpty(function(node) {
       nodes.push(node);
     });
+    if (points) {
+      // If points are provided, assume completely functional
+      this.clear();
+    }
     return nodes;
   }
 
