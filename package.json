@@ -2,6 +2,7 @@
   "name": "infomap-bioregions",
   "version": "0.1.0",
   "dependencies": {
+    "axios": "^0.7.0",
     "babel-runtime": "^5.8.25",
     "colorbrewer": "0.0.2",
     "d3": "^3.5.6",

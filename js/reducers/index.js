@@ -10,8 +10,10 @@ function errorMessage(state = null, action) {
   const { type, error } = action;
 
   if (type === RESET_ERROR_MESSAGE) {
+    console.log("Reset errors");
     return null;
   } else if (error) {
+    console.log("Got error:", error);
     return error;
   }
 

@@ -9,6 +9,8 @@ export const RESET_ERROR_MESSAGE = 'RESET_ERROR_MESSAGE';
 
 //worldmap
 export const CHANGE_PROJECTION = 'CHANGE_PROJECTION';
+export const LOAD_WORLD = 'LOAD_WORLD';
+export const ADD_WORLD = 'ADD_WORLD';
 
 
 export const DATA_FETCHED = 'DATA_FETCHED';

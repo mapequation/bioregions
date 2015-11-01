@@ -12,6 +12,7 @@ const initialState = {
   bins: [], // bins = binner.bins(features)
 };
 
+
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.ADD_FEATURES:

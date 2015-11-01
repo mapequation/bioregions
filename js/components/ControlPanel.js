@@ -20,7 +20,7 @@ class ControlPanel extends Component {
   render() {
     const {files, actions} = this.props;
     return (
-      <div>
+      <div className="">
         <FileLoader {...files} {...actions} />
         {this.renderDataDependentComponents()}
       </div>

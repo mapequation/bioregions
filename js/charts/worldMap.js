@@ -2,7 +2,7 @@ import $ from 'jquery'
 import d3 from 'd3'
 import topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
-
+import {DATA_SUCCEEDED} from '../constants/DataFetching'
 var world = {};
 
 export default world;
@@ -73,17 +73,8 @@ world.update = function(el, props) {
     .scaleExtent([1, 12])
     .on("zoom", onZoom);
 
-
-  var path = d3.geo.path()
-    .pointRadius(1)
-    .projection(props.projection);
-
   svg.call(zoom)
     .on("click", onClick);
-
-  var isLoadingWorld = false;
-
-  console.log("render world chart...");
 
   var height = props.height - props.top - props.bottom;
   var width = totalWidth - props.left - props.right;
@@ -97,36 +88,32 @@ world.update = function(el, props) {
     .translate([(width/2), (height/2)])
     .scale( width / 2 / Math.PI);
 
-  drawWorld();
+  var path = d3.geo.path()
+    .pointRadius(1)
+    .projection(props.projection);
 
-  function drawWorld() {
+  var defsPath = g.select("defs").select("path");
+  if (!defsPath.datum() && props.worldStatus === DATA_SUCCEEDED) {
+    console.log("Draw world...");
+    defsPath
+      .datum(topojson.feature(props.world, props.world.objects.land))
+      .attr("d", path);
+  }
 
-    if (!world.topology) {
-      loadWorld();
-      return;
-    }
+  function drawRawFeatures() {
+    console.log("Draw raw features...");
+    let testFeatures = props.features.slice(0, 100);
+    let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
+    svgFeature.exit().remove();
+    svgFeature.enter().append("path").attr("class", "feature");
+    svgFeature.attr("d", path)
+      .style("fill", "none")
+      .style("stroke", "red");
+  }
 
-    var defsPath = g.select("defs").select("path");
-    if (!defsPath.datum()) {
-      console.log("Render world...");
-      defsPath
-        .datum(topojson.feature(world.topology, world.topology.objects.land))
-        .attr("d", path);
-    }
-
-    // console.log("Draw features...");
-    // let testFeatures = props.features.slice(0);
-    // let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
-    // svgFeature.exit().remove();
-    // svgFeature.enter().append("path").attr("class", "feature");
-    // svgFeature.attr("d", path)
-    //   .style("fill", "none")
-    //   .style("stroke", "red");
-
-    // draw quadtree
-
+  if (props.bins.length > 0) {
+    console.log("Draw bins as cloropleth map...");
     const bins = props.bins;
-
     var maxCount = d3.max(bins.map((bin) => bin.points.length / bin.size()));
     var domainMax = + maxCount + (8 - maxCount % 8);
     console.log("domainMax:", domainMax);
@@ -154,40 +141,8 @@ world.update = function(el, props) {
 
   }
 
-  function loadWorld() {
-    if (isLoadingWorld)
-      return;
-    isLoadingWorld = true;
-    console.log("Load world map...");
-
-    var progress = svg.append("text")
-    .attr("class", "progress")
-    .attr("font-size", 14)
-    .style("fill", "white")
-    .attr("x", width/2)
-    .attr("y", height/2)
-    .attr("text-anchor", "middle");
-    // .text("Loding world map...");
-
-
-    d3.json("maps/physical/land.topojson", function (error, topology) {
-      if (error) {
-        console.log("Error loading world:", error);
-        progress.text("Error loading world: " + error.statusText);
-        anchorElement.classed("error", true);
-        return;
-      }
-      world.topology = topology;
-      progress.remove();
-      //svg.classed("world-loaded", true);
-      anchorElement.classed("world-loaded", true);
-      console.log("Loaded world topology!");
-      drawWorld();
-    });
-  }
-
   function onZoom() {
-    if (!world.topology)
+    if (!props.world)
     return;
 
     var t = d3.event.translate;

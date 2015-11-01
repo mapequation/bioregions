@@ -4,11 +4,17 @@ import {bindActionCreators} from 'redux';
 import ControlPanel from '../components/ControlPanel';
 import WorldMap from '../components/WorldMap';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
+import * as worldmapActions from '../actions/WorldmapActions';
 
 class App extends Component {
   constructor(props) {
     super(props);
   }
+
+  componentDidMount() {
+    console.log("App::componentDidMount()");
+  }
+
 
   render() {
     const {data, files, worldmap, errorMessage, actions} = this.props;
@@ -21,7 +27,7 @@ class App extends Component {
               <ControlPanel {...{files, data, actions}} />
             </div>
             <div className="twelve wide column">
-              <WorldMap {...worldmap} {...data} />
+              <WorldMap {...worldmap} {...data} {...actions} />
             </div>
           </div>
         </main>
@@ -44,7 +50,7 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
   return {
-    actions: bindActionCreators(Object.assign({}, fileLoaderActions), dispatch)
+    actions: bindActionCreators(Object.assign({}, fileLoaderActions, worldmapActions), dispatch)
   };
 }
 
