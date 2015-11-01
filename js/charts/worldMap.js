@@ -112,33 +112,47 @@ world.update = function(el, props) {
   }
 
   if (props.bins.length > 0) {
-    console.log("Draw bins as cloropleth map...");
-    const bins = props.bins;
-    var maxCount = d3.max(bins.map((bin) => bin.points.length / bin.size()));
-    var domainMax = + maxCount + (8 - maxCount % 8);
-    console.log("domainMax:", domainMax);
-    var domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
-    domain.push(domainMax);
-    domain[0] = 1; // Make a threshold between non-empty and empty bins
-    domain.unshift(0.5);
-    console.log("Color domain:", domain.length, domain);
+    if (props.clusters.length > 0) {
+      console.log("Draw bins colored by cluster");
+      console.log(props.clusters.slice(0,10));
 
-    var colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
-    colorRange.unshift("#eeeeee");
-    console.log("Color range:", colorRange.length, colorRange);
-    var color = d3.scale.threshold()
-        .domain(domain)
-        .range(colorRange);
+      let color = d3.scale.category20();
+      let quadNodes = g.select(".overlay").selectAll(".quadnode")
+          .data(props.bins);
+      quadNodes.exit().remove();
+      quadNodes.enter().append("path").attr("class", "quadnode");
+      quadNodes.attr("d", props.binner.renderer(props.projection))
+        .style("fill", (d, i) => color(d.clusterId))
+        .style("stroke", "none");
+    }
+    else {
+      console.log("Draw bins as cloropleth map...");
+      const bins = props.bins;
+      let maxCount = d3.max(bins.map((bin) => bin.points.length / bin.size()));
+      let domainMax = + maxCount + (8 - maxCount % 8);
+      console.log("domainMax:", domainMax);
+      let domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
+      domain.push(domainMax);
+      domain[0] = 1; // Make a threshold between non-empty and empty bins
+      domain.unshift(0.5);
+      console.log("Color domain:", domain.length, domain);
 
-    // console.log("quad nodes:", quadtree.bins());
-    var quadNodes = g.select(".overlay").selectAll(".quadnode")
-        .data(bins);
-    quadNodes.exit().remove();
-    quadNodes.enter().append("path").attr("class", "quadnode");
-    quadNodes.attr("d", props.binner.renderer(props.projection))
-      .style("fill", (d) => color(d.points.length / d.size()))
-      .style("stroke", "none");
+      let colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
+      colorRange.unshift("#eeeeee");
+      console.log("Color range:", colorRange.length, colorRange);
+      let color = d3.scale.threshold()
+          .domain(domain)
+          .range(colorRange);
 
+      // console.log("quad nodes:", quadtree.bins());
+      let quadNodes = g.select(".overlay").selectAll(".quadnode")
+          .data(bins);
+      quadNodes.exit().remove();
+      quadNodes.enter().append("path").attr("class", "quadnode");
+      quadNodes.attr("d", props.binner.renderer(props.projection))
+        .style("fill", (d) => color(d.points.length / d.size()))
+        .style("stroke", "none");
+    }
   }
 
   function onZoom() {

@@ -7,22 +7,30 @@ class ControlPanel extends Component {
     super(props);
   }
 
+  runInfomap() {
+    this.props.actions.getClusters();
+  }
+
   renderDataDependentComponents() {
-    const {data} = this.props;
+    const {data, actions} = this.props;
     // const {runInfomap} = this.props.actions;
     if (data.features.length === 0)
       return "";
     return (
-      <Infomap data={data} runInfomap={() => {console.log("Run infomap...");}} />
+      <Infomap data={data} runInfomap={::this.runInfomap} />
     )
   }
 
   render() {
     const {files, actions} = this.props;
     return (
-      <div className="">
-        <FileLoader {...files} {...actions} />
-        {this.renderDataDependentComponents()}
+      <div className="ui segment">
+        <div className="ui vertical segment">
+          <FileLoader {...files} {...actions} />
+        </div>
+        <div className="ui vertical segment">
+          {this.renderDataDependentComponents()}
+        </div>
       </div>
     );
   }

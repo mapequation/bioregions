@@ -5,6 +5,7 @@ import ControlPanel from '../components/ControlPanel';
 import WorldMap from '../components/WorldMap';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
 import * as worldmapActions from '../actions/WorldmapActions';
+import * as ClusterActions from '../actions/ClusterActions';
 
 class App extends Component {
   constructor(props) {
@@ -50,7 +51,11 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
   return {
-    actions: bindActionCreators(Object.assign({}, fileLoaderActions, worldmapActions), dispatch)
+    actions: bindActionCreators(Object.assign({},
+      fileLoaderActions,
+      worldmapActions,
+      ClusterActions,
+    ), dispatch)
   };
 }
 

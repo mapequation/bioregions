@@ -12,7 +12,6 @@ export const CHANGE_PROJECTION = 'CHANGE_PROJECTION';
 export const LOAD_WORLD = 'LOAD_WORLD';
 export const ADD_WORLD = 'ADD_WORLD';
 
-
-export const DATA_FETCHED = 'DATA_FETCHED';
-export const DATA_SUCCEEDED = 'DATA_SUCCEEDED';
-export const DATA_FAILED = 'DATA_FAILED';
+//infomap
+export const REQUEST_CLUSTERS = 'REQUEST_CLUSTERS';
+export const ADD_CLUSTERS = 'ADD_CLUSTERS';
