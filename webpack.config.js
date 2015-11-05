@@ -1,5 +1,5 @@
 var webpack = require('webpack');
-var ExtractTextPlugin = require('extract-text-webpack-plugin');
+// var ExtractTextPlugin = require('extract-text-webpack-plugin');
 var path = require('path');
 
 var devFlagPlugin = new webpack.DefinePlugin({
@@ -9,7 +9,8 @@ var devFlagPlugin = new webpack.DefinePlugin({
 module.exports = {
   entry: [
     'webpack-dev-server/client?http://localhost:3003',
-    'webpack/hot/only-dev-server',
+    // 'webpack/hot/only-dev-server',
+    'webpack/hot/dev-server',
     './js/index.js'
   ],
   output: {
@@ -19,16 +20,20 @@ module.exports = {
     hot: true
   },
   plugins: [
+    new webpack.optimize.OccurenceOrderPlugin(),
     new webpack.HotModuleReplacementPlugin(),
     new webpack.NoErrorsPlugin(),
     devFlagPlugin,
-    new ExtractTextPlugin('app.css')
+    // new ExtractTextPlugin('app.css')
   ],
+  // devtool: 'cheap-module-eval-source-map',
+  devtool: "source-map", // or "inline-source-map"
   module: {
     loaders: [
       { test: /\.js$/, loaders: ['react-hot', 'babel'], exclude: /node_modules/ },
-      // { test: /\.css$/, loader: ExtractTextPlugin.extract('css-loader?module!cssnext-loader') }
-      { test: /\.css$/, loader: ExtractTextPlugin.extract('style-loader', 'css-loader!cssnext-loader') }
+      { test: /\.css$/, loaders: ["style", "css", ""] },
+      { test: /\.scss$/, loaders: ["style", "css", "sass"] },
+      // { test: /\.scss$/, loaders: ["style", "css?sourceMap", "sass?sourceMap"] }
     ]
   },
   resolve: {

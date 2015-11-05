@@ -10,6 +10,8 @@ import d3 from 'd3';
 import d3tip from 'd3-tip';
 import R from 'ramda';
 import crossfilter from 'crossfilter';
+import d3tipStyles from '../components/d3-tip.css';
+import AppStyles from './App.scss';
 
 class App extends Component {
   constructor(props) {
@@ -31,11 +33,11 @@ class App extends Component {
         var topSpecies = heapselectByValue(speciesCounts, 0, speciesCounts.length, 3)
             .sort((a, b) => b[1] - a[1]);
         return `<p class="tooltip-heading">
-                    <span class="value total-records-count text-info">${d.points.length}</span> records of
-                    <span class="value total-species-count text-info">${speciesCounts.length}</span> unique species
+                    <span class="value total-records-count">${d.points.length}</span> records of
+                    <span class="value total-species-count">${speciesCounts.length}</span> unique species
                 </p>
                 <p class="top-n text-muted">Top 3:</p>` +
-            topSpecies.map(d => `<p><span class="value top-count text-info">${d[1]}</span> <span class="name">${d[0]}</span></p>`)
+            topSpecies.map(d => `<p><span class="value top-count">${d[1]}</span> <span class="name">${d[0]}</span></p>`)
             .join("");
       });
     d3.select(this.worldMap.getSvg()).call(this.tip);
