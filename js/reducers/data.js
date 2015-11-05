@@ -7,8 +7,9 @@ const initialState = {
   binner: new QuadtreeBinner()
     .x((point) => point.geometry.coordinates[0])
     .y((point) => point.geometry.coordinates[1])
-    .extent([[-180, -90], [180, 90]])
-    .minNodeSize(1),
+    .minNodeSize(1)
+    .maxNodeSize(8)
+    .densityThreshold(100),
   bins: [], // bins = binner.bins(features)
   clusters: [],
 };

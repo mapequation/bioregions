@@ -113,8 +113,7 @@ world.update = function(el, props) {
 
   if (props.bins.length > 0) {
     if (props.clusters.length > 0) {
-      console.log("Draw bins colored by cluster");
-      console.log(props.clusters.slice(0,10));
+      console.log("Draw bins colored by cluster...");
 
       let color = d3.scale.category20();
       let quadNodes = g.select(".overlay").selectAll(".quadnode")

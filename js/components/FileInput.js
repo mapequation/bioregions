@@ -1,8 +1,12 @@
 import React, {Component, PropTypes} from 'react';
 
 class FileInput extends Component {
-  constructor(props) {
-    super(props);
+
+  static propTypes = {
+    isLoading: PropTypes.bool.isRequired,
+    sampleFiles: PropTypes.array.isRequired,
+    loadFiles: PropTypes.func.isRequired,
+    loadSampleFile: PropTypes.func.isRequired,
   }
 
   componentDidMount() {
@@ -42,12 +46,5 @@ class FileInput extends Component {
     );
   }
 }
-
-FileInput.propTypes = {
-  isLoading: PropTypes.bool.isRequired,
-  sampleFiles: PropTypes.array.isRequired,
-  loadFiles: PropTypes.func.isRequired,
-  loadSampleFile: PropTypes.func.isRequired,
-};
 
 export default FileInput;
