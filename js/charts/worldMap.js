@@ -38,7 +38,7 @@ world.create = function(el, props) {
     .append("use")
     .attr("xlink:href", "#land");
 
-  world.update(el, props);
+  return world.update(el, props);
 }
 
 world.update = function(el, props) {
@@ -73,8 +73,8 @@ world.update = function(el, props) {
     .scaleExtent([1, 12])
     .on("zoom", onZoom);
 
-  svg.call(zoom)
-    .on("click", onClick);
+  svg.call(zoom);
+    // .on("click", onClick);
 
   var height = props.height - props.top - props.bottom;
   var width = totalWidth - props.left - props.right;
@@ -112,17 +112,11 @@ world.update = function(el, props) {
   }
 
   if (props.bins.length > 0) {
+    var colorDomainValue, color;
     if (props.clusters.length > 0) {
       console.log("Draw bins colored by cluster...");
-
-      let color = d3.scale.category20();
-      let quadNodes = g.select(".overlay").selectAll(".quadnode")
-          .data(props.bins);
-      quadNodes.exit().remove();
-      quadNodes.enter().append("path").attr("class", "quadnode");
-      quadNodes.attr("d", props.binner.renderer(props.projection))
-        .style("fill", (d, i) => color(d.clusterId))
-        .style("stroke", "none");
+      color = d3.scale.category20();
+      colorDomainValue = (d) => d.clusterId;
     }
     else {
       console.log("Draw bins as cloropleth map...");
@@ -139,19 +133,28 @@ world.update = function(el, props) {
       let colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       colorRange.unshift("#eeeeee");
       console.log("Color range:", colorRange.length, colorRange);
-      let color = d3.scale.threshold()
-          .domain(domain)
-          .range(colorRange);
+      color = d3.scale.threshold()
+        .domain(domain)
+        .range(colorRange);
 
-      // console.log("quad nodes:", quadtree.bins());
-      let quadNodes = g.select(".overlay").selectAll(".quadnode")
-          .data(bins);
-      quadNodes.exit().remove();
-      quadNodes.enter().append("path").attr("class", "quadnode");
-      quadNodes.attr("d", props.binner.renderer(props.projection))
-        .style("fill", (d) => color(d.points.length / d.size()))
-        .style("stroke", "none");
+      colorDomainValue = (d) => d.points.length / d.size();
     }
+
+    let quadNodes = g.select(".overlay").selectAll(".quadnode")
+        .data(props.bins);
+
+    quadNodes.exit().remove();
+
+    quadNodes.enter().append("path")
+      .attr("class", "quadnode")
+      .on('mouseover', props.onMouseOver)
+      .on('mouseout', props.onMouseOut)
+      .on('click', props.onMouseClick);
+
+    //Update
+    quadNodes.attr("d", props.binner.renderer(props.projection))
+      .style("fill", (d, i) => color(colorDomainValue(d)))
+      .style("stroke", "none");
   }
 
   function onZoom() {

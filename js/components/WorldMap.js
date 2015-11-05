@@ -3,8 +3,32 @@ import worldChart from '../charts/worldMap.js';
 import * as DataFetching from '../constants/DataFetching';
 
 class WorldMap extends Component {
-  constructor(props) {
-    super(props);
+
+  static propTypes = {
+    width: PropTypes.number.isRequired,
+    height: PropTypes.number.isRequired,
+    projection: PropTypes.func.isRequired,
+    world: PropTypes.object.isRequired,
+    worldStatus: PropTypes.string.isRequired,
+    loadWorld: PropTypes.func.isRequired,
+    havePolygons: PropTypes.bool.isRequired,
+    features: PropTypes.array.isRequired,
+    binner: PropTypes.object.isRequired,
+    bins: PropTypes.array.isRequired,
+    onMouseOver: PropTypes.func.isRequired,
+    onMouseOut: PropTypes.func.isRequired,
+    onMouseClick: PropTypes.func.isRequired,
+  }
+
+  getSvg() {
+    return this.svgParent.getElementsByTagName('svg')[0];
+  }
+
+  getSvgString() {
+    return this.svgParent.innerHTML;
+    // .replace(/^<svg/, svgProps)
+    // var svgProps = '<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">';
+    // return svgProps + svg.html() + "</svg>";
   }
 
   componentDidMount() {
@@ -50,18 +74,5 @@ class WorldMap extends Component {
     );
   }
 }
-
-WorldMap.propTypes = {
-  width: PropTypes.number.isRequired,
-  height: PropTypes.number.isRequired,
-  projection: PropTypes.func.isRequired,
-  world: PropTypes.object.isRequired,
-  worldStatus: PropTypes.string.isRequired,
-  loadWorld: PropTypes.func.isRequired,
-  havePolygons: PropTypes.bool.isRequired,
-  features: PropTypes.array.isRequired,
-  binner: PropTypes.object.isRequired,
-  bins: PropTypes.array.isRequired,
-};
 
 export default WorldMap;
