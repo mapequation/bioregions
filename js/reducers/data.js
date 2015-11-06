@@ -1,18 +1,57 @@
 import * as ActionTypes from '../constants/ActionTypes';
-import QuadtreeBinner from '../utils/QuadtreeBinner'
+import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
+import * as Binning from '../constants/Binning';
+
+const initialBinningState = {
+  type: Binning.QUAD_TREE,
+  minNodeSize: 1,
+  maxNodeSize: 8,
+  densityThreshold: 100,
+  renderer: QuadtreeGeoBinner.renderer,
+};
+
+function binning(state = initialBinningState, action) {
+  switch (action.type) {
+    case ActionTypes.BINNING_CHANGE_TYPE:
+      return {
+        ...state,
+        type: action.type
+      }
+    case ActionTypes.BINNING_MIN_NODE_SIZE:
+      return {
+        ...state,
+        minNodeSize: action.minNodeSize
+      }
+    case ActionTypes.BINNING_MAX_NODE_SIZE:
+      return {
+        ...state,
+        maxNodeSize: action.maxNodeSize
+      }
+    case ActionTypes.BINNING_DENSITY_THRESHOLD:
+      return {
+        ...state,
+        densityThreshold: action.densityThreshold
+      }
+    default:
+      return state;
+  }
+}
 
 const initialState = {
   havePolygons: false,
   features: [], // GeoJSON features
-  binner: new QuadtreeBinner()
-    .x((point) => point.geometry.coordinates[0])
-    .y((point) => point.geometry.coordinates[1])
-    .minNodeSize(1)
-    .maxNodeSize(8)
-    .densityThreshold(100),
+  binning: initialBinningState,
   bins: [], // bins = binner.bins(features)
   clusters: [],
 };
+
+function getBins(binning, features) {
+  let binner = new QuadtreeGeoBinner()
+   .minNodeSize(binning.minNodeSize)
+   .maxNodeSize(binning.maxNodeSize)
+   .densityThreshold(binning.densityThreshold);
+  return binner.bins(features);
+}
 
 function mergeClustersToBins(clusters, bins) {
   // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusters[i]}));
@@ -31,7 +70,7 @@ export default function data(state = initialState, action) {
         ...state,
         havePolygons: action.havePolygons,
         features: action.features,
-        bins: state.binner.bins(action.features)
+        bins: getBins(state.binning, action.features)
       };
     case ActionTypes.ADD_CLUSTERS:
       return {
@@ -39,6 +78,16 @@ export default function data(state = initialState, action) {
         bins: mergeClustersToBins(action.clusters, state.bins),
         clusters: action.clusters
       };
+    case ActionTypes.BINNING_CHANGE_TYPE:
+    case ActionTypes.BINNING_MIN_NODE_SIZE:
+    case ActionTypes.BINNING_MAX_NODE_SIZE:
+    case ActionTypes.BINNING_DENSITY_THRESHOLD:
+      let newBinning = binning(state.binning, action)
+      return {
+        binning: newBinning,
+        bins: getBins(newBinning, state.features),
+        clusters: [] // Reset clusters on changed binning
+      }
     default:
       return state;
   }

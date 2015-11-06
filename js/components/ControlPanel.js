@@ -17,7 +17,9 @@ class ControlPanel extends Component {
     if (data.features.length === 0)
       return "";
     return (
-      <Infomap data={data} runInfomap={::this.runInfomap} />
+      <div className="ui vertical segment">
+        <Infomap data={data} runInfomap={::this.runInfomap} />
+      </div>
     )
   }
 
@@ -28,9 +30,8 @@ class ControlPanel extends Component {
         <div className="ui vertical segment">
           <FileLoader {...files} {...actions} />
         </div>
-        <div className="ui vertical segment">
-          {this.renderDataDependentComponents()}
-        </div>
+        
+        {this.renderDataDependentComponents()}
       </div>
     );
   }

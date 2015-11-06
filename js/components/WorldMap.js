@@ -13,7 +13,7 @@ class WorldMap extends Component {
     loadWorld: PropTypes.func.isRequired,
     havePolygons: PropTypes.bool.isRequired,
     features: PropTypes.array.isRequired,
-    binner: PropTypes.object.isRequired,
+    binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
     onMouseOver: PropTypes.func.isRequired,
     onMouseOut: PropTypes.func.isRequired,

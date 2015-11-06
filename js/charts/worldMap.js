@@ -152,7 +152,7 @@ world.update = function(el, props) {
       .on('click', props.onMouseClick);
 
     //Update
-    quadNodes.attr("d", props.binner.renderer(props.projection))
+    quadNodes.attr("d", props.binning.renderer(props.projection))
       .style("fill", (d, i) => color(colorDomainValue(d)))
       .style("stroke", "none");
   }

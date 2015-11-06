@@ -28,6 +28,7 @@ class App extends Component {
     var countByName = R.countBy(feature => feature.properties.name);
 
     this.tip = d3tip().attr("class", "d3-tip")
+      .direction("s")
       .html(function(d) {
         var speciesCounts = R.toPairs(countByName(d.points));
         var topSpecies = heapselectByValue(speciesCounts, 0, speciesCounts.length, 3)
@@ -59,9 +60,14 @@ class App extends Component {
   render() {
     const {data, files, worldmap, errorMessage, actions} = this.props;
     return (
-      <div className="ui container">
-        <header><i className="globe icon"></i> Infomap Bioregions</header>
-        <main>
+      <div>
+        <div className="ui secondary pointing menu">
+          <a className="active item">Infomap Bioregions</a>
+          <div className="right menu">
+            <a className="item">About</a>
+          </div>
+        </div>
+        <div className="ui container">
           <div className="ui two column stackable grid">
             <div className="four wide column">
               <ControlPanel {...{files, data, actions}} />
@@ -75,7 +81,7 @@ class App extends Component {
                />
             </div>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
