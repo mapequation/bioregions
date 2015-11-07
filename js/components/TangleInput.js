@@ -10,7 +10,7 @@ class TangleInput extends Component {
       min: PropTypes.number,
       max: PropTypes.number,
       step: PropTypes.number,
-      pixelDistance: PropTypes.number,
+      speed: PropTypes.number,
       format: PropTypes.func,
       className: PropTypes.string,
       onInput: PropTypes.func,
@@ -21,7 +21,7 @@ class TangleInput extends Component {
       min: 0,
       max: 100,
       step: 1,
-      pixelDistance: 0,
+      speed: 0,
       format: (value, step) => step < 1? value.toFixed(Math.ceil(-Math.log10(step))) : value
     }
 
@@ -40,12 +40,11 @@ class TangleInput extends Component {
     propsToState(props) {
       let { min, max } = this.adjustedMinMax(props);
       let value = clamp(props.value, min, max);
-      let currentStep = this.getStep(props.value, props);
+      let currentStep = this.getStep(value, props);
       return {
         ...props,
         min,
         max,
-        currentStep,
         value,
         formattedValue: this.props.format(value, currentStep),
         isChanged: false,
@@ -53,8 +52,10 @@ class TangleInput extends Component {
     }
 
     getStep(value, props) {
-      if (props.logStep)
-        return Math.pow(10, Math.floor(Math.log10(value))) * props.logStep
+      if (props.logStep) {
+        // console.log(`\nlogStep(${value}) -> ${Math.pow(10, Math.floor(Math.log10(value))) * props.logStep}`);
+        return Math.pow(10, Math.floor(Math.log10(value))) * props.logStep;
+      }
       return props.step;
     }
 
@@ -84,6 +85,8 @@ class TangleInput extends Component {
       this._immediateState = {
         value: this.state.value,
         startValue: this.state.value,
+        lastX: e.screenX,
+        currentStep:this.getStep(this.state.value, this.props),
         isChanged: false
       };
 
@@ -93,40 +96,60 @@ class TangleInput extends Component {
 
     onMouseMove(e) {
       e.preventDefault();
-      let change = e.screenX - this.state.startX;
-      if (this.props.pixelDistance > 0)
-        change = Math.floor(change / this.props.pixelDistance);
+      let change = e.screenX - this._immediateState.lastX;
+      if (this.props.speed > 0)
+        change = change * this.props.speed;
+      let currentStep = this._immediateState.currentStep;
 
-      let nextValue = this.state.startValue + (change * this.state.currentStep);
+      let nextValue = this._immediateState.value + (change * currentStep);
+      // console.log(`${this._immediateState.value} + (${change} * ${currentStep}) -> ${nextValue}`);
 
-      // console.log(`${this.state.startValue} + (${change} * ${this.state.currentStep}) -> ${nextValue}`);
+      // Clamp to step-resolved bounds
+      nextValue = clamp(nextValue, this.state.min, this.state.max);
 
       // Adjust current step size if log step
       if (this.props.logStep) {
-        this.state.currentStep = this.getStep(value, this.props);
+        let nextStep = this.getStep(nextValue, this.props);
+        let oldLog = Math.floor(Math.log10(this._immediateState.value));
+        let newLog = Math.floor(Math.log10(nextValue));
+        if (newLog !== oldLog) {
+          if (newLog < oldLog) {
+            // Recalculate next value with smaller step size, so e.g. 200, 100, 0 -> 200, 100, 90, ...
+            // nextStep = Math.pow(10, Math.floor(oldLog - 1)) * this.props.logStep;
+            nextValue = this._immediateState.value + (change * nextStep);
+            // Re-calculate new step size
+            nextStep = this.getStep(nextValue, this.props);
+            // nextValue = this.stepRound(nextStep, nextValue);
+          }
+          currentStep = this._immediateState.currentStep = nextStep;
+          // Round to step resolution
+          nextValue = this.stepRound(currentStep, nextValue);
+          // Clamp to step-resolved bounds
+          nextValue = clamp(nextValue, this.state.min, this.state.max);
+        }
       }
 
-      nextValue = clamp(this.stepRound(this.state.currentStep, nextValue), this.state.min, this.state.max);
 
       // console.log(`  -> clamp(${this.state.min}, ${this.state.max}) -> ${nextValue}`);
 
-      let nextFormattedValue = this.props.format(nextValue, this.state.currentStep);
+      let nextFormattedValue = this.props.format(nextValue, currentStep);
+
+      // isChanged compares the value between mouseDown and mouseUp
+      let isChanged = nextFormattedValue !== this.state.startFormattedValue;
+
+      this._immediateState.value = nextValue;
+      this._immediateState.isChanged = isChanged;
+      this._immediateState.lastX = e.screenX;
 
       // Skip update if nothing visually changed
       if (nextFormattedValue === this.state.formattedValue)
         return;
-
-      // isChanged compares the value between mouseDown and mouseUp
-      let isChanged = nextFormattedValue !== this.state.startFormattedValue;
 
       this.setState({
         value: nextValue,
         formattedValue: nextFormattedValue,
         isChanged
       });
-
-      this._immediateState.value = nextValue;
-      this._immediateState.isChanged = isChanged;
 
       if (this.props.onInput)
         this.props.onInput(nextValue, this.state.value);

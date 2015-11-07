@@ -38,7 +38,7 @@ class Binning extends Component {
             value={this.props.maxNodeSize}
             min={this.props.minNodeSize}
             max={100}
-            step={1}
+            step={0.1}
             onChange={(value) => this.props.changeMaxBinSize(value)} />
         </div>
         <div className="inline field">
@@ -56,6 +56,7 @@ class Binning extends Component {
             value={this.props.densityThreshold}
             min={5}
             max={1000000}
+            logStep={1}
             onChange={(value) => this.props.changeDensityThreshold(value)} />
         </div>
       </div>
