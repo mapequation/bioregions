@@ -3,7 +3,8 @@ import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import * as Binning from '../constants/Binning';
 
 const initialBinningState = {
-  type: Binning.QUAD_TREE,
+  binnerType: Binning.QUAD_TREE,
+  binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
   minNodeSize: 1,
   maxNodeSize: 8,
   densityThreshold: 100,
@@ -15,7 +16,7 @@ function binning(state = initialBinningState, action) {
     case ActionTypes.BINNING_CHANGE_TYPE:
       return {
         ...state,
-        type: action.type
+        binnerType: action.binnerType
       }
     case ActionTypes.BINNING_MIN_NODE_SIZE:
       return {
@@ -82,10 +83,11 @@ export default function data(state = initialState, action) {
     case ActionTypes.BINNING_MIN_NODE_SIZE:
     case ActionTypes.BINNING_MAX_NODE_SIZE:
     case ActionTypes.BINNING_DENSITY_THRESHOLD:
-      let newBinning = binning(state.binning, action)
+      let nextBinning = binning(state.binning, action)
       return {
-        binning: newBinning,
-        bins: getBins(newBinning, state.features),
+        ...state,
+        binning: nextBinning,
+        bins: getBins(nextBinning, state.features),
         clusters: [] // Reset clusters on changed binning
       }
     default:

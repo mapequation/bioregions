@@ -32,14 +32,11 @@ class WorldMap extends Component {
   }
 
   componentDidMount() {
-    console.log("WorldMap::componentDidMount()");
     this.loadWorldIfNotFetched();
     worldChart.create(this.svgParent, this.props);
   }
 
   componentDidUpdate() {
-    console.log("WorldMap::componentDidUpdate()");
-    this.loadWorldIfNotFetched();
     worldChart.update(this.svgParent, this.props);
   }
 
@@ -50,7 +47,6 @@ class WorldMap extends Component {
   loadWorldIfNotFetched() {
     const worldStatus = this.props.worldStatus;
     if (worldStatus === DataFetching.DATA_NOT_FETCHED) {
-      console.log("WorldMap -> loadWorld()");
       this.props.loadWorld();
     }
   }

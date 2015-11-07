@@ -1,6 +1,7 @@
 import React, {Component, PropTypes} from 'react';
-import FileLoader from './FileLoader'
-import Infomap from './Infomap'
+import FileLoader from './FileLoader';
+import Infomap from './Infomap';
+import Binning from './Binning';
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -24,13 +25,13 @@ class ControlPanel extends Component {
   }
 
   render() {
-    const {files, actions} = this.props;
+    const {files, data, actions} = this.props;
     return (
       <div className="ui segment">
         <div className="ui vertical segment">
           <FileLoader {...files} {...actions} />
         </div>
-        
+        <Binning {...data.binning} {...actions} />
         {this.renderDataDependentComponents()}
       </div>
     );
