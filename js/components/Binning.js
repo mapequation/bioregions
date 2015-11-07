@@ -27,6 +27,57 @@ class Binning extends Component {
 
   render() {
     return (
+      <table className="ui celled table">
+        <thead>
+          <tr>
+            <th colSpan="2">
+              Binning
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Max bin size</td>
+            <td className="">
+              <TangleInput className="ui label"
+                value={this.props.maxNodeSize}
+                min={this.props.minNodeSize}
+                max={100}
+                step={0.1}
+                onChange={(value) => this.props.changeMaxBinSize(value)} />
+            </td>
+          </tr>
+
+          <tr>
+            <td>Min bin size</td>
+            <td className="">
+              <TangleInput className="ui label"
+                value={this.props.minNodeSize}
+                min={0.1}
+                max={this.props.maxNodeSize}
+                step={0.1}
+                onChange={(value) => this.props.changeMinBinSize(value)} />
+            </td>
+          </tr>
+
+          <tr>
+            <td>Density threshold</td>
+            <td className="">
+              <TangleInput className="ui label"
+                value={this.props.densityThreshold}
+                min={5}
+                max={1000000}
+                logStep={1}
+                onChange={(value) => this.props.changeDensityThreshold(value)} />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  renderForm() {
+    return (
       <div className="ui form">
         <div className="inline field">
           <label>Type</label>
