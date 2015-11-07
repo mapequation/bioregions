@@ -19,7 +19,7 @@ class ControlPanel extends Component {
       return "";
     return (
       <div className="ui vertical segment">
-        <Infomap data={data} runInfomap={::this.runInfomap} />
+        <Infomap {...data} runInfomap={::this.runInfomap} />
       </div>
     )
   }

@@ -44,6 +44,7 @@ const initialState = {
   binning: initialBinningState,
   bins: [], // bins = binner.bins(features)
   clusters: [],
+  isClustering: false,
 };
 
 function getBins(binning, features) {
@@ -73,9 +74,15 @@ export default function data(state = initialState, action) {
         features: action.features,
         bins: getBins(state.binning, action.features)
       };
+    case ActionTypes.REQUEST_CLUSTERS:
+      return {
+        ...state,
+        isClustering: true
+      };
     case ActionTypes.ADD_CLUSTERS:
       return {
         ...state,
+        isClustering: false,
         bins: mergeClustersToBins(action.clusters, state.bins),
         clusters: action.clusters
       };

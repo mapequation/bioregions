@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import FileInput from './FileInput'
+import classNames from 'classnames';
 
 class Infomap extends Component {
   constructor(props) {
@@ -7,17 +8,20 @@ class Infomap extends Component {
   }
 
   render() {
-    const {data, runInfomap} = this.props;
+    const {isClustering, runInfomap} = this.props;
+    let classes = classNames("ui button", { loading: isClustering });
     return (
       <div>
-        <button className="ui button" onClick={runInfomap}>Cluster...</button>
+        <button className={classes} disabled={isClustering ? "disabled" : false} onClick={runInfomap}>
+          Cluster...
+        </button>
       </div>
     );
   }
 }
 
 Infomap.propTypes = {
-  data: PropTypes.object.isRequired,
+  isClustering: PropTypes.bool.isRequired,
   runInfomap: PropTypes.func.isRequired,
 };
 
