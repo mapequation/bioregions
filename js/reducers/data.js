@@ -1,6 +1,8 @@
 import * as ActionTypes from '../constants/ActionTypes';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import * as Binning from '../constants/Binning';
+import R from 'ramda';
+import crossfilter from 'crossfilter';
 
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
@@ -41,11 +43,40 @@ function binning(state = initialBinningState, action) {
 const initialState = {
   havePolygons: false,
   features: [], // GeoJSON features
+  species: [], // features count by name, array of {name: string, count: number}
   binning: initialBinningState,
   bins: [], // bins = binner.bins(features)
-  clusters: [],
+  clustersIds: [], // array<int> of cluster id:s, matching bins array in index
   isClustering: false,
+  clusters: [], // features grouped by cluster
 };
+
+function accumulateSpecies(features) {
+  // let speciesMap = new Map();
+  // features.forEach(feature => {
+  //   let name = feature.properties.name;
+  //   let currentCount = speciesMap.get[name];
+  //   if (currentCount === undefined)
+  //     speciesMap.set(name, 1);
+  //   else
+  //     speciesMap.set(name, currentCount + 1);
+  // });
+  // let speciesCounts = [];
+  // speciesMap.forEach((name, count) => {
+  //   speciesCounts.push({name, count});
+  // });
+  var heapselectByCount = crossfilter.heapselect.by(d => d.count);
+  var getSpeciesCounts = R.pipe(
+    R.countBy(feature => feature.properties.name),
+    R.toPairs,
+    R.map(pair => { return {name: pair[0], count: pair[1]}; })
+  );
+  var speciesCounts = getSpeciesCounts(features);
+  // var topSpecies = heapselectByCount(speciesCounts, 0, speciesCounts.length, 2)
+  //   .sort((a, b) => b.count - a.count);
+  // return topSpecies;
+  return speciesCounts.sort((a, b) => b.count - a.count);
+}
 
 function getBins(binning, features) {
   let binner = new QuadtreeGeoBinner()
@@ -55,11 +86,11 @@ function getBins(binning, features) {
   return binner.bins(features);
 }
 
-function mergeClustersToBins(clusters, bins) {
-  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusters[i]}));
-  if (clusters.length === bins.length) {
+function mergeClustersToBins(clustersIds, bins) {
+  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clustersIds[i]}));
+  if (clustersIds.length === bins.length) {
     bins.forEach((bin, i) => {
-      bin.clusterId = clusters[i];
+      bin.clusterId = clustersIds[i];
     });
   }
   return bins;
@@ -72,6 +103,7 @@ export default function data(state = initialState, action) {
         ...state,
         havePolygons: action.havePolygons,
         features: action.features,
+        species: accumulateSpecies(action.features),
         bins: getBins(state.binning, action.features)
       };
     case ActionTypes.REQUEST_CLUSTERS:
@@ -83,8 +115,8 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         isClustering: false,
-        bins: mergeClustersToBins(action.clusters, state.bins),
-        clusters: action.clusters
+        bins: mergeClustersToBins(action.clustersIds, state.bins),
+        clustersIds: action.clustersIds
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
@@ -95,7 +127,7 @@ export default function data(state = initialState, action) {
         ...state,
         binning: nextBinning,
         bins: getBins(nextBinning, state.features),
-        clusters: [] // Reset clusters on changed binning
+        clustersIds: [] // Reset clusters on changed binning
       }
     default:
       return state;

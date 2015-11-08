@@ -12,12 +12,12 @@ function setError(message) {
 
 /**
 * Add the bioregions clusters
-* @param clusters An array of cluster indexes for the corresponding spatial bins array
+* @param clusterIds An array of cluster indexes for the corresponding spatial bins array
 */
-function addClusters(clusters, binsTimestamp) {
+function addClusters(clustersIds, binsTimestamp) {
   return {
     type: ADD_CLUSTERS,
-    clusters,
+    clustersIds,
     binsTimestamp
   }
 }
@@ -78,11 +78,11 @@ function onInfomapFinished(dispatch, binsTimestamp, output) {
       return null; // Strip commented rows
     return [+row[0].substring(1), +row[1]]; // [nodeId, clusterId] // zero-based
   });
-  let clusters = new Array(clu.length);
+  let clusterIds = new Array(clu.length);
   clu.forEach((row) => {
-    clusters[row[0] - 1] = row[1] - 1;
+    clusterIds[row[0] - 1] = row[1] - 1;
   });
-  dispatch(addClusters(clusters, binsTimestamp));
+  dispatch(addClusters(clusterIds, binsTimestamp));
 }
 
 

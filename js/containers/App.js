@@ -3,6 +3,7 @@ import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import ControlPanel from '../components/ControlPanel';
 import WorldMap from '../components/WorldMap';
+import Statistics from '../components/Statistics';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
 import * as worldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
@@ -80,6 +81,7 @@ class App extends Component {
                 onMouseOut={::this.handleMouseOutGridCell}
                 onMouseClick={::this.handleMouseClickGridCell}
                />
+             <Statistics {...data} {...actions} />
             </div>
           </div>
         </div>
