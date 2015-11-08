@@ -37,6 +37,16 @@ class Binning extends Component {
         </thead>
         <tbody>
           <tr>
+            <td>Type</td>
+            <td>
+              <select className="ui dropdown">
+                {this.props.binnerTypes.map(binner => (
+                  <option key={binner} value={binner}>{binner}</option>
+                ))}
+              </select>
+            </td>
+          </tr>
+          <tr>
             <td>Max bin size</td>
             <td className="">
               <TangleInput className="ui label" suffix="˚"
