@@ -8,31 +8,30 @@ class ControlPanel extends Component {
     super(props);
   }
 
-  runInfomap() {
-    this.props.actions.getClusters();
-  }
-
-  renderDataDependentComponents() {
-    const {data, actions} = this.props;
-    // const {runInfomap} = this.props.actions;
-    if (data.features.length === 0)
-      return "";
-    return (
-      <div className="ui vertical segment">
-        <Infomap {...data} runInfomap={::this.runInfomap} />
-      </div>
-    )
+  componentDidMount() {
+    $('.ui.accordion').accordion();
   }
 
   render() {
     const {files, data, actions} = this.props;
     return (
-      <div className="ui segment">
-        <div className="ui vertical segment">
-          <FileLoader {...files} {...actions} />
+      <div className="ui styled accordion">
+        <div className="active title">
+          <i className="dropdown icon"></i>
+          Data
         </div>
-        <Binning {...data.binning} {...actions} />
-        {this.renderDataDependentComponents()}
+        <div className="active content">
+          <FileLoader {...files} {...actions} />
+          <Binning {...data.binning} {...actions} />
+          <Infomap {...data} {...actions} />
+        </div>
+        <div className="title">
+          <i className="dropdown icon"></i>
+          Output
+        </div>
+        <div className="content">
+          Save SVG...
+        </div>
       </div>
     );
   }
