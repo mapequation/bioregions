@@ -14,10 +14,10 @@ function setError(message) {
 * Add the bioregions clusters
 * @param clusterIds An array of cluster indexes for the corresponding spatial bins array
 */
-function addClusters(clustersIds, binsTimestamp) {
+function addClusters(clusterIds, binsTimestamp) {
   return {
     type: ADD_CLUSTERS,
-    clustersIds,
+    clusterIds,
     binsTimestamp
   }
 }

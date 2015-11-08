@@ -46,7 +46,7 @@ const initialState = {
   species: [], // features count by name, array of {name: string, count: number}
   binning: initialBinningState,
   bins: [], // bins = binner.bins(features)
-  clustersIds: [], // array<int> of cluster id:s, matching bins array in index
+  clusterIds: [], // array<int> of cluster id:s, matching bins array in index
   isClustering: false,
   clusters: [], // features grouped by cluster
 };
@@ -86,11 +86,11 @@ function getBins(binning, features) {
   return binner.bins(features);
 }
 
-function mergeClustersToBins(clustersIds, bins) {
-  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clustersIds[i]}));
-  if (clustersIds.length === bins.length) {
+function mergeClustersToBins(clusterIds, bins) {
+  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
+  if (clusterIds.length === bins.length) {
     bins.forEach((bin, i) => {
-      bin.clusterId = clustersIds[i];
+      bin.clusterId = clusterIds[i];
     });
   }
   return bins;
@@ -99,11 +99,13 @@ function mergeClustersToBins(clustersIds, bins) {
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.ADD_FEATURES:
+    let species = accumulateSpecies(action.features);
       return {
         ...state,
         havePolygons: action.havePolygons,
         features: action.features,
-        species: accumulateSpecies(action.features),
+        species,
+        speciesCountMap: new Map(species.map(({name, count}) => [name, count])),
         bins: getBins(state.binning, action.features)
       };
     case ActionTypes.REQUEST_CLUSTERS:
@@ -115,8 +117,8 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         isClustering: false,
-        bins: mergeClustersToBins(action.clustersIds, state.bins),
-        clustersIds: action.clustersIds
+        bins: mergeClustersToBins(action.clusterIds, state.bins),
+        clusterIds: action.clusterIds
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
@@ -127,7 +129,7 @@ export default function data(state = initialState, action) {
         ...state,
         binning: nextBinning,
         bins: getBins(nextBinning, state.features),
-        clustersIds: [] // Reset clusters on changed binning
+        clusterIds: [] // Reset clusters on changed binning
       }
     default:
       return state;
