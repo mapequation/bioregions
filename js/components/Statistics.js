@@ -14,7 +14,7 @@ class Statistics extends Component {
     let maxCount = species[0].count;
     return (
       <div>
-        <table class="ui celled table">
+        <table className="ui celled table">
           <thead>
             <tr>
               <th>
