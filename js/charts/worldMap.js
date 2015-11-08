@@ -113,7 +113,7 @@ world.update = function(el, props) {
 
   if (props.bins.length > 0) {
     var colorDomainValue, color;
-    if (props.clusters.length > 0) {
+    if (props.bins[0].clusterId !== undefined) {
       console.log("Draw bins colored by cluster...");
       color = d3.scale.category20();
       colorDomainValue = (d) => d.clusterId;
