@@ -39,7 +39,7 @@ class Binning extends Component {
           <tr>
             <td>Max bin size</td>
             <td className="">
-              <TangleInput className="ui label"
+              <TangleInput className="ui label" suffix="˚"
                 value={this.props.maxNodeSize}
                 min={this.props.minNodeSize}
                 max={100}
@@ -51,7 +51,7 @@ class Binning extends Component {
           <tr>
             <td>Min bin size</td>
             <td className="">
-              <TangleInput className="ui label"
+              <TangleInput className="ui label" suffix="˚"
                 value={this.props.minNodeSize}
                 min={0.1}
                 max={this.props.maxNodeSize}
@@ -90,6 +90,8 @@ class Binning extends Component {
             min={this.props.minNodeSize}
             max={100}
             step={0.1}
+            suffix="˚"
+            asdf="asdf"
             onChange={(value) => this.props.changeMaxBinSize(value)} />
         </div>
         <div className="inline field">
@@ -99,6 +101,7 @@ class Binning extends Component {
             min={0.1}
             max={this.props.maxNodeSize}
             step={0.1}
+            suffix="degrees"
             onChange={(value) => this.props.changeMinBinSize(value)} />
         </div>
         <div className="inline field">

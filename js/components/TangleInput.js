@@ -12,6 +12,8 @@ class TangleInput extends Component {
       step: PropTypes.number,
       speed: PropTypes.number,
       format: PropTypes.func,
+      prefix: PropTypes.string,
+      suffix: PropTypes.string,
       className: PropTypes.string,
       onInput: PropTypes.func,
       onChange: PropTypes.func,
@@ -22,7 +24,9 @@ class TangleInput extends Component {
       max: 100,
       step: 1,
       speed: 0,
-      format: (value, step) => step < 1? value.toFixed(Math.ceil(-Math.log10(step))) : value
+      format: (value, step) => step < 1? value.toFixed(Math.ceil(-Math.log10(step))) : value,
+      prefix: "",
+      suffix: "",
     }
 
     constructor(props) {
@@ -173,11 +177,10 @@ class TangleInput extends Component {
         {"tangle-pressed": this.state.isPressed},
         {"tangle-changed": this.state.isChanged},
       );
-      // console.log(`classes: ${classes}`);
       return (
         <span className={classes}
           onMouseDown={this.onMouseDown}
-          >{this.state.formattedValue}</span>
+          >{`${this.props.prefix}${this.state.formattedValue}${this.props.suffix}`}</span>
       )
     }
 }
