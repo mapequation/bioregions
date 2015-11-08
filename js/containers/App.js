@@ -26,22 +26,64 @@ class App extends Component {
   }
 
   initTooltip() {
-    var heapselectByValue = crossfilter.heapselect.by(d => d[1]);
-    var countByName = R.countBy(feature => feature.properties.name);
+    var getSpeciesCounts = R.pipe(
+      R.countBy(feature => feature.properties.name),
+      R.toPairs,
+      R.map(pair => { return {name: pair[0], count: pair[1]}; })
+    );
+    var heapselectByCount = crossfilter.heapselect.by(d => d.count);
+    var heapselectByScore = crossfilter.heapselect.by(d => d.score);
 
     this.tip = d3tip().attr("class", "d3-tip")
       .direction("s")
-      .html(function(d) {
-        var speciesCounts = R.toPairs(countByName(d.points));
-        var topSpecies = heapselectByValue(speciesCounts, 0, speciesCounts.length, 3)
-            .sort((a, b) => b[1] - a[1]);
-        return `<p class="tooltip-heading">
-                    <span class="value total-records-count">${d.points.length}</span> records of
-                    <span class="value total-species-count">${speciesCounts.length}</span> unique species
-                </p>
-                <p class="top-n text-muted">Top 3:</p>` +
-            topSpecies.map(d => `<p><span class="value top-count">${d[1]}</span> <span class="name">${d[0]}</span></p>`)
-            .join("");
+      .html((d) => {
+        var speciesCounts = getSpeciesCounts(d.points);
+        let topCommonSpecies = heapselectByCount(speciesCounts, 0, speciesCounts.length, 3)
+            .sort((a, b) => b.count - a.count);
+        let indicatorSpecies = speciesCounts.map(({name, count}) => {
+          // tfidf-like score
+          let score = (count / topCommonSpecies[0].count) / (this.props.data.speciesCountMap.get(name) / this.props.data.species[0].count);
+          return {name, score};
+        });
+        let topIndicatorSpecies = heapselectByScore(indicatorSpecies, 0, indicatorSpecies.length, 3)
+          .sort((a, b) => b.score - a.score);
+        let topSpecies = R.zip(topCommonSpecies, topIndicatorSpecies);
+
+        let tableRows = topSpecies.map(([common, indicator]) => `
+          <tr>
+            <td class="name">${common.name}</td>
+            <td class="value">${common.count}</td>
+            <td class="name">${indicator.name}</td>
+            <td class="value">${indicator.score.toPrecision(3)}</td>
+          </tr>`
+        ).join("");
+
+        return `
+          <div>
+            <p class="tooltip-heading">
+              <span class="value total-records-count">${d.points.length}</span> records of
+              <span class="value total-species-count">${speciesCounts.length}</span> unique species
+            </p>
+            <table class="ui styled table">
+              <thead>
+                <tr>
+                  <th>Most common species</th>
+                  <th>Count</th>
+                  <th>Most indicative species</th>
+                  <th>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>`;
+              //   <p class="top-n text-muted">Top 3:</p>
+              //   ${topSpecies.map(d => `<p><span class="value top-count">${d.count}</span> <span class="name">${d.name}</span></p>`).join("")}
+              //   <p class="indicative text-muted">Top indicative species:</p>
+              //   ${topIndicatorSpecies.map(d => `<p><span class="value top-count">${d.score}</span> <span class="name">${d.name}</span></p>`).join("")}
+              // `;
+
       });
     d3.select(this.worldMap.getSvg()).call(this.tip);
   }
