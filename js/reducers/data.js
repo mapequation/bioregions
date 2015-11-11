@@ -96,6 +96,17 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
+function getClusterStatistics(clusterIds, bins) {
+  // TODO: Don't repeat, order of execution in object literal guaranteed?
+  if (clusterIds.length === bins.length) {
+    bins.forEach((bin, i) => {
+      bin.clusterId = clusterIds[i];
+    });
+  }
+  // let clusters = R.groupBy
+  return [];
+}
+
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.ADD_FEATURES:
@@ -118,7 +129,8 @@ export default function data(state = initialState, action) {
         ...state,
         isClustering: false,
         bins: mergeClustersToBins(action.clusterIds, state.bins),
-        clusterIds: action.clusterIds
+        clusterIds: action.clusterIds,
+        clusters: getClusterStatistics(action.clusterIds, state.bins),
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:

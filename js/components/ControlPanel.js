@@ -27,10 +27,11 @@ class ControlPanel extends Component {
         </div>
         <div className="title">
           <i className="dropdown icon"></i>
-          Output
+          Map
         </div>
         <div className="content">
-          Save SVG...
+          <p>Color settings etc...</p>
+          <button className="ui basic button">Export...</button>
         </div>
       </div>
     );

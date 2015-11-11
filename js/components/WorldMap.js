@@ -32,16 +32,46 @@ class WorldMap extends Component {
     // return svgProps + svg.html() + "</svg>";
   }
 
+  state = {}
+
+  // Using arrow functions and ES7 Class properties to autobind
+  // http://babeljs.io/blog/2015/06/07/react-on-es6-plus/#arrow-functions
+  updateDimensions = () => {
+    if (!this.svgParent) {
+      throw new Error('Cannot find WorldMap container div')
+    }
+    let { clientWidth, clientHeight } = this.svgParent;
+    this.setState({
+      width: clientWidth,
+      containerWidth: clientWidth,
+      containerHeight: clientHeight
+    });
+  }
+
+  onResize = () => {
+    if (this.rqf) return
+    this.rqf = window.requestAnimationFrame(() => {
+      this.rqf = null
+      this.updateDimensions()
+    })
+  }
+
+
   componentDidMount() {
+    this.updateDimensions();
+    window.addEventListener('resize', this.onResize, false);
     this.loadWorldIfNotFetched();
-    worldChart.create(this.svgParent, this.props);
+    let props = Object.assign({}, this.props, this.state);
+    worldChart.create(this.svgParent, props);
   }
 
   componentDidUpdate() {
-    worldChart.update(this.svgParent, this.props);
+    let props = Object.assign({}, this.props, this.state);
+    worldChart.update(this.svgParent, props);
   }
 
   componentWillUnmount() {
+    window.removeEventListener('resize', this.onResize);
     worldChart.destroy(this.svgParent);
   }
 

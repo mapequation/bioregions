@@ -4,14 +4,10 @@ class Statistics extends Component {
 
   static propTypes = {
     species: PropTypes.array.isRequired,
+    clusters: PropTypes.array,
   }
 
-  render() {
-    let {species} = this.props;
-    if (species.length === 0)
-      return (<div></div>)
-
-    let maxCount = species[0].count;
+  renderSpeciesCounts() {
     return (
       <div>
         <table className="ui celled table">
@@ -36,6 +32,23 @@ class Statistics extends Component {
         </table>
       </div>
     );
+  }
+
+  renderClusters() {
+    return (
+      <div>Clusters here...</div>
+    )
+  }
+
+  render() {
+    let {species, clusters} = this.props;
+    if (species.length === 0)
+      return (<div></div>)
+
+    // if (clusters)
+    //   return this.renderClusters();
+
+    return this.renderSpeciesCounts();
   }
 }
 

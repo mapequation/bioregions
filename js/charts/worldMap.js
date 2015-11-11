@@ -7,7 +7,7 @@ var world = {};
 
 export default world;
 
-world.topology = undefined;
+var _zoom;
 
 world.create = function(el, props) {
   console.log("world.create()");
@@ -64,17 +64,9 @@ world.update = function(el, props) {
 
   var g = svg.select("g");
 
-
   var totalWidth = props.width;
   if (!totalWidth)
     totalWidth = $(anchorElement.node()).innerWidth();
-
-  var zoom = d3.behavior.zoom()
-    .scaleExtent([1, 12])
-    .on("zoom", onZoom);
-
-  svg.call(zoom);
-    // .on("click", onClick);
 
   var height = props.height - props.top - props.bottom;
   var width = totalWidth - props.left - props.right;
@@ -84,9 +76,26 @@ world.update = function(el, props) {
 
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
+  console.log("_zoom:", _zoom);
+  var zoom = _zoom;
+  if (!zoom) {
+    zoom = _zoom = d3.behavior.zoom()
+      .scaleExtent([1, 12])
+      .on("zoom", onZoom);
+
+    svg.call(zoom)
+      .on("click", onClick);
+
+    // world._zoomTranslation = [width/4, height/4];
+    world._zoomTranslation = [0, height/4];
+    world._zoomScale = 1;
+  }
+
+  doZoom(world._zoomTranslation, world._zoomScale);
+
   props.projection
-    .translate([(width/2), (height/2)])
-    .scale( width / 2 / Math.PI);
+    .translate([width/2, height/2])
+    .scale(width / 2 / Math.PI);
 
   var path = d3.geo.path()
     .pointRadius(1)
@@ -159,7 +168,7 @@ world.update = function(el, props) {
 
   function onZoom() {
     if (!props.world)
-    return;
+      return;
 
     var t = d3.event.translate;
     var s = d3.event.scale;
@@ -175,13 +184,21 @@ world.update = function(el, props) {
       Math.max(height  * (1 - s) - h * s, t[1])
     );
 
-    zoom.translate(t);
-    g.attr("transform", "translate(" + t + ")scale(" + s + ")");
+    doZoom(t, s);
+  }
+
+  function doZoom(translation, scale) {
+    // Cache current zoom
+    world._zoomTranslation = translation;
+    world._zoomScale = scale;
+    console.log(`!!! doZoom, t: ${translation}, s: ${scale}`);
+
+    zoom.translate(translation);
+    g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
 
     //adjust the country hover stroke width based on zoom level
-    g.select("#land").style("stroke-width", 1.5 / s);
+    g.select("#land").style("stroke-width", 1.5 / scale);
     // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
-
   }
 
   //geo translation on mouse click in map
