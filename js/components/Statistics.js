@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import R from 'ramda';
+import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 
 class Statistics extends Component {
 
@@ -86,18 +87,20 @@ class Statistics extends Component {
   }
 
   renderClusters() {
+    const {clusters} = this.props;
     return (
       <div>Clusters here...</div>
     )
   }
 
   render() {
-    let {species, clusters} = this.props;
+
+    const {species, groupBy} = this.props;
     if (species.length === 0)
       return (<div></div>)
 
-    // if (clusters)
-    //   return this.renderClusters();
+    if (groupBy == BY_CLUSTER)
+      return this.renderClusters();
 
     return this.renderSpeciesCounts();
   }

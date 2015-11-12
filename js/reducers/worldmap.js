@@ -5,8 +5,8 @@ import d3 from 'd3';
 const initialState = {
   world: {},
   worldStatus: DataFetching.DATA_NOT_FETCHED,
-  width: 300,
-  height: 300,
+  width: 500,
+  height: 500,
   // projection: d3.geo.mercator(),
   projection: d3.geo.equirectangular(),
   // projection: d3.geo.equirectangular.raw,

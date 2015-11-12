@@ -8,6 +8,7 @@ import * as fileLoaderActions from '../actions/FileLoaderActions';
 import * as worldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
+import * as DisplayActions from '../actions/DisplayActions';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import R from 'ramda';
@@ -113,19 +114,20 @@ class App extends Component {
         </div>
         <div className="ui container">
           <div className="ui two column stackable grid">
-            <div className="six wide column">
+            <div className="four wide column">
               <ControlPanel {...{files, data, actions}} />
             </div>
-            <div className="ten wide column">
+            <div className="twelve wide column">
               <WorldMap {...worldmap} {...data} {...actions}
                 ref={(instance) => this.worldMap = instance}
                 onMouseOver={::this.handleMouseOverGridCell}
                 onMouseOut={::this.handleMouseOutGridCell}
                 onMouseClick={::this.handleMouseClickGridCell}
                />
-             <Statistics {...data} {...actions} />
             </div>
           </div>
+          <p></p>
+          <Statistics {...data} {...actions} />
         </div>
       </div>
     );
@@ -151,6 +153,7 @@ function mapDispatchToProps(dispatch) {
       worldmapActions,
       ClusterActions,
       BinningActions,
+      DisplayActions,
     ), dispatch)
   };
 }

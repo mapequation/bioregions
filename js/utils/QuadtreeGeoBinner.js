@@ -8,7 +8,7 @@ class Node {
     this.isLeaf = true;
     this.points = [];
     this.children = []; // at index 0,1,2,3
-    this.clusterId = 0;
+    this.clusterId = -1;
   }
 
   size() {

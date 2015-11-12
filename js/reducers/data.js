@@ -1,6 +1,7 @@
 import * as ActionTypes from '../constants/ActionTypes';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import * as Binning from '../constants/Binning';
+import * as Display from '../constants/Display';
 import R from 'ramda';
 import crossfilter from 'crossfilter';
 
@@ -49,6 +50,7 @@ const initialState = {
   clusterIds: [], // array<int> of cluster id:s, matching bins array in index
   isClustering: false,
   clusters: [], // features grouped by cluster
+  groupBy: Display.BY_NAME, // name or cluster when clusters ready
 };
 
 function accumulateSpecies(features) {
@@ -97,13 +99,15 @@ function mergeClustersToBins(clusterIds, bins) {
 }
 
 function getClusterStatistics(clusterIds, bins) {
-  // TODO: Don't repeat, order of execution in object literal guaranteed?
-  if (clusterIds.length === bins.length) {
-    bins.forEach((bin, i) => {
-      bin.clusterId = clusterIds[i];
-    });
-  }
-  // let clusters = R.groupBy
+  if (bins.length === 0)
+    return [];
+  if (bins[0].clusterId < 0)
+    mergeClustersToBins(clusterIds, bins);
+  // let clusters = R.pipe(
+  //   bins,
+  //   R.groupBy((bin) => bin.clusterId)
+  // );
+  // return clusters;
   return [];
 }
 
@@ -125,12 +129,15 @@ export default function data(state = initialState, action) {
         isClustering: true
       };
     case ActionTypes.ADD_CLUSTERS:
+      let bins = mergeClustersToBins(action.clusterIds, state.bins);
+      let clusters = getClusterStatistics(action.clusterIds, state.bins);
       return {
         ...state,
         isClustering: false,
-        bins: mergeClustersToBins(action.clusterIds, state.bins),
+        bins,
         clusterIds: action.clusterIds,
-        clusters: getClusterStatistics(action.clusterIds, state.bins),
+        clusters,
+        groupBy: Display.BY_CLUSTER,
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
@@ -142,6 +149,11 @@ export default function data(state = initialState, action) {
         binning: nextBinning,
         bins: getBins(nextBinning, state.features),
         clusterIds: [] // Reset clusters on changed binning
+      }
+    case ActionTypes.CHANGE_GROUP_BY:
+      return {
+        ...state,
+        groupBy: action.groupBy
       }
     default:
       return state;
