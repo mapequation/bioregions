@@ -94,7 +94,9 @@ class Node {
     let aggregatedPoints = [];
     nonEmptyChildren.forEach((child) => {
       const childPoints = child.patchPartiallyEmptyNodes(maxNodeSize);
-      aggregatedPoints = aggregatedPoints.concat(...childPoints);
+      childPoints.forEach((point) => {
+        aggregatedPoints.push(point);
+      });
     });
     if (doPatch) {
       this.points = aggregatedPoints;
