@@ -41,11 +41,12 @@ class WorldMap extends Component {
       throw new Error('Cannot find WorldMap container div')
     }
     let { clientWidth, clientHeight } = this.svgParent;
-    this.setState({
+    let nextState = {
       width: clientWidth,
       containerWidth: clientWidth,
       containerHeight: clientHeight
-    });
+    };
+    this.setState(nextState);
   }
 
   onResize = () => {
