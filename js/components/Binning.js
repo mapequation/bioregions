@@ -25,6 +25,23 @@ class Binning extends Component {
     )
   }
 
+  renderTypesSelection() {
+    if (this.props.binnerTypes.length === 1)
+      return (<tr></tr>);
+    return (
+      <tr>
+        <td>Type</td>
+        <td>
+          <select className="ui dropdown">
+            {this.props.binnerTypes.map(binner => (
+              <option key={binner} value={binner}>{binner}</option>
+            ))}
+          </select>
+        </td>
+      </tr>
+    );
+  }
+
   render() {
     return (
       <table className="ui celled table">
@@ -36,16 +53,7 @@ class Binning extends Component {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>Type</td>
-            <td>
-              <select className="ui dropdown">
-                {this.props.binnerTypes.map(binner => (
-                  <option key={binner} value={binner}>{binner}</option>
-                ))}
-              </select>
-            </td>
-          </tr>
+          {this.renderTypesSelection()}
           <tr>
             <td>Max bin size</td>
             <td className="">

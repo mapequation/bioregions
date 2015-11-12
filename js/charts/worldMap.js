@@ -76,9 +76,9 @@ world.update = function(el, props) {
 
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
-  console.log("_zoom:", _zoom);
   var zoom = _zoom;
-  if (!zoom) {
+  if (zoom === undefined) {
+    console.log("Creating worldmap zoom behavior...");
     zoom = _zoom = d3.behavior.zoom()
       .scaleExtent([1, 12])
       .on("zoom", onZoom);
