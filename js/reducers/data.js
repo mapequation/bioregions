@@ -4,6 +4,8 @@ import * as Binning from '../constants/Binning';
 import * as Display from '../constants/Display';
 import R from 'ramda';
 import crossfilter from 'crossfilter';
+import d3 from 'd3';
+import * as S from '../utils/statistics';
 
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
@@ -53,33 +55,6 @@ const initialState = {
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
 };
 
-function accumulateSpecies(features) {
-  // let speciesMap = new Map();
-  // features.forEach(feature => {
-  //   let name = feature.properties.name;
-  //   let currentCount = speciesMap.get[name];
-  //   if (currentCount === undefined)
-  //     speciesMap.set(name, 1);
-  //   else
-  //     speciesMap.set(name, currentCount + 1);
-  // });
-  // let speciesCounts = [];
-  // speciesMap.forEach((name, count) => {
-  //   speciesCounts.push({name, count});
-  // });
-  var heapselectByCount = crossfilter.heapselect.by(d => d.count);
-  var getSpeciesCounts = R.pipe(
-    R.countBy(feature => feature.properties.name),
-    R.toPairs,
-    R.map(pair => { return {name: pair[0], count: pair[1]}; })
-  );
-  var speciesCounts = getSpeciesCounts(features);
-  // var topSpecies = heapselectByCount(speciesCounts, 0, speciesCounts.length, 2)
-  //   .sort((a, b) => b.count - a.count);
-  // return topSpecies;
-  return speciesCounts.sort((a, b) => b.count - a.count);
-}
-
 function getBins(binning, features) {
   let binner = new QuadtreeGeoBinner()
    .minNodeSize(binning.minNodeSize)
@@ -98,23 +73,40 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
-function getClusterStatistics(clusterIds, bins) {
+function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap) {
   if (bins.length === 0)
     return [];
   if (bins[0].clusterId < 0)
     mergeClustersToBins(clusterIds, bins);
-  // let clusters = R.pipe(
-  //   bins,
-  //   R.groupBy((bin) => bin.clusterId)
-  // );
-  // return clusters;
-  return [];
+  return d3.nest()
+    .key((bin) => bin.clusterId)
+    .rollup((bins) => {
+      // rollup features grouped on bins
+      let features = [];
+      bins.forEach((bin) => {
+        // Skip patched aggregation of points on non-leaf level
+        if (bin.isLeaf) {
+          bin.points.forEach((point) => {
+            features.push(point);
+          });
+        }
+      });
+      const topCommonSpecies = S.topSortedCountBy(feature => feature.properties.name, 10, features);
+      const numSpecies = features.length;
+      return {
+        numBins: bins.length,
+        numSpecies,
+        topCommonSpecies,
+        topIndicatorSpecies: S.topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies)
+      }
+    })
+    .entries(bins)
 }
 
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.ADD_FEATURES:
-    let species = accumulateSpecies(action.features);
+    const species = S.sortedCountBy(feature => feature.properties.name, action.features);
       return {
         ...state,
         havePolygons: action.havePolygons,
@@ -130,7 +122,7 @@ export default function data(state = initialState, action) {
       };
     case ActionTypes.ADD_CLUSTERS:
       let bins = mergeClustersToBins(action.clusterIds, state.bins);
-      let clusters = getClusterStatistics(action.clusterIds, state.bins);
+      let clusters = getClusterStatistics(action.clusterIds, state.bins, state.species[0].count, state.speciesCountMap);
       return {
         ...state,
         isClustering: false,

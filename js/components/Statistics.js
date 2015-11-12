@@ -86,10 +86,42 @@ class Statistics extends Component {
     );
   }
 
+  renderCluster(cluster) {
+    const {numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+    return (
+      <table key={cluster.key} className="ui styled table">
+        <thead>
+          <tr>
+            <th>Most common species</th>
+            <th>Count</th>
+            <th>Most indicative species</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            R.zip(topCommonSpecies, topIndicatorSpecies).map(([common, indicator], i) => {
+              return (
+                <tr key={`${cluster.key}-${i}`}>
+                  <td className="name">{common.name}</td>
+                  <td className="value">{common.count}</td>
+                  <td className="name">{indicator.name}</td>
+                  <td className="value">{indicator.score.toPrecision(3)}</td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    )
+  }
+
   renderClusters() {
     const {clusters} = this.props;
     return (
-      <div>Clusters here...</div>
+      <div className="ui segment">
+        {clusters.map((cluster) => this.renderCluster(cluster))}
+      </div>
     )
   }
 
