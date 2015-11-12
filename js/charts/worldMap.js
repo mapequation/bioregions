@@ -86,8 +86,7 @@ world.update = function(el, props) {
     svg.call(zoom)
       .on("click", onClick);
 
-    // world._zoomTranslation = [width/4, height/4];
-    world._zoomTranslation = [0, height/4];
+    world._zoomTranslation = [0, 0];
     world._zoomScale = 1;
   }
 
@@ -191,7 +190,7 @@ world.update = function(el, props) {
     // Cache current zoom
     world._zoomTranslation = translation;
     world._zoomScale = scale;
-    console.log(`!!! doZoom, t: ${translation}, s: ${scale}`);
+    // console.log(`doZoom: t: ${translation}, s: ${scale}`);
 
     zoom.translate(translation);
     g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
