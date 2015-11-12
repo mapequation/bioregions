@@ -98,7 +98,11 @@ class WorldMap extends Component {
         break;
     }
     return (
-      <div className={`ui ${statusClassName} segment`} ref={(el) => this.svgParent = el}></div>
+      <div
+        className={`ui ${statusClassName} segment`}
+        style={{padding: 0}}
+        ref={(el) => this.svgParent = el}>
+      </div>
     );
   }
 }
