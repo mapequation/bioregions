@@ -22,7 +22,7 @@ class Statistics extends Component {
             </tr>
           </thead>
           <tbody>
-            {species.map(({name, count}) => (
+            {this.props.species.map(({name, count}) => (
               <tr key={name}>
                 <td>{name}</td>
                 <td>{count}</td>
