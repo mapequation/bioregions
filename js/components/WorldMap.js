@@ -16,6 +16,7 @@ class WorldMap extends Component {
     binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
     clusterIds: PropTypes.array.isRequired,
+    clusterColors: PropTypes.array.isRequired,
     onMouseOver: PropTypes.func.isRequired,
     onMouseOut: PropTypes.func.isRequired,
     onMouseClick: PropTypes.func.isRequired,

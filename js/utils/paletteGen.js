@@ -1,4 +1,4 @@
-import chroma from 'chroma-js';
+var chroma = require('chroma-js');
 /**
       chroma.palette-gen.js - a palette generator for data scientists
 	  based on Chroma.js HCL color space
@@ -21,7 +21,7 @@ import chroma from 'chroma-js';
 
 // v0.1
 export default {
-  generate(colorsCount, checkColor, forceMode, quality, ultra_precision) {
+  generate: function(colorsCount, checkColor, forceMode, quality, genCandidateLabColor, ultra_precision) {
 		// Default
 		if(colorsCount === undefined)
 			colorsCount = 8;
@@ -29,28 +29,31 @@ export default {
 			checkColor = function(x){return true;};
 		if(forceMode === undefined)
 			forceMode = false;
+		if(genCandidateLabColor === undefined)
+			genCandidateLabColor = function(){return [Math.random()*100,Math.random()*220-110,Math.random()*220-110];};
 		if(quality === undefined)
 			quality = 50;
 		ultra_precision = ultra_precision || false
+
+    // It will be necessary to check if a Lab color exists in the rgb space.
+    function checkLab(lab){
+      var color = chroma.lab(lab[0], lab[1], lab[2]);
+      var rgb = color.rgb();
+      return rgb[0] >= 0 && rgb[0] < 256 && rgb[1] >= 0 && rgb[1] < 256 && rgb[2] >= 0 && rgb[2] < 256 && checkColor(color);
+    }
 
 		if(forceMode){
 			// Force Vector Mode
 
 			var colors = [];
 
-			// It will be necessary to check if a Lab color exists in the rgb space.
-			function checkLab(lab){
-				var color = chroma.lab(lab[0], lab[1], lab[2]);
-				return !isNaN(color.rgb[0]) && color.rgb[0]>=0 && color.rgb[1]>=0 && color.rgb[2]>=0 && color.rgb[0]<256 && color.rgb[1]<256 && color.rgb[2]<256 && checkColor(color);
-			}
-
 			// Init
 			var vectors = {};
 			for(let i=0; i<colorsCount; i++){
 				// Find a valid Lab color
-				var color = [Math.random(),2*Math.random()-1,2*Math.random()-1];
+				var color = genCandidateLabColor();
 				while(!checkLab(color)){
-					color = [Math.random(),2*Math.random()-1,2*Math.random()-1];
+					color = genCandidateLabColor();
 				}
 				colors.push(color);
 			}
@@ -99,7 +102,7 @@ export default {
 					var displacement = speed * Math.sqrt(Math.pow(vectors[i].dl, 2)+Math.pow(vectors[i].da, 2)+Math.pow(vectors[i].db, 2));
 					if(displacement>0){
 						var ratio = speed * Math.min(0.1, displacement)/displacement;
-						candidateLab = [color[0] + vectors[i].dl*ratio, color[1] + vectors[i].da*ratio, color[2] + vectors[i].db*ratio];
+						var candidateLab = [color[0] + vectors[i].dl*ratio, color[1] + vectors[i].da*ratio, color[2] + vectors[i].db*ratio];
 						if(checkLab(candidateLab)){
 							colors[i] = candidateLab;
 						}
@@ -111,18 +114,12 @@ export default {
 		} else {
 
 			// K-Means Mode
-			function checkColor2(color){
-				// Check that a color is valid: it must verify our checkColor condition, but also be in the color space
-				var lab = color.lab();
-				var hcl = color.hcl();
-				return !isNaN(color.rgb[0]) && color.rgb[0]>=0 && color.rgb[1]>=0 && color.rgb[2]>=0 && color.rgb[0]<256 && color.rgb[1]<256 && color.rgb[2]<256 && checkColor(color);
-			}
 
 			var kMeans = [];
 			for(let i=0; i<colorsCount; i++){
-				var lab = [Math.random(),2*Math.random()-1,2*Math.random()-1];
-				while(!checkColor2(chroma.lab(lab))){
-					lab = [Math.random(),2*Math.random()-1,2*Math.random()-1];
+				var lab = genCandidateLabColor();
+				while(!checkLab(lab)){
+					lab = genCandidateLabColor();
 				}
 				kMeans.push(lab);
 			}
@@ -133,7 +130,7 @@ export default {
 				for(let l=0; l<=1; l+=0.01){
 					for(let a=-1; a<=1; a+=0.05){
 						for(let b=-1; b<=1; b+=0.05){
-							if(checkColor2(chroma.lab(l, a, b))){
+							if(checkLab([l, a, b])){
 								colorSamples.push([l, a, b]);
 								samplesClosest.push(null);
 							}
@@ -144,7 +141,7 @@ export default {
 				for(let l=0; l<=1; l+=0.05){
 					for(let a=-1; a<=1; a+=0.1){
 						for(let b=-1; b<=1; b+=0.1){
-							if(checkColor2(chroma.lab(l, a, b))){
+							if(checkLab([l, a, b])){
 								colorSamples.push([l, a, b]);
 								samplesClosest.push(null);
 							}
@@ -190,7 +187,7 @@ export default {
 						candidateKMean[2] /= count;
 					}
 
-					if(count!=0 && checkColor2(chroma.lab(candidateKMean[0], candidateKMean[1], candidateKMean[2])) && candidateKMean){
+					if(count!=0 && checkLab(candidateKMean) && candidateKMean){
 						kMeans[j] = candidateKMean;
 					} else {
 						// The candidate kMean is out of the boundaries of the color space, or unfound.
@@ -227,13 +224,17 @@ export default {
 							|| color[2] != kMeans[j][2];
 					});
 				}
+
 			}
-			return kMeans.map(function(lab){return chroma.lab(lab[0], lab[1], lab[2]);});
+			return kMeans.map(function(lab, i){
+        return chroma.lab(lab[0], lab[1], lab[2]);
+      });
 		}
 	},
 
-	diffSort(colorsToSort) {
+	diffSort: function(colorsToSort) {
 		// Sort
+
 		var diffColors = [colorsToSort.shift()];
 		while(colorsToSort.length>0){
 			var index = -1;
@@ -259,4 +260,4 @@ export default {
 		}
 		return diffColors;
 	}
-}
+};

@@ -54,7 +54,7 @@ const initialState = {
   isClustering: false,
   clusters: [], // features grouped by cluster
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
-  clusterColors: colors.categoryColors(10), // array of chroma colors for each cluster
+  clusterColors: [], // array of chroma colors for each cluster
 };
 
 function getBins(binning, features) {
