@@ -71,7 +71,8 @@ export default {
     let colors = d3.scale.category20().range().map(color => chroma(color));
     if (count > 20)  {
       categoryColorsByIWantHue(count - 20, options).forEach(color => {
-        colors.push(color);
+        // re-create chroma objects as IWantHue depends on earlier version of chroma-js
+        colors.push(chroma(color.hex()));
       });
     }
     return colors;
