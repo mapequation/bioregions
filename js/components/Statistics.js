@@ -62,8 +62,8 @@ class Statistics extends Component {
               <th>{`${numFilteredSpecies} / ${species.length}`}</th>
             </tr>
             <tr>
-              <th class="">Name</th>
-              <th class="sorted descending">Count</th>
+              <th className="">Name</th>
+              <th className="sorted descending">Count</th>
             </tr>
           </thead>
           <tbody>
@@ -89,37 +89,51 @@ class Statistics extends Component {
   renderCluster(cluster) {
     const {numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
     return (
-      <table key={cluster.key} className="ui styled table">
-        <thead>
-          <tr>
-            <th>Most common species</th>
-            <th>Count</th>
-            <th>Most indicative species</th>
-            <th>Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {
-            R.zip(topCommonSpecies, topIndicatorSpecies).map(([common, indicator], i) => {
-              return (
-                <tr key={`${cluster.key}-${i}`}>
-                  <td className="name">{common.name}</td>
-                  <td className="value">{common.count}</td>
-                  <td className="name">{indicator.name}</td>
-                  <td className="value">{indicator.score.toPrecision(3)}</td>
-                </tr>
-              );
-            })
-          }
-        </tbody>
-      </table>
+      <div key={cluster.key} className="ui fluid card">
+        <div className="content">
+          <div className="ui top attached button" style={{backgroundColor: "#1f77b4"}}>
+            {topIndicatorSpecies[0].name}, ...
+          </div>
+          <div className="description">
+            <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> bins
+          </div>
+          <table className="ui very basic compact celled table">
+            <thead>
+              <tr>
+                <th colSpan="2" className="center aligned">Most common species</th>
+                <th colSpan="2" className="center aligned">Most indicative species</th>
+              </tr>
+              <tr>
+                <th>Name</th>
+                <th>Count</th>
+                <th>Name</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                R.zip(topCommonSpecies, topIndicatorSpecies).map(([common, indicator], i) => {
+                  return (
+                    <tr key={`${cluster.key}-${i}`}>
+                      <td className="name">{common.name}</td>
+                      <td className="value">{common.count}</td>
+                      <td className="name">{indicator.name}</td>
+                      <td className="value">{indicator.score.toPrecision(3)}</td>
+                    </tr>
+                  );
+                })
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
     )
   }
 
   renderClusters() {
     const {clusters} = this.props;
     return (
-      <div className="ui segment">
+      <div className="ui cards">
         {clusters.map((cluster) => this.renderCluster(cluster))}
       </div>
     )

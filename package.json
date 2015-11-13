@@ -6,6 +6,7 @@
     "babel-core": "^5.8.33",
     "babel-loader": "^5.3.3",
     "babel-runtime": "^5.8.29",
+    "chroma-js": "^1.1.1",
     "clamp": "^1.0.1",
     "classnames": "^2.2.0",
     "colorbrewer": "0.0.2",

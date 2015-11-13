@@ -6,6 +6,7 @@ import R from 'ramda';
 import crossfilter from 'crossfilter';
 import d3 from 'd3';
 import * as S from '../utils/statistics';
+import * as colors from '../utils/colors';
 
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
@@ -53,6 +54,7 @@ const initialState = {
   isClustering: false,
   clusters: [], // features grouped by cluster
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
+  clusterColors: colors.categoryColors(10), // array of chroma colors for each cluster
 };
 
 function getBins(binning, features) {
@@ -130,6 +132,7 @@ export default function data(state = initialState, action) {
         clusterIds: action.clusterIds,
         clusters,
         groupBy: Display.BY_CLUSTER,
+        clusterColors: colors.categoryColors(clusters.length),
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
