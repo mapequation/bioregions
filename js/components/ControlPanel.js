@@ -32,7 +32,7 @@ class ControlPanel extends Component {
     return (
       <div class="field">
         <label>Statistics by</label>
-        <div className="ui basic buttons mini">
+        <div className="ui compact basic buttons">
           {availableGroupings.map((grouping) => (
             <button key={grouping}
               className={`ui button ${grouping == data.groupBy? "active" : ""}`}

@@ -50,6 +50,8 @@ class App extends Component {
           .sort((a, b) => b.score - a.score);
         let topSpecies = R.zip(topCommonSpecies, topIndicatorSpecies);
 
+        let clusterInfo = d.clusterId < 0? "" : `Cluster id: ${d.clusterId}`;
+
         let tableRows = topSpecies.map(([common, indicator]) => `
           <tr>
             <td class="name">${common.name}</td>
@@ -61,11 +63,13 @@ class App extends Component {
 
         return `
           <div>
-            <p class="tooltip-heading">
+            <h4 class="ui inverted header">
               <span class="value total-records-count">${d.points.length}</span> records of
-              <span class="value total-species-count">${speciesCounts.length}</span> unique species
+              <span class="value total-species-count">${speciesCounts.length}</span> unique species.
+              <div class="sub header">Bin size: ${d.size().toPrecision(1)}˚. ${clusterInfo}</div>
+            </h4>
             </p>
-            <table class="ui styled table">
+            <table class="ui styled inverted table">
               <thead>
                 <tr>
                   <th>Most common species</th>

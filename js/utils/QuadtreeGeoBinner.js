@@ -12,6 +12,10 @@ class Node {
   }
 
   size() {
+    return this.x2 - this.x1;
+  }
+
+  area() {
     const dx = this.x2 - this.x1;
     return dx * dx;
   }

@@ -12,7 +12,7 @@ const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
   binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
   minNodeSize: 1,
-  maxNodeSize: 8,
+  maxNodeSize: 4,
   densityThreshold: 100,
   renderer: QuadtreeGeoBinner.renderer,
 };
