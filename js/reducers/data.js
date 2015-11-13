@@ -96,6 +96,7 @@ function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap)
       const topCommonSpecies = S.topSortedCountBy(feature => feature.properties.name, 10, features);
       const numSpecies = features.length;
       return {
+        clusterId: bins[0].clusterId,
         numBins: bins.length,
         numSpecies,
         topCommonSpecies,

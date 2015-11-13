@@ -6,7 +6,8 @@ class Statistics extends Component {
 
   static propTypes = {
     species: PropTypes.array.isRequired,
-    clusters: PropTypes.array,
+    clusters: PropTypes.array.isRequired,
+    clusterColors: PropTypes.array.isRequired,
   }
 
   state = {
@@ -87,11 +88,17 @@ class Statistics extends Component {
   }
 
   renderCluster(cluster) {
-    const {numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+    const {clusterId, numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+    const {clusterColors} = this.props;
+    let clusterColor = clusterColors[clusterId];
+    let style = {
+      backgroundColor: clusterColor.hex(),
+      color: clusterColor.luminance() < 0.5 ? 'white' : 'black'
+    };
     return (
       <div key={cluster.key} className="ui fluid card">
         <div className="content">
-          <div className="ui top attached button" style={{backgroundColor: "#1f77b4"}}>
+          <div className="ui top attached button" style={style}>
             {topIndicatorSpecies[0].name}, ...
           </div>
           <div className="description">
