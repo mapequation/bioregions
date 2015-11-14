@@ -144,7 +144,9 @@ export default function data(state = initialState, action) {
         ...state,
         binning: nextBinning,
         bins: getBins(nextBinning, state.features),
-        clusterIds: [] // Reset clusters on changed binning
+        clusterIds: [], // Reset clusters on changed binning
+        clusters: [],
+        groupBy: Display.BY_NAME,
       }
     case ActionTypes.CHANGE_GROUP_BY:
       return {
