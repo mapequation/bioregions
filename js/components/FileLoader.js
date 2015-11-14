@@ -1,27 +1,47 @@
 import React, {Component, PropTypes} from 'react';
 import FileInput from './FileInput'
+import DSVWorker from 'worker!../workers/DSVWorker';
 
+const INITIAL_STATE = {
+  fieldsToParse: {
+    Name: 0,
+    Latitude: 1,
+    Longitude: 2,
+  },
+  fieldsSubmitted: false,
+  error: false,
+  message: "",
+  subMessage: "",
+  headLines: [],
+  parsedHead: [],
+  dsvType: "", // tsv or csv
+  done: false,
+};
 
 class FileLoader extends Component {
 
-  state = {
-    fieldsToParse: {
-      Name: 0,
-      Latitude: 1,
-      Longitude: 2,
-    },
-    submitted: false,
-    error: false,
-    message: "",
-    subMessage: "",
-    headLines: [],
-    parsedHead: [],
-  }
+  static propTypes = {
+    isLoading: PropTypes.bool.isRequired,
+    loadedFiles: PropTypes.array.isRequired,
+    sampleFiles: PropTypes.array.isRequired,
+    loadFiles: PropTypes.func.isRequired,
+    loadSampleFile: PropTypes.func.isRequired,
+    parseData: PropTypes.bool.isRequired,
+    data: PropTypes.string.isRequired,
+    setError: PropTypes.func.isRequired,
+    addFeatures: PropTypes.func.isRequired,
+  };
+
+  state = INITIAL_STATE;
 
   componentWillReceiveProps(nextProps) {
-    const {parseHeader, data} = nextProps;
-    if (parseHeader)
+    const {parseData, data} = nextProps;
+    console.log(`!!! FileLoader. receiveProps, parseData: ${parseData}`);
+    if (parseData)
       this.parsePointOccurrenceDataHeader(data);
+    else if (this.props.parseData) {
+      this.setState(INITIAL_STATE);
+    }
   }
 
   parsePointOccurrenceDataHeader(data) {
@@ -60,6 +80,7 @@ class FileLoader extends Component {
 
     const parsedHead = parser.parseRows(headLines.join('\n'));
     // Add to parsed state
+    parsedState.dsvType = isTSV? "tsv" : "csv";
     parsedState.parsedHead = parsedHead;
 
     let columns = parsedHead[0];
@@ -97,6 +118,11 @@ class FileLoader extends Component {
     });
   }
 
+  cancelParsing = () => {
+    this.setState(INITIAL_STATE);
+    this.props.cancelFileActions();
+  }
+
   changeFieldMap = (fieldMap) => {
     let fieldsToParse = Object.assign({}, this.state.fieldsToParse, fieldMap);
      this.setState({
@@ -104,26 +130,75 @@ class FileLoader extends Component {
      });
   }
 
+  submitFieldsMap = () => {
+    this.setState({
+      fieldsSubmitted: true
+    });
+
+    var worker = new DSVWorker();
+    worker.onmessage = (event) => {
+      const {type, message, payload} = event.data;
+      if (type === "error") {
+        this.setState({
+          error: true,
+          message
+        });
+        worker.terminate();
+      }
+      else if (type === "result") {
+        console.log("Got result from worker:", payload);
+        worker.terminate();
+        this.setState({
+          done: true
+        });
+        this.props.addFeatures(payload.features);
+      }
+      else {
+        console.log("Unrecognised message type from worker:", type);
+      }
+    }
+    worker.onerror = (event) => {
+      console.log("Worker error:", event);
+      this.setState({
+        error: true,
+        message: event.message
+      })
+      worker.terminate();
+    }
+
+    const {data} = this.props;
+    const {dsvType, fieldsToParse} = this.state;
+    worker.postMessage({
+      type: "parse",
+      data,
+      dsvType,
+      fieldsToParse,
+    });
+  }
+
+  ErrorMessage = ({message, subMessage, children}) => (
+    <Dimmer onCancel={this.cancelParsing} subHeader={this.props.loadedFiles[0]}>
+      {children}
+      <div className="ui negative message">
+        <div className="header">
+          {message}
+        </div>
+        {subMessage}
+      </div>
+    </Dimmer>
+  );
+
   renderFileOptions() {
-    const {parseHeader, loadedFiles, cancelFileActions} = this.props;
-    const {error, message, subMessage, headLines, parsedHead, fieldsToParse, submitted} = this.state;
-    if (!parseHeader)
+    const {parseData, loadedFiles} = this.props;
+    const {error, message, subMessage, headLines, parsedHead, fieldsToParse, fieldsSubmitted, done} = this.state;
+    if (!parseData)
       return (<span></span>);
 
-    var ErrorMessage = ({message, subMessage, children}) => (
-      <Dimmer onCancel={cancelFileActions} subHeader={loadedFiles[0]}>
-        {children}
-        <div className="ui negative message">
-          <div className="header">
-            {message}
-          </div>
-          {subMessage}
-        </div>
-      </Dimmer>
-    );
-    ErrorMessage.defaultProps = {
-      subMessage: ""
-    };
+    if (done) { // Will soon be restored to initial state with !parseData
+      return (<span></span>);
+    }
+
+    const ErrorMessage = this.ErrorMessage;
 
     if (error) {
       if (headLines.length === 0)
@@ -151,14 +226,14 @@ class FileLoader extends Component {
       )
     }
 
-    if (!submitted) {
+    const columns = parsedHead[0];
 
-      const columns = parsedHead[0];
+    if (!fieldsSubmitted) {
       const selectOptions = columns.map((col, i) => (<option key={i} value={i}>{col}</option>));
       const {Name, Latitude, Longitude} = fieldsToParse;
 
       return (
-        <Dimmer onCancel={cancelFileActions} subHeader={loadedFiles[0]}>
+        <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
           <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
 
           <h2 className="ui header">Select how to parse columns</h2>
@@ -194,7 +269,7 @@ class FileLoader extends Component {
                 <tfoot>
                   <tr>
                     <th colSpan="2" className="right aligned">
-                      <button type="submit" className="ui basic button">Submit</button>
+                      <button type="submit" className="ui basic button" onClick={this.submitFieldsMap}>Submit</button>
                     </th>
                   </tr>
                 </tfoot>
@@ -208,18 +283,23 @@ class FileLoader extends Component {
     // Parsing file...
 
     return (
-      <Dimmer onCancel={cancelFileActions} subHeader={loadedFiles[0]}>
+      <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
         <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
-        <h2 className="ui header">
-          Parsing file...
-        </h2>
+        <div className="ui active progress">
+          <div className="bar">
+            <div className="progress"></div>
+          </div>
+          <div className="label">Parsing records...</div>
+        </div>
       </Dimmer>
     )
   }
 
   render() {
-    const {loadedFiles, parseHeader, data, ...other} = this.props;
-    console.log("loadedFiles:", loadedFiles);
+    const {loadedFiles, parseData, data, ...other} = this.props;
+
+    console.log(`##### FileLoader.render(), parseData: ${parseData}`);
+
     return (
       <div>
         <FileInput {...other} />
@@ -228,17 +308,6 @@ class FileLoader extends Component {
     );
   }
 }
-
-FileLoader.propTypes = {
-  isLoading: PropTypes.bool.isRequired,
-  loadedFiles: PropTypes.array.isRequired,
-  sampleFiles: PropTypes.array.isRequired,
-  loadFiles: PropTypes.func.isRequired,
-  loadSampleFile: PropTypes.func.isRequired,
-  parseHeader: PropTypes.bool.isRequired,
-  data: PropTypes.string.isRequired,
-  setError: PropTypes.func.isRequired,
-};
 
 
 var Dimmer = ({header, subHeader, onCancel, children}) => (

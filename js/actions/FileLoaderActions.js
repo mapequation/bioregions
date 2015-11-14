@@ -1,7 +1,7 @@
 import {
   LOAD_FILES,
   LOAD_SAMPLE_FILE,
-  PARSE_HEADER,
+  PARSE_TEXT_DATA,
   ADD_FEATURES,
   CANCEL_FILE_ACTIONS
 } from '../constants/ActionTypes';
@@ -56,9 +56,9 @@ function setPendingFiles(filesList) {
   }
 }
 
-function parseHeader(data, filename) {
+function parseTextData(data, filename) {
   return {
-    type: PARSE_HEADER,
+    type: PARSE_TEXT_DATA,
     payload: {
       data,
       filename
@@ -66,7 +66,7 @@ function parseHeader(data, filename) {
   }
 }
 
-function addFeatures(features, havePolygons = false) {
+export function addFeatures(features, havePolygons = false) {
   return {
     type: ADD_FEATURES,
     features,
@@ -124,7 +124,7 @@ export function loadFiles(filesList) {
     else {
       let reader = new FileReader();
       reader.onload = (progressEvent) => {
-        return dispatch(parseHeader(reader.result, file.name));
+        return dispatch(parseTextData(reader.result, file.name));
       };
 
       try {

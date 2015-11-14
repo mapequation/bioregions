@@ -77,7 +77,7 @@ class Statistics extends Component {
           </tbody>
           <tfoot>
             <tr>
-              <th colspan="2">
+              <th colSpan="2">
                 {this.renderShowMore(numLimited)}
               </th>
             </tr>
