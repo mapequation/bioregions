@@ -15,7 +15,7 @@ function parseDSV({data, dsvType, fieldsToParse}) {
     const name = row[Name];
     const lat = +row[Latitude];
     const long = +row[Longitude];
-    if (name >= name && lat >= lat && long >= long) { // not undefined/NaN etc
+    if (name && lat >= lat && long >= long) { // not undefined/NaN etc
       if (count % 1000 === 0) {
         postMessage({type: "progress", payload: { count, numSkipped, activity: "Parsing rows..." }});
       }
