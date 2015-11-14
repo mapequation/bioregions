@@ -9,6 +9,7 @@ import * as worldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
+import * as ErrorActions from '../actions/ErrorActions';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import R from 'ramda';
@@ -109,7 +110,7 @@ class App extends Component {
   render() {
     const {data, files, worldmap, errorMessage, actions} = this.props;
     return (
-      <div>
+      <div className="">
         <div className="ui secondary pointing menu">
           <a className="active item">Infomap Bioregions</a>
           <div className="right menu">
@@ -158,6 +159,7 @@ function mapDispatchToProps(dispatch) {
       ClusterActions,
       BinningActions,
       DisplayActions,
+      ErrorActions,
     ), dispatch)
   };
 }

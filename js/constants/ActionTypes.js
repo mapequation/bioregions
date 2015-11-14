@@ -2,6 +2,8 @@
 export const LOAD_FILES = 'LOAD_FILES';
 export const LOAD_SAMPLE_FILE = 'LOAD_SAMPLE_FILE';
 export const ADD_FEATURES = 'ADD_FEATURES';
+export const PARSE_HEADER = 'PARSE_HEADER';
+export const CANCEL_FILE_ACTIONS = 'CANCEL_FILE_ACTIONS';
 
 //errorMessage
 export const ERROR_MESSAGE = 'ERROR_MESSAGE';

@@ -123,16 +123,13 @@ world.update = function(el, props) {
     var colorDomainValue;
     var color;
     if (props.clusterIds.length !== 0) {
-      console.log("Draw bins colored by cluster...");
       color = (clusterId) => props.clusterColors[clusterId];
       colorDomainValue = (d) => d.clusterId;
     }
     else {
-      console.log("Draw bins as cloropleth map...");
       const bins = props.bins;
       let maxCount = d3.max(bins.map((bin) => bin.points.length / bin.area()));
       let domainMax = + maxCount + (8 - maxCount % 8);
-      console.log("domainMax:", domainMax);
       let domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
       domain.push(domainMax);
       domain[0] = 1; // Make a threshold between non-empty and empty bins
@@ -141,7 +138,6 @@ world.update = function(el, props) {
 
       let colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       colorRange.unshift("#eeeeee");
-      console.log("Color range:", colorRange.length, colorRange);
       color = d3.scale.threshold()
         .domain(domain)
         .range(colorRange);

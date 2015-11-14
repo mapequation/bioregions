@@ -1,14 +1,8 @@
-import {REQUEST_CLUSTERS, ADD_CLUSTERS, ERROR_MESSAGE} from '../constants/ActionTypes';
+import {REQUEST_CLUSTERS, ADD_CLUSTERS} from '../constants/ActionTypes';
+import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios';
 import d3 from 'd3';
-
-function setError(message) {
-  return {
-    type: ERROR_MESSAGE,
-    message
-  }
-}
 
 /**
 * Add the bioregions clusters

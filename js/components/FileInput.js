@@ -39,7 +39,6 @@ class FileInput extends Component {
             {this.props.sampleFiles.map((sampleFile) => (
               <div key={sampleFile.filename} className="item" onClick={() => this.props.loadSampleFile(sampleFile.filename)}>{sampleFile.name}</div>
             ))}
-            <div className="item"><i className="help icon"></i> Help</div>
           </div>
         </div>
       </div>
