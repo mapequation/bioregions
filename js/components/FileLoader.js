@@ -97,8 +97,11 @@ class FileLoader extends Component {
     });
   }
 
-  handleChange = (event) => {
-     console.log("!!!! handleChange:", event.target.value);
+  changeFieldMap = (fieldMap) => {
+    let fieldsToParse = Object.assign({}, this.state.fieldsToParse, fieldMap);
+     this.setState({
+       fieldsToParse
+     });
   }
 
   renderFileOptions() {
@@ -166,15 +169,7 @@ class FileLoader extends Component {
                   <tr>
                     <td>Name</td>
                     <td>
-                      <select className="ui dropdown" onChange={(e) => {
-                          console.log("!!!!CHANGE STATE:", e.target.value);
-                          this.setState({
-                            fieldsToParse: {
-                              ...fieldsToParse,
-                              Name: e.target.value
-                            }
-                          });
-                        }} value={Name}>
+                      <select value={Name} onChange={(e) => {this.changeFieldMap({Name: e.target.value})}}>
                         {selectOptions}
                       </select>
                     </td>
@@ -182,8 +177,7 @@ class FileLoader extends Component {
                   <tr>
                     <td>Latitude</td>
                     <td>
-                      <select className="ui dropdown" onChange={this.asdf}
-                        value={Latitude}>
+                      <select value={Latitude} onChange={(e) => {this.changeFieldMap({Latitude: e.target.value})}}>
                         {selectOptions}
                       </select>
                     </td>
@@ -191,8 +185,7 @@ class FileLoader extends Component {
                   <tr>
                     <td>Longitude</td>
                     <td>
-                      <select className="ui dropdown" onChange={(e) => {console.log("Change Longitude to", e.target.value);}}
-                        defaultValue={Longitude}>
+                      <select value={Longitude} onChange={(e) => {this.changeFieldMap({Longitude: e.target.value})}}>
                         {selectOptions}
                       </select>
                     </td>
