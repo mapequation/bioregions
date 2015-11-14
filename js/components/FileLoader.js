@@ -15,6 +15,9 @@ const INITIAL_STATE = {
   headLines: [],
   parsedHead: [],
   dsvType: "", // tsv or csv
+  numRecordsParsed: 0,
+  numRecordsSkipped: 0,
+  activity: "",
   done: false,
 };
 
@@ -36,7 +39,6 @@ class FileLoader extends Component {
 
   componentWillReceiveProps(nextProps) {
     const {parseData, data} = nextProps;
-    console.log(`!!! FileLoader. receiveProps, parseData: ${parseData}`);
     if (parseData)
       this.parsePointOccurrenceDataHeader(data);
     else if (this.props.parseData) {
@@ -153,6 +155,13 @@ class FileLoader extends Component {
         });
         this.props.addFeatures(payload.features);
       }
+      else if (type === "progress") {
+        this.setState({
+          numRecordsParsed: payload.count,
+          numRecordsSkipped: payload.numSkipped,
+          activity: payload.activity
+        });
+      }
       else {
         console.log("Unrecognised message type from worker:", type);
       }
@@ -228,6 +237,21 @@ class FileLoader extends Component {
 
     const columns = parsedHead[0];
 
+    // Test
+    // if (columns.length > 3) {
+    //   return (
+    //     <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
+    //       <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
+    //       <div className="ui indeterminate inline text loader">
+    //         <h2 className="ui header">
+    //           Parsing rows...
+    //           <div className="sub header">12000 records parsed, 344 invalid records skipped.</div>
+    //         </h2>
+    //       </div>
+    //     </Dimmer>
+    //   )
+    // }
+
     if (!fieldsSubmitted) {
       const selectOptions = columns.map((col, i) => (<option key={i} value={i}>{col}</option>));
       const {Name, Latitude, Longitude} = fieldsToParse;
@@ -281,15 +305,15 @@ class FileLoader extends Component {
     }
 
     // Parsing file...
-
+    const {numRecordsParsed, numRecordsSkipped, activity} = this.state;
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
         <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
-        <div className="ui active progress">
-          <div className="bar">
-            <div className="progress"></div>
-          </div>
-          <div className="label">Parsing records...</div>
+        <div className="ui indeterminate inline text loader">
+          <h2 className="ui header">
+            {activity}
+            <div className="sub header">{numRecordsParsed} records parsed, {numRecordsSkipped} invalid records skipped.</div>
+          </h2>
         </div>
       </Dimmer>
     )
@@ -297,8 +321,6 @@ class FileLoader extends Component {
 
   render() {
     const {loadedFiles, parseData, data, ...other} = this.props;
-
-    console.log(`##### FileLoader.render(), parseData: ${parseData}`);
 
     return (
       <div>
