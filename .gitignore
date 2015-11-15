@@ -1,5 +1,6 @@
 .DS_Store
 dist/**
+static/**
 node_modules/
 npm-debug.log
 semantic/dist
