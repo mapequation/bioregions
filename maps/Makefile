@@ -60,9 +60,9 @@ GEOGRAPHICAL_LINES = physical/ne_$(SCALE)_geographic_lines
 
 physical/land.topojson: $(LAND).shp Makefile
 	cp $(LAND).shp physical/land.shp
-	mv $(LAND).dbf physical/land.dbf
-	mv $(LAND).prj physical/land.prj
-	mv $(LAND).shx physical/land.shx
+	cp $(LAND).dbf physical/land.dbf
+	cp $(LAND).prj physical/land.prj
+	cp $(LAND).shx physical/land.shx
 	topojson -o $@ -- physical/land.shp
 
 # physical/land.topojson: physical/land.json Makefile
