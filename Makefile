@@ -4,7 +4,7 @@ PLANT_DATA = data/coordinates_plants_west_africa.txt
 
 .PHONY: all maps
 
-all: Infomap-worker.js $(SNAKE_DATA) $(PLANT_DATA) Makefile
+all: Infomap-worker.js $(SNAKE_DATA) $(PLANT_DATA) maps Makefile
 
 Infomap-worker.js:
 	curl -LO http://www.mapequation.org/downloads/$@
