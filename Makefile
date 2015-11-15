@@ -2,9 +2,9 @@
 SNAKE_DATA = data/coordinates_snakes_south_america.txt
 PLANT_DATA = data/coordinates_plants_west_africa.txt
 
-.PHONY: all maps
+.PHONY: all maps css
 
-all: Infomap-worker.js $(SNAKE_DATA) $(PLANT_DATA) maps Makefile
+all: Infomap-worker.js $(SNAKE_DATA) $(PLANT_DATA) maps css Makefile
 
 Infomap-worker.js:
 	curl -LO http://www.mapequation.org/downloads/$@
@@ -22,6 +22,8 @@ $(PLANT_DATA):
 maps:
 	$(MAKE) -C maps
 
+css:
+	cd semantic && gulp build
 
 clean:
 	$(RM) Infomap-worker.js
