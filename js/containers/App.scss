@@ -1,0 +1,5 @@
+.min-content {
+  width: -moz-min-content;    /* Firefox */
+  width: -webkit-min-content; /* Chrome */
+  width: min-content;
+}

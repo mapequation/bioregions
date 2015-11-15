@@ -1,13 +1,7 @@
-import {LOAD_WORLD, ADD_WORLD, ERROR_MESSAGE} from '../constants/ActionTypes';
+import {LOAD_WORLD, ADD_WORLD} from '../constants/ActionTypes';
+import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios'
-
-function setError(message) {
-  return {
-    type: ERROR_MESSAGE,
-    message
-  }
-}
 
 /**
 * Add the loaded world

@@ -1,23 +1,17 @@
-import {REQUEST_CLUSTERS, ADD_CLUSTERS, ERROR_MESSAGE} from '../constants/ActionTypes';
+import {REQUEST_CLUSTERS, ADD_CLUSTERS} from '../constants/ActionTypes';
+import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios';
 import d3 from 'd3';
 
-function setError(message) {
-  return {
-    type: ERROR_MESSAGE,
-    message
-  }
-}
-
 /**
 * Add the bioregions clusters
-* @param clusters An array of cluster indexes for the corresponding spatial bins array
+* @param clusterIds An array of cluster indexes for the corresponding spatial bins array
 */
-function addClusters(clusters, binsTimestamp) {
+function addClusters(clusterIds, binsTimestamp) {
   return {
     type: ADD_CLUSTERS,
-    clusters,
+    clusterIds,
     binsTimestamp
   }
 }
@@ -78,11 +72,11 @@ function onInfomapFinished(dispatch, binsTimestamp, output) {
       return null; // Strip commented rows
     return [+row[0].substring(1), +row[1]]; // [nodeId, clusterId] // zero-based
   });
-  let clusters = new Array(clu.length);
+  let clusterIds = new Array(clu.length);
   clu.forEach((row) => {
-    clusters[row[0] - 1] = row[1] - 1;
+    clusterIds[row[0] - 1] = row[1] - 1;
   });
-  dispatch(addClusters(clusters, binsTimestamp));
+  dispatch(addClusters(clusterIds, binsTimestamp));
 }
 
 

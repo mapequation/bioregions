@@ -2,6 +2,8 @@
 export const LOAD_FILES = 'LOAD_FILES';
 export const LOAD_SAMPLE_FILE = 'LOAD_SAMPLE_FILE';
 export const ADD_FEATURES = 'ADD_FEATURES';
+export const PARSE_TEXT_DATA = 'PARSE_TEXT_DATA';
+export const CANCEL_FILE_ACTIONS = 'CANCEL_FILE_ACTIONS';
 
 //errorMessage
 export const ERROR_MESSAGE = 'ERROR_MESSAGE';
@@ -15,3 +17,12 @@ export const ADD_WORLD = 'ADD_WORLD';
 //infomap
 export const REQUEST_CLUSTERS = 'REQUEST_CLUSTERS';
 export const ADD_CLUSTERS = 'ADD_CLUSTERS';
+
+//binning
+export const BINNING_CHANGE_TYPE = 'BINNING_CHANGE_TYPE';
+export const BINNING_MIN_NODE_SIZE = 'BINNING_MIN_NODE_SIZE';
+export const BINNING_MAX_NODE_SIZE = 'BINNING_MAX_NODE_SIZE';
+export const BINNING_DENSITY_THRESHOLD = 'BINNING_DENSITY_THRESHOLD';
+
+//Display
+export const CHANGE_GROUP_BY = 'CHANGE_GROUP_BY';

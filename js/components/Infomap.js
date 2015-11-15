@@ -1,24 +1,30 @@
 import React, {Component, PropTypes} from 'react';
 import FileInput from './FileInput'
+import classNames from 'classnames';
 
 class Infomap extends Component {
-  constructor(props) {
-    super(props);
+
+  static propTypes = {
+    features: PropTypes.array.isRequired,
+    isClustering: PropTypes.bool.isRequired,
+    getClusters: PropTypes.func.isRequired,
   }
 
   render() {
-    const {data, runInfomap} = this.props;
+    const {features, isClustering, getClusters} = this.props;
+    let classes = classNames("ui button", { loading: isClustering });
+    if (features.length === 0)
+      return <div></div>;
     return (
       <div>
-        <button className="ui button" onClick={runInfomap}>Cluster...</button>
+        <button className={classes}
+          disabled={isClustering ? "disabled" : false}
+          onClick={() => getClusters()}>
+          Cluster...
+        </button>
       </div>
     );
   }
 }
-
-Infomap.propTypes = {
-  data: PropTypes.object.isRequired,
-  runInfomap: PropTypes.func.isRequired,
-};
 
 export default Infomap;

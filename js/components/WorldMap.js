@@ -13,8 +13,10 @@ class WorldMap extends Component {
     loadWorld: PropTypes.func.isRequired,
     havePolygons: PropTypes.bool.isRequired,
     features: PropTypes.array.isRequired,
-    binner: PropTypes.object.isRequired,
+    binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
+    clusterIds: PropTypes.array.isRequired,
+    clusterColors: PropTypes.array.isRequired,
     onMouseOver: PropTypes.func.isRequired,
     onMouseOut: PropTypes.func.isRequired,
     onMouseClick: PropTypes.func.isRequired,
@@ -31,26 +33,53 @@ class WorldMap extends Component {
     // return svgProps + svg.html() + "</svg>";
   }
 
+  state = {}
+
+  // Using arrow functions and ES7 Class properties to autobind
+  // http://babeljs.io/blog/2015/06/07/react-on-es6-plus/#arrow-functions
+  updateDimensions = () => {
+    if (!this.svgParent) {
+      throw new Error('Cannot find WorldMap container div')
+    }
+    let { clientWidth, clientHeight } = this.svgParent;
+    let nextState = {
+      width: clientWidth,
+      containerWidth: clientWidth,
+      containerHeight: clientHeight
+    };
+    this.setState(nextState);
+  }
+
+  onResize = () => {
+    if (this.rqf) return
+    this.rqf = window.requestAnimationFrame(() => {
+      this.rqf = null
+      this.updateDimensions()
+    })
+  }
+
+
   componentDidMount() {
-    console.log("WorldMap::componentDidMount()");
+    this.updateDimensions();
+    window.addEventListener('resize', this.onResize, false);
     this.loadWorldIfNotFetched();
-    worldChart.create(this.svgParent, this.props);
+    let props = Object.assign({}, this.props, this.state);
+    worldChart.create(this.svgParent, props);
   }
 
   componentDidUpdate() {
-    console.log("WorldMap::componentDidUpdate()");
-    this.loadWorldIfNotFetched();
-    worldChart.update(this.svgParent, this.props);
+    let props = Object.assign({}, this.props, this.state);
+    worldChart.update(this.svgParent, props);
   }
 
   componentWillUnmount() {
+    window.removeEventListener('resize', this.onResize);
     worldChart.destroy(this.svgParent);
   }
 
   loadWorldIfNotFetched() {
     const worldStatus = this.props.worldStatus;
     if (worldStatus === DataFetching.DATA_NOT_FETCHED) {
-      console.log("WorldMap -> loadWorld()");
       this.props.loadWorld();
     }
   }
@@ -70,7 +99,11 @@ class WorldMap extends Component {
         break;
     }
     return (
-      <div className={`ui ${statusClassName} segment`} ref={(el) => this.svgParent = el}></div>
+      <div
+        className={`ui ${statusClassName} segment`}
+        style={{padding: 0}}
+        ref={(el) => this.svgParent = el}>
+      </div>
     );
   }
 }

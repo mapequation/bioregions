@@ -1,6 +1,15 @@
-import {LOAD_FILES, LOAD_SAMPLE_FILE, ERROR_MESSAGE, ADD_FEATURES} from '../constants/ActionTypes';
+import {
+  LOAD_FILES,
+  LOAD_SAMPLE_FILE,
+  PARSE_TEXT_DATA,
+  ADD_FEATURES,
+  CANCEL_FILE_ACTIONS
+} from '../constants/ActionTypes';
+import {setError} from './ErrorActions';
 import d3 from 'd3';
 import _ from 'lodash';
+import io from '../utils/io';
+import shp from 'shpjs';
 
 let exampleGeoJson = {
   type: "FeatureCollection",
@@ -47,14 +56,17 @@ function setPendingFiles(filesList) {
   }
 }
 
-function setError(message) {
+function parseTextData(data, filename) {
   return {
-    type: ERROR_MESSAGE,
-    message
+    type: PARSE_TEXT_DATA,
+    payload: {
+      data,
+      filename
+    }
   }
 }
 
-function addFeatures(features, havePolygons = false) {
+export function addFeatures(features, havePolygons = false) {
   return {
     type: ADD_FEATURES,
     features,
@@ -64,17 +76,63 @@ function addFeatures(features, havePolygons = false) {
 
 export function loadFiles(filesList) {
   return (dispatch, getState) => {
+    let numFiles = filesList.length;
     let file = filesList[0];
-    let reader = new FileReader();
-    reader.onload = (progressEvent) => {
-        console.log("reader.result ready!");
-    };
 
-    try {
-      reader.readAsText(file);
+    let fileArray = Array.from(filesList);
+
+    // Shapefile needs multiple files
+    // let isShapefile = /shp$|prj$|dbf$|zip$/.test(filename);
+    // let isShapefile = /shp$|prj$|dbf$/.test(filename);
+    let isShapefile = _.any(fileArray, file => /shp$/.test(file.name));
+
+    if (isShapefile) {
+      console.log("Found a .shp file");
+      // Keep buffers here
+      let shapefiles = new Map();
+
+      for (let i = 0; i < numFiles; ++i) {
+        let file = filesList[i];
+        // Only keep .shp, .prj and .dbf files
+        if (/shp$|prj$|dbf$/.test(file.name))
+          shapefiles.set(file.name.slice(-3), file);
+      }
+      if (!shapefiles.has('dbf'))
+        return dispatch(setError(`Can't use a .shp file without a .dbf file.`));
+
+      let filePromises = [];
+      shapefiles.forEach(file => {
+        console.log(`Add promise for file ${file.name}...`);
+        filePromises.push(io.readFile(file, /prj$/.test(file.name) ? 'text' : 'buffer'));
+      });
+
+      Promise.all(filePromises)
+        .then(result => {
+          result.forEach(file => { shapefiles.set(file.name.slice(-3), file.data); });
+          let shpBuffer = shapefiles.get('shp');
+          let prjString = shapefiles.get('prj');
+          let dbfBuffer = shapefiles.get('dbf');
+          console.log("Combine shapefiles...");
+          let geoJson = shp.combine([shp.parseShp(shpBuffer, prjString), shp.parseDbf(dbfBuffer)]);
+          console.log("Parse shapefiles...");
+          parseGeoJson(geoJson);
+        })
+        .catch(err => {
+          return dispatch(setError(`Error loading shapefiles: ${err}`));
+        });
     }
-    catch (e) {
-      dispatch(setError(`Error loading file '${file.name}': ${e}`));
+    else {
+      let reader = new FileReader();
+      reader.onload = (progressEvent) => {
+        return dispatch(parseTextData(reader.result, file.name));
+      };
+
+      try {
+        reader.readAsText(file);
+      }
+      catch (e) {
+        return dispatch(setError(`Error loading file '${file.name}': ${e}`));
+      }
     }
   }
 }
@@ -112,8 +170,14 @@ function loadSnakes() {
           .filter((d) => validatePointFeature(d))
           .value();
       console.log("Filtered", snakes.length, "snakes from", data.length, 'in the original data.');
-      dispatch(addFeatures(snakes));
+      return dispatch(addFeatures(snakes));
     });
+  }
+}
+
+export function cancelFileActions() {
+  return {
+    type: CANCEL_FILE_ACTIONS
   }
 }
 
