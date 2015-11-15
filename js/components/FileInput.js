@@ -32,7 +32,7 @@ class FileInput extends Component {
     return (
       <div className="ui buttons">
         <div className="ui button" onClick={::this.handleClickLoadFile}>Load data...</div>
-        <input id="inputfile" ref="inputfile" style={{display: "none"}} type="file" placeholder="File input"></input>
+        <input id="inputfile" ref="inputfile" style={{display: "none"}} type="file" multiple placeholder="File input"></input>
         <div className="ui floating dropdown icon button">
           <i className="dropdown icon"></i>
           <div className="menu">
