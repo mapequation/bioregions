@@ -170,7 +170,8 @@ class FileLoader extends Component {
       console.log("Worker error:", event);
       this.setState({
         error: true,
-        message: event.message
+        message: "Worker error",
+        subMessage: event.message
       })
       worker.terminate();
     }
