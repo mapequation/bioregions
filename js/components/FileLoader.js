@@ -147,10 +147,18 @@ class FileLoader extends Component {
     const ErrorMessage = this.ErrorMessage;
 
     if (error) {
+      if (!parsedFeatureProperty)
+        return (
+          <ErrorMessage message={message} subMessage={subMessage}>
+          </ErrorMessage>
+        );
+
       return (
         <ErrorMessage message={message} subMessage={subMessage}>
+          <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
         </ErrorMessage>
       );
+
     }
 
     const subHeader = files.map(file => file.name).join(",\n");
@@ -159,7 +167,7 @@ class FileLoader extends Component {
       const selectOptions = R.keys(parsedFeatureProperty).map((field, i) => (<option key={i} value={field}>{field}</option>));
       return (
         <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-
+          <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
           <h2 className="ui header">Select name field</h2>
           <div className="ui center aligned container grid">
             <div className="ui compact segment">
@@ -193,6 +201,7 @@ class FileLoader extends Component {
 
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+        <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
         <Loader header={activity} subHeader={amount}></Loader>
       </Dimmer>
     )
