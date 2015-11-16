@@ -301,7 +301,7 @@ class FileLoader extends Component {
   }
 
   renderFileLoading() {
-    const {isLoading, parsedHead, parsedFeatureProperty} = this.props;
+    const {isLoading, files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
     const {done} = this.state;
     if (!isLoading)
       return (<span></span>);
@@ -315,6 +315,23 @@ class FileLoader extends Component {
 
     if (parsedFeatureProperty)
       return this.renderGeoJSONFileOptions();
+
+    const ErrorMessage = this.ErrorMessage;
+
+    if (error) {
+      return (
+        <ErrorMessage message={message} subMessage={subMessage}>
+        </ErrorMessage>
+      );
+    }
+    // Loading file...
+    const subHeader = files.map(file => file.name).join(",\n");
+
+    return (
+      <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+        <Loader header="Loading files..."></Loader>
+      </Dimmer>
+    );
   }
 
 
