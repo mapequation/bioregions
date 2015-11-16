@@ -40,28 +40,10 @@ class App extends Component {
   }
 
   initTooltip() {
-    var getSpeciesCounts = R.pipe(
-      R.countBy(feature => feature.properties.name),
-      R.toPairs,
-      R.map(pair => { return {name: pair[0], count: pair[1]}; })
-    );
-    var heapselectByCount = crossfilter.heapselect.by(d => d.count);
-    var heapselectByScore = crossfilter.heapselect.by(d => d.score);
-
     this.tip = d3tip().attr("class", "d3-tip")
       .direction("s")
       .html((d) => {
-        var speciesCounts = getSpeciesCounts(d.points);
-        let topCommonSpecies = heapselectByCount(speciesCounts, 0, speciesCounts.length, 3)
-            .sort((a, b) => b.count - a.count);
-        let indicatorSpecies = speciesCounts.map(({name, count}) => {
-          // tfidf-like score
-          let score = (count / topCommonSpecies[0].count) / (this.props.data.speciesCountMap.get(name) / this.props.data.species[0].count);
-          return {name, score};
-        });
-        let topIndicatorSpecies = heapselectByScore(indicatorSpecies, 0, indicatorSpecies.length, 3)
-          .sort((a, b) => b.score - a.score);
-        let topSpecies = R.zip(topCommonSpecies, topIndicatorSpecies);
+        let topSpecies = R.zip(d.topCommonSpecies, d.topIndicatorSpecies).slice(0,5);
 
         let clusterInfo = d.clusterId < 0? "" : `Cluster id: ${d.clusterId}`;
 
@@ -77,9 +59,9 @@ class App extends Component {
         return `
           <div>
             <h4 class="ui inverted header">
-              <span class="value total-records-count">${d.points.length}</span> records of
-              <span class="value total-species-count">${speciesCounts.length}</span> unique species.
-              <div class="sub header">Bin size: ${d.size().toPrecision(1)}˚. ${clusterInfo}</div>
+              <span class="value total-records-count">${d.count}</span> records of
+              <span class="value total-species-count">${d.speciesCount}</span> unique species.
+              <div class="sub header">Bin size: ${d.size.toPrecision(1)}˚. ${clusterInfo}</div>
             </h4>
             </p>
             <table class="ui styled inverted table">

@@ -234,7 +234,8 @@ function parseDSV(fieldsToColumns) {
 
 function groupByName() {
   _species = S.sortedCountBy(feature => feature.properties.name, _features);
-  _speciesCountMap: new Map(_species.map(({name, count}) => [name, count]));
+  // _speciesCountMap = d3.map(_species, d => d.name);
+  _speciesCountMap = new Map(_species.map(({name, count}) => [name, count]));
 }
 
 function binData() {
@@ -245,15 +246,21 @@ function binData() {
    .densityThreshold(_binning.densityThreshold);
    // Bin and map to summary bins, all points not needed
   _bins = binner.bins(_features).map((bin) => {
+    const countedSpecies = S.countBy(feature => feature.properties.name, bin.points);
+    const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
+    const topIndicatorSpecies = S.topIndicatorItems("name", _speciesCountMap, _species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
     return {
       x1: bin.x1,
       x2: bin.x2,
       y1: bin.y1,
       y2: bin.y2,
       isLeaf: bin.isLeaf,
-      count: bin.points.length,
       area: bin.area(),
       size: bin.size(),
+      count: bin.points.length,
+      speciesCount: countedSpecies.length,
+      topCommonSpecies,
+      topIndicatorSpecies,
       clusterId: -1
     };
   });

@@ -2,6 +2,13 @@ import d3 from 'd3';
 import R from 'ramda';
 import crossfilter from 'crossfilter';
 
+
+export function topSortedBy(key, limit, items) {
+  var heapselectBy = crossfilter.heapselect.by(key);
+  return heapselectBy(items, 0, items.length, limit)
+    .sort((a, b) => key(b) - key(a));
+}
+
 export function countBy(key, items) {
   // d3.nest()
   //   .key(countBy)
