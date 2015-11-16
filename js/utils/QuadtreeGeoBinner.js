@@ -1,3 +1,6 @@
+import turfPolygon from 'turf-polygon';
+import turfIntersect from 'turf-intersect';
+import turfSimplify from 'turf-simplify';
 
 class Node {
   constructor(x1, y1, x2, y2) {
@@ -6,7 +9,7 @@ class Node {
     this.x2 = x2;
     this.y2 = y2;
     this.isLeaf = true;
-    this.points = [];
+    this.features = [];
     this.children = []; // at index 0,1,2,3
     this.clusterId = -1;
   }
@@ -20,57 +23,114 @@ class Node {
     return dx * dx;
   }
 
-  add(point, x, y, maxNodeSize, minNodeSize, densityThreshold) {
+  add(feature, maxNodeSize, minNodeSize, densityThreshold) {
     if (!this.isLeaf)
-      return this.addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
+      return this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
 
     let width = this.x2 - this.x1;
 
     // Force create children
     if (width > maxNodeSize) {
-      return this.addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
+      return this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
     }
 
     // Allow no more children
     if (width <= minNodeSize) {
-      return this.points.push(point);
+      return this.features.push(feature);
     }
 
     // In-between size bounds, create children if overflowing density threshold
-    if (this.points.length === densityThreshold) {
-      this.points.forEach((point) => {
-        this.addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
+    if (this.features.length === densityThreshold) {
+      this.features.forEach((feature) => {
+        this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
       });
-      this.points = [];
+      this.features = [];
     }
     else {
-      this.points.push(point);
+      this.features.push(feature);
     }
   }
 
-  // Recursively inserts the specified point [x, y] into a descendant of
+  // Recursively inserts the specified point or polygon into descendants of
   // this node.
-  addChild(point, x, y, maxNodeSize, minNodeSize, densityThreshold) {
+  addChild(feature, maxNodeSize, minNodeSize, densityThreshold) {
     // Compute the split point, and the quadrant in which to insert the point.
     let {x1, x2, y1, y2} = this;
     var xm = (x1 + x2) * .5,
-        ym = (y1 + y2) * .5,
-        right = x >= xm,
-        below = y >= ym,
-        i = below << 1 | right;
-
-    // Update the bounds as we recurse.
-    if (right) x1 = xm; else x2 = xm;
-    if (below) y1 = ym; else y2 = ym;
+        ym = (y1 + y2) * .5;
 
     // Recursively insert into the child node.
     this.isLeaf = false;
-    let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
-    child.add(point, x, y, maxNodeSize, minNodeSize, densityThreshold);
+
+    if (feature.geometry.type === "Point") {
+      var right = x >= xm,
+          below = y >= ym,
+          i = below << 1 | right;
+
+      // Update the bounds as we recurse.
+      if (right) x1 = xm; else x2 = xm;
+      if (below) y1 = ym; else y2 = ym;
+
+      let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
+      child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+    }
+    else {
+      // Polygon feature, check intersection with quadtree children, indexed as order below
+      const topLeft = turfPolygon([[
+        [x1, ym],
+        [x1, y2],
+        [xm, y2],
+        [xm, ym],
+        [x1, ym]
+      ]]);
+      const topRight = turfPolygon([[
+        [xm, ym],
+        [xm, y2]
+        [x2, y2],
+        [x2, ym],
+        [xm, ym],
+      ]]);
+      const lowerLeft = turfPolygon([[
+        [x1, y1],
+        [x1, ym],
+        [xm, ym],
+        [xm, y1],
+        [x1, y1]
+      ]]);
+      const lowerRight = turfPolygon([[
+        [xm, y1],
+        [xm, ym]
+        [x2, ym],
+        [x2, y1],
+        [xm, y1],
+      ]]);
+
+      const topLeftIntersect = turfIntersect(topLeft, feature);
+      const topRightIntersect = turfIntersect(topRight, feature);
+      const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
+      const lowerRightIntersect = turfIntersect(lowerRight, feature);
+
+      if (topLeftIntersect) {
+        let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
+        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      }
+      if (topRightIntersect) {
+        let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
+        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      }
+      if (lowerLeftIntersect) {
+        let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
+        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      }
+      if (lowerRightIntersect) {
+        let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
+        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      }
+    }
   }
 
   visitNonEmpty(callback) {
-    if (this.points.length > 0) {
+    if (this.features.length > 0) {
       if (callback(this))
         return; // early exit if callback returns true
     }
@@ -87,25 +147,25 @@ class Node {
 
   patchPartiallyEmptyNodes(maxNodeSize) {
     if (this.isLeaf)
-      return this.points;
-    // Already patched if points at non-leaf node.
-    if (this.points.length > 0) {
-      return this.points;
+      return this.features;
+    // Already patched if features at non-leaf node.
+    if (this.features.length > 0) {
+      return this.features;
     }
     let nonEmptyChildren = this.children.filter((child) => child !== undefined);
     let size = this.x2 - this.x1;
-    let doPatch = (size < maxNodeSize) && this.points.length === 0 && nonEmptyChildren.length < 4;
-    let aggregatedPoints = [];
+    let doPatch = (size < maxNodeSize) && this.features.length === 0 && nonEmptyChildren.length < 4;
+    let aggregatedFeatures = [];
     nonEmptyChildren.forEach((child) => {
-      const childPoints = child.patchPartiallyEmptyNodes(maxNodeSize);
-      childPoints.forEach((point) => {
-        aggregatedPoints.push(point);
+      const childFeatures = child.patchPartiallyEmptyNodes(maxNodeSize);
+      childfeatures.forEach((feature) => {
+        aggregatedFeatures.push(feature);
       });
     });
     if (doPatch) {
-      this.points = aggregatedPoints;
+      this.features = aggregatedFeatures;
     }
-    return aggregatedPoints;
+    return aggregatedFeatures;
   }
 }
 
@@ -165,13 +225,9 @@ export default class QuadtreeGeoBinner {
     return this._root.visitNonEmpty(callback);
   }
 
-  addPoints(points) {
-    points.forEach((point) => {
-      // Assume point type now
-      let x = point.geometry.coordinates[0];
-      let y = point.geometry.coordinates[1];
-      if (!isNaN(x) && !isNaN(y)) // ignore invalid points
-        this._root.add(point, x, y, this._maxNodeSize, this._minNodeSize, this._densityThreshold);
+  addFeatures(features) {
+    features.forEach((feature) => {
+      this._root.add(feature, this._maxNodeSize, this._minNodeSize, this._densityThreshold);
     });
     return this;
   }
@@ -195,22 +251,22 @@ export default class QuadtreeGeoBinner {
   /**
   * Get all bins less than maxNodeSize
   * If the bin have partially filled children (1-3 children non-empty)
-  * the points array of that bin is an aggregation of the points below
-  * @param points The points to bin, else assume added by addPoints
+  * the features array of that bin is an aggregation of the features below
+  * @param features The features to bin, else assume added by addFeatures
   * @return an Array of quadtree nodes
   */
-  bins(points = null) {
-    if (points) {
+  bins(features = null) {
+    if (features) {
       this.clear();
-      this.addPoints(points);
+      this.addFeatures(features);
     }
     this._root.patchPartiallyEmptyNodes(this._maxNodeSize);
     var nodes = [];
     this.visitNonEmpty(function(node) {
       nodes.push(node);
     });
-    if (points) {
-      // If points are provided, assume completely functional
+    if (features) {
+      // If features are provided, assume completely functional
       this.clear();
     }
     return nodes;

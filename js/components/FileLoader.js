@@ -2,14 +2,17 @@ import React, {Component, PropTypes} from 'react';
 import _ from 'lodash';
 import FileInput from './FileInput'
 import {FILE_PROGRESS} from '../constants/ActionTypes';
+import R from 'ramda';
 
 const INITIAL_STATE = {
   fieldMappingSubmitted: false,
+  nameFieldSubmitted: false,
   fieldsToColumns: {
     Name: 0,
     Latitude: 1,
     Longitude: 2,
   },
+  nameField: "",
   guessedColumns: false,
   progress: null,
   done: false,
@@ -26,6 +29,8 @@ class FileLoader extends Component {
     loadFiles: PropTypes.func.isRequired,
     loadSampleFile: PropTypes.func.isRequired,
     dataWorker: PropTypes.object.isRequired,
+    setFieldsToColumnsMapping: PropTypes.func.isRequired,
+    setFeatureNameField: PropTypes.func.isRequired,
   };
 
   state = INITIAL_STATE;
@@ -83,6 +88,9 @@ class FileLoader extends Component {
 
   guessFeatureNameField(parsedFeatureProperty) {
     console.log("Guess feature name field from:", parsedFeatureProperty);
+    let keys = R.keys(parsedFeatureProperty);
+    keys = keys.filter(key => key !== "OBJECTID");
+    this.setState({nameField: keys[0]});
   }
 
   cancelParsing = () => {
@@ -97,6 +105,12 @@ class FileLoader extends Component {
      });
   }
 
+  changeNameField = (nameField) => {
+     this.setState({
+       nameField
+     });
+  }
+
   submitFieldsMap = () => {
     this.setState({
       fieldMappingSubmitted: true
@@ -104,6 +118,14 @@ class FileLoader extends Component {
 
     const {fieldsToColumns} = this.state;
     this.props.setFieldsToColumnsMapping(fieldsToColumns);
+  }
+
+  submitNameField = () => {
+    this.setState({
+      nameFieldSubmitted: true
+    });
+
+    this.props.setFeatureNameField(this.state.nameField);
   }
 
   ErrorMessage = ({message, subMessage, children}) => (
@@ -119,36 +141,62 @@ class FileLoader extends Component {
   );
 
   renderGeoJSONFileOptions() {
-    const {parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
-    const {done} = this.state;
+    const {files, parsedFeatureProperty, error, message, subMessage} = this.props;
+    const {nameField, nameFieldSubmitted} = this.state;
 
     const ErrorMessage = this.ErrorMessage;
 
     if (error) {
-      if (headLines.length === 0)
-        return (
-          <ErrorMessage message={message} subMessage={subMessage}>
-          </ErrorMessage>
-        );
-
-      if (parsedHead.length === 0)
-        return (
-          <ErrorMessage message={message} subMessage={subMessage}>
-            <div className="ui form">
-              <div className="field">
-                <label>File head</label>
-                <textarea readonly rows={headLines.length} value={headLines.join('\n')}></textarea>
-              </div>
-            </div>
-          </ErrorMessage>
-        );
-
       return (
         <ErrorMessage message={message} subMessage={subMessage}>
-          <HeadTable head={parsedHead[0]} rows={parsedHead.slice(1)}></HeadTable>
         </ErrorMessage>
-      )
+      );
     }
+
+    const subHeader = files.map(file => file.name).join(",\n");
+
+    if (!nameFieldSubmitted) {
+      const selectOptions = R.keys(parsedFeatureProperty).map((field, i) => (<option key={i} value={field}>{field}</option>));
+      return (
+        <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+
+          <h2 className="ui header">Select name field</h2>
+          <div className="ui center aligned container grid">
+            <div className="ui compact segment">
+              <table className="ui very basic collapsing celled table">
+                <tbody>
+                  <tr>
+                    <td>Name</td>
+                    <td>
+                      <select value={nameField} onChange={(e) => {this.changeNameField(e.target.value)}}>
+                        {selectOptions}
+                      </select>
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colSpan="2" className="right aligned">
+                      <button type="submit" className="ui basic button" onClick={this.submitNameField}>Submit</button>
+                    </th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </Dimmer>
+      );
+    }
+
+    // Parsing file...
+    const {activity, mode, amount, meta} = this.state.progress;
+
+    return (
+      <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+        <Loader header={activity} subHeader={amount}></Loader>
+      </Dimmer>
+    )
+
   }
 
   renderDSVFileOptions() {
@@ -243,7 +291,7 @@ class FileLoader extends Component {
 
     // Parsing file...
     const {activity, mode, amount, meta} = this.state.progress;
-    
+
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
         <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>

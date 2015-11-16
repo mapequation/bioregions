@@ -94,10 +94,10 @@ export function requestDSVColumnMapping(parsedHead) {
   }
 }
 
-export function requestGeoJSONNameField(properties) {
+export function requestGeoJSONNameField(parsedFeatureProperty) {
   return {
     type: REQUEST_GEOJSON_NAME_FIELD,
-    properties
+    parsedFeatureProperty
   }
 }
 

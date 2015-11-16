@@ -10,6 +10,9 @@ import shp from 'shpjs';
 import * as S from '../utils/statistics';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import {calculateInfomapClusters, getClusterStatistics} from '../utils/clustering';
+import turfPolygon from 'turf-polygon';
+import turfSimplify from 'turf-simplify';
+import turfRandom from 'turf-random';
 
 // Worker scoped variables
 var _geoJSON = null;
@@ -35,6 +38,7 @@ function dispatch(action) {
 function loadShapefiles(files) {
   console.log("Load shapefiles...");
   dispatch(setFileProgress("Load shapefiles...", INDETERMINATE));
+  const numFiles = files.length;
   // Keep buffers here
   let shapefiles = new Map();
 
@@ -66,12 +70,72 @@ function loadShapefiles(files) {
       _geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded _geoJSON:", _geoJSON);
       const {properties} = _geoJSON.features[0];
-      dispatch(selectGeoJSONProperties(properties));
+      dispatch(requestGeoJSONNameField(properties));
     })
     .catch(err => {
       return dispatch(setFileError(`Error loading shapefiles: ${err}`));
     });
 }
+
+
+function parseGeoJSON(nameField) {
+  _features = [];
+  let numPoints = 0;
+  let numPolygons = 0;
+  let numMultiPolygons = 0;
+  let numMultiPolygonsExpanded = 0;
+  let numBadFeatures = 0;
+  const numOriginalFeatures = _geoJSON.features.length;
+
+  _geoJSON.features.forEach((feature, i) => {
+    if (i % 1000 === 0)
+      dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i+1, {total: numOriginalFeatures}));
+
+    // Simplify the feature
+    // console.log("Simplifying features...");
+    // feature = turfSimplify(feature, 0.01, false);
+    // if (!feature) {
+    //   ++numBadFeatures;
+    // }
+    // else {
+
+    feature.properties.name = feature.properties[nameField];
+    // Split MultiPolygon features to multiple Polygon features
+    const {type} = feature.geometry;
+    if (type === "Polygon") {
+      ++numPolygons;
+      _features.push(feature);
+    }
+    else if (type === "MultiPolygon") {
+      ++numMultiPolygons;
+      feature.geometry.coordinates.forEach(polygonCoords => {
+        ++numMultiPolygonsExpanded;
+        _features.push(turfPolygon(polygonCoords, feature.properties));
+      });
+    }
+    else if (type === "Point") {
+      ++numPoints;
+      _features.push(feature);
+    }
+    else {
+      console.log("Unsupported geometry type:", type);
+    }
+  });
+  dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, numOriginalFeatures, {total: numOriginalFeatures}));
+
+  console.log(`numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`);
+
+  dispatch(setFileProgress("Aggregating species...", INDETERMINATE));
+  groupByName();
+
+  dispatch(setFileProgress("Binning species...", INDETERMINATE));
+  binData();
+
+  dispatch(setFileProgress("Transferring result...", INDETERMINATE));
+  dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
+
+}
+
 
 function loadTextFile(file) {
   console.log("[DataWorker]: Load file:", file.name);
@@ -128,12 +192,12 @@ function loadTextFile(file) {
 }
 
 function loadFiles(files) {
-  let numFiles = files.length;
+  const numFiles = files.length;
 
   let isShapefile = _.any(files, file => /shp$/.test(file.name));
 
   if (isShapefile)
-    loadShapefiles();
+    loadShapefiles(files);
   else
     loadTextFile(files[0]);
 }
