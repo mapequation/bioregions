@@ -14,6 +14,7 @@ export const ADD_SPECIES_AND_BINS = 'ADD_SPECIES_AND_BINS';
 //progress
 export const FILE_PROGRESS = 'FILE_PROGRESS';
 export const BINNING_PROGRESS = 'BINNING_PROGRESS';
+export const CLUSTERING_PROGRESS = 'CLUSTERING_PROGRESS';
 
 //errorMessage
 export const ERROR_MESSAGE = 'ERROR_MESSAGE';
@@ -25,7 +26,7 @@ export const LOAD_WORLD = 'LOAD_WORLD';
 export const ADD_WORLD = 'ADD_WORLD';
 
 //infomap
-export const REQUEST_CLUSTERS = 'REQUEST_CLUSTERS';
+export const GET_CLUSTERS = 'GET_CLUSTERS';
 export const ADD_CLUSTERS = 'ADD_CLUSTERS';
 
 //binning

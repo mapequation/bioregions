@@ -79,37 +79,6 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
-function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap) {
-  if (bins.length === 0)
-    return [];
-  if (bins[0].clusterId < 0)
-    mergeClustersToBins(clusterIds, bins);
-  return d3.nest()
-    .key((bin) => bin.clusterId)
-    .rollup((bins) => {
-      // rollup features grouped on bins
-      let features = [];
-      bins.forEach((bin) => {
-        // Skip patched aggregation of points on non-leaf level
-        if (bin.isLeaf) {
-          bin.points.forEach((point) => {
-            features.push(point);
-          });
-        }
-      });
-      const topCommonSpecies = S.topSortedCountBy(feature => feature.properties.name, 10, features);
-      const numSpecies = features.length;
-      return {
-        clusterId: bins[0].clusterId,
-        numBins: bins.length,
-        numSpecies,
-        topCommonSpecies,
-        topIndicatorSpecies: S.topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies)
-      }
-    })
-    .entries(bins)
-}
-
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
@@ -124,14 +93,16 @@ export default function data(state = initialState, action) {
         species: action.species,
         bins: action.bins
       };
-    case ActionTypes.REQUEST_CLUSTERS:
+    case ActionTypes.GET_CLUSTERS:
+      // Forward to data worker
+      state.dataWorker.postMessage(action);
       return {
         ...state,
         isClustering: true
       };
     case ActionTypes.ADD_CLUSTERS:
-      let bins = mergeClustersToBins(action.clusterIds, state.bins);
-      let clusters = getClusterStatistics(action.clusterIds, state.bins, state.species[0].count, state.speciesCountMap);
+      const bins = mergeClustersToBins(action.clusterIds, state.bins);
+      const clusters = action.clusterStatistics;
       return {
         ...state,
         isClustering: false,

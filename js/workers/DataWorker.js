@@ -1,13 +1,15 @@
 import d3 from 'd3';
 import _ from 'lodash';
-import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD} from '../constants/ActionTypes';
-import {setFileProgress, setBinningProgress,
+import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS} from '../constants/ActionTypes';
+import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField, addSpeciesAndBins} from '../actions/FileLoaderActions';
+import {addClusters} from '../actions/ClusterActions';
 import io from '../utils/io';
 import shp from 'shpjs';
 import * as S from '../utils/statistics';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
+import {calculateInfomapClusters, getClusterStatistics} from '../utils/clustering';
 
 // Worker scoped variables
 var _geoJSON = null;
@@ -229,7 +231,7 @@ function parseDSV(fieldsToColumns) {
   binData();
 
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addSpeciesAndBins(_species, _bins));
+  dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
 }
 
 function groupByName() {
@@ -238,32 +240,61 @@ function groupByName() {
   _speciesCountMap = new Map(_species.map(({name, count}) => [name, count]));
 }
 
+function getSummaryBins() {
+   // Bin and map to summary bins, all points not needed
+   return _bins.map((bin) => {
+     const countedSpecies = S.countBy(feature => feature.properties.name, bin.points);
+     const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
+     const topIndicatorSpecies = S.topIndicatorItems("name", _speciesCountMap, _species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
+     return {
+       x1: bin.x1,
+       x2: bin.x2,
+       y1: bin.y1,
+       y2: bin.y2,
+       isLeaf: bin.isLeaf,
+       area: bin.area(),
+       size: bin.size(),
+       count: bin.points.length,
+       speciesCount: countedSpecies.length,
+       topCommonSpecies,
+       topIndicatorSpecies,
+       clusterId: -1
+     };
+   });
+}
+
 function binData() {
   dispatch(setBinningProgress("Binning species...", INDETERMINATE));
   let binner = new QuadtreeGeoBinner()
    .minNodeSize(_binning.minNodeSize)
    .maxNodeSize(_binning.maxNodeSize)
    .densityThreshold(_binning.densityThreshold);
-   // Bin and map to summary bins, all points not needed
-  _bins = binner.bins(_features).map((bin) => {
-    const countedSpecies = S.countBy(feature => feature.properties.name, bin.points);
-    const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
-    const topIndicatorSpecies = S.topIndicatorItems("name", _speciesCountMap, _species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
-    return {
-      x1: bin.x1,
-      x2: bin.x2,
-      y1: bin.y1,
-      y2: bin.y2,
-      isLeaf: bin.isLeaf,
-      area: bin.area(),
-      size: bin.size(),
-      count: bin.points.length,
-      speciesCount: countedSpecies.length,
-      topCommonSpecies,
-      topIndicatorSpecies,
-      clusterId: -1
-    };
-  });
+  _bins = binner.bins(_features);
+}
+
+function mergeClustersToBins(clusterIds, bins) {
+  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
+  if (clusterIds.length === bins.length) {
+    bins.forEach((bin, i) => {
+      bin.clusterId = clusterIds[i];
+    });
+  }
+  return bins;
+}
+
+function onInfomapFinished(clusterIds) {
+
+  mergeClustersToBins(clusterIds, _bins);
+
+  dispatch(setClusteringProgress("Calculating cluster statistics...", INDETERMINATE));
+  const clusterStatistics = getClusterStatistics(clusterIds, _bins, _species[0].count, _speciesCountMap)
+
+  dispatch(setClusteringProgress("Transferring clusters...", INDETERMINATE));
+  dispatch(addClusters(clusterIds, clusterStatistics));
+}
+
+function getClusters(infomapArgs) {
+  calculateInfomapClusters(dispatch, _species, _features, _bins, onInfomapFinished, infomapArgs);
 }
 
 onmessage = function(event) {
@@ -278,6 +309,9 @@ onmessage = function(event) {
       break;
     case SET_FEATURE_NAME_FIELD:
       parseGeoJSON(event.data.featureNameField);
+      break;
+    case GET_CLUSTERS:
+      getClusters(event.data.infomapArgs);
       break;
     default:
       console.log("[DataWorker]: Unrecognised message type:", type);

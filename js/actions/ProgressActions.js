@@ -1,4 +1,4 @@
-import {FILE_PROGRESS, BINNING_PROGRESS} from '../constants/ActionTypes';
+import {FILE_PROGRESS, BINNING_PROGRESS, CLUSTERING_PROGRESS} from '../constants/ActionTypes';
 
 // Modes
 const INDETERMINATE = 'INDETERMINATE';
@@ -30,4 +30,8 @@ export function setFileProgress(activity, mode, amount, meta) {
 
 export function setBinningProgress(activity, mode, amount, meta) {
   return setProgress(BINNING_PROGRESS, activity, mode, amount, meta);
+}
+
+export function setClusteringProgress(activity, mode, amount, meta) {
+  return setProgress(CLUSTERING_PROGRESS, activity, mode, amount, meta);
 }
