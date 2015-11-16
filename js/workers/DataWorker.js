@@ -12,7 +12,9 @@ import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import {calculateInfomapClusters, getClusterStatistics} from '../utils/clustering';
 import turfPolygon from 'turf-polygon';
 import turfSimplify from 'turf-simplify';
-import turfRandom from 'turf-random';
+import turfExtent from 'turf-extent';
+import turfPoint from 'turf-point';
+import turfInside from 'turf-inside';
 
 // Worker scoped variables
 var _geoJSON = null;
@@ -22,6 +24,9 @@ var _features = []; // GeoJSON features
 var _bins = [];
 var _species = []; // array of [{name, count}], sorted on count
 var _speciesCountMap = new Map();
+
+//TODO: Support polygons through the whole pipeline, but for now translate to point grid
+var _shapeFeatures = null;
 
 var _binning = {
   minNodeSize: 1,
@@ -79,7 +84,7 @@ function loadShapefiles(files) {
 
 
 function parseGeoJSON(nameField) {
-  _features = [];
+  _shapeFeatures = [];
   let numPoints = 0;
   let numPolygons = 0;
   let numMultiPolygons = 0;
@@ -104,32 +109,23 @@ function parseGeoJSON(nameField) {
     const {type} = feature.geometry;
     if (type === "Polygon") {
       ++numPolygons;
-      // feature.geometry.coordinates.forEach(ring => {
-      //   ring.forEach(([x,y]) => {
-      //     if (!(x > -180 && x < 180 && y > -90 && y < 90)) {
-      //       console.log("!!!! BAD POLYGON!!!!:", x, y);
-      //     }
-      //   });
-      // });
-      _features.push(feature);
+      if (!feature.geometry.bbox)
+        feature.geometry.bbox = turfExtent(feature);
+      _shapeFeatures.push(feature);
     }
     else if (type === "MultiPolygon") {
       ++numMultiPolygons;
       feature.geometry.coordinates.forEach(polygonCoords => {
         ++numMultiPolygonsExpanded;
-        // polygonCoords.forEach(ring => {
-        //   ring.forEach(([x,y]) => {
-        //     if (!(x > -180 && x < 180 && y > -90 && y < 90)) {
-        //       console.log("##### BAD POLYGON!!!!:", x, y);
-        //     }
-        //   });
-        // });
-        _features.push(turfPolygon(polygonCoords, feature.properties));
+        let polygonFeature = turfPolygon(polygonCoords, feature.properties);
+        if (!polygonFeature.geometry.bbox)
+          polygonFeature.geometry.bbox = turfExtent(feature);
+        _shapeFeatures.push(polygonFeature);
       });
     }
     else if (type === "Point") {
       ++numPoints;
-      _features.push(feature);
+      _shapeFeatures.push(feature);
     }
     else {
       console.log("Unsupported geometry type:", type);
@@ -138,6 +134,8 @@ function parseGeoJSON(nameField) {
   dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, numOriginalFeatures, {total: numOriginalFeatures}));
 
   console.log(`numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`);
+
+  shapeToPoints();
 
   dispatch(setFileProgress("Aggregating species...", INDETERMINATE));
   groupByName();
@@ -148,6 +146,24 @@ function parseGeoJSON(nameField) {
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
   dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
 
+}
+
+function shapeToPoints() {
+  _features = [];
+  const resolution = _binning.minNodeSize;
+  const totCount = _shapeFeatures.length;
+  _shapeFeatures.forEach((feature, i) => {
+    dispatch(setBinningProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
+    const {bbox} = feature.geometry;
+    let simplifiedFeature = turfSimplify(feature, resolution * 0.125);
+      for (let long = bbox[0]; long < bbox[2]; long += resolution) {
+        for (let lat = bbox[1]; lat < bbox[3]; lat += resolution) {
+          const pointFeature = turfPoint([long, lat], feature.properties);
+          if (turfInside(pointFeature, simplifiedFeature))
+            _features.push(pointFeature)
+        }
+      }
+  });
 }
 
 
