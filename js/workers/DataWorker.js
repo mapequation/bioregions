@@ -273,6 +273,9 @@ function parseDSV(fieldsToColumns) {
   });
   console.log(`Parsed ${features.length} valid features and skipped ${numSkipped} bad ones.`);
 
+  if (features.length === 0)
+    return dispatch(setFileError(`No valid records could be parsed. ${numSkipped} skipped.`));
+
   // Store features
   _features = features;
 
