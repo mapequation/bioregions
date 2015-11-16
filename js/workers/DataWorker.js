@@ -170,56 +170,16 @@ function shapeToPoints() {
 function loadTextFile(file) {
   console.log("[DataWorker]: Load file:", file.name);
 
-  // FileReader not available in workers in Firefox: https://bugzilla.mozilla.org/show_bug.cgi?id=1051150
-  var usingAsyncReader = typeof FileReader === 'function';
-  var reader;
-  var result;
-
-  if (usingAsyncReader) {
-    reader = new FileReader();
-
-    reader.onprogress = function(event) {
-      // console.log("[DataWorker]: onprogress");
-      let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
-      dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
-    };
-
-    reader.onloadend = (event) => {
-      console.log("[DataWorker]: onloadend");
-      const {result, error} = event.target;
-
-      if (error) {
-        console.log("File reader error:", error, "error code:", error.code);
-        dispatch(setFileError(`File could not be read: ${error.toString()}`));
-      }
-      else {
-        console.log("Got file content!");
-        parseDSVHeader(result);
-      }
-    };
-  }
-  else {
-    console.log("[DataWorker]: Using FileReaderSync as FileReader not available in workers in Firefox.");
-    reader = new FileReaderSync();
-  }
-
-  var successful = true;
-  try {
-    console.log("[DataWorker]: try reader.readAsText()");
-    result = reader.readAsText(file);
-  }
-  catch (e) {
-    console.log("[DataWorker]: Error reader.readAsText():", e);
-    successful = false;
-    dispatch(setFileError(`Error loading file '${file.name}': ${e}`));
-  }
-  finally {
-    if (!usingAsyncReader && successful) {
-      console.log("[DataWorker]: got sync result");
-      parseDSVHeader(result);
-    }
-  }
+  io.readFile(file, 'text', (event) => {
+    let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
+    dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
+  }).then(result => {
+    parseDSVHeader(result.data)
+  }).catch(error => {
+    dispatch(setFileError(`File could not be read: ${error.toString()}`));
+  });
 }
+
 
 function loadFiles(files) {
   const numFiles = files.length;

@@ -6,21 +6,53 @@ export {io as default};
 * File in FileList, format in ['text', 'buffer']
 * @return promise
 */
-io.readFile = function(file, format) {
+io.readFile = function(file, format, progressCallback) {
   let promise = new Promise( function(resolve, reject) {
-    let reader = new FileReader();
-    reader.onload = function(progressEvent) {
-        resolve({name: file.name, data: reader.result});
-    };
+    // FileReader not available in workers in Firefox: https://bugzilla.mozilla.org/show_bug.cgi?id=1051150
+    var usingAsyncReader = typeof FileReader === 'function';
+    var reader;
+    var result;
 
+    if (usingAsyncReader) {
+      reader = new FileReader();
+
+      reader.onprogress = function(event) {
+        if (typeof progressCallback === 'function')
+          progressCallback(event);
+      };
+
+
+      reader.onloadend = (event) => {
+        const {result, error} = event.target;
+
+        if (error) {
+          reject(error);
+        }
+        else {
+          resolve({name: file.name, data: result});
+        }
+      };
+    }
+    else {
+      reader = new FileReaderSync();
+    }
+
+
+    var successful = true;
     try {
       if (format == 'text')
-        reader.readAsText(file);
+        result = reader.readAsText(file);
       else
-        reader.readAsArrayBuffer(file);
+        result = reader.readAsArrayBuffer(file);
     }
     catch (e) {
+      successful = false;
       reject(e);
+    }
+    finally {
+      if (!usingAsyncReader && successful) {
+        resolve({name: file.name, data: result});
+      }
     }
   });
   return promise;
