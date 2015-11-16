@@ -158,7 +158,7 @@ class Node {
     let aggregatedFeatures = [];
     nonEmptyChildren.forEach((child) => {
       const childFeatures = child.patchPartiallyEmptyNodes(maxNodeSize);
-      childfeatures.forEach((feature) => {
+      childFeatures.forEach((feature) => {
         aggregatedFeatures.push(feature);
       });
     });
