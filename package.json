@@ -29,6 +29,8 @@
     "shp-write": "^0.2.4",
     "shpjs": "^3.3.1",
     "topojson": "^1.6.19",
+    "turf-centroid": "^1.1.2",
+    "turf-extent": "^1.0.4",
     "turf-featurecollection": "^1.0.1",
     "turf-intersect": "^1.4.2",
     "turf-polygon": "^1.0.3",

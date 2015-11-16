@@ -104,12 +104,26 @@ function parseGeoJSON(nameField) {
     const {type} = feature.geometry;
     if (type === "Polygon") {
       ++numPolygons;
+      // feature.geometry.coordinates.forEach(ring => {
+      //   ring.forEach(([x,y]) => {
+      //     if (!(x > -180 && x < 180 && y > -90 && y < 90)) {
+      //       console.log("!!!! BAD POLYGON!!!!:", x, y);
+      //     }
+      //   });
+      // });
       _features.push(feature);
     }
     else if (type === "MultiPolygon") {
       ++numMultiPolygons;
       feature.geometry.coordinates.forEach(polygonCoords => {
         ++numMultiPolygonsExpanded;
+        // polygonCoords.forEach(ring => {
+        //   ring.forEach(([x,y]) => {
+        //     if (!(x > -180 && x < 180 && y > -90 && y < 90)) {
+        //       console.log("##### BAD POLYGON!!!!:", x, y);
+        //     }
+        //   });
+        // });
         _features.push(turfPolygon(polygonCoords, feature.properties));
       });
     }
@@ -305,9 +319,9 @@ function groupByName() {
 }
 
 function getSummaryBins() {
-   // Bin and map to summary bins, all points not needed
+   // Bin and map to summary bins, all individual features not needed
    return _bins.map((bin) => {
-     const countedSpecies = S.countBy(feature => feature.properties.name, bin.points);
+     const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
      const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
      const topIndicatorSpecies = S.topIndicatorItems("name", _speciesCountMap, _species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
      return {
@@ -318,7 +332,7 @@ function getSummaryBins() {
        isLeaf: bin.isLeaf,
        area: bin.area(),
        size: bin.size(),
-       count: bin.points.length,
+       count: bin.features.length,
        speciesCount: countedSpecies.length,
        topCommonSpecies,
        topIndicatorSpecies,

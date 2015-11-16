@@ -1,6 +1,9 @@
 import turfPolygon from 'turf-polygon';
 import turfIntersect from 'turf-intersect';
 import turfSimplify from 'turf-simplify';
+import turfExtent from 'turf-extent';
+import turfCentroid from 'turf-centroid';
+import {bboxIntersect} from './polygons';
 
 class Node {
   constructor(x1, y1, x2, y2) {
@@ -61,8 +64,10 @@ class Node {
 
     // Recursively insert into the child node.
     this.isLeaf = false;
+    const geom = feature.geometry;
 
-    if (feature.geometry.type === "Point") {
+    if (geom.type === "Point") {
+      var [x, y] = geom.coordinates;
       var right = x >= xm,
           below = y >= ym,
           i = below << 1 | right;
@@ -76,39 +81,46 @@ class Node {
     }
     else {
       // Polygon feature, check intersection with quadtree children, indexed as order below
-      const topLeft = turfPolygon([[
-        [x1, ym],
-        [x1, y2],
-        [xm, y2],
-        [xm, ym],
-        [x1, ym]
-      ]]);
-      const topRight = turfPolygon([[
-        [xm, ym],
-        [xm, y2]
-        [x2, y2],
-        [x2, ym],
-        [xm, ym],
-      ]]);
-      const lowerLeft = turfPolygon([[
-        [x1, y1],
-        [x1, ym],
-        [xm, ym],
-        [xm, y1],
-        [x1, y1]
-      ]]);
-      const lowerRight = turfPolygon([[
-        [xm, y1],
-        [xm, ym]
-        [x2, ym],
-        [x2, y1],
-        [xm, y1],
-      ]]);
+      // const topLeft = turfPolygon([[
+      //   [x1, ym],
+      //   [x1, y2],
+      //   [xm, y2],
+      //   [xm, ym],
+      //   [x1, ym]
+      // ]]);
+      // const topRight = turfPolygon([[
+      //   [xm, ym],
+      //   [xm, y2]
+      //   [x2, y2],
+      //   [x2, ym],
+      //   [xm, ym],
+      // ]]);
+      // const lowerLeft = turfPolygon([[
+      //   [x1, y1],
+      //   [x1, ym],
+      //   [xm, ym],
+      //   [xm, y1],
+      //   [x1, y1]
+      // ]]);
+      // const lowerRight = turfPolygon([[
+      //   [xm, y1],
+      //   [xm, ym]
+      //   [x2, ym],
+      //   [x2, y1],
+      //   [xm, y1],
+      // ]]);
 
-      const topLeftIntersect = turfIntersect(topLeft, feature);
-      const topRightIntersect = turfIntersect(topRight, feature);
-      const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
-      const lowerRightIntersect = turfIntersect(lowerRight, feature);
+      var [xLow, yLow, xHigh, yHigh] = turfExtent(feature);
+
+      const topLeftIntersect = bboxIntersect(feature, [x1, ym, xm, y2]);
+      const topRightIntersect = bboxIntersect(feature, [xm, ym, x2, y2]);
+      const lowerLeftIntersect = bboxIntersect(feature, [x1, y1, xm, ym]);
+      const lowerRightIntersect = bboxIntersect(feature, [xm, y1, x2, ym]);
+      // const topLeftIntersect = turfIntersect(topLeft, feature);
+      // const topRightIntersect = turfIntersect(topRight, feature);
+      // const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
+      // const lowerRightIntersect = turfIntersect(lowerRight, feature);
+      console.log(topLeftIntersect, topRightIntersect, lowerLeftIntersect, lowerRightIntersect);
 
       if (topLeftIntersect) {
         let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));

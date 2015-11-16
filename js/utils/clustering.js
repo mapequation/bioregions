@@ -19,8 +19,8 @@ export function getBipartiteNetwork(species, features, bins) {
   var binCounter = 0;
   bins.forEach((bin) => {
     ++binCounter;
-    bin.points.forEach((point) => {
-      network.push(`f${speciesNameToIndex.get(point.properties.name)} n${binCounter}`);
+    bin.features.forEach((feature) => {
+      network.push(`f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`);
     })
   });
   console.log("First 10 links:", network.slice(0,10));
@@ -39,10 +39,10 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
       // rollup features grouped on bins
       let features = [];
       bins.forEach((bin) => {
-        // Skip patched aggregation of points on non-leaf level
+        // Skip patched aggregation of features on non-leaf level
         if (bin.isLeaf) {
-          bin.points.forEach((point) => {
-            features.push(point);
+          bin.features.forEach((feature) => {
+            features.push(feature);
           });
         }
       });
