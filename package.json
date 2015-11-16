@@ -26,8 +26,11 @@
     "redux": "^3.0.4",
     "redux-thunk": "^1.0.0",
     "semantic-ui": "^2.1.5",
+    "shp-write": "^0.2.4",
     "shpjs": "^3.3.1",
     "topojson": "^1.6.19",
+    "turf-featurecollection": "^1.0.1",
+    "turf-polygon": "^1.0.3",
     "worker-loader": "^0.6.0"
   },
   "scripts": {
