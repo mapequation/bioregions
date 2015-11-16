@@ -3,7 +3,6 @@ import React, {Component, PropTypes} from 'react';
 class FileInput extends Component {
 
   static propTypes = {
-    isLoading: PropTypes.bool.isRequired,
     sampleFiles: PropTypes.array.isRequired,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFile: PropTypes.func.isRequired,
@@ -12,7 +11,7 @@ class FileInput extends Component {
   componentDidMount() {
     $('.ui.dropdown').dropdown();
     $('#inputfile').on('change', (e) => {
-      this.props.loadFiles(e.target.files);
+      this.props.loadFiles(Array.from(e.target.files)); // Array from FileList
     });
   }
 

@@ -128,7 +128,7 @@ world.update = function(el, props) {
     }
     else {
       const bins = props.bins;
-      let maxCount = d3.max(bins.map((bin) => bin.points.length / bin.area()));
+      let maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
       let domainMax = + maxCount + (8 - maxCount % 8);
       let domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
       domain.push(domainMax);
@@ -142,7 +142,7 @@ world.update = function(el, props) {
         .domain(domain)
         .range(colorRange);
 
-      colorDomainValue = (d) => d.points.length / d.area();
+      colorDomainValue = (d) => d.count / d.area;
     }
 
     let quadNodes = g.select(".overlay").selectAll(".quadnode")

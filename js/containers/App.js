@@ -24,7 +24,19 @@ class App extends Component {
 
   componentDidMount() {
     console.log("App::componentDidMount()");
+    this.initDataWorker();
     this.initTooltip();
+  }
+
+  initDataWorker() {
+    const {data, dispatch} = this.props;
+    let worker = data.dataWorker;
+    worker.addEventListener("message", (event) => {
+      const action = event.data;
+      // Dispatch all non-progress actions to redux state
+      if (!action.isProgress)
+        dispatch(action);
+    });
   }
 
   initTooltip() {
@@ -160,7 +172,8 @@ function mapDispatchToProps(dispatch) {
       BinningActions,
       DisplayActions,
       ErrorActions,
-    ), dispatch)
+    ), dispatch),
+    dispatch
   };
 }
 

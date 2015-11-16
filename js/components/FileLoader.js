@@ -1,23 +1,17 @@
 import React, {Component, PropTypes} from 'react';
+import _ from 'lodash';
 import FileInput from './FileInput'
-import DSVWorker from 'worker!../workers/DSVWorker';
+import {FILE_PROGRESS} from '../constants/ActionTypes';
 
 const INITIAL_STATE = {
-  fieldsToParse: {
+  fieldMappingSubmitted: false,
+  fieldsToColumns: {
     Name: 0,
     Latitude: 1,
     Longitude: 2,
   },
-  fieldsSubmitted: false,
-  error: false,
-  message: "",
-  subMessage: "",
-  headLines: [],
-  parsedHead: [],
-  dsvType: "", // tsv or csv
-  numRecordsParsed: 0,
-  numRecordsSkipped: 0,
-  activity: "",
+  guessedColumns: false,
+  progress: null,
   done: false,
 };
 
@@ -25,75 +19,40 @@ class FileLoader extends Component {
 
   static propTypes = {
     isLoading: PropTypes.bool.isRequired,
-    loadedFiles: PropTypes.array.isRequired,
+    files: PropTypes.array.isRequired,
     sampleFiles: PropTypes.array.isRequired,
+    parsedHead: PropTypes.array.isRequired,
+    parsedFeatureProperty: PropTypes.object,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFile: PropTypes.func.isRequired,
-    parseData: PropTypes.bool.isRequired,
-    data: PropTypes.string.isRequired,
-    setError: PropTypes.func.isRequired,
-    addFeatures: PropTypes.func.isRequired,
+    dataWorker: PropTypes.object.isRequired,
   };
 
   state = INITIAL_STATE;
 
-  componentWillReceiveProps(nextProps) {
-    const {parseData, data} = nextProps;
-    if (parseData)
-      this.parsePointOccurrenceDataHeader(data);
-    else if (this.props.parseData) {
-      this.setState(INITIAL_STATE);
-    }
+  componentDidMount() {
+    const {dataWorker} = this.props;
+    dataWorker.addEventListener("message", (event) => {
+      const action = event.data;
+      if (action.isProgress) {
+        this.setState({
+          progress: action
+        });
+      }
+    });
   }
 
-  parsePointOccurrenceDataHeader(data) {
-    let parsedState = {};
-    let newlineIndex = data.indexOf('\n');
-    if (newlineIndex == -1)
-      return this.setState({
-        error: true,
-        message: "Couldn't read a line from the file",
-        subMessage: "Please check the file content and try again."
-      });
+  componentWillReceiveProps(nextProps) {
+    const {parsedHead, parsedFeatureProperty} = nextProps;
+    // this.setState({selectColumns});
+    // this.setState({selectProperties});
+    if (parsedHead.length > 0)
+      this.guessColumns(parsedHead);
+    else if (parsedFeatureProperty)
+      this.guessFeatureNameField(parsedFeatureProperty);
+  }
 
-    let headLines = [];
-    let prevIndex = 0;
-    while (newlineIndex !== -1 && headLines.length < 5) {
-      headLines.push(data.substring(prevIndex, newlineIndex));
-      prevIndex = newlineIndex + 1;
-      newlineIndex = data.indexOf('\n', prevIndex);
-    }
-    // Add to parsed state
-    parsedState.headLines = headLines;
-
-    let headerLine = headLines[0];
-    let isTSV = headerLine.split('\t').length > 1;
-    let isCSV = headerLine.split(',').length > 1;
-
-    if (!isTSV && !isCSV)
-      return this.setState({
-        ...parsedState,
-        error: true,
-        message: "Couldn't recognise the format as CSV or TSV.",
-        subMessage: ""
-      });
-
-    let parser = isTSV? d3.tsv : d3.csv;
-
-    const parsedHead = parser.parseRows(headLines.join('\n'));
-    // Add to parsed state
-    parsedState.dsvType = isTSV? "tsv" : "csv";
-    parsedState.parsedHead = parsedHead;
-
-    let columns = parsedHead[0];
-
-    if (columns.length < 3)
-      return this.setState({
-        ...parsedState,
-        error: true,
-        message: "Couldn't parse enough columns",
-        subMessage: ""
-      });
+  guessColumns(parsedHead) {
 
     function getMatchingColumns(columns) {
       // Transform the columns to filter out lat/long
@@ -109,15 +68,21 @@ class FileLoader extends Component {
       return [0, columns.length - 2, columns.length - 1];
     }
 
+    const columns = parsedHead[0];
+
     let [nameIndex, latIndex, longIndex] = getMatchingColumns(columns);
     this.setState({
-      ...parsedState,
-      fieldsToParse: {
+      fieldsToColumns: {
         Name: nameIndex,
         Latitude: latIndex,
         Longitude: longIndex,
-      }
+      },
+      guessedColumns: true
     });
+  }
+
+  guessFeatureNameField(parsedFeatureProperty) {
+    console.log("Guess feature name field from:", parsedFeatureProperty);
   }
 
   cancelParsing = () => {
@@ -126,68 +91,23 @@ class FileLoader extends Component {
   }
 
   changeFieldMap = (fieldMap) => {
-    let fieldsToParse = Object.assign({}, this.state.fieldsToParse, fieldMap);
+    let fieldsToColumns = Object.assign({}, this.state.fieldsToColumns, fieldMap);
      this.setState({
-       fieldsToParse
+       fieldsToColumns
      });
   }
 
   submitFieldsMap = () => {
     this.setState({
-      fieldsSubmitted: true
+      fieldMappingSubmitted: true
     });
 
-    var worker = new DSVWorker();
-    worker.onmessage = (event) => {
-      const {type, message, payload} = event.data;
-      if (type === "error") {
-        this.setState({
-          error: true,
-          message
-        });
-        worker.terminate();
-      }
-      else if (type === "result") {
-        console.log("Got result from worker:", payload);
-        worker.terminate();
-        this.setState({
-          done: true
-        });
-        this.props.addFeatures(payload.features);
-      }
-      else if (type === "progress") {
-        this.setState({
-          numRecordsParsed: payload.count,
-          numRecordsSkipped: payload.numSkipped,
-          activity: payload.activity
-        });
-      }
-      else {
-        console.log("Unrecognised message type from worker:", type);
-      }
-    }
-    worker.onerror = (event) => {
-      console.log("Worker error:", event);
-      this.setState({
-        error: true,
-        message: "Worker error",
-        subMessage: event.message
-      })
-      worker.terminate();
-    }
-
-    const {data} = this.props;
-    const {dsvType, fieldsToParse} = this.state;
-    worker.postMessage({
-      type: "parse",
-      data,
-      dsvType,
-      fieldsToParse,
-    });
+    const {fieldsToColumns} = this.state;
+    this.props.setFieldsToColumnsMapping(fieldsToColumns);
   }
 
   ErrorMessage = ({message, subMessage, children}) => (
-    <Dimmer onCancel={this.cancelParsing} subHeader={this.props.loadedFiles[0]}>
+    <Dimmer onCancel={this.cancelParsing} subHeader={this.props.files[0].name}>
       {children}
       <div className="ui negative message">
         <div className="header">
@@ -198,15 +118,9 @@ class FileLoader extends Component {
     </Dimmer>
   );
 
-  renderFileOptions() {
-    const {parseData, loadedFiles} = this.props;
-    const {error, message, subMessage, headLines, parsedHead, fieldsToParse, fieldsSubmitted, done} = this.state;
-    if (!parseData)
-      return (<span></span>);
-
-    if (done) { // Will soon be restored to initial state with !parseData
-      return (<span></span>);
-    }
+  renderGeoJSONFileOptions() {
+    const {parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
+    const {done} = this.state;
 
     const ErrorMessage = this.ErrorMessage;
 
@@ -235,13 +149,35 @@ class FileLoader extends Component {
         </ErrorMessage>
       )
     }
+  }
+
+  renderDSVFileOptions() {
+    const {files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
+    const {fieldsToColumns, fieldMappingSubmitted} = this.state;
+
+    const ErrorMessage = this.ErrorMessage;
+
+    if (error) {
+
+      if (parsedHead.length === 0)
+        return (
+          <ErrorMessage message={message} subMessage={subMessage}>
+          </ErrorMessage>
+        );
+
+      return (
+        <ErrorMessage message={message} subMessage={subMessage}>
+          <HeadTable head={parsedHead[0]} rows={parsedHead.slice(1)}></HeadTable>
+        </ErrorMessage>
+      )
+    }
 
     const columns = parsedHead[0];
 
     // Test
     // if (columns.length > 3) {
     //   return (
-    //     <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
+    //     <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
     //       <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
     //       <div className="ui indeterminate inline text loader">
     //         <h2 className="ui header">
@@ -253,12 +189,12 @@ class FileLoader extends Component {
     //   )
     // }
 
-    if (!fieldsSubmitted) {
+    if (!fieldMappingSubmitted) {
       const selectOptions = columns.map((col, i) => (<option key={i} value={i}>{col}</option>));
-      const {Name, Latitude, Longitude} = fieldsToParse;
+      const {Name, Latitude, Longitude} = fieldsToColumns;
 
       return (
-        <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
+        <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
           <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
 
           <h2 className="ui header">Select how to parse columns</h2>
@@ -306,27 +242,41 @@ class FileLoader extends Component {
     }
 
     // Parsing file...
-    const {numRecordsParsed, numRecordsSkipped, activity} = this.state;
+    const {activity, mode, amount, meta} = this.state.progress;
+    
     return (
-      <Dimmer onCancel={this.cancelParsing} subHeader={loadedFiles[0]}>
+      <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
         <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
-        <div className="ui indeterminate inline text loader">
-          <h2 className="ui header">
-            {activity}
-            <div className="sub header">{numRecordsParsed} records parsed, {numRecordsSkipped} invalid records skipped.</div>
-          </h2>
-        </div>
+        <Loader header={activity} subHeader={amount}></Loader>
       </Dimmer>
     )
   }
 
+  renderFileLoading() {
+    const {isLoading, parsedHead, parsedFeatureProperty} = this.props;
+    const {done} = this.state;
+    if (!isLoading)
+      return (<span></span>);
+
+    if (done) { // Will soon be restored to initial state with !isLoading
+      return (<span></span>);
+    }
+
+    if (parsedHead.length > 0)
+      return this.renderDSVFileOptions();
+
+    if (parsedFeatureProperty)
+      return this.renderGeoJSONFileOptions();
+  }
+
+
   render() {
-    const {loadedFiles, parseData, data, ...other} = this.props;
+    const {isLoading, files, sampleFiles, parsedHead, parsedFeatureProperty, loadFiles, loadSampleFile} = this.props;
 
     return (
       <div>
-        <FileInput {...other} />
-        {this.renderFileOptions()}
+        <FileInput {...{sampleFiles, loadFiles, loadSampleFile}} />
+        {this.renderFileLoading()}
       </div>
     );
   }
@@ -380,6 +330,27 @@ var HeadTable = ({head, rows}) => (
       </tr>
     </tfoot>
   </table>
+);
+
+var Loader = ({header, subHeader}) => (
+  <div className="ui indeterminate inline text loader">
+    <h2 className="ui header">
+      {header}
+      <div className="sub header">{subHeader}</div>
+    </h2>
+  </div>
+);
+Loader.defaultProps = {
+  subHeader: ""
+};
+
+var Progress = ({label}) => (
+  <div className="ui indicating progress" data-value="1" data-total="20">
+    <div className="bar">
+      <div className="progress"></div>
+    </div>
+    <div className="label">{label}</div>
+  </div>
 );
 
 export default FileLoader;

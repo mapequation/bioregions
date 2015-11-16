@@ -7,6 +7,7 @@ import crossfilter from 'crossfilter';
 import d3 from 'd3';
 import * as S from '../utils/statistics';
 import * as colors from '../utils/colors';
+import DataWorker from 'worker!../workers/DataWorker';
 
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
@@ -44,7 +45,10 @@ function binning(state = initialBinningState, action) {
   }
 }
 
+var dataWorker = new DataWorker();
+
 const initialState = {
+  dataWorker,
   havePolygons: false,
   features: [], // GeoJSON features
   species: [], // features count by name, array of {name: string, count: number}
@@ -108,15 +112,17 @@ function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap)
 
 export default function data(state = initialState, action) {
   switch (action.type) {
-    case ActionTypes.ADD_FEATURES:
-    const species = S.sortedCountBy(feature => feature.properties.name, action.features);
+    case ActionTypes.LOAD_FILES:
+    case ActionTypes.SET_FIELDS_TO_COLUMNS_MAPPING:
+    case ActionTypes.SET_FEATURE_NAME_FIELD:
+      // Forward to data worker
+      state.dataWorker.postMessage(action);
+      return state;
+    case ActionTypes.ADD_SPECIES_AND_BINS:
       return {
         ...state,
-        havePolygons: action.havePolygons,
-        features: action.features,
-        species,
-        speciesCountMap: new Map(species.map(({name, count}) => [name, count])),
-        bins: getBins(state.binning, action.features)
+        species: action.species,
+        bins: action.bins
       };
     case ActionTypes.REQUEST_CLUSTERS:
       return {
