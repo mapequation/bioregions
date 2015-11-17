@@ -35,23 +35,12 @@ class Export extends Component {
   this.setState({[type]: {filename, url}});
   }
 
-  handleClickSaveFile = () => {
-    // If revoking directly, the file wouldn't be downloaded
-    // let self = this;
-    // setTimeout(() => {
-    //   if (self.state.save) {
-    //     URL.revokeObjectURL(self.state.save.url);
-    //   }
-    //   self.setState({save: null});
-    // }, 100);
-  }
-
   handleSaveMap = () => {
     let data = $('svg')[0].outerHTML;
-    // console.log("svg string:", data);
     data = data.replace('<svg', '<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"');
-    data = JSON.stringify(data, null, '\t');
-    this.saveData(data, 'Infomap-bioregions.svg', 'image/svg+xml');
+    // data = JSON.stringify(data, null, '\t');
+    // this.saveData(data, 'Infomap-bioregions.svg', 'image/svg+xml');
+    this.saveData(data, 'Infomap-bioregions.svg', 'octet/stream');
   }
 
   handleSaveBioregionsAsGeoJSON = () => {
