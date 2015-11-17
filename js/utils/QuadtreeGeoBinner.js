@@ -1,9 +1,9 @@
-import turfPolygon from 'turf-polygon';
-import turfIntersect from 'turf-intersect';
-import turfSimplify from 'turf-simplify';
-import turfExtent from 'turf-extent';
-import turfCentroid from 'turf-centroid';
-import {bboxIntersect} from './polygons';
+// import turfPolygon from 'turf-polygon';
+// import turfIntersect from 'turf-intersect';
+// import turfSimplify from 'turf-simplify';
+// import turfExtent from 'turf-extent';
+// import turfCentroid from 'turf-centroid';
+// import {bboxIntersect} from './polygons';
 
 class Node {
   constructor(x1, y1, x2, y2) {
@@ -110,34 +110,34 @@ class Node {
       //   [xm, y1],
       // ]]);
 
-      var [xLow, yLow, xHigh, yHigh] = turfExtent(feature);
-
-      const topLeftIntersect = bboxIntersect(feature, [x1, ym, xm, y2]);
-      const topRightIntersect = bboxIntersect(feature, [xm, ym, x2, y2]);
-      const lowerLeftIntersect = bboxIntersect(feature, [x1, y1, xm, ym]);
-      const lowerRightIntersect = bboxIntersect(feature, [xm, y1, x2, ym]);
-      // const topLeftIntersect = turfIntersect(topLeft, feature);
-      // const topRightIntersect = turfIntersect(topRight, feature);
-      // const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
-      // const lowerRightIntersect = turfIntersect(lowerRight, feature);
-      console.log(topLeftIntersect, topRightIntersect, lowerLeftIntersect, lowerRightIntersect);
-
-      if (topLeftIntersect) {
-        let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
-        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
-      }
-      if (topRightIntersect) {
-        let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
-        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
-      }
-      if (lowerLeftIntersect) {
-        let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
-        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
-      }
-      if (lowerRightIntersect) {
-        let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
-        child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
-      }
+      // var [xLow, yLow, xHigh, yHigh] = turfExtent(feature);
+      //
+      // const topLeftIntersect = bboxIntersect(feature, [x1, ym, xm, y2]);
+      // const topRightIntersect = bboxIntersect(feature, [xm, ym, x2, y2]);
+      // const lowerLeftIntersect = bboxIntersect(feature, [x1, y1, xm, ym]);
+      // const lowerRightIntersect = bboxIntersect(feature, [xm, y1, x2, ym]);
+      // // const topLeftIntersect = turfIntersect(topLeft, feature);
+      // // const topRightIntersect = turfIntersect(topRight, feature);
+      // // const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
+      // // const lowerRightIntersect = turfIntersect(lowerRight, feature);
+      // // console.log(topLeftIntersect, topRightIntersect, lowerLeftIntersect, lowerRightIntersect);
+      //
+      // if (topLeftIntersect) {
+      //   let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
+      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      // }
+      // if (topRightIntersect) {
+      //   let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
+      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      // }
+      // if (lowerLeftIntersect) {
+      //   let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
+      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      // }
+      // if (lowerRightIntersect) {
+      //   let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
+      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      // }
     }
   }
 
