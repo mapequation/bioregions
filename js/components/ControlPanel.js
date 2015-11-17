@@ -144,7 +144,7 @@ class ControlPanel extends Component {
         </div>
         <div className="active content">
           <FileLoader {...data} {...files} {...actions} />
-          <Binning {...data.binning} {...actions} />
+          <Binning {...data.binning} binningLoading={data.binningLoading} {...actions} />
           <Infomap {...data} {...actions} />
         </div>
         <div className="title">

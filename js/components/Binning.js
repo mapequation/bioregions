@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import TangleInput from './TangleInput';
+import classNames from 'classnames';
 
 class Binning extends Component {
 
@@ -13,6 +14,7 @@ class Binning extends Component {
     changeMinBinSize: PropTypes.func.isRequired,
     changeMaxBinSize: PropTypes.func.isRequired,
     changeDensityThreshold: PropTypes.func.isRequired,
+    binningLoading: PropTypes.bool.isRequired,
   }
 
   renderTypes() {
@@ -43,8 +45,12 @@ class Binning extends Component {
   }
 
   render() {
+    let classes = classNames("ui celled table", {
+      yellow: this.props.binningLoading,
+      green: !this.props.binningLoading,
+    });
     return (
-      <table className="ui celled table">
+      <table className={classes}>
         <thead>
           <tr>
             <th colSpan="2">

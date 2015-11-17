@@ -1,6 +1,7 @@
 import d3 from 'd3';
 import _ from 'lodash';
-import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS} from '../constants/ActionTypes';
+import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS,
+  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_DENSITY_THRESHOLD} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField, addSpeciesAndBins} from '../actions/FileLoaderActions';
@@ -320,13 +321,19 @@ function getSummaryBins() {
    });
 }
 
-function binData() {
+function binData(dispatchResult = false) {
+  if (_features.length === 0)
+    return;
   dispatch(setBinningProgress("Binning species...", INDETERMINATE));
   let binner = new QuadtreeGeoBinner()
    .minNodeSize(_binning.minNodeSize)
    .maxNodeSize(_binning.maxNodeSize)
    .densityThreshold(_binning.densityThreshold);
   _bins = binner.bins(_features);
+
+  if (dispatchResult) {
+    dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
+  }
 }
 
 function mergeClustersToBins(clusterIds, bins) {
@@ -369,6 +376,22 @@ onmessage = function(event) {
       break;
     case GET_CLUSTERS:
       getClusters(event.data.infomapArgs);
+      break;
+    case BINNING_MIN_NODE_SIZE:
+      let oldMinNodeSize = event.data.minNodeSize;
+      _binning.minNodeSize = event.data.minNodeSize;
+      if (_binning.minNodeSize < oldMinNodeSize) {
+        shapeToPoints();
+      }
+      binData(true);
+      break;
+    case BINNING_MAX_NODE_SIZE:
+      _binning.maxNodeSize = event.data.maxNodeSize;
+      binData(true);
+      break;
+    case BINNING_DENSITY_THRESHOLD:
+      _binning.densityThreshold = event.data.densityThreshold;
+      binData(true);
       break;
     default:
       console.log("[DataWorker]: Unrecognised message type:", type);

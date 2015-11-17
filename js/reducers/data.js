@@ -16,6 +16,7 @@ const initialBinningState = {
   maxNodeSize: 4,
   densityThreshold: 100,
   renderer: QuadtreeGeoBinner.renderer,
+  binningLoading: false,
 };
 
 function binning(state = initialBinningState, action) {
@@ -53,6 +54,7 @@ const initialState = {
   features: [], // GeoJSON features
   species: [], // features count by name, array of {name: string, count: number}
   binning: initialBinningState,
+  binningLoading: false,
   bins: [], // bins = binner.bins(features)
   clusterIds: [], // array<int> of cluster id:s, matching bins array in index
   isClustering: false,
@@ -91,7 +93,8 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         species: action.species,
-        bins: action.bins
+        bins: action.bins,
+        binningLoading: false,
       };
     case ActionTypes.GET_CLUSTERS:
       // Forward to data worker
@@ -117,12 +120,11 @@ export default function data(state = initialState, action) {
     case ActionTypes.BINNING_MAX_NODE_SIZE:
     case ActionTypes.BINNING_DENSITY_THRESHOLD:
       let nextBinning = binning(state.binning, action)
+      dataWorker.postMessage(action);
       return {
         ...state,
         binning: nextBinning,
-        bins: getBins(nextBinning, state.features),
-        clusterIds: [], // Reset clusters on changed binning
-        clusters: [],
+        binningLoading: state.species.length > 0,
         groupBy: Display.BY_NAME,
       }
     case ActionTypes.CHANGE_GROUP_BY:
