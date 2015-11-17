@@ -375,6 +375,7 @@ Dimmer.propTypes = {
   header: PropTypes.string.isRequired,
   subHeader: PropTypes.string.isRequired,
   onCancel: PropTypes.func.isRequired,
+  children: React.PropTypes.element.isRequired,
 }
 
 Dimmer.defaultProps = {

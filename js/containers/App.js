@@ -114,7 +114,7 @@ class App extends Component {
         <div className="ui container">
           <div className="ui two column stackable grid">
             <div className="four wide column">
-              <ControlPanel {...{files, data, actions}} />
+              <ControlPanel {...{files, data, worldmap, actions}} />
             </div>
             <div className="twelve wide column">
               <WorldMap {...worldmap} {...data} {...actions}

@@ -4,6 +4,8 @@ import Infomap from './Infomap';
 import Binning from './Binning';
 import Export from './Export';
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
+import InlineForm from './InlineForm';
+import TangleInput from './TangleInput';
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -60,7 +62,7 @@ class ControlPanel extends Component {
   }
 
   render() {
-    const {files, data, actions} = this.props;
+    const {files, data, worldmap, actions} = this.props;
     return (
       <div className="ui styled accordion">
         <div className="active title">
@@ -80,6 +82,15 @@ class ControlPanel extends Component {
           <div className="ui form">
             {this.renderSelectGroupBy()}
           </div>
+          <span></span>
+          <InlineForm label="Graticule">
+            <TangleInput className="ui label" suffix="˚"
+              value={worldmap.graticuleStep}
+              min={1}
+              max={180}
+              step={1}
+              onChange={(value) => actions.changeGraticuleStep(value)} />
+          </InlineForm>
           <h4 className="ui dividing header">Export</h4>
           <Export {...data}></Export>
         </div>
@@ -91,6 +102,7 @@ class ControlPanel extends Component {
 ControlPanel.propTypes = {
   files: PropTypes.object.isRequired,
   data: PropTypes.object.isRequired,
+  worldmap: PropTypes.object.isRequired,
   actions: PropTypes.object.isRequired,
 };
 
