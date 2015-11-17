@@ -8,7 +8,7 @@ class WorldMap extends Component {
     width: PropTypes.number.isRequired,
     height: PropTypes.number.isRequired,
     projection: PropTypes.func.isRequired,
-    graticuleStep: PropTypes.func.isRequired,
+    graticuleStep: PropTypes.number.isRequired,
     world: PropTypes.object.isRequired,
     worldStatus: PropTypes.string.isRequired,
     loadWorld: PropTypes.func.isRequired,

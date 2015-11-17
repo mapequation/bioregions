@@ -49,7 +49,7 @@ function binning(state = initialBinningState, action) {
 
 var dataWorker = new DataWorker();
 var progressEmitter = new EventEmitter2({
-  wildcard: true,
+  wildcard: false,
   delimiter: '.',
 });
 

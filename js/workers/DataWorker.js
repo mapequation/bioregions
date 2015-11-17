@@ -17,6 +17,8 @@ import turfExtent from 'turf-extent';
 import turfPoint from 'turf-point';
 import turfInside from 'turf-inside';
 
+console.log(`[DataWorker] ok`);
+
 // Worker scoped variables
 var _geoJSON = null;
 var _dsvType = null; // "TSV" or "CSV"
@@ -69,10 +71,11 @@ function loadShapefiles(files) {
       let shpBuffer = shapefiles.get('shp');
       let prjString = shapefiles.get('prj');
       let dbfBuffer = shapefiles.get('dbf');
-      dispatch(setFileProgress("Parsing shapefiles...", INDETERMINATE));
+      dispatch(setFileProgress("Parsing shapes...", INDETERMINATE));
       let parsedShape = shp.parseShp(shpBuffer, prjString);
+      dispatch(setFileProgress("Parsing attributes...", INDETERMINATE));
       let parsedDbf = shp.parseDbf(dbfBuffer);
-      dispatch(setFileProgress("Combining shapefiles to GeoJSON...", INDETERMINATE));
+      dispatch(setFileProgress("Combining to GeoJSON...", INDETERMINATE));
       _geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded _geoJSON:", _geoJSON);
       const {properties} = _geoJSON.features[0];
@@ -92,10 +95,14 @@ function parseGeoJSON(nameField) {
   let numMultiPolygonsExpanded = 0;
   let numBadFeatures = 0;
   const numOriginalFeatures = _geoJSON.features.length;
+  let lastPercent = 0;
 
   _geoJSON.features.forEach((feature, i) => {
-    if (i % 1000 === 0)
+    let percent = Math.round((i+1) * 100 / numOriginalFeatures);
+    if (percent !== lastPercent) {
       dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i+1, {total: numOriginalFeatures}));
+      lastPercent = percent;
+    }
 
     // Simplify the feature
     // console.log("Simplifying features...");
@@ -173,11 +180,16 @@ function loadTextFile(file) {
 
   io.readFile(file, 'text', (event) => {
     let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
+    console.log("!!!! io.readFile progress!!", event);
     dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
   }).then(result => {
     parseDSVHeader(result.data)
   }).catch(error => {
-    dispatch(setFileError(`File could not be read: ${error.toString()}`));
+    console.log("File read error:", error);
+    if (error.message && error.name)
+      dispatch(setFileError(error.name, error.message));
+    else
+      dispatch(setFileError("Error reading file", error.toString()));
   });
 }
 

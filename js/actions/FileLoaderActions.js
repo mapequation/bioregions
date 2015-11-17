@@ -68,7 +68,7 @@ export function cancelFileActions() {
 export function setFileError(error, subMessage = "") {
   return {
     type: FILE_ERROR,
-    message: error.toString(),
+    message: error.message? error.message : error.toString(),
     subMessage
   }
 }

@@ -13,9 +13,10 @@ io.readFile = function(file, format, progressCallback) {
     var reader;
     var result;
 
+    console.log(`Trying to load ${file} as ${format}, using ${usingAsyncReader? "FileReader" : "FileReaderSync"}...`);
+
     if (usingAsyncReader) {
       reader = new FileReader();
-
       reader.onprogress = function(event) {
         if (typeof progressCallback === 'function')
           progressCallback(event);

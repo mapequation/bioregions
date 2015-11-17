@@ -3,6 +3,7 @@ import _ from 'lodash';
 import FileInput from './FileInput'
 import {FILE_PROGRESS} from '../constants/ActionTypes';
 import R from 'ramda';
+import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 
 const INITIAL_STATE = {
   fieldMappingSubmitted: false,
@@ -127,12 +128,14 @@ class FileLoader extends Component {
 
   ErrorMessage = ({message, subMessage, children}) => (
     <Dimmer onCancel={this.cancelParsing} subHeader={this.props.files[0].name}>
-      {children}
-      <div className="ui negative message">
-        <div className="header">
-          {message}
+      <div>
+        {children}
+        <div className="ui negative message">
+          <div className="header">
+            {message}
+          </div>
+          {subMessage}
         </div>
-        {subMessage}
       </div>
     </Dimmer>
   );
@@ -164,42 +167,43 @@ class FileLoader extends Component {
       const selectOptions = R.keys(parsedFeatureProperty).map((field, i) => (<option key={i} value={field}>{field}</option>));
       return (
         <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-          <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
-          <h2 className="ui header">Select name field</h2>
-          <div className="ui center aligned container grid">
-            <div className="ui compact segment">
-              <table className="ui very basic collapsing celled table">
-                <tbody>
-                  <tr>
-                    <td>Name</td>
-                    <td>
-                      <select value={nameField} onChange={(e) => {this.changeNameField(e.target.value)}}>
-                        {selectOptions}
-                      </select>
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan="2" className="right aligned">
-                      <button type="submit" className="ui basic button" onClick={this.submitNameField}>Submit</button>
-                    </th>
-                  </tr>
-                </tfoot>
-              </table>
+          <div>
+            <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
+            <h2 className="ui header">Select name field</h2>
+            <div className="ui center aligned container grid">
+              <div className="ui compact segment">
+                <table className="ui very basic collapsing celled table">
+                  <tbody>
+                    <tr>
+                      <td>Name</td>
+                      <td>
+                        <select value={nameField} onChange={(e) => {this.changeNameField(e.target.value)}}>
+                          {selectOptions}
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan="2" className="right aligned">
+                        <button type="submit" className="ui basic button" onClick={this.submitNameField}>Submit</button>
+                      </th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           </div>
         </Dimmer>
       );
     }
 
-    // Parsing file...
-    const {activity, mode, amount, meta} = this.state.progress;
-
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-        <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
-        <Loader header={activity} subHeader={amount}></Loader>
+        <div>
+          <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
+          <Progress {...this.state.progress}></Progress>
+        </div>
       </Dimmer>
     )
 
@@ -249,59 +253,60 @@ class FileLoader extends Component {
 
       return (
         <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
-          <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
+          <div>
+            <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
 
-          <h2 className="ui header">Select how to parse columns</h2>
-          <div className="ui center aligned container grid">
-            <div className="ui compact segment">
-              <table className="ui very basic collapsing celled table">
-                <tbody>
-                  <tr>
-                    <td>Name</td>
-                    <td>
-                      <select value={Name} onChange={(e) => {this.changeFieldMap({Name: e.target.value})}}>
-                        {selectOptions}
-                      </select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Latitude</td>
-                    <td>
-                      <select value={Latitude} onChange={(e) => {this.changeFieldMap({Latitude: e.target.value})}}>
-                        {selectOptions}
-                      </select>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>Longitude</td>
-                    <td>
-                      <select value={Longitude} onChange={(e) => {this.changeFieldMap({Longitude: e.target.value})}}>
-                        {selectOptions}
-                      </select>
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan="2" className="right aligned">
-                      <button type="submit" className="ui basic button" onClick={this.submitFieldsMap}>Submit</button>
-                    </th>
-                  </tr>
-                </tfoot>
-              </table>
+            <h2 className="ui header">Select how to parse columns</h2>
+            <div className="ui center aligned container grid">
+              <div className="ui compact segment">
+                <table className="ui very basic collapsing celled table">
+                  <tbody>
+                    <tr>
+                      <td>Name</td>
+                      <td>
+                        <select value={Name} onChange={(e) => {this.changeFieldMap({Name: e.target.value})}}>
+                          {selectOptions}
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Latitude</td>
+                      <td>
+                        <select value={Latitude} onChange={(e) => {this.changeFieldMap({Latitude: e.target.value})}}>
+                          {selectOptions}
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Longitude</td>
+                      <td>
+                        <select value={Longitude} onChange={(e) => {this.changeFieldMap({Longitude: e.target.value})}}>
+                          {selectOptions}
+                        </select>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan="2" className="right aligned">
+                        <button type="submit" className="ui basic button" onClick={this.submitFieldsMap}>Submit</button>
+                      </th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           </div>
         </Dimmer>
       );
     }
 
-    // Parsing file...
-    const {activity, mode, amount, meta} = this.state.progress;
-
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
-        <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
-        <Loader header={activity} subHeader={amount}></Loader>
+        <div>
+          <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
+          <Progress {...this.state.progress}></Progress>
+        </div>
       </Dimmer>
     )
   }
@@ -332,10 +337,19 @@ class FileLoader extends Component {
     }
     // Loading file...
     const subHeader = files.map(file => file.name).join(",\n");
+    const {progress} = this.state;
+    if (progress) {
+      return (
+        <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+          <Progress {...progress}></Progress>
+        </Dimmer>
+      );
+    }
 
+    let header = files.length > 0? "Loading files..." : "Loading file...";
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-        <Loader header="Loading files..."></Loader>
+        <Loader header={header}></Loader>
       </Dimmer>
     );
   }
@@ -416,13 +430,46 @@ Loader.defaultProps = {
   subHeader: ""
 };
 
-var Progress = ({label}) => (
-  <div className="ui indicating progress" data-value="1" data-total="20">
-    <div className="bar">
-      <div className="progress"></div>
+var ProgressBar = ({value, total, label}) => {
+  const percent = `${Math.round(value*100/total)}%`;
+  return (
+    <div className="ui indicating progress active" data-value={value} data-total={total}>
+      <div className="bar" style={{width: percent, "transition-duration": "300ms"}}>
+        <div className="progress">{percent}</div>
+      </div>
+      <div className="label">{label}</div>
     </div>
-    <div className="label">{label}</div>
-  </div>
-);
+  );
+}
+ProgressBar.propTypes = {
+  value: PropTypes.number.isRequired,
+  total: PropTypes.number.isRequired,
+  label: PropTypes.string.isRequired,
+};
+ProgressBar.defaultProps = {
+  label: "",
+};
+
+
+var Progress = ({activity, mode, amount, meta}) => {
+  if (mode === INDETERMINATE || mode === COUNT) {
+    return (
+      <Loader header={activity} subHeader={amount? amount : ""}></Loader>
+    );
+  }
+  console.log(`[Progress]: mode: ${mode}, amount: ${amount}, total: ${meta.total}`);
+  return (
+    <div>
+      <Loader header={activity} subHeader={amount}></Loader>
+      <ProgressBar value={amount} total={meta.total}></ProgressBar>
+    </div>
+  )
+}
+Progress.propTypes = {
+  activity: PropTypes.string.isRequired,
+  mode: PropTypes.oneOf([INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL]).isRequired,
+  amount: PropTypes.number,
+  meta: PropTypes.object.isRequired,
+};
 
 export default FileLoader;

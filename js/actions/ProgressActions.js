@@ -1,10 +1,10 @@
 import {FILE_PROGRESS, BINNING_PROGRESS, CLUSTERING_PROGRESS} from '../constants/ActionTypes';
 
 // Modes
-const INDETERMINATE = 'INDETERMINATE';
-const PERCENT = 'PERCENT';
-const COUNT = 'COUNT';
-const COUNT_WITH_TOTAL = 'COUNT_WITH_TOTAL';
+export const INDETERMINATE = 'INDETERMINATE';
+export const PERCENT = 'PERCENT';
+export const COUNT = 'COUNT';
+export const COUNT_WITH_TOTAL = 'COUNT_WITH_TOTAL';
 
 /**
 * Create progress action
@@ -13,14 +13,14 @@ const COUNT_WITH_TOTAL = 'COUNT_WITH_TOTAL';
 * @param amount {number} 0-100 if PERCENT mode, otherwise a count
 * @param meta {object} meta data like {total: number} for COUNT mode and {done: true}
 */
-function setProgress(type, activity, mode, amount, meta) {
+function setProgress(type, activity, mode = INDETERMINATE, amount = undefined, meta = {}) {
   return {
     isProgress: true,
     type,
     activity,
     mode,
     amount,
-    meta: meta || {},
+    meta,
   }
 }
 
