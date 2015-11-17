@@ -29,6 +29,13 @@ world.create = function(el, props) {
     .attr("class", "overlay")
     .attr("clip-path", "url(#clip)");
 
+  var graticuleGroup = g.append("g")
+    .attr("class", "graticules");
+  graticuleGroup.append("path")
+    .attr("class", "graticule");
+  graticuleGroup.append("path")
+    .attr("class", "graticule-outline");
+
   var defsPath = defs.append("path")
     .attr("id", "land")
     .attr("class", "land")
@@ -107,6 +114,26 @@ world.update = function(el, props) {
       .datum(topojson.feature(props.world, props.world.objects.land))
       .attr("d", path);
   }
+
+  const {graticuleStep} = props;
+  var graticule = d3.geo.graticule()
+    .minorStep([graticuleStep, graticuleStep]);
+
+  g.select(".graticules").select("path.graticule")
+    .datum(graticule)
+      .attr("d", path)
+      .attr("fill", "none")
+      .attr("stroke", "#ccc")
+      .attr("stroke-opacity", 0.3)
+      .attr("stroke-width", ".5px");
+  g.select(".graticules").select("path.graticule-outline")
+    .datum(graticule.outline)
+      .attr("d", path)
+      .attr("fill", "none")
+      .attr("stroke", "#ccc")
+      .attr("stroke-opacity", 0.3)
+      .attr("stroke-width", ".5px");
+
 
   function drawRawFeatures() {
     console.log("Draw raw features...");
@@ -195,6 +222,7 @@ world.update = function(el, props) {
     //adjust the country hover stroke width based on zoom level
     g.select("#land").style("stroke-width", 1.5 / scale);
     // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
+    g.selectAll(".graticules").select("path").style("stroke-width", 0.5 / scale);
   }
 
   //geo translation on mouse click in map

@@ -42,7 +42,7 @@
   },
   "scripts": {
     "start": "DEBUG=true node server.js",
-    "build": "webpack -p --config webpack.production.js --stack_size=100000",
+    "build": "webpack -p --config webpack.production.js -- --stack_size=100000",
     "build-dev": "webpack -p"
   },
   "devDependencies": {

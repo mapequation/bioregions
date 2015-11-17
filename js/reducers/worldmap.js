@@ -7,6 +7,7 @@ const initialState = {
   worldStatus: DataFetching.DATA_NOT_FETCHED,
   width: 500,
   height: 500,
+  graticuleStep: 2,
   // projection: d3.geo.mercator(),
   projection: d3.geo.equirectangular(),
   // projection: d3.geo.equirectangular.raw,
@@ -30,6 +31,11 @@ export default function worldmap(state = initialState, action) {
       return {
         ...state,
         projection: action.projection
+      };
+    case ActionTypes.CHANGE_GRATICULE_STEP:
+      return {
+        ...state,
+        graticuleStep: action.graticuleStep
       };
     default:
       return state;
