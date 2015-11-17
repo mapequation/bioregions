@@ -32,12 +32,15 @@ class App extends Component {
 
   initDataWorker() {
     const {data, dispatch} = this.props;
-    let worker = data.dataWorker;
-    worker.addEventListener("message", (event) => {
+    let {progressEmitter, dataWorker} = data;
+
+    dataWorker.addEventListener("message", (event) => {
       const action = event.data;
       // Dispatch all non-progress actions to redux state
       if (!action.isProgress)
         dispatch(action);
+      else
+        progressEmitter.emit(action.type, action);
 
       // Workaround as spawning sub workers only supported in Firefox.
       function onInfomapFinished(error, clusterIds) {
@@ -47,8 +50,8 @@ class App extends Component {
         else
           dispatch(ClusterActions.addClusters(clusterIds));
       }
-      function progressDispatch(action) {
-        
+      function progressDispatch(progressAction) {
+        progressEmitter.emit(progressAction.type, progressAction);
       }
       if (action.type === CALCULATE_CLUSTERS) {
         console.log("[App]: Spawn Infomap worker from main thread...");

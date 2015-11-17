@@ -28,7 +28,7 @@ class FileLoader extends Component {
     parsedFeatureProperty: PropTypes.object,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFile: PropTypes.func.isRequired,
-    dataWorker: PropTypes.object.isRequired,
+    progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
   };
@@ -36,14 +36,11 @@ class FileLoader extends Component {
   state = INITIAL_STATE;
 
   componentDidMount() {
-    const {dataWorker} = this.props;
-    dataWorker.addEventListener("message", (event) => {
-      const action = event.data;
-      if (action.isProgress) {
-        this.setState({
-          progress: action
-        });
-      }
+    const {progressEmitter} = this.props;
+    progressEmitter.on(FILE_PROGRESS, (action) => {
+      this.setState({
+        progress: action
+      });
     });
   }
 

@@ -15,6 +15,7 @@
     "d3-tip": "^0.6.7",
     "distinct-colors": "^1.0.4",
     "eslint-plugin-react": "^3.7.1",
+    "eventemitter2": "^0.4.14",
     "iwanthue-api": "^0.1.0",
     "jquery": "^2.1.4",
     "jquery-tablesort": "0.0.6",

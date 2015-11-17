@@ -8,6 +8,7 @@ import d3 from 'd3';
 import * as S from '../utils/statistics';
 import * as colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
+import EventEmitter2 from 'eventemitter2';
 
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
@@ -47,9 +48,14 @@ function binning(state = initialBinningState, action) {
 }
 
 var dataWorker = new DataWorker();
+var progressEmitter = new EventEmitter2({
+  wildcard: true,
+  delimiter: '.',
+});
 
 const initialState = {
   dataWorker,
+  progressEmitter,
   havePolygons: false,
   features: [], // GeoJSON features
   species: [], // features count by name, array of {name: string, count: number}
