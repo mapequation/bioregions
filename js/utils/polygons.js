@@ -50,7 +50,7 @@ export function getBioregions(bins) {
     //   // console.log("Merged polygon - union:", turfUnion());
     //   clusterFeatures.push(mergedPolygon);
     // }
-    polygons.forEach(polygin => {
+    polygons.forEach(polygon => {
       clusterFeatures.push(polygon);
     });
   }

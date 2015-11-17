@@ -82,7 +82,7 @@ class ControlPanel extends Component {
           <div className="ui form">
             {this.renderSelectGroupBy()}
           </div>
-          <span></span>
+          <h4 className="ui dividing header">Map</h4>
           <InlineForm label="Graticule">
             <TangleInput className="ui label" suffix="˚"
               value={worldmap.graticuleStep}
