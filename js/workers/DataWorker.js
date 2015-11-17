@@ -1,16 +1,16 @@
 import d3 from 'd3';
 import _ from 'lodash';
-import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS,
+import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
   BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_DENSITY_THRESHOLD} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField, addSpeciesAndBins} from '../actions/FileLoaderActions';
-import {addClusters} from '../actions/ClusterActions';
+import {addClustersAndStatistics, calculateClusters} from '../actions/ClusterActions';
 import io from '../utils/io';
 import shp from 'shpjs';
 import * as S from '../utils/statistics';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
-import {calculateInfomapClusters, getClusterStatistics} from '../utils/clustering';
+import {calculateInfomapClusters, getClusterStatistics, getBipartiteNetwork} from '../utils/clustering';
 import turfPolygon from 'turf-polygon';
 import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
@@ -346,19 +346,33 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
-function onInfomapFinished(clusterIds) {
-
+function calculateClusterStatistics(clusterIds) {
   mergeClustersToBins(clusterIds, _bins);
 
   dispatch(setClusteringProgress("Calculating cluster statistics...", INDETERMINATE));
   const clusterStatistics = getClusterStatistics(clusterIds, _bins, _species[0].count, _speciesCountMap)
 
   dispatch(setClusteringProgress("Transferring clusters...", INDETERMINATE));
-  dispatch(addClusters(clusterIds, clusterStatistics));
+  dispatch(addClustersAndStatistics(clusterIds, clusterStatistics));
+}
+
+function onInfomapFinished(error, clusterIds) {
+  if (error)
+    console.log("Error running Infomap:", error);
+  else
+    calculateClusterStatistics(clusterIds);
 }
 
 function getClusters(infomapArgs) {
-  calculateInfomapClusters(dispatch, _species, _features, _bins, onInfomapFinished, infomapArgs);
+  const networkData = getBipartiteNetwork(_species, _features, _bins);
+
+  var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
+  if (haveWorker) {
+    calculateInfomapClusters(dispatch, infomapArgs, networkData, onInfomapFinished);
+  }
+  else {
+    dispatch(calculateClusters(networkData, infomapArgs));
+  }
 }
 
 onmessage = function(event) {
@@ -376,6 +390,9 @@ onmessage = function(event) {
       break;
     case GET_CLUSTERS:
       getClusters(event.data.infomapArgs);
+      break;
+    case ADD_CLUSTERS:
+      calculateClusterStatistics(event.data.clusterIds);
       break;
     case BINNING_MIN_NODE_SIZE:
       let oldMinNodeSize = event.data.minNodeSize;

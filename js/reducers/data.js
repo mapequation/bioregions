@@ -103,7 +103,14 @@ export default function data(state = initialState, action) {
         ...state,
         isClustering: true
       };
+    case ActionTypes.CALCULATE_CLUSTERS: // From worker as it couldn't spawn sub worker if not Firefox
+      console.log("Got CALCULATE_CLUSTERS in main thread reducer...");
+      return state;
     case ActionTypes.ADD_CLUSTERS:
+      // Forward to data worker
+      state.dataWorker.postMessage(action);
+      return state;
+    case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
       const bins = mergeClustersToBins(action.clusterIds, state.bins);
       const clusters = action.clusterStatistics;
       return {

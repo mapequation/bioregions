@@ -59,9 +59,14 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
     .entries(bins)
 }
 
-export function calculateInfomapClusters(dispatch, species, features, bins, callback, infomapArgs = "-v") {
+export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback) {
 
-  const networkData = getBipartiteNetwork(species, features, bins);
+  // Only Firefox allow spawning workers from other workers
+  var haveWorker = typeof Worker === 'function';
+
+  if (!haveWorker) {
+    return callback("Can't create a Worker, only Firefox support creating a worker from another worker.");
+  }
 
   console.log("Creating worker...");
   dispatch(setClusteringProgress("Creating Infomap worker...", INDETERMINATE));
@@ -88,12 +93,22 @@ export function calculateInfomapClusters(dispatch, species, features, bins, call
         dispatch(setClusteringProgress("Clustering...", INDETERMINATE, 0, {done: true}));
 
         dispatch(setClusteringProgress("Parsing Infomap result...", INDETERMINATE));
-        const clusterIds = parseInfomapOutput(data.output);
 
-        callback(clusterIds);
+        var error = null;
+        try {
+          var clusterIds = parseInfomapOutput(data.output);
+        }
+        catch(e) {
+          console.log("Error parsing infomap output:", e);
+          error = e;
+        }
+        finally {
 
-        console.log("Terminating worker...");
-        worker.terminate();
+          callback(error, clusterIds);
+
+          console.log("Terminating worker...");
+          worker.terminate();
+        }
         break;
       }
       default: throw `Unknown target on message from Infomap worker: '${data}'`;

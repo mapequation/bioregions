@@ -10,6 +10,8 @@ import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
 import * as ErrorActions from '../actions/ErrorActions';
+import {CALCULATE_CLUSTERS} from '../constants/ActionTypes';
+import {calculateInfomapClusters} from '../utils/clustering';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import R from 'ramda';
@@ -36,6 +38,22 @@ class App extends Component {
       // Dispatch all non-progress actions to redux state
       if (!action.isProgress)
         dispatch(action);
+
+      // Workaround as spawning sub workers only supported in Firefox.
+      function onInfomapFinished(error, clusterIds) {
+        console.log("[App]: Infomap finished in main thread.");
+        if (error)
+          console.log("Infomap got error:", error);
+        else
+          dispatch(ClusterActions.addClusters(clusterIds));
+      }
+      function progressDispatch(action) {
+        
+      }
+      if (action.type === CALCULATE_CLUSTERS) {
+        console.log("[App]: Spawn Infomap worker from main thread...");
+        calculateInfomapClusters(progressDispatch, action.infomapArgs, action.payload.networkData, onInfomapFinished);
+      }
     });
   }
 
