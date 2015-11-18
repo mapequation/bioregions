@@ -20,7 +20,6 @@ class Export extends Component {
         a = this.downloadAnchor;
     a.href = url;
     a.download = filename;
-    console.log("!!! Save file url:", url, "filename:", filename, "type:", type);
     a.click();
     // If revoking directly, the file wouldn't be downloaded
     setTimeout(() => {
@@ -39,8 +38,8 @@ class Export extends Component {
     let data = $('svg')[0].outerHTML;
     data = data.replace('<svg', '<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"');
     // data = JSON.stringify(data, null, '\t');
-    // this.saveData(data, 'Infomap-bioregions.svg', 'image/svg+xml');
-    this.saveData(data, 'Infomap-bioregions.svg', 'octet/stream');
+    this.saveData(data, 'Infomap-bioregions.svg', 'image/svg+xml;charset=utf-8');
+    // this.saveData(data, 'Infomap-bioregions.svg', 'octet/stream');
   }
 
   handleSaveBioregionsAsGeoJSON = () => {

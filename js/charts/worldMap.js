@@ -190,9 +190,10 @@ world.update = function(el, props) {
       .attr("class", "bins")
       .style("fill", (d, i) => color(colorDomainValue(d)))
       .style("stroke", "none")
-      .style("stroke-width", 0)
-      .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
       // .style("stroke", (d, i) => color(colorDomainValue(d)))
+      // .style("stroke-opacity", 0.1)
+      // .style("stroke-width", 0.1)
+      .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
       // .style("stroke", "white")
   }
 
@@ -206,7 +207,7 @@ world.update = function(el, props) {
 
     t[0] = Math.min(
       (width/height)  * (s - 1),
-      Math.max( width * (1 - s), t[0] )
+      Math.max(width * (1 - s), t[0])
     );
 
     t[1] = Math.min(
