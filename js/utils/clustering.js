@@ -68,8 +68,8 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
     return callback("Can't create a Worker, only Firefox support creating a worker from another worker.");
   }
 
-  console.log("Creating worker...");
-  dispatch(setClusteringProgress("Creating Infomap worker...", INDETERMINATE));
+  console.log("Creating Infomap Worker...");
+  dispatch(setClusteringProgress("Loading Infomap clustering algorithm...", INDETERMINATE));
   var worker = new Worker('/Infomap-worker.js');
 
   infomapArgs += " -i bipartite --clu --skip-adjust-bipartite-flow -2";
@@ -103,10 +103,11 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
           error = e;
         }
         finally {
+          dispatch(setClusteringProgress("Clustering done!", INDETERMINATE));
 
           callback(error, clusterIds);
 
-          console.log("Terminating worker...");
+          console.log("Terminating Infomap Worker...");
           worker.terminate();
         }
         break;
