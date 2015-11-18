@@ -1,6 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import worldChart from '../charts/worldMap.js';
 import * as DataFetching from '../constants/DataFetching';
+import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 
 class WorldMap extends Component {
 
@@ -16,7 +17,7 @@ class WorldMap extends Component {
     features: PropTypes.array.isRequired,
     binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
-    clusterIds: PropTypes.array.isRequired,
+    groupBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
     onMouseOver: PropTypes.func.isRequired,
     onMouseOut: PropTypes.func.isRequired,

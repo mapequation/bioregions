@@ -3,6 +3,7 @@ import d3 from 'd3'
 import topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
 import {DATA_SUCCEEDED} from '../constants/DataFetching'
+import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 var world = {};
 
 export default world;
@@ -149,7 +150,7 @@ world.update = function(el, props) {
   if (props.bins.length > 0) {
     var colorDomainValue;
     var color;
-    if (props.clusterIds.length !== 0) {
+    if (props.groupBy == BY_CLUSTER) {
       color = (clusterId) => props.clusterColors[clusterId];
       colorDomainValue = (d) => d.clusterId;
     }
