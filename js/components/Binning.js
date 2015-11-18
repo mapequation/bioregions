@@ -1,6 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import TangleInput from './TangleInput';
 import classNames from 'classnames';
+import {BINNING_PROGRESS} from '../constants/ActionTypes';
 
 class Binning extends Component {
 
@@ -15,6 +16,24 @@ class Binning extends Component {
     changeMaxBinSize: PropTypes.func.isRequired,
     changeDensityThreshold: PropTypes.func.isRequired,
     binningLoading: PropTypes.bool.isRequired,
+    progressEmitter: PropTypes.object.isRequired,
+  }
+
+  state = {
+    percentLoaded: null,
+  }
+
+  componentDidMount() {
+    const {progressEmitter} = this.props;
+    progressEmitter.on(BINNING_PROGRESS, (action) => {
+      const {type, activity, mode, amount, meta} = action;
+      console.log("!!!!! BINNING PROGRESS:", activity);
+      this.setState({
+        activity,
+        amount,
+        total: meta.total
+      });
+    });
   }
 
   renderTypes() {
@@ -45,64 +64,68 @@ class Binning extends Component {
   }
 
   render() {
-    let classes = classNames("ui celled table", {
+    let progressClasses = classNames("ui celled table", {
       yellow: this.props.binningLoading,
       green: !this.props.binningLoading,
     });
+    const {amount, total} = this.state;
+    const percentLoaded = total? `${Math.round(amount*100/total)}%` : "100%";
     return (
-      <table className={classes}>
-        <thead>
-          <tr>
-            <th colSpan="2">
-              Binning
-              <span> </span>
-              {this.props.binningLoading? (
-                <div className="ui active small inline loader"></div>
-              ) : (
-                <span></span>
-              )}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {this.renderTypesSelection()}
-          <tr>
-            <td>Max bin size</td>
-            <td className="">
-              <TangleInput className="ui label" suffix="˚"
-                value={this.props.maxNodeSize}
-                min={this.props.minNodeSize}
-                max={100}
-                step={0.1}
-                onChange={(value) => this.props.changeMaxBinSize(value)} />
-            </td>
-          </tr>
+      <div className="ui segment" style={{padding: 0}}>
+        <div className="ui top attached progress">
+          <div className="bar" style={{width: percentLoaded}}></div>
+        </div>
+        <div className="ui basic segment" style={{paddingBottom: 0}}>
+          <h4 className="ui header">Binning
+            <span> </span>
+            {this.props.binningLoading? (
+              <div className="ui active small inline loader"></div>
+            ) : (
+              <span></span>
+            )}
+          </h4>
+        </div>
+        <table className="ui basic table">
+          <tbody>
+            {this.renderTypesSelection()}
+            <tr>
+              <td>Max bin size</td>
+              <td className="">
+                <TangleInput className="ui label" suffix="˚"
+                  value={this.props.maxNodeSize}
+                  min={this.props.minNodeSize}
+                  max={100}
+                  step={0.1}
+                  onChange={(value) => this.props.changeMaxBinSize(value)} />
+              </td>
+            </tr>
 
-          <tr>
-            <td>Min bin size</td>
-            <td className="">
-              <TangleInput className="ui label" suffix="˚"
-                value={this.props.minNodeSize}
-                min={0.1}
-                max={this.props.maxNodeSize}
-                step={0.1}
-                onChange={(value) => this.props.changeMinBinSize(value)} />
-            </td>
-          </tr>
+            <tr>
+              <td>Min bin size</td>
+              <td className="">
+                <TangleInput className="ui label" suffix="˚"
+                  value={this.props.minNodeSize}
+                  min={0.1}
+                  max={this.props.maxNodeSize}
+                  step={0.1}
+                  onChange={(value) => this.props.changeMinBinSize(value)} />
+              </td>
+            </tr>
 
-          <tr>
-            <td>Density threshold</td>
-            <td className="">
-              <TangleInput className="ui label"
-                value={this.props.densityThreshold}
-                min={5}
-                max={1000000}
-                logStep={1}
-                onChange={(value) => this.props.changeDensityThreshold(value)} />
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            <tr>
+              <td>Density threshold</td>
+              <td className="">
+                <TangleInput className="ui label"
+                  value={this.props.densityThreshold}
+                  min={5}
+                  max={1000000}
+                  logStep={1}
+                  onChange={(value) => this.props.changeDensityThreshold(value)} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     );
   }
 
