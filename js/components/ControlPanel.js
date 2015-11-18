@@ -74,8 +74,6 @@ class ControlPanel extends Component {
           <FileLoader {...data} {...files} {...actions} />
           <Binning {...data.binning} binningLoading={data.binningLoading} {...actions} />
           <Infomap {...data} {...actions} />
-          <p></p>
-          <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
         </div>
         <div className="title">
           <i className="dropdown icon"></i>
@@ -94,6 +92,8 @@ class ControlPanel extends Component {
               step={1}
               onChange={(value) => actions.changeGraticuleStep(value)} />
           </InlineForm>
+          <p></p>
+          <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
           <h4 className="ui dividing header">Export</h4>
           <Export {...data}></Export>
         </div>
