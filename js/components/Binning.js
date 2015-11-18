@@ -55,6 +55,12 @@ class Binning extends Component {
           <tr>
             <th colSpan="2">
               Binning
+              <span> </span>
+              {this.props.binningLoading? (
+                <div className="ui active small inline loader"></div>
+              ) : (
+                <span></span>
+              )}
             </th>
           </tr>
         </thead>
