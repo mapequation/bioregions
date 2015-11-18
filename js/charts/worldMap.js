@@ -172,7 +172,9 @@ world.update = function(el, props) {
       colorDomainValue = (d) => d.count / d.area;
     }
 
-    let quadNodes = g.select(".overlay").selectAll(".quadnode")
+    let quadNodes = g.select(".overlay")
+      .attr("clip-path", props.clipToLand? "url(#clip)" : null)
+      .selectAll(".quadnode")
         .data(props.bins);
 
     quadNodes.exit().remove();
@@ -185,6 +187,7 @@ world.update = function(el, props) {
 
     //Update
     quadNodes.attr("d", props.binning.renderer(props.projection))
+      .attr("class", "bins")
       .style("fill", (d, i) => color(colorDomainValue(d)))
       .style("stroke", "none")
       .style("stroke-width", 0)
@@ -227,6 +230,7 @@ world.update = function(el, props) {
     g.select("#land").style("stroke-width", 1.5 / scale);
     // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
     g.selectAll(".graticules").select("path").style("stroke-width", 0.5 / scale);
+    // g.selectAll(".bins").style("stroke-width", 0.5 / scale);
   }
 
   //geo translation on mouse click in map

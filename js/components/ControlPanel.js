@@ -6,6 +6,7 @@ import Export from './Export';
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 import InlineForm from './InlineForm';
 import TangleInput from './TangleInput';
+import Checkbox from './Checkbox';
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -73,6 +74,8 @@ class ControlPanel extends Component {
           <FileLoader {...data} {...files} {...actions} />
           <Binning {...data.binning} binningLoading={data.binningLoading} {...actions} />
           <Infomap {...data} {...actions} />
+          <p></p>
+          <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
         </div>
         <div className="title">
           <i className="dropdown icon"></i>

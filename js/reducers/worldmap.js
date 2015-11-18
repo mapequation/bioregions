@@ -11,6 +11,7 @@ const initialState = {
   // projection: d3.geo.mercator(),
   projection: d3.geo.equirectangular(),
   // projection: d3.geo.equirectangular.raw,
+  clipToLand: true,
 };
 
 export default function worldmap(state = initialState, action) {
@@ -36,6 +37,11 @@ export default function worldmap(state = initialState, action) {
       return {
         ...state,
         graticuleStep: action.graticuleStep
+      };
+    case ActionTypes.CHANGE_CLIP_TO_LAND:
+      return {
+        ...state,
+        clipToLand: action.clipToLand
       };
     default:
       return state;

@@ -1,4 +1,8 @@
-import {LOAD_WORLD, ADD_WORLD, CHANGE_PROJECTION, CHANGE_GRATICULE_STEP} from '../constants/ActionTypes';
+import {LOAD_WORLD,
+  ADD_WORLD,
+  CHANGE_PROJECTION,
+  CHANGE_GRATICULE_STEP,
+  CHANGE_CLIP_TO_LAND} from '../constants/ActionTypes';
 import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios'
@@ -46,5 +50,12 @@ export function changeGraticuleStep(graticuleStep) {
   return {
     type: CHANGE_GRATICULE_STEP,
     graticuleStep
+  }
+}
+
+export function changeClipToLand(clipToLand) {
+  return {
+    type: CHANGE_CLIP_TO_LAND,
+    clipToLand
   }
 }

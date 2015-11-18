@@ -189,6 +189,7 @@ export default class QuadtreeGeoBinner {
   constructor() {
     // this._extent = [[-180, -90], [180, 90]];
     this._extent = [[-256, -256], [256, 256]]; // power of 2 to get 1x1 degree grid cells
+    // this._extent = [[-180, -90], [512-180, 512-90]]; // power of 2 to get 1x1 degree grid cells
     this._maxNodeSize = 10;
     this._minNodeSize = 1;
     this._densityThreshold = 10;
