@@ -186,7 +186,11 @@ world.update = function(el, props) {
     //Update
     quadNodes.attr("d", props.binning.renderer(props.projection))
       .style("fill", (d, i) => color(colorDomainValue(d)))
-      .style("stroke", "none");
+      .style("stroke", "none")
+      .style("stroke-width", 0)
+      .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
+      // .style("stroke", (d, i) => color(colorDomainValue(d)))
+      // .style("stroke", "white")
   }
 
   function onZoom() {
