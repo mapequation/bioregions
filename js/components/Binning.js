@@ -27,7 +27,6 @@ class Binning extends Component {
     const {progressEmitter} = this.props;
     progressEmitter.on(BINNING_PROGRESS, (action) => {
       const {type, activity, mode, amount, meta} = action;
-      console.log("!!!!! BINNING PROGRESS:", activity);
       this.setState({
         activity,
         amount,

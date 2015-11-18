@@ -21,7 +21,7 @@ export default function files(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
       return {
-        ...state,
+        ...initialState, // Restore to initial state
         files: action.files,
         isLoading: true
       };

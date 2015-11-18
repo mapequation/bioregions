@@ -5,18 +5,20 @@ import {FILE_PROGRESS} from '../constants/ActionTypes';
 import R from 'ramda';
 import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 
-const INITIAL_STATE = {
-  fieldMappingSubmitted: false,
-  nameFieldSubmitted: false,
-  fieldsToColumns: {
-    Name: 0,
-    Latitude: 1,
-    Longitude: 2,
-  },
-  nameField: "",
-  guessedColumns: false,
-  progress: null,
-  done: false,
+const getInitialState = () => {
+  return {
+    fieldMappingSubmitted: false,
+    nameFieldSubmitted: false,
+    fieldsToColumns: {
+      Name: 0,
+      Latitude: 1,
+      Longitude: 2,
+    },
+    nameField: "",
+    guessedColumns: false,
+    progress: null,
+    done: false,
+  }
 };
 
 class FileLoader extends Component {
@@ -34,7 +36,7 @@ class FileLoader extends Component {
     setFeatureNameField: PropTypes.func.isRequired,
   };
 
-  state = INITIAL_STATE;
+  state = getInitialState();
 
   componentDidMount() {
     const {progressEmitter} = this.props;
@@ -47,12 +49,16 @@ class FileLoader extends Component {
 
   componentWillReceiveProps(nextProps) {
     const {parsedHead, parsedFeatureProperty} = nextProps;
-    // this.setState({selectColumns});
-    // this.setState({selectProperties});
-    if (parsedHead.length > 0)
-      this.guessColumns(parsedHead);
-    else if (parsedFeatureProperty)
-      this.guessFeatureNameField(parsedFeatureProperty);
+
+    const haveDSV = parsedHead.length > 0
+    const haveFeatures = !!parsedFeatureProperty;
+    if (haveDSV || haveFeatures) {
+      this.setState(getInitialState());
+      if (haveDSV)
+        this.guessColumns(parsedHead);
+      else
+        this.guessFeatureNameField(parsedFeatureProperty);
+    }
   }
 
   guessColumns(parsedHead) {
@@ -92,7 +98,7 @@ class FileLoader extends Component {
   }
 
   cancelParsing = () => {
-    this.setState(INITIAL_STATE);
+    this.setState(getInitialState());
     this.props.cancelFileActions();
   }
 
@@ -198,14 +204,27 @@ class FileLoader extends Component {
       );
     }
 
+    const {progress} = this.state;
+    if (progress) {
+      return (
+        <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+          <div>
+            <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
+            <Progress {...progress}></Progress>
+          </div>
+        </Dimmer>
+      );
+    }
+
+    let header = files.length > 0? "Loading files..." : "Loading file...";
     return (
       <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
         <div>
           <HeadTable head={R.keys(parsedFeatureProperty)} rows={[R.values(parsedFeatureProperty)]}></HeadTable>
-          <Progress {...this.state.progress}></Progress>
+          <Loader header={header}></Loader>
         </div>
       </Dimmer>
-    )
+    );
 
   }
 
@@ -230,12 +249,13 @@ class FileLoader extends Component {
       )
     }
 
+    const subHeader = files[0].name;
     const columns = parsedHead[0];
 
     // Test
     // if (columns.length > 3) {
     //   return (
-    //     <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
+    //     <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
     //       <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
     //       <div className="ui indeterminate inline text loader">
     //         <h2 className="ui header">
@@ -252,7 +272,7 @@ class FileLoader extends Component {
       const {Name, Latitude, Longitude} = fieldsToColumns;
 
       return (
-        <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
+        <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
           <div>
             <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
 
@@ -301,14 +321,27 @@ class FileLoader extends Component {
       );
     }
 
+    const {progress} = this.state;
+    if (progress) {
+      return (
+        <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+          <div>
+            <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
+            <Progress {...progress}></Progress>
+          </div>
+        </Dimmer>
+      );
+    }
+
+    let header = files.length > 0? "Loading files..." : "Loading file...";
     return (
-      <Dimmer onCancel={this.cancelParsing} subHeader={files[0].name}>
+      <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
         <div>
           <HeadTable head={columns} rows={parsedHead.slice(1)}></HeadTable>
-          <Progress {...this.state.progress}></Progress>
+          <Loader header={header}></Loader>
         </div>
       </Dimmer>
-    )
+    );
   }
 
   renderFileLoading() {
@@ -457,7 +490,7 @@ var Progress = ({activity, mode, amount, meta}) => {
       <Loader header={activity} subHeader={amount? amount : ""}></Loader>
     );
   }
-  console.log(`[Progress]: mode: ${mode}, amount: ${amount}, total: ${meta.total}`);
+  // console.log(`[Progress]: mode: ${mode}, amount: ${amount}, total: ${meta.total}`);
   return (
     <div>
       <Loader header={activity} subHeader={amount}></Loader>

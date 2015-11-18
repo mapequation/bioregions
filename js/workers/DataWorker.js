@@ -19,23 +19,26 @@ import turfInside from 'turf-inside';
 
 console.log(`[DataWorker] ok`);
 
-// Worker scoped variables
-var _geoJSON = null;
-var _dsvType = null; // "TSV" or "CSV"
-var _content = null; // string content for dsv files
-var _features = []; // GeoJSON features
-var _bins = [];
-var _species = []; // array of [{name, count}], sorted on count
-var _speciesCountMap = new Map();
-
-//TODO: Support polygons through the whole pipeline, but for now translate to point grid
-var _shapeFeatures = null;
-
-var _binning = {
-  minNodeSize: 1,
-  maxNodeSize: 4,
-  densityThreshold: 100,
+// Worker state
+const getInitialState = () => {
+  return {
+    geoJSON: null,
+    DSVType: null, // "TSV" or "CSV"
+    DSVStringContent: null, // string content for dsv files
+    features: [], // Only point features here, possibly regenerate from shapeFeatures on binning change
+    bins: [],
+    species: [], // array of [{name, count}], sorted on count
+    speciesCountMap: new Map(),
+    shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
+    binning: {
+      minNodeSize: 1,
+      maxNodeSize: 4,
+      densityThreshold: 100,
+    }
+  }
 };
+
+var state = getInitialState();
 
 function dispatch(action) {
   postMessage(action);
@@ -76,9 +79,9 @@ function loadShapefiles(files) {
       dispatch(setFileProgress("Parsing attributes...", INDETERMINATE));
       let parsedDbf = shp.parseDbf(dbfBuffer);
       dispatch(setFileProgress("Combining to GeoJSON...", INDETERMINATE));
-      _geoJSON = shp.combine([parsedShape, parsedDbf]);
-      console.log("Loaded _geoJSON:", _geoJSON);
-      const {properties} = _geoJSON.features[0];
+      state.geoJSON = shp.combine([parsedShape, parsedDbf]);
+      console.log("Loaded state.geoJSON:", state.geoJSON);
+      const {properties} = state.geoJSON.features[0];
       dispatch(requestGeoJSONNameField(properties));
     })
     .catch(err => {
@@ -88,16 +91,16 @@ function loadShapefiles(files) {
 
 
 function parseGeoJSON(nameField) {
-  _shapeFeatures = [];
+  state.shapeFeatures = [];
   let numPoints = 0;
   let numPolygons = 0;
   let numMultiPolygons = 0;
   let numMultiPolygonsExpanded = 0;
   let numBadFeatures = 0;
-  const numOriginalFeatures = _geoJSON.features.length;
+  const numOriginalFeatures = state.geoJSON.features.length;
   let lastPercent = 0;
 
-  _geoJSON.features.forEach((feature, i) => {
+  state.geoJSON.features.forEach((feature, i) => {
     let percent = Math.round((i+1) * 100 / numOriginalFeatures);
     if (percent !== lastPercent) {
       dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i+1, {total: numOriginalFeatures}));
@@ -119,7 +122,7 @@ function parseGeoJSON(nameField) {
       ++numPolygons;
       if (!feature.geometry.bbox)
         feature.geometry.bbox = turfExtent(feature);
-      _shapeFeatures.push(feature);
+      state.shapeFeatures.push(feature);
     }
     else if (type === "MultiPolygon") {
       ++numMultiPolygons;
@@ -128,12 +131,12 @@ function parseGeoJSON(nameField) {
         let polygonFeature = turfPolygon(polygonCoords, feature.properties);
         if (!polygonFeature.geometry.bbox)
           polygonFeature.geometry.bbox = turfExtent(feature);
-        _shapeFeatures.push(polygonFeature);
+        state.shapeFeatures.push(polygonFeature);
       });
     }
     else if (type === "Point") {
       ++numPoints;
-      _shapeFeatures.push(feature);
+      state.shapeFeatures.push(feature);
     }
     else {
       console.log("Unsupported geometry type:", type);
@@ -152,15 +155,15 @@ function parseGeoJSON(nameField) {
   binData();
 
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
+  dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
 
 }
 
 function shapeToPoints() {
-  _features = [];
-  const resolution = _binning.minNodeSize;
-  const totCount = _shapeFeatures.length;
-  _shapeFeatures.forEach((feature, i) => {
+  state.features = [];
+  const resolution = state.binning.minNodeSize;
+  const totCount = state.shapeFeatures.length;
+  state.shapeFeatures.forEach((feature, i) => {
     dispatch(setBinningProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
     const {bbox} = feature.geometry;
     let simplifiedFeature = turfSimplify(feature, resolution * 0.125);
@@ -168,7 +171,7 @@ function shapeToPoints() {
         for (let lat = bbox[1]; lat < bbox[3]; lat += resolution) {
           const pointFeature = turfPoint([long, lat], feature.properties);
           if (turfInside(pointFeature, simplifiedFeature))
-            _features.push(pointFeature)
+            state.features.push(pointFeature)
         }
       }
   });
@@ -230,10 +233,10 @@ function parseDSVHeader(content) {
   if (!isTSV && !isCSV)
     return dispatch(setFileError("Couldn't recognise the format as CSV or TSV"));
 
-  _dsvType = isTSV? "TSV" : "CSV";
+  state.DSVType = isTSV? "TSV" : "CSV";
   let parser = isTSV? d3.tsv : d3.csv;
 
-  dispatch(setFileProgress(`Trying to parse the file as ${_dsvType}...`, INDETERMINATE));
+  dispatch(setFileProgress(`Trying to parse the file as ${state.DSVType}...`, INDETERMINATE));
 
   const parsedHead = parser.parseRows(headLines.join('\n'));
 
@@ -245,7 +248,7 @@ function parseDSVHeader(content) {
   dispatch(requestDSVColumnMapping(parsedHead));
 
   // Save reference to continue when columns selected
-  _content = content;
+  state.DSVStringContent = content;
 }
 
 
@@ -253,11 +256,11 @@ function parseDSV(fieldsToColumns) {
   console.log("[DataWorker]: parseDSV with fieldsToColumns:", fieldsToColumns);
   const {Name, Latitude, Longitude} = fieldsToColumns; // Contains index of corresponding field
 
-  let parser = _dsvType == "TSV" ? d3.tsv : d3.csv;
+  let parser = state.DSVType == "TSV" ? d3.tsv : d3.csv;
   let numSkipped = 0;
   let count = 0;
 
-  let features = parser.parseRows(_content, (row, index) => {
+  let features = parser.parseRows(state.DSVStringContent, (row, index) => {
     // Skip header
     if (index === 0)
       return null;
@@ -290,7 +293,7 @@ function parseDSV(fieldsToColumns) {
     return dispatch(setFileError(`No valid records could be parsed. ${numSkipped} skipped.`));
 
   // Store features
-  _features = features;
+  state.features = features;
 
   dispatch(setFileProgress("Parsing rows... done!", COUNT, count, {numSkipped, done: true}));
 
@@ -301,21 +304,21 @@ function parseDSV(fieldsToColumns) {
   binData();
 
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
+  dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
 }
 
 function groupByName() {
-  _species = S.sortedCountBy(feature => feature.properties.name, _features);
-  // _speciesCountMap = d3.map(_species, d => d.name);
-  _speciesCountMap = new Map(_species.map(({name, count}) => [name, count]));
+  state.species = S.sortedCountBy(feature => feature.properties.name, state.features);
+  // state.speciesCountMap = d3.map(state.species, d => d.name);
+  state.speciesCountMap = new Map(state.species.map(({name, count}) => [name, count]));
 }
 
 function getSummaryBins() {
    // Bin and map to summary bins, all individual features not needed
-   return _bins.map((bin) => {
+   return state.bins.map((bin) => {
      const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
      const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
-     const topIndicatorSpecies = S.topIndicatorItems("name", _speciesCountMap, _species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
+     const topIndicatorSpecies = S.topIndicatorItems("name", state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
      return {
        x1: bin.x1,
        x2: bin.x2,
@@ -334,17 +337,17 @@ function getSummaryBins() {
 }
 
 function binData(dispatchResult = false) {
-  if (_features.length === 0)
+  if (state.features.length === 0)
     return;
   dispatch(setBinningProgress("Binning species...", INDETERMINATE));
   let binner = new QuadtreeGeoBinner()
-   .minNodeSize(_binning.minNodeSize)
-   .maxNodeSize(_binning.maxNodeSize)
-   .densityThreshold(_binning.densityThreshold);
-  _bins = binner.bins(_features);
+   .minNodeSize(state.binning.minNodeSize)
+   .maxNodeSize(state.binning.maxNodeSize)
+   .densityThreshold(state.binning.densityThreshold);
+  state.bins = binner.bins(state.features);
 
   if (dispatchResult) {
-    dispatch(addSpeciesAndBins(_species, getSummaryBins(_bins)));
+    dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
   }
 }
 
@@ -359,10 +362,10 @@ function mergeClustersToBins(clusterIds, bins) {
 }
 
 function calculateClusterStatistics(clusterIds) {
-  mergeClustersToBins(clusterIds, _bins);
+  mergeClustersToBins(clusterIds, state.bins);
 
   dispatch(setClusteringProgress("Calculating cluster statistics...", INDETERMINATE));
-  const clusterStatistics = getClusterStatistics(clusterIds, _bins, _species[0].count, _speciesCountMap)
+  const clusterStatistics = getClusterStatistics(clusterIds, state.bins, state.species[0].count, state.speciesCountMap)
 
   dispatch(setClusteringProgress("Transferring clusters...", INDETERMINATE));
   dispatch(addClustersAndStatistics(clusterIds, clusterStatistics));
@@ -376,7 +379,7 @@ function onInfomapFinished(error, clusterIds) {
 }
 
 function getClusters(infomapArgs) {
-  const networkData = getBipartiteNetwork(_species, _features, _bins);
+  const networkData = getBipartiteNetwork(state.species, state.features, state.bins);
 
   var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
   if (haveWorker) {
@@ -392,6 +395,8 @@ onmessage = function(event) {
   console.log("[DataWorker]: got message of type:", type);
   switch (type) {
     case LOAD_FILES:
+      console.log("Reset data worker state");
+      state = getInitialState();
       loadFiles(event.data.files);
       break;
     case SET_FIELDS_TO_COLUMNS_MAPPING:
@@ -408,18 +413,18 @@ onmessage = function(event) {
       break;
     case BINNING_MIN_NODE_SIZE:
       let oldMinNodeSize = event.data.minNodeSize;
-      _binning.minNodeSize = event.data.minNodeSize;
-      if (_binning.minNodeSize < oldMinNodeSize) {
+      state.binning.minNodeSize = event.data.minNodeSize;
+      if (state.binning.minNodeSize < oldMinNodeSize) {
         shapeToPoints();
       }
       binData(true);
       break;
     case BINNING_MAX_NODE_SIZE:
-      _binning.maxNodeSize = event.data.maxNodeSize;
+      state.binning.maxNodeSize = event.data.maxNodeSize;
       binData(true);
       break;
     case BINNING_DENSITY_THRESHOLD:
-      _binning.densityThreshold = event.data.densityThreshold;
+      state.binning.densityThreshold = event.data.densityThreshold;
       binData(true);
       break;
     default:
