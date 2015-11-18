@@ -172,22 +172,21 @@ world.update = function(el, props) {
       colorDomainValue = (d) => d.count / d.area;
     }
 
-    let quadNodes = g.select(".overlay")
+    let binPaths = g.select(".overlay")
       .attr("clip-path", props.clipToLand? "url(#clip)" : null)
-      .selectAll(".quadnode")
+      .selectAll(".bin")
         .data(props.bins);
 
-    quadNodes.exit().remove();
+    binPaths.exit().remove();
 
-    quadNodes.enter().append("path")
-      .attr("class", "quadnode")
+    binPaths.enter().append("path")
+      .attr("class", "bin")
       .on('mouseover', props.onMouseOver)
       .on('mouseout', props.onMouseOut)
       .on('click', props.onMouseClick);
 
     //Update
-    quadNodes.attr("d", props.binning.renderer(props.projection))
-      .attr("class", "bins")
+    binPaths.attr("d", props.binning.renderer(props.projection))
       .style("fill", (d, i) => color(colorDomainValue(d)))
       .style("stroke", "none")
       // .style("stroke", (d, i) => color(colorDomainValue(d)))

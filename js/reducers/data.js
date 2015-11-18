@@ -90,6 +90,9 @@ function mergeClustersToBins(clusterIds, bins) {
 export default function data(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
+      // Forward to data worker
+      state.dataWorker.postMessage(action);
+      return initialState;
     case ActionTypes.SET_FIELDS_TO_COLUMNS_MAPPING:
     case ActionTypes.SET_FEATURE_NAME_FIELD:
       // Forward to data worker
@@ -136,6 +139,8 @@ export default function data(state = initialState, action) {
       dataWorker.postMessage(action);
       return {
         ...state,
+        clusterIds: [],
+        clusters: [],
         binning: nextBinning,
         binningLoading: state.species.length > 0,
         groupBy: Display.BY_NAME,
