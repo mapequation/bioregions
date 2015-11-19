@@ -163,7 +163,8 @@ function parseGeoJSON(nameField) {
 function shapeToPoints() {
   state.features = [];
   const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2);
-  const resolution = minNodeSize;// * 0.1;
+  const halfMinNodeSize = minNodeSize / 2;
+  const resolution = minNodeSize * 0.1;
   const totCount = state.shapeFeatures.length;
   let lastPercent = 0;
 
@@ -174,12 +175,36 @@ function shapeToPoints() {
       lastPercent = percent;
     }
     const {bbox} = feature.geometry;
-    let simplifiedFeature = turfSimplify(feature, minNodeSize / 8);
-    for (let long = bbox[0]; long < bbox[2]; long += resolution) {
-      for (let lat = bbox[1]; lat < bbox[3]; lat += resolution) {
-        const pointFeature = turfPoint([long, lat], feature.properties);
-        if (turfInside(pointFeature, simplifiedFeature))
-          state.features.push(pointFeature)
+    const bboxWidth = bbox[2] - bbox[0];
+    const bboxHeight = bbox[3] - bbox[1];
+    const [bboxSizeMin, bboxSizeMax] = bboxWidth < bboxHeight ? [bboxWidth, bboxHeight] : [bboxHeight, bboxWidth];
+    if (bboxSizeMax < minNodeSize) {
+      // If feature less than minimum cell size, add points at centre
+      state.features.push(turfPoint([bbox[0] + bboxWidth/2, bbox[1] + bboxHeight/2], feature.properties));
+      // const long = bbox[0] + halfMinNodeSize;
+      // const lat = bbox[1] + halfMinNodeSize;
+      // for (let x = long - halfMinNodeSize; x < long + halfMinNodeSize; x += resolution) {
+      //   for (let y = lat - halfMinNodeSize; y < lat + halfMinNodeSize; y += resolution) {
+      //     const pointFeature = turfPoint([x, y], feature.properties);
+      //     state.features.push(pointFeature);
+      //   }
+      // }
+    }
+    else {
+      let simplifiedFeature = turfSimplify(feature, minNodeSize / 8);
+      for (let long = bbox[0] + halfMinNodeSize; long < bbox[2]; long += minNodeSize) {
+        for (let lat = bbox[1] + halfMinNodeSize; lat < bbox[3]; lat += minNodeSize) {
+          const pointFeature = turfPoint([long, lat], feature.properties);
+          if (turfInside(pointFeature, simplifiedFeature)) {
+            state.features.push(turfPoint([long, lat], feature.properties));
+            // for (let x = long - halfMinNodeSize; x < long + halfMinNodeSize; x += resolution) {
+            //   for (let y = lat - halfMinNodeSize; y < lat + halfMinNodeSize; y += resolution) {
+            //     const subPointFeature = turfPoint([x, y], feature.properties);
+            //     state.features.push(subPointFeature);
+            //   }
+            // }
+          }
+        }
       }
     }
   });
