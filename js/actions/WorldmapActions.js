@@ -2,7 +2,9 @@ import {LOAD_WORLD,
   ADD_WORLD,
   CHANGE_PROJECTION,
   CHANGE_GRATICULE_STEP,
-  CHANGE_CLIP_TO_LAND} from '../constants/ActionTypes';
+  CHANGE_SHOW_GRATICULES,
+  CHANGE_CLIP_TO_LAND,
+  CHANGE_SHOW_CELL_BORDERS } from '../constants/ActionTypes';
 import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios'
@@ -53,9 +55,23 @@ export function changeGraticuleStep(graticuleStep) {
   }
 }
 
+export function changeShowGraticules(showGraticules) {
+  return {
+    type: CHANGE_SHOW_GRATICULES,
+    showGraticules
+  }
+}
+
 export function changeClipToLand(clipToLand) {
   return {
     type: CHANGE_CLIP_TO_LAND,
     clipToLand
+  }
+}
+
+export function changeShowCellBorders(showCellBorders) {
+  return {
+    type: CHANGE_SHOW_CELL_BORDERS,
+    showCellBorders
   }
 }

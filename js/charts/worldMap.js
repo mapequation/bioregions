@@ -116,9 +116,12 @@ world.update = function(el, props) {
       .attr("d", path);
   }
 
-  const {graticuleStep} = props;
+  const {graticuleStep, showGraticules} = props;
   var graticule = d3.geo.graticule()
     .step([graticuleStep, graticuleStep]);
+
+  if (!showGraticules)
+    graticule = () => [];
 
   g.select(".graticules").select("path.graticule")
     .datum(graticule)
@@ -189,10 +192,10 @@ world.update = function(el, props) {
     //Update
     binPaths.attr("d", props.binning.renderer(props.projection))
       .style("fill", (d, i) => color(colorDomainValue(d)))
-      .style("stroke", "none")
+      .style("stroke", props.showCellBorders? "#ccc" : "none")
       // .style("stroke", (d, i) => color(colorDomainValue(d)))
-      // .style("stroke-opacity", 0.1)
-      // .style("stroke-width", 0.1)
+      .style("stroke-opacity", 0.5)
+      .style("stroke-width", 0.1)
       .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
       // .style("stroke", "white")
   }

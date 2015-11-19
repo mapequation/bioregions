@@ -7,11 +7,13 @@ const initialState = {
   worldStatus: DataFetching.DATA_NOT_FETCHED,
   width: 500,
   height: 500,
-  graticuleStep: 2,
   // projection: d3.geo.mercator(),
   projection: d3.geo.equirectangular(),
   // projection: d3.geo.equirectangular.raw,
+  graticuleStep: 2,
+  showGraticules: true,
   clipToLand: true,
+  showCellBorders: true,
 };
 
 export default function worldmap(state = initialState, action) {
@@ -38,10 +40,20 @@ export default function worldmap(state = initialState, action) {
         ...state,
         graticuleStep: action.graticuleStep
       };
+    case ActionTypes.CHANGE_SHOW_GRATICULES:
+      return {
+        ...state,
+        showGraticules: action.showGraticules
+      };
     case ActionTypes.CHANGE_CLIP_TO_LAND:
       return {
         ...state,
         clipToLand: action.clipToLand
+      };
+    case ActionTypes.CHANGE_SHOW_CELL_BORDERS:
+      return {
+        ...state,
+        showCellBorders: action.showCellBorders
       };
     default:
       return state;
