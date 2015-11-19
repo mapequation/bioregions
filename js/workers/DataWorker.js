@@ -162,10 +162,16 @@ function parseGeoJSON(nameField) {
 
 function shapeToPoints() {
   state.features = [];
-  const resolution = state.binning.minNodeSizeLog2;
+  const resolution = Math.pow(2, state.binning.minNodeSizeLog2);
   const totCount = state.shapeFeatures.length;
+  let lastPercent = 0;
+
   state.shapeFeatures.forEach((feature, i) => {
-    dispatch(setBinningProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
+    let percent = Math.round((i+1) * 100 / totCount);
+    if (percent !== lastPercent) {
+      dispatch(setFileProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
+      lastPercent = percent;
+    }
     const {bbox} = feature.geometry;
     let simplifiedFeature = turfSimplify(feature, resolution * 0.125);
       for (let long = bbox[0]; long < bbox[2]; long += resolution) {
