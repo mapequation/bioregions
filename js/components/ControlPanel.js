@@ -97,7 +97,7 @@ class ControlPanel extends Component {
           <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
           <Checkbox label="Show cell borders" checked={worldmap.showCellBorders} onChange={actions.changeShowCellBorders}></Checkbox>
           <h4 className="ui dividing header">Export</h4>
-          <Export {...data}></Export>
+          <Export {...data} {...files}></Export>
         </div>
       </div>
     );

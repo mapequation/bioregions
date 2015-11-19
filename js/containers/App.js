@@ -128,6 +128,11 @@ class App extends Component {
       <div className="">
         <div className="ui secondary pointing menu">
           <a className="active item">Infomap Bioregions</a>
+          <div className="item">
+            {files.haveFile? (
+              <i className="right chevron grey icon">{files.basename}</i>
+              ) : (<i></i>)}
+          </div>
           <div className="right menu">
             <a className="item">About</a>
           </div>

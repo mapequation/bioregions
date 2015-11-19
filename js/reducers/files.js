@@ -3,6 +3,8 @@ import * as ActionTypes from '../constants/ActionTypes';
 const initialState = {
   isLoading: false,
   files: [], // array of File objects to load
+  basename: "Infomap bioregions",
+  haveFile: false,
   sampleFiles: [
     {
       name: "Snakes in South Africa",
@@ -20,10 +22,15 @@ const initialState = {
 export default function files(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
+      const filename = action.files[0].name;
+      const lastDot = filename.lastIndexOf(".");
+      const basename = lastDot == -1? filename : filename.substring(0, lastDot);
       return {
         ...initialState, // Restore to initial state
         files: action.files,
-        isLoading: true
+        basename,
+        isLoading: true,
+        haveFile: true
       };
     case ActionTypes.FILE_ERROR:
       return {

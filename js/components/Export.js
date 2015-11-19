@@ -10,6 +10,14 @@ const BIOREGIONS_SHAPEFILE = 'BIOREGIONS_SHAPEFILE';
 const CLUSTERS_CSV = 'CLUSTERS_CSV';
 
 class Export extends Component {
+
+  static propTypes = {
+    bins: PropTypes.array.isRequired,
+    clusters: PropTypes.array.isRequired,
+    clusterColors: PropTypes.array.isRequired,
+    basename: PropTypes.string.isRequired,
+  }
+
   state = {
 
   }
@@ -38,14 +46,14 @@ class Export extends Component {
     let data = $('svg')[0].outerHTML;
     data = data.replace('<svg', '<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg"');
     // data = JSON.stringify(data, null, '\t');
-    this.saveData(data, 'Infomap-bioregions.svg', 'image/svg+xml;charset=utf-8');
+    this.saveData(data, `${this.props.basename}.svg`, 'image/svg+xml;charset=utf-8');
     // this.saveData(data, 'Infomap-bioregions.svg', 'octet/stream');
   }
 
   handleSaveBioregionsAsGeoJSON = () => {
     var geoJSON = clusteredBinsToCollectionOfMultiPolygons(this.props.bins);
     var data = JSON.stringify(geoJSON, null, '\t');
-    this.saveData(data, 'Infomap-bioregions.geojson', 'application/vnd.geo+json');
+    this.saveData(data, `${this.props.basename}.geojson`, 'application/vnd.geo+json');
   }
 
   handleSaveBioregionsAsShapefile = () => {
@@ -75,7 +83,7 @@ class Export extends Component {
     });
 
     let csvData = d3.csv.format(rows);
-    this.saveData(csvData, 'Infomap-bioregions.csv', 'text/csv');
+    this.saveData(csvData, `${this.props.basename}.csv`, 'text/csv');
   }
 
   renderDownloadButtons() {
@@ -116,11 +124,5 @@ DownloadButton.propTypes = {
   label: PropTypes.string.isRequired,
   type: PropTypes.string.isRequired,
 }
-
-Export.propTypes = {
-  bins: PropTypes.array.isRequired,
-  clusters: PropTypes.array.isRequired,
-  clusterColors: PropTypes.array.isRequired,
-};
 
 export default Export;
