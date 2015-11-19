@@ -1,7 +1,7 @@
 import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
-  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_DENSITY_THRESHOLD} from '../constants/ActionTypes';
+  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField, addSpeciesAndBins} from '../actions/FileLoaderActions';
@@ -33,7 +33,8 @@ const getInitialState = () => {
     binning: { // TODO: Sync with main data state
       minNodeSizeLog2: 0,
       maxNodeSizeLog2: 2,
-      densityThreshold: 100,
+      nodeCapacity: 100,
+      lowerThreshold: 1,
     }
   }
 };
@@ -343,7 +344,8 @@ function binData(dispatchResult = false) {
   let binner = new QuadtreeGeoBinner()
    .minNodeSizeLog2(state.binning.minNodeSizeLog2)
    .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
-   .densityThreshold(state.binning.densityThreshold);
+   .nodeCapacity(state.binning.nodeCapacity)
+   .lowerThreshold(state.binning.lowerThreshold);
   state.bins = binner.bins(state.features);
 
   if (dispatchResult) {
@@ -423,8 +425,12 @@ onmessage = function(event) {
       state.binning.maxNodeSizeLog2 = event.data.maxNodeSizeLog2;
       binData(true);
       break;
-    case BINNING_DENSITY_THRESHOLD:
-      state.binning.densityThreshold = event.data.densityThreshold;
+    case BINNING_NODE_CAPACITY:
+      state.binning.nodeCapacity = event.data.nodeCapacity;
+      binData(true);
+      break;
+    case BINNING_LOWER_THRESHOLD:
+      state.binning.lowerThreshold = event.data.lowerThreshold;
       binData(true);
       break;
     default:

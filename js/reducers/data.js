@@ -15,7 +15,8 @@ const initialBinningState = {
   binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
   minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
   maxNodeSizeLog2: 2,
-  densityThreshold: 100,
+  nodeCapacity: 100,
+  lowerThreshold: 1,
   renderer: QuadtreeGeoBinner.renderer,
   binningLoading: false,
 };
@@ -37,10 +38,15 @@ function binning(state = initialBinningState, action) {
         ...state,
         maxNodeSizeLog2: action.maxNodeSizeLog2
       }
-    case ActionTypes.BINNING_DENSITY_THRESHOLD:
+    case ActionTypes.BINNING_NODE_CAPACITY:
       return {
         ...state,
-        densityThreshold: action.densityThreshold
+        nodeCapacity: action.nodeCapacity
+      }
+    case ActionTypes.BINNING_LOWER_THRESHOLD:
+      return {
+        ...state,
+        lowerThreshold: action.lowerThreshold
       }
     default:
       return state;
@@ -73,7 +79,7 @@ function getBins(binning, features) {
   let binner = new QuadtreeGeoBinner()
    .minNodeSizeLog2(binning.minNodeSizeLog2)
    .maxNodeSizeLog2(binning.maxNodeSizeLog2)
-   .densityThreshold(binning.densityThreshold);
+   .nodeCapacity(binning.nodeCapacity);
   return binner.bins(features);
 }
 
@@ -134,7 +140,8 @@ export default function data(state = initialState, action) {
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
     case ActionTypes.BINNING_MAX_NODE_SIZE:
-    case ActionTypes.BINNING_DENSITY_THRESHOLD:
+    case ActionTypes.BINNING_NODE_CAPACITY:
+    case ActionTypes.BINNING_LOWER_THRESHOLD:
       let nextBinning = binning(state.binning, action)
       dataWorker.postMessage(action);
       return {

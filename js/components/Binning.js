@@ -10,11 +10,13 @@ class Binning extends Component {
     binnerTypes: PropTypes.array.isRequired,
     minNodeSizeLog2: PropTypes.number,
     maxNodeSizeLog2: PropTypes.number,
-    densityThreshold: PropTypes.number,
+    nodeCapacity: PropTypes.number,
+    lowerThreshold: PropTypes.number,
     changeBinnerType: PropTypes.func.isRequired,
     changeMinBinSize: PropTypes.func.isRequired,
     changeMaxBinSize: PropTypes.func.isRequired,
-    changeDensityThreshold: PropTypes.func.isRequired,
+    changeNodeCapacity: PropTypes.func.isRequired,
+    changeLowerThreshold: PropTypes.func.isRequired,
     binningLoading: PropTypes.bool.isRequired,
     progressEmitter: PropTypes.object.isRequired,
   }
@@ -118,15 +120,28 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Density threshold</td>
+              <td>Bin capacity</td>
               <td className="">
                 <TangleInput className="ui label"
-                  value={this.props.densityThreshold}
+                  value={this.props.nodeCapacity}
                   min={5}
                   max={1000000}
                   logStep={1}
                   speed={0.2}
-                  onChange={(value) => this.props.changeDensityThreshold(value)} />
+                  onChange={(value) => this.props.changeNodeCapacity(value)} />
+              </td>
+            </tr>
+
+            <tr>
+              <td>Lower threshold</td>
+              <td className="">
+                <TangleInput className="ui label"
+                  value={this.props.lowerThreshold}
+                  min={0}
+                  max={1000000}
+                  logStep={1}
+                  speed={0.2}
+                  onChange={(value) => this.props.changeLowerThreshold(value)} />
               </td>
             </tr>
           </tbody>

@@ -199,6 +199,14 @@ world.update = function(el, props) {
       .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
       // .style("stroke", "white")
   }
+  else {
+    // No bins, remove possible existing ones
+    let binPaths = g.select(".overlay")
+      .selectAll(".bin")
+        .data(props.bins);
+
+    binPaths.exit().remove();
+  }
 
   function onZoom() {
     if (!props.world)

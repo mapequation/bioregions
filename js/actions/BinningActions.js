@@ -2,7 +2,8 @@ import {
   BINNING_CHANGE_TYPE,
   BINNING_MIN_NODE_SIZE,
   BINNING_MAX_NODE_SIZE,
-  BINNING_DENSITY_THRESHOLD
+  BINNING_NODE_CAPACITY,
+  BINNING_LOWER_THRESHOLD
 } from '../constants/ActionTypes';
 
 export function changeBinnerType(binnerType) {
@@ -26,9 +27,16 @@ export function changeMaxBinSize(maxNodeSizeLog2) {
   }
 }
 
-export function changeDensityThreshold(densityThreshold) {
+export function changeNodeCapacity(nodeCapacity) {
   return {
-    type: BINNING_DENSITY_THRESHOLD,
-    densityThreshold
+    type: BINNING_NODE_CAPACITY,
+    nodeCapacity
+  }
+}
+
+export function changeLowerThreshold(lowerThreshold) {
+  return {
+    type: BINNING_LOWER_THRESHOLD,
+    lowerThreshold
   }
 }

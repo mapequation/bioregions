@@ -26,15 +26,15 @@ class Node {
     return dx * dx;
   }
 
-  add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold) {
+  add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity) {
     if (!this.isLeaf)
-      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
 
     const sizeLog2 = Math.log2(this.x2 - this.x1);
 
     // Force create children
     if (sizeLog2 > maxNodeSizeLog2) {
-      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
     }
 
     // Allow no more children
@@ -43,9 +43,9 @@ class Node {
     }
 
     // In-between size bounds, create children if overflowing density threshold
-    if (this.features.length === densityThreshold) {
+    if (this.features.length === nodeCapacity) {
       this.features.forEach((feature) => {
-        this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+        this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
       });
       this.features = [];
     }
@@ -56,7 +56,7 @@ class Node {
 
   // Recursively inserts the specified point or polygon into descendants of
   // this node.
-  addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold) {
+  addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity) {
     // Compute the split point, and the quadrant in which to insert the point.
     let {x1, x2, y1, y2} = this;
     var xm = (x1 + x2) * .5,
@@ -77,7 +77,7 @@ class Node {
       if (below) y1 = ym; else y2 = ym;
 
       let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
-      child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
     }
     else {
       // Polygon feature, check intersection with quadtree children, indexed as order below
@@ -124,19 +124,19 @@ class Node {
       //
       // if (topLeftIntersect) {
       //   let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
       // }
       // if (topRightIntersect) {
       //   let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
       // }
       // if (lowerLeftIntersect) {
       //   let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
       // }
       // if (lowerRightIntersect) {
       //   let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
       // }
     }
   }
@@ -192,7 +192,8 @@ export default class QuadtreeGeoBinner {
     // this._extent = [[-180, -90], [512-180, 512-90]]; // power of 2 to get 1x1 degree grid cells
     this._maxNodeSizeLog2 = 4;
     this._minNodeSizeLog2 = -3;
-    this._densityThreshold = 10;
+    this._nodeCapacity = 10;
+    this._lowerThreshold = 0; //
     this._root = null;
     this.initRoot();
   }
@@ -226,8 +227,12 @@ export default class QuadtreeGeoBinner {
     return arguments.length ? (this._minNodeSizeLog2 = _, this) : this._minNodeSizeLog2;
   }
 
-  densityThreshold(_) {
-    return arguments.length ? (this._densityThreshold = _, this) : this._densityThreshold;
+  nodeCapacity(_) {
+    return arguments.length ? (this._nodeCapacity = _, this) : this._nodeCapacity;
+  }
+
+  lowerThreshold(_) {
+    return arguments.length ? (this._lowerThreshold = _, this) : this._lowerThreshold;
   }
 
   visit(callback) {
@@ -240,7 +245,7 @@ export default class QuadtreeGeoBinner {
 
   addFeatures(features) {
     features.forEach((feature) => {
-      this._root.add(feature, this._maxNodeSizeLog2, this._minNodeSizeLog2, this._densityThreshold);
+      this._root.add(feature, this._maxNodeSizeLog2, this._minNodeSizeLog2, this._nodeCapacity);
     });
     return this;
   }
@@ -275,7 +280,11 @@ export default class QuadtreeGeoBinner {
     }
     this._root.patchPartiallyEmptyNodes(this._maxNodeSizeLog2);
     var nodes = [];
-    this.visitNonEmpty(function(node) {
+    this.visitNonEmpty((node) => {
+      // Skip biggest non-empty nodes if its number of features are below the lower threshold
+      if (Math.log2(node.size()) === this._maxNodeSizeLog2 && node.features.length < this._lowerThreshold) {
+        return true;
+      }
       nodes.push(node);
     });
     if (features) {
