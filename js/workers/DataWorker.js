@@ -30,9 +30,9 @@ const getInitialState = () => {
     species: [], // array of [{name, count}], sorted on count
     speciesCountMap: new Map(),
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
-    binning: {
-      minNodeSize: 1,
-      maxNodeSize: 4,
+    binning: { // TODO: Sync with main data state
+      minNodeSizeLog2: 0,
+      maxNodeSizeLog2: 2,
       densityThreshold: 100,
     }
   }
@@ -161,7 +161,7 @@ function parseGeoJSON(nameField) {
 
 function shapeToPoints() {
   state.features = [];
-  const resolution = state.binning.minNodeSize;
+  const resolution = state.binning.minNodeSizeLog2;
   const totCount = state.shapeFeatures.length;
   state.shapeFeatures.forEach((feature, i) => {
     dispatch(setBinningProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
@@ -341,8 +341,8 @@ function binData(dispatchResult = false) {
     return;
   dispatch(setBinningProgress("Binning species...", INDETERMINATE));
   let binner = new QuadtreeGeoBinner()
-   .minNodeSize(state.binning.minNodeSize)
-   .maxNodeSize(state.binning.maxNodeSize)
+   .minNodeSizeLog2(state.binning.minNodeSizeLog2)
+   .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
    .densityThreshold(state.binning.densityThreshold);
   state.bins = binner.bins(state.features);
 
@@ -412,15 +412,15 @@ onmessage = function(event) {
       calculateClusterStatistics(event.data.clusterIds);
       break;
     case BINNING_MIN_NODE_SIZE:
-      let oldMinNodeSize = event.data.minNodeSize;
-      state.binning.minNodeSize = event.data.minNodeSize;
-      if (state.binning.minNodeSize < oldMinNodeSize) {
+      let oldMinNodeSizeLog2 = event.data.minNodeSizeLog2;
+      state.binning.minNodeSizeLog2 = event.data.minNodeSizeLog2;
+      if (state.binning.minNodeSizeLog2 < oldMinNodeSizeLog2) {
         shapeToPoints();
       }
       binData(true);
       break;
     case BINNING_MAX_NODE_SIZE:
-      state.binning.maxNodeSize = event.data.maxNodeSize;
+      state.binning.maxNodeSizeLog2 = event.data.maxNodeSizeLog2;
       binData(true);
       break;
     case BINNING_DENSITY_THRESHOLD:

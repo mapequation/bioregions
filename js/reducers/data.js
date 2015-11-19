@@ -13,8 +13,8 @@ import EventEmitter2 from 'eventemitter2';
 const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
   binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
-  minNodeSize: 1,
-  maxNodeSize: 4,
+  minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
+  maxNodeSizeLog2: 2,
   densityThreshold: 100,
   renderer: QuadtreeGeoBinner.renderer,
   binningLoading: false,
@@ -30,12 +30,12 @@ function binning(state = initialBinningState, action) {
     case ActionTypes.BINNING_MIN_NODE_SIZE:
       return {
         ...state,
-        minNodeSize: action.minNodeSize
+        minNodeSizeLog2: action.minNodeSizeLog2
       }
     case ActionTypes.BINNING_MAX_NODE_SIZE:
       return {
         ...state,
-        maxNodeSize: action.maxNodeSize
+        maxNodeSizeLog2: action.maxNodeSizeLog2
       }
     case ActionTypes.BINNING_DENSITY_THRESHOLD:
       return {
@@ -71,8 +71,8 @@ const initialState = {
 
 function getBins(binning, features) {
   let binner = new QuadtreeGeoBinner()
-   .minNodeSize(binning.minNodeSize)
-   .maxNodeSize(binning.maxNodeSize)
+   .minNodeSizeLog2(binning.minNodeSizeLog2)
+   .maxNodeSizeLog2(binning.maxNodeSizeLog2)
    .densityThreshold(binning.densityThreshold);
   return binner.bins(features);
 }

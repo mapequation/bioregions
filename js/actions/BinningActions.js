@@ -12,17 +12,17 @@ export function changeBinnerType(binnerType) {
   }
 }
 
-export function changeMinBinSize(minNodeSize) {
+export function changeMinBinSize(minNodeSizeLog2) {
   return {
     type: BINNING_MIN_NODE_SIZE,
-    minNodeSize
+    minNodeSizeLog2
   }
 }
 
-export function changeMaxBinSize(maxNodeSize) {
+export function changeMaxBinSize(maxNodeSizeLog2) {
   return {
     type: BINNING_MAX_NODE_SIZE,
-    maxNodeSize
+    maxNodeSizeLog2
   }
 }
 

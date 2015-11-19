@@ -26,26 +26,26 @@ class Node {
     return dx * dx;
   }
 
-  add(feature, maxNodeSize, minNodeSize, densityThreshold) {
+  add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold) {
     if (!this.isLeaf)
-      return this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
+      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
 
-    let width = this.x2 - this.x1;
+    const sizeLog2 = Math.log2(this.x2 - this.x1);
 
     // Force create children
-    if (width > maxNodeSize) {
-      return this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
+    if (sizeLog2 > maxNodeSizeLog2) {
+      return this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
     }
 
     // Allow no more children
-    if (width <= minNodeSize) {
+    if (sizeLog2 <= minNodeSizeLog2) {
       return this.features.push(feature);
     }
 
     // In-between size bounds, create children if overflowing density threshold
     if (this.features.length === densityThreshold) {
       this.features.forEach((feature) => {
-        this.addChild(feature, maxNodeSize, minNodeSize, densityThreshold);
+        this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
       });
       this.features = [];
     }
@@ -56,7 +56,7 @@ class Node {
 
   // Recursively inserts the specified point or polygon into descendants of
   // this node.
-  addChild(feature, maxNodeSize, minNodeSize, densityThreshold) {
+  addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold) {
     // Compute the split point, and the quadrant in which to insert the point.
     let {x1, x2, y1, y2} = this;
     var xm = (x1 + x2) * .5,
@@ -77,7 +77,7 @@ class Node {
       if (below) y1 = ym; else y2 = ym;
 
       let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
-      child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
     }
     else {
       // Polygon feature, check intersection with quadtree children, indexed as order below
@@ -124,19 +124,19 @@ class Node {
       //
       // if (topLeftIntersect) {
       //   let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
-      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
       // }
       // if (topRightIntersect) {
       //   let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
-      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
       // }
       // if (lowerLeftIntersect) {
       //   let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
-      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
       // }
       // if (lowerRightIntersect) {
       //   let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
-      //   child.add(feature, maxNodeSize, minNodeSize, densityThreshold);
+      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, densityThreshold);
       // }
     }
   }
@@ -157,7 +157,7 @@ class Node {
       this.children[i] && this.children[i].visit(callback);
   }
 
-  patchPartiallyEmptyNodes(maxNodeSize) {
+  patchPartiallyEmptyNodes(maxNodeSizeLog2) {
     if (this.isLeaf)
       return this.features;
     // Already patched if features at non-leaf node.
@@ -165,11 +165,11 @@ class Node {
       return this.features;
     }
     let nonEmptyChildren = this.children.filter((child) => child !== undefined);
-    let size = this.x2 - this.x1;
-    let doPatch = (size < maxNodeSize) && this.features.length === 0 && nonEmptyChildren.length < 4;
+    const sizeLog2 = Math.log2(this.x2 - this.x1);
+    let doPatch = (sizeLog2 < maxNodeSizeLog2) && this.features.length === 0 && nonEmptyChildren.length < 4;
     let aggregatedFeatures = [];
     nonEmptyChildren.forEach((child) => {
-      const childFeatures = child.patchPartiallyEmptyNodes(maxNodeSize);
+      const childFeatures = child.patchPartiallyEmptyNodes(maxNodeSizeLog2);
       childFeatures.forEach((feature) => {
         aggregatedFeatures.push(feature);
       });
@@ -190,8 +190,8 @@ export default class QuadtreeGeoBinner {
     // this._extent = [[-180, -90], [180, 90]];
     this._extent = [[-256, -256], [256, 256]]; // power of 2 to get 1x1 degree grid cells
     // this._extent = [[-180, -90], [512-180, 512-90]]; // power of 2 to get 1x1 degree grid cells
-    this._maxNodeSize = 10;
-    this._minNodeSize = 1;
+    this._maxNodeSizeLog2 = 4;
+    this._minNodeSizeLog2 = -3;
     this._densityThreshold = 10;
     this._root = null;
     this.initRoot();
@@ -218,12 +218,12 @@ export default class QuadtreeGeoBinner {
     return this;
   }
 
-  maxNodeSize(_) {
-    return arguments.length ? (this._maxNodeSize = _, this) : this._maxNodeSize;
+  maxNodeSizeLog2(_) {
+    return arguments.length ? (this._maxNodeSizeLog2 = _, this) : this._maxNodeSizeLog2;
   }
 
-  minNodeSize(_) {
-    return arguments.length ? (this._minNodeSize = _, this) : this._minNodeSize;
+  minNodeSizeLog2(_) {
+    return arguments.length ? (this._minNodeSizeLog2 = _, this) : this._minNodeSizeLog2;
   }
 
   densityThreshold(_) {
@@ -240,7 +240,7 @@ export default class QuadtreeGeoBinner {
 
   addFeatures(features) {
     features.forEach((feature) => {
-      this._root.add(feature, this._maxNodeSize, this._minNodeSize, this._densityThreshold);
+      this._root.add(feature, this._maxNodeSizeLog2, this._minNodeSizeLog2, this._densityThreshold);
     });
     return this;
   }
@@ -262,7 +262,7 @@ export default class QuadtreeGeoBinner {
   }
 
   /**
-  * Get all bins less than maxNodeSize
+  * Get all bins less than maxNodeSizeLog2
   * If the bin have partially filled children (1-3 children non-empty)
   * the features array of that bin is an aggregation of the features below
   * @param features The features to bin, else assume added by addFeatures
@@ -273,7 +273,7 @@ export default class QuadtreeGeoBinner {
       this.clear();
       this.addFeatures(features);
     }
-    this._root.patchPartiallyEmptyNodes(this._maxNodeSize);
+    this._root.patchPartiallyEmptyNodes(this._maxNodeSizeLog2);
     var nodes = [];
     this.visitNonEmpty(function(node) {
       nodes.push(node);
