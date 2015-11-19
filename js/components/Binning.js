@@ -95,6 +95,7 @@ class Binning extends Component {
                   min={this.props.minNodeSize}
                   max={100}
                   step={0.1}
+                  speed={0.5}
                   onChange={(value) => this.props.changeMaxBinSize(value)} />
               </td>
             </tr>
@@ -107,6 +108,7 @@ class Binning extends Component {
                   min={0.1}
                   max={this.props.maxNodeSize}
                   step={0.1}
+                  speed={0.5}
                   onChange={(value) => this.props.changeMinBinSize(value)} />
               </td>
             </tr>
@@ -119,6 +121,7 @@ class Binning extends Component {
                   min={5}
                   max={1000000}
                   logStep={1}
+                  speed={0.2}
                   onChange={(value) => this.props.changeDensityThreshold(value)} />
               </td>
             </tr>
