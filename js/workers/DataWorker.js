@@ -244,20 +244,17 @@ function loadFiles(files) {
 
 function parseDSVHeader(content) {
   dispatch(setFileProgress("Trying to parse the file as delimiter-separated values...", INDETERMINATE));
-  let newlineIndex = content.indexOf('\n');
-  if (newlineIndex == -1) {
-    if (content.length === 0)
-      return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
-    return dispatch(setFileError("Could only read a single line from the file.", "Please check the file format."));
+  if (content.length === 0)
+    return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
+  var extractLine = /^(.+)(\r\n|\n|\r)?$/gm;
+  var result;
+  let headLines = [];
+  while ((result = extractLine.exec(content)) !== null && headLines.length < 5) {
+    headLines.push(result[1]);
   }
 
-  let headLines = [];
-  let prevIndex = 0;
-  while (newlineIndex !== -1 && headLines.length < 5) {
-    headLines.push(content.substring(prevIndex, newlineIndex));
-    prevIndex = newlineIndex + 1;
-    newlineIndex = content.indexOf('\n', prevIndex);
-  }
+  if (headLines.length < 3)
+    return dispatch(setFileError(`Could only read ${headLines.length} lines.`, "Please check the file format."));
 
   let headerLine = headLines[0];
   let isTSV = headerLine.split('\t').length > 1;
