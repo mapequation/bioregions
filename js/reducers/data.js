@@ -14,9 +14,9 @@ const initialBinningState = {
   binnerType: Binning.QUAD_TREE,
   binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
   minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
-  maxNodeSizeLog2: 2,
+  maxNodeSizeLog2: 1,
   nodeCapacity: 100,
-  lowerThreshold: 1,
+  lowerThreshold: 10,
   renderer: QuadtreeGeoBinner.renderer,
   binningLoading: false,
 };

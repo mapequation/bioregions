@@ -32,9 +32,9 @@ const getInitialState = () => {
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
     binning: { // TODO: Sync with main data state
       minNodeSizeLog2: 0,
-      maxNodeSizeLog2: 2,
+      maxNodeSizeLog2: 1,
       nodeCapacity: 100,
-      lowerThreshold: 1,
+      lowerThreshold: 10,
     }
   }
 };
