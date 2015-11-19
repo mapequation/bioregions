@@ -1,5 +1,5 @@
 import React, {Component, PropTypes} from 'react';
-import {getBioregions} from '../utils/polygons';
+import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../utils/polygons';
 import shpWrite from "shp-write"
 import R from 'ramda';
 import d3 from 'd3';
@@ -43,13 +43,14 @@ class Export extends Component {
   }
 
   handleSaveBioregionsAsGeoJSON = () => {
-    var geoJSON = getBioregions(this.props.bins);
+    var geoJSON = clusteredBinsToCollectionOfMultiPolygons(this.props.bins);
     var data = JSON.stringify(geoJSON, null, '\t');
     this.saveData(data, 'Infomap-bioregions.geojson', 'application/vnd.geo+json');
   }
 
   handleSaveBioregionsAsShapefile = () => {
-    let geoJson = getBioregions(this.props.bins);
+    let geoJson = clusteredBinsToCollectionOfPolygons(this.props.bins);
+    //TODO: shp-write doesn't support MultiPolygon features!
     shpWrite.download(geoJson); // -> location.href = 'data:application/zip;base64,' + content;
   }
 

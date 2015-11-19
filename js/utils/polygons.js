@@ -14,7 +14,7 @@ export function bboxIntersect(a, b) {
   //        (abs(a.y - b.y) * 2 < (a.height + b.height));
 }
 
-export function getBioregions(bins) {
+export function clusteredBinsToCollectionOfMultiPolygons(bins) {
   let clusterFeatureMap = new Map();
   bins.forEach(bin => {
     const {clusterId, x1, x2, y1, y2, count, speciesCount} = bin;
@@ -50,4 +50,33 @@ export function getBioregions(bins) {
   };
 
   return clusterFeatureCollection;
+}
+
+export function clusteredBinsToCollectionOfPolygons(bins) {
+  let features = bins.map(bin => {
+    const {clusterId, x1, x2, y1, y2, count, speciesCount} = bin;
+    return {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[
+          [x1, y1],
+          [x1, y2],
+          [x2, y2],
+          [x2, y1],
+          [x1, y1],
+        ]]
+      },
+      properties: {
+        clusterId,
+        recordsCount: count,
+        speciesCount
+      }
+    }
+  });
+
+  return {
+    type: "FeatureCollection",
+    features
+  };
 }
