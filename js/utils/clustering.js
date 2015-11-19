@@ -46,6 +46,14 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
           });
         }
       });
+      // Check edge case where sub-nodes have been partitioned to other cluster and only non-leaf nodes left
+      if (features.length === 0) {
+        bins.forEach((bin, i) => {
+          bin.features.forEach((feature) => {
+            features.push(feature);
+          });
+        });
+      }
       const topCommonSpecies = S.topSortedCountBy(feature => feature.properties.name, 10, features);
       const numSpecies = features.length;
       return {

@@ -162,7 +162,8 @@ function parseGeoJSON(nameField) {
 
 function shapeToPoints() {
   state.features = [];
-  const resolution = Math.pow(2, state.binning.minNodeSizeLog2);
+  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2);
+  const resolution = minNodeSize;// * 0.1;
   const totCount = state.shapeFeatures.length;
   let lastPercent = 0;
 
@@ -173,14 +174,14 @@ function shapeToPoints() {
       lastPercent = percent;
     }
     const {bbox} = feature.geometry;
-    let simplifiedFeature = turfSimplify(feature, resolution * 0.125);
-      for (let long = bbox[0]; long < bbox[2]; long += resolution) {
-        for (let lat = bbox[1]; lat < bbox[3]; lat += resolution) {
-          const pointFeature = turfPoint([long, lat], feature.properties);
-          if (turfInside(pointFeature, simplifiedFeature))
-            state.features.push(pointFeature)
-        }
+    let simplifiedFeature = turfSimplify(feature, minNodeSize / 8);
+    for (let long = bbox[0]; long < bbox[2]; long += resolution) {
+      for (let lat = bbox[1]; lat < bbox[3]; lat += resolution) {
+        const pointFeature = turfPoint([long, lat], feature.properties);
+        if (turfInside(pointFeature, simplifiedFeature))
+          state.features.push(pointFeature)
       }
+    }
   });
 }
 
