@@ -15,49 +15,39 @@ export function bboxIntersect(a, b) {
 }
 
 export function getBioregions(bins) {
-  let clusters = new Map();
+  let clusterFeatureMap = new Map();
   bins.forEach(bin => {
     const {clusterId, x1, x2, y1, y2, count, speciesCount} = bin;
-    let polygons = clusters.get(clusterId);
-    if (!polygons) {
-      polygons = [];
-      clusters.set(clusterId, polygons);
+    let clusterFeature = clusterFeatureMap.get(clusterId);
+    if (!clusterFeature) {
+      // Create a feature with MultiPolygon geometry for each cluster
+      clusterFeature = {
+        type: "Feature",
+        geometry: {
+          type: "MultiPolygon",
+          coordinates: [] // Array of Polygon coordinate arrays
+        },
+        properties: {
+          clusterId,
+          recordsCount: count,
+          speciesCount
+        }
+      };
+      clusterFeatureMap.set(clusterId, clusterFeature);
     }
-    polygons.push(turfPolygon([[
+    clusterFeature.geometry.coordinates.push([[
       [x1, y1],
       [x1, y2],
       [x2, y2],
       [x2, y1],
       [x1, y1],
-    ]], {clusterId, recordsCount: count, speciesCount}));
+    ]]);
   });
 
-  let clusterFeatures = [];
-  // let mapIter = clusters[Symbol.iterator]();
-  // console.log("First [clusterId, polygons]:", mapIter.next().value);
-  for (let [clusterId, polygons] of clusters) {
-    // Map polygon coordinates to a geoJSON Polygon feature
-    // let feature = polygons.map(turfPolygon);
-    // console.log("clusterId:", clusterId, "polygons:", polygons);
-    // let features = polygons.map(polygon => turfPolygon([polygon], { clusterId }));
-    // console.log(" -> features:", features);
-    // if (features.length > 1) {
-    //   console.log(" => MERGE...");
-    //   let collection = turfFeaturecollection(features);
-    //   console.log("  turfFeaturecollection(features):", collection);
-    //   let mergedPolygon = turfMerge(collection);
-    //   console.log("  => Merged polygon:", mergedPolygon);
-    //   // console.log("Merged polygon - union:", turfUnion());
-    //   clusterFeatures.push(mergedPolygon);
-    // }
-    polygons.forEach(polygon => {
-      clusterFeatures.push(polygon);
-    });
-  }
-  // console.log("=========== ALL MERGE DONE! ==========");
-  console.log("Warning: Skip merge now due to jsts TopologyError: side location conflict");
-  console.log("Check npm:2d-polygon-boolean instead");
-  let clusterFeatureCollection = turfFeaturecollection(clusterFeatures);
-  console.log("clusterFeatureCollection:", clusterFeatureCollection);
+  const clusterFeatureCollection = {
+    type: "FeatureCollection",
+    features: Array.from(clusterFeatureMap.values())
+  };
+
   return clusterFeatureCollection;
 }
