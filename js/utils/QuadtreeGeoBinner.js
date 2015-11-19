@@ -166,7 +166,7 @@ class Node {
     }
     let nonEmptyChildren = this.children.filter((child) => child !== undefined);
     const sizeLog2 = Math.log2(this.x2 - this.x1);
-    let doPatch = (sizeLog2 < maxNodeSizeLog2) && this.features.length === 0 && nonEmptyChildren.length < 4;
+    let doPatch = (sizeLog2 <= maxNodeSizeLog2) && this.features.length === 0 && nonEmptyChildren.length < 4;
     let aggregatedFeatures = [];
     nonEmptyChildren.forEach((child) => {
       const childFeatures = child.patchPartiallyEmptyNodes(maxNodeSizeLog2);
