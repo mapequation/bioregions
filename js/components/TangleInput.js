@@ -10,6 +10,7 @@ class TangleInput extends Component {
       min: PropTypes.number,
       max: PropTypes.number,
       step: PropTypes.number,
+      logStep: PropTypes.number,
       speed: PropTypes.number,
       format: PropTypes.func,
       prefix: PropTypes.string,
@@ -23,7 +24,7 @@ class TangleInput extends Component {
       min: 0,
       max: 100,
       step: 1,
-      speed: 0,
+      speed: 1, // steps per pixel change
       format: (value, step) => step < 1? value.toFixed(Math.ceil(-Math.log10(step))) : value,
       prefix: "",
       suffix: "",
@@ -100,13 +101,15 @@ class TangleInput extends Component {
 
     onMouseMove(e) {
       e.preventDefault();
-      let change = e.screenX - this._immediateState.lastX;
-      if (this.props.speed > 0)
-        change = change * this.props.speed;
+      const {speed} = this.props; // steps per pixel change
+      const pixelChange = e.screenX - this._immediateState.lastX;
+      const numSteps = pixelChange > 0? Math.floor(speed * pixelChange) : Math.ceil(speed * pixelChange);
+      if (numSteps === 0)
+        return;
+
       let currentStep = this._immediateState.currentStep;
 
-      let nextValue = this._immediateState.value + (change * currentStep);
-      // console.log(`${this._immediateState.value} + (${change} * ${currentStep}) -> ${nextValue}`);
+      let nextValue = this._immediateState.value + (numSteps * currentStep);
 
       // Clamp to step-resolved bounds
       nextValue = clamp(nextValue, this.state.min, this.state.max);
@@ -120,7 +123,7 @@ class TangleInput extends Component {
           if (newLog < oldLog) {
             // Recalculate next value with smaller step size, so e.g. 200, 100, 0 -> 200, 100, 90, ...
             // nextStep = Math.pow(10, Math.floor(oldLog - 1)) * this.props.logStep;
-            nextValue = this._immediateState.value + (change * nextStep);
+            nextValue = this._immediateState.value + (numSteps * nextStep);
             // Re-calculate new step size
             nextStep = this.getStep(nextValue, this.props);
             // nextValue = this.stepRound(nextStep, nextValue);
