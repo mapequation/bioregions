@@ -179,6 +179,30 @@ class Node {
     }
     return aggregatedFeatures;
   }
+
+  patchSparseNodes(maxNodeSizeLog2, lowerThreshold) {
+    if (this.isLeaf)
+      return this.features;
+    // Already patched if features at non-leaf node.
+    if (this.features.length > 0) {
+      return this.features;
+    }
+    let nonEmptyChildren = this.children.filter((child) => child !== undefined);
+    let sparseChildren = nonEmptyChildren.filter(child => child.isLeaf && child.features.length < lowerThreshold);
+    const sizeLog2 = Math.log2(this.x2 - this.x1);
+    let doPatch = (sizeLog2 <= maxNodeSizeLog2) && (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
+    let aggregatedFeatures = [];
+    nonEmptyChildren.forEach((child) => {
+      const childFeatures = child.patchSparseNodes(maxNodeSizeLog2, lowerThreshold);
+      childFeatures.forEach((feature) => {
+        aggregatedFeatures.push(feature);
+      });
+    });
+    if (doPatch) {
+      this.features = aggregatedFeatures;
+    }
+    return aggregatedFeatures;
+  }
 }
 
 /**
@@ -278,11 +302,12 @@ export default class QuadtreeGeoBinner {
       this.clear();
       this.addFeatures(features);
     }
-    this._root.patchPartiallyEmptyNodes(this._maxNodeSizeLog2);
+    // this._root.patchPartiallyEmptyNodes(this._maxNodeSizeLog2);
+    this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
     var nodes = [];
     this.visitNonEmpty((node) => {
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
-      if (Math.log2(node.size()) === this._maxNodeSizeLog2 && node.features.length < this._lowerThreshold) {
+      if (node.features.length < this._lowerThreshold) {
         return true;
       }
       nodes.push(node);
