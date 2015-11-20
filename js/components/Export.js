@@ -152,13 +152,24 @@ class ExportWindow extends Component {
   }
 
   componentDidMount() {
-    let svgContent = this.getSvgContent();
+    let $svg = $('svg');
+    const [width, height] = [$svg.width(), $svg.height()];
+    let svgContent = $svg[0].outerHTML;
+    console.log("svgContent before:", svgContent.substring(0, 100));
+    svgContent = svgContent.replace(/^<svg/, ['<svg',
+      'xmlns="http://www.w3.org/2000/svg"',
+      'xmlns:xlink="http://www.w3.org/1999/xlink"',
+      'version="1.1"'].join(' '));
+    console.log("svgContent after:", svgContent.substring(0, 100));
+
     this.svgURL = this.contentToBase64URL(svgContent, 'image/svg+xml');
     // var svgUrl = contentToBase64URL(svgContent, 'image/svg+xml;charset=utf-8');
 
+    this.canvas.width = width;
+    this.canvas.height = height;
     var ctx = this.canvas.getContext('2d');
 
-    var image = new Image(500, 500)
+    var image = new Image(width, height)
     image.onload = () => {
       console.log("Image loaded! Draw to canvas...");
       ctx.drawImage(image, 0, 0);
@@ -233,17 +244,6 @@ class ExportWindow extends Component {
 
     let csvData = d3.csv.format(rows);
     return csvData;
-  }
-
-  getSvgContent() {
-    let svgContent = $('svg')[0].outerHTML;
-    console.log("svgContent before:", svgContent.substring(0, 100));
-    svgContent = svgContent.replace(/^<svg/, ['<svg',
-      'xmlns="http://www.w3.org/2000/svg"',
-      'xmlns:xlink="http://www.w3.org/1999/xlink"',
-      'version="1.1"'].join(' '));
-    console.log("svgContent after:", svgContent.substring(0, 100));
-    return svgContent;
   }
 
   // <img ref={(el) => {this.image = el}} width="300" height="300"></img>
