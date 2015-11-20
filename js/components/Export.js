@@ -201,6 +201,11 @@ class ExportWindow extends Component {
     return 'data:' + type + ';base64,' + window.btoa(content);
   }
 
+  clickDownloadShapefile = () => {
+    var geoJSON = clusteredBinsToCollectionOfPolygons(this.props.bins);
+    shpWrite.download(geoJSON); // -> location.href = 'data:application/zip;base64,' + content;
+  }
+
   getGeoJSON() {
     var geoJSON = clusteredBinsToCollectionOfMultiPolygons(this.props.bins);
     return JSON.stringify(geoJSON, null, '\t');
@@ -270,7 +275,7 @@ class ExportWindow extends Component {
                   </div>
                 </div>
               </div>
-              <div className="ui segment">
+              <div className={`ui segment${this.props.clusters.length === 0? " disabled" : ""}`}>
                 <h4 className="ui header">Save bioregions</h4>
                 <div className="ui list">
                   <div className="item">
@@ -282,12 +287,12 @@ class ExportWindow extends Component {
                   <div className="item">
                     <i className="file archive outline icon"></i>
                     <div className="content">
-                      <a ref={(el) => {this.anchorShapefile = el}}></a>
+                      <a ref={(el) => {this.anchorShapefile = el}} onClick={this.clickDownloadShapefile}></a>
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="ui segment">
+              <div className={`ui segment${this.props.clusters.length === 0? " disabled" : ""}`}>
                 <h4 className="ui header">Save clusters</h4>
                 <div className="ui list">
                   <div className="item">
