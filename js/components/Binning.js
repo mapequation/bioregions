@@ -81,7 +81,7 @@ class Binning extends Component {
           <div className="bar" style={{width: percentLoaded}}></div>
         </div>
         <div className="ui basic segment" style={{paddingBottom: 0}}>
-          <h4 className="ui header">Binning
+          <h4 className="ui header">Resolution
             <span> </span>
             {this.props.binningLoading? (
               <div className="ui active small inline loader"></div>
@@ -94,7 +94,7 @@ class Binning extends Component {
           <tbody>
             {this.renderTypesSelection()}
             <tr>
-              <td>Max bin size</td>
+              <td>Max cell size</td>
               <td className="">
                 <TangleInput className="ui label" suffix="˚"
                   value={this.props.maxNodeSizeLog2}
@@ -107,7 +107,7 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Min bin size</td>
+              <td>Min cell size</td>
               <td className="">
                 <TangleInput className="ui label" suffix="˚"
                   value={this.props.minNodeSizeLog2}
@@ -120,7 +120,7 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Bin capacity</td>
+              <td>Cell capacity</td>
               <td className="">
                 <TangleInput className="ui label"
                   value={this.props.nodeCapacity}
@@ -133,7 +133,7 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Lower threshold</td>
+              <td>Cell filter</td>
               <td className="">
                 <TangleInput className="ui label"
                   value={this.props.lowerThreshold}

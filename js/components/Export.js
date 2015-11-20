@@ -293,7 +293,7 @@ class ExportWindow extends Component {
                 </div>
               </div>
               <div className={`ui segment${this.props.clusters.length === 0? " disabled" : ""}`}>
-                <h4 className="ui header">Save clusters</h4>
+                <h4 className="ui header">Save cluster statistics</h4>
                 <div className="ui list">
                   <div className="item">
                     <i className="file text outline icon"></i>

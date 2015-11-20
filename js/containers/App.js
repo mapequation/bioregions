@@ -82,7 +82,7 @@ class App extends Component {
             <h4 class="ui inverted header">
               <span class="value total-records-count">${d.count}</span> records of
               <span class="value total-species-count">${d.speciesCount}</span> unique species.
-              <div class="sub header">Bin size: ${d.size}˚. ${clusterInfo}</div>
+              <div class="sub header">Cell size: ${d.size}˚. ${clusterInfo}</div>
             </h4>
             </p>
             <table class="ui styled inverted table">

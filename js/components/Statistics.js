@@ -103,7 +103,7 @@ class Statistics extends Component {
             {topIndicatorSpecies[0].name},...
           </div>
           <div className="description">
-            <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> bins
+            <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> cells
           </div>
           <table className="ui very basic compact celled table">
             <thead>
