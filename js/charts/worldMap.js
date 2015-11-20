@@ -15,7 +15,6 @@ world.create = function(el, props) {
   var anchorElement = d3.select(el);
   anchorElement.selectAll("*").remove();
   var svg = anchorElement.append('svg')
-    .attr('class', 'd3')
     .attr('width', props.width)
     .attr('height', props.height);
 

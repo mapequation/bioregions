@@ -19,7 +19,7 @@ class Export extends Component {
   }
 
   state = {
-
+    showExport: false,
   }
 
   saveData(content, filename, type) {
@@ -104,11 +104,31 @@ class Export extends Component {
     );
   }
 
+  // render() {
+  //   return (
+  //     <div>
+  //       <a ref={(el) => {this.downloadAnchor = el}} style={{display: 'none'}}>download element</a>
+  //       {this.renderDownloadButtons()}
+  //     </div>
+  //   );
+  // }
+
+  showExport = () => {
+    this.setState({showExport: true});
+  }
+
+  hideExport = () => {
+    this.setState({showExport: false});
+  }
+
+
   render() {
     return (
       <div>
-        <a ref={(el) => {this.downloadAnchor = el}} style={{display: 'none'}}>download element</a>
-        {this.renderDownloadButtons()}
+        <button className="ui button" onClick={this.showExport}>Export...</button>
+        {this.state.showExport? (
+          <ExportWindow {...this.props} onHide={this.hideExport}></ExportWindow>
+        ) : (<i></i>)}
       </div>
     );
   }
@@ -123,6 +143,176 @@ DownloadButton.propTypes = {
   onClick: PropTypes.func.isRequired,
   label: PropTypes.string.isRequired,
   type: PropTypes.string.isRequired,
+}
+
+class ExportWindow extends Component {
+  static propTypes = {
+    onHide: PropTypes.func.isRequired,
+    basename: PropTypes.string.isRequired,
+  }
+
+  componentDidMount() {
+    let svgContent = this.getSvgContent();
+    this.svgURL = this.contentToBase64URL(svgContent, 'image/svg+xml');
+    // var svgUrl = contentToBase64URL(svgContent, 'image/svg+xml;charset=utf-8');
+
+    var ctx = this.canvas.getContext('2d');
+
+    var image = new Image(500, 500)
+    image.onload = () => {
+      console.log("Image loaded! Draw to canvas...");
+      ctx.drawImage(image, 0, 0);
+      this.generateLinks();
+    }
+    console.log("Set img src to svg...");
+    image.src = this.svgURL;
+
+  }
+
+  generateLinks() {
+    this.anchorSvg.innerHTML = `${this.props.basename}.svg`;
+    this.anchorSvg.download = `${this.props.basename}.svg`;
+    this.anchorSvg.target = "_blank";
+    this.anchorSvg.href = this.svgURL;
+
+    this.anchorPng.innerHTML = `${this.props.basename}.png`;
+    this.anchorPng.download = `${this.props.basename}.png`;
+    this.anchorPng.target = "_blank";
+    this.anchorPng.href = this.canvas.toDataURL("image/png");
+
+
+    this.anchorGeoJSON.innerHTML = `${this.props.basename}.geojson`;
+    this.anchorGeoJSON.download = `${this.props.basename}.geojson`;
+    this.anchorGeoJSON.target = "_blank";
+    this.anchorGeoJSON.href = this.contentToBase64URL(this.getGeoJSON(), 'application/vnd.geo+json');
+
+    this.anchorShapefile.innerHTML = `${this.props.basename}_shapefile.zip`;
+    this.anchorShapefile.download = `${this.props.basename}_shapefile.zip`;
+    this.anchorShapefile.target = "_blank";
+    // this.anchorShapefile.href = this.contentToBase64URL(this.getGeoJSON(), 'application/vnd.geo+json');
+
+    this.anchorClustersCSV.innerHTML = `${this.props.basename}.csv`;
+    this.anchorClustersCSV.download = `${this.props.basename}.csv`;
+    this.anchorClustersCSV.target = "_blank";
+    this.anchorClustersCSV.href = this.contentToBase64URL(this.getClustersCSV(), 'text/csv');
+  }
+
+  contentToBase64URL(content, type) {
+    return 'data:' + type + ';base64,' + window.btoa(content);
+  }
+
+  getGeoJSON() {
+    var geoJSON = clusteredBinsToCollectionOfMultiPolygons(this.props.bins);
+    return JSON.stringify(geoJSON, null, '\t');
+  }
+
+  getClustersCSV() {
+    const {clusters, clusterColors} = this.props;
+    if (clusters.length == 0)
+      return;
+    let rows = [];
+    clusters.forEach(cluster => {
+      const {clusterId, numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+      let clusterColor = clusterColors[clusterId];
+      R.zip(topCommonSpecies, topIndicatorSpecies).forEach(([common, indicator], i) => {
+        rows.push({
+          commonSpecies: common.name,
+          commonSpeciesCount: common.count,
+          indicatorSpecies: indicator.name,
+          indicatorSpeciesScore: indicator.score,
+          clusterId,
+          clusterColor: clusterColor.hex()
+        });
+      });
+    });
+
+    let csvData = d3.csv.format(rows);
+    return csvData;
+  }
+
+  getSvgContent() {
+    let svgContent = $('svg')[0].outerHTML;
+    console.log("svgContent before:", svgContent.substring(0, 100));
+    svgContent = svgContent.replace(/^<svg/, ['<svg',
+      'xmlns="http://www.w3.org/2000/svg"',
+      'xmlns:xlink="http://www.w3.org/1999/xlink"',
+      'version="1.1"'].join(' '));
+    console.log("svgContent after:", svgContent.substring(0, 100));
+    return svgContent;
+  }
+
+  // <img ref={(el) => {this.image = el}} width="300" height="300"></img>
+  render() {
+    return (
+      <div className="ui inverted active page dimmer" style={{overflow: 'auto'}}>
+        <div className="ui container" style={{background: "white"}}>
+          <h1 className="ui header">
+            Export
+            <div className="sub header">{this.props.basename}</div>
+          </h1>
+
+          <div className="ui two column grid">
+            <div className="column">
+              <div className="ui segment">
+                <h4 className="ui header">Save map</h4>
+                <div className="ui list">
+                  <div className="item">
+                    <i className="file image outline icon"></i>
+                    <div className="content">
+                      <a ref={(el) => {this.anchorSvg = el}}></a>
+                    </div>
+                  </div>
+                  <div className="item">
+                    <i className="file image outline icon"></i>
+                    <div className="content">
+                      <a ref={(el) => {this.anchorPng = el}}></a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="ui segment">
+                <h4 className="ui header">Save bioregions</h4>
+                <div className="ui list">
+                  <div className="item">
+                    <i className="world icon"></i>
+                    <div className="content">
+                      <a ref={(el) => {this.anchorGeoJSON = el}}></a>
+                    </div>
+                  </div>
+                  <div className="item">
+                    <i className="file archive outline icon"></i>
+                    <div className="content">
+                      <a ref={(el) => {this.anchorShapefile = el}}></a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="ui segment">
+                <h4 className="ui header">Save clusters</h4>
+                <div className="ui list">
+                  <div className="item">
+                    <i className="file text outline icon"></i>
+                    <div className="content">
+                      <a ref={(el) => {this.anchorClustersCSV = el}}></a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="column">
+              <canvas className="ui fluid image" ref={(el) => {this.canvas = el}} width="500" height="500"></canvas>
+            </div>
+          </div>
+
+
+
+          <div className="ui divider"></div>
+          <button className="ui very basic button" tabIndex="0" onClick={this.props.onHide}>Back</button>
+        </div>
+      </div>
+    );
+  }
 }
 
 export default Export;
