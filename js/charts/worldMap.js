@@ -119,8 +119,11 @@ world.update = function(el, props) {
   var graticule = d3.geo.graticule()
     .step([graticuleStep, graticuleStep]);
 
+  let emptyGraticule = () => [];
+  emptyGraticule.outline = () => [];
+
   if (!showGraticules)
-    graticule = () => [];
+    graticule = emptyGraticule;
 
   g.select(".graticules").select("path.graticule")
     .datum(graticule)
