@@ -28,7 +28,7 @@ export function clusteredBinsToCollectionOfMultiPolygons(bins) {
           coordinates: [] // Array of Polygon coordinate arrays
         },
         properties: {
-          clusterId,
+          bioregion: clusterId + 1,
           recordsCount: count,
           speciesCount
         }
@@ -68,7 +68,7 @@ export function clusteredBinsToCollectionOfPolygons(bins) {
         ]]
       },
       properties: {
-        clusterId,
+        bioregion: clusterId + 1,
         recordsCount: count,
         speciesCount
       }

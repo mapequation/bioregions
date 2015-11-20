@@ -236,7 +236,7 @@ class ExportWindow extends Component {
           commonSpeciesCount: common.count,
           indicatorSpecies: indicator.name,
           indicatorSpeciesScore: indicator.score,
-          clusterId,
+          bioregion: clusterId + 1,
           clusterColor: clusterColor.hex()
         });
       });

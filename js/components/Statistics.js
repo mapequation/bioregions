@@ -99,7 +99,8 @@ class Statistics extends Component {
       <div key={cluster.key} className="ui fluid card">
         <div className="content">
           <div className="ui top attached button" style={style}>
-            {topIndicatorSpecies[0].name}, ...
+            <span className="ui left floated">{`Bioregion ${clusterId + 1}`}</span>
+            {topIndicatorSpecies[0].name},...
           </div>
           <div className="description">
             <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> bins

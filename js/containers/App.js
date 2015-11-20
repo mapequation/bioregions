@@ -66,7 +66,7 @@ class App extends Component {
       .html((d) => {
         let topSpecies = R.zip(d.topCommonSpecies, d.topIndicatorSpecies).slice(0,5);
 
-        let clusterInfo = d.clusterId < 0? "" : `Cluster id: ${d.clusterId}`;
+        let clusterInfo = d.clusterId < 0? "" : `Bioregion: ${d.clusterId + 1}`;
 
         let tableRows = topSpecies.map(([common, indicator]) => `
           <tr>
