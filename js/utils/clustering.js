@@ -70,10 +70,11 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
 export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback) {
 
   // Only Firefox allow spawning workers from other workers
-  var haveWorker = typeof Worker === 'function';
+  // var haveWorker = typeof Worker === 'function'; // object in Safari
+  var haveWorker = !!Worker;
 
   if (!haveWorker) {
-    return callback("Can't create a Worker, only Firefox support creating a worker from another worker.");
+    return callback(`Worker not available, typeof Worker: ${typeof Worker}. (Only Firefox support spawning workers from other workers)`);
   }
 
   console.log("Creating Infomap Worker...");
