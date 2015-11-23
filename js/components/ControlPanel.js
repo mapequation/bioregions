@@ -7,6 +7,7 @@ import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 import InlineForm from './InlineForm';
 import TangleInput from './TangleInput';
 import Checkbox from './Checkbox';
+import Tooltip from './Tooltip';
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -84,7 +85,7 @@ class ControlPanel extends Component {
             {this.renderSelectGroupBy()}
           </div>
           <h4 className="ui dividing header">Map</h4>
-          <InlineForm label="Graticule">
+          <InlineForm label="Grid resolution">
             <TangleInput className="ui label" suffix="˚"
               value={worldmap.graticuleStep}
               min={1}
@@ -93,7 +94,7 @@ class ControlPanel extends Component {
               onChange={(value) => actions.changeGraticuleStep(value)} />
           </InlineForm>
           <p></p>
-          <Checkbox label="Show graticules" checked={worldmap.showGraticules} onChange={actions.changeShowGraticules}></Checkbox>
+          <Checkbox label="Show grid" checked={worldmap.showGraticules} onChange={actions.changeShowGraticules}></Checkbox>
           <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
           <Checkbox label="Show cell borders" checked={worldmap.showCellBorders} onChange={actions.changeShowCellBorders}></Checkbox>
           <h4 className="ui dividing header">Export</h4>

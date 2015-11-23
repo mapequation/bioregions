@@ -2,6 +2,7 @@ import React, {Component, PropTypes} from 'react';
 import TangleInput from './TangleInput';
 import classNames from 'classnames';
 import {BINNING_PROGRESS} from '../constants/ActionTypes';
+import Tooltip from './Tooltip';
 
 class Binning extends Component {
 
@@ -80,15 +81,47 @@ class Binning extends Component {
         <div className="ui top attached progress">
           <div className="bar" style={{width: percentLoaded}}></div>
         </div>
-        <div className="ui basic segment" style={{paddingBottom: 0}}>
-          <h4 className="ui header">Resolution
-            <span> </span>
-            {this.props.binningLoading? (
-              <div className="ui active small inline loader"></div>
-            ) : (
-              <span></span>
-            )}
-          </h4>
+        <div className="ui basic segment" style={{paddingBottom: 0, paddingTop: 0}}>
+          <div className="ui text menu">
+            <div className="item">
+              <h4 className="ui header">Resolution</h4>
+            </div>
+            <div className="right item">
+              <Tooltip>
+                <i className="help icon" style={{color: '#ccc'}}></i>
+                <div className="ui floating segment">
+                  <table className="ui very basic celled table" style={{
+                      backgroundColor: "white",
+                      width: "400px"
+                    }}>
+                    <tbody>
+                      <tr>
+                        <td><strong>Max cell size</strong></td>
+                        <td>Maximum cell size to accumulate records</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Min cell size</strong></td>
+                        <td>Minimum cell size to accumulate records</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Cell capacity</strong></td>
+                        <td>The number of records in a cell before it splits to four sub-cells, if allowed due to min cell size</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Cell filter</strong></td>
+                        <td>The minimum number of records in a cell to take it to account</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </Tooltip>
+              {this.props.binningLoading? (
+                <div className="ui active small inline loader"></div>
+              ) : (
+                <span></span>
+              )}
+            </div>
+          </div>
         </div>
         <table className="ui basic table">
           <tbody>
