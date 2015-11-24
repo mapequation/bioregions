@@ -54,14 +54,19 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
           });
         });
       }
-      const topCommonSpecies = S.topSortedCountBy(feature => feature.properties.name, 10, features);
-      const numSpecies = features.length;
+      // const topCommonSpecies = S.topSortedBy(feature => feature.properties.name, 10, features);
+      const species = S.countBy(feature => feature.properties.name, features);
+      const topCommonSpecies = S.topSortedBy(d => d.count, 10, species);
+      const topIndicatorSpecies = S.topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies);
+      const numRecords = features.length;
+      const numSpecies = species.length;
       return {
         clusterId: bins[0].clusterId,
         numBins: bins.length,
+        numRecords,
         numSpecies,
         topCommonSpecies,
-        topIndicatorSpecies: S.topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies)
+        topIndicatorSpecies,
       }
     })
     .entries(bins)

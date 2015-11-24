@@ -88,7 +88,7 @@ class Statistics extends Component {
   }
 
   renderCluster(cluster) {
-    const {clusterId, numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+    const {clusterId, numBins, numRecords, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
     const {clusterColors} = this.props;
     let clusterColor = clusterColors[clusterId];
     let style = {
@@ -99,11 +99,10 @@ class Statistics extends Component {
       <div key={cluster.key} className="ui fluid card">
         <div className="content">
           <div className="ui top attached button" style={style}>
-            <span className="ui left floated">{`Bioregion ${clusterId + 1}`}</span>
-            {topIndicatorSpecies[0].name},...
+            {`Bioregion ${clusterId + 1}`}
           </div>
           <div className="description">
-            <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> cells
+            <strong>{numRecords}</strong> records of <strong>{numSpecies}</strong> unique species in <strong>{numBins}</strong> cells
           </div>
           <table className="ui very basic compact celled table">
             <thead>
