@@ -154,13 +154,17 @@ class ExportWindow extends Component {
   componentDidMount() {
     let $svg = $('svg');
     const [width, height] = [$svg.width(), $svg.height()];
-    let svgContent = $svg[0].outerHTML;
-    console.log("svgContent before:", svgContent.substring(0, 100));
+    // let svgContent = $svg[0].outerHTML;
+    let svgContent = $svg.parent().html();
+    console.log("svgContent before:", svgContent.substring(0, 250));
     svgContent = svgContent.replace(/^<svg/, ['<svg',
       'xmlns="http://www.w3.org/2000/svg"',
       'xmlns:xlink="http://www.w3.org/1999/xlink"',
       'version="1.1"'].join(' '));
-    console.log("svgContent after:", svgContent.substring(0, 100));
+    // Safari inserts NS1/NS2 namespaces as xlink is not defined within the svg html
+    svgContent = svgContent.replace("NS1", "xlink");
+    svgContent = svgContent.replace("NS2", "xlink");
+    console.log("svgContent after:", svgContent.substring(0, 250));
 
     this.svgURL = this.contentToBase64URL(svgContent, 'image/svg+xml');
     // var svgUrl = contentToBase64URL(svgContent, 'image/svg+xml;charset=utf-8');
@@ -175,8 +179,13 @@ class ExportWindow extends Component {
       ctx.drawImage(image, 0, 0);
       this.generateLinks();
     }
+    image.onerror = (e) => {
+      console.log("ERROR setting image src:", e.type, e, e.message);
+      this.generateLinks();
+    }
     console.log("Set img src to svg...");
     image.src = this.svgURL;
+    console.log("src set, complete:", image.complete);
 
   }
 
