@@ -1,10 +1,12 @@
-import {LOAD_WORLD,
+import {
+  LOAD_WORLD,
   ADD_WORLD,
   CHANGE_PROJECTION,
   CHANGE_GRATICULE_STEP,
   CHANGE_SHOW_GRATICULES,
   CHANGE_CLIP_TO_LAND,
-  CHANGE_SHOW_CELL_BORDERS } from '../constants/ActionTypes';
+  CHANGE_SHOW_CELL_BORDERS
+} from '../constants/ActionTypes';
 import {setError} from './ErrorActions';
 import * as DataFetching from '../constants/DataFetching';
 import axios from 'axios'

@@ -157,6 +157,11 @@ export default function data(state = initialState, action) {
         ...state,
         groupBy: action.groupBy
       }
+    case ActionTypes.SET_CLUSTER_COLORS:
+      return {
+        ...state,
+        clusterColors: action.clusterColors
+      };
     default:
       return state;
   }

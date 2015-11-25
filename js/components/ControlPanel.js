@@ -8,6 +8,7 @@ import InlineForm from './InlineForm';
 import TangleInput from './TangleInput';
 import Checkbox from './Checkbox';
 import Tooltip from './Tooltip';
+import Colors from './Colors';
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -97,6 +98,8 @@ class ControlPanel extends Component {
           <Checkbox label="Show grid" checked={worldmap.showGraticules} onChange={actions.changeShowGraticules}></Checkbox>
           <Checkbox label="Clip to land" checked={worldmap.clipToLand} onChange={actions.changeClipToLand}></Checkbox>
           <Checkbox label="Show cell borders" checked={worldmap.showCellBorders} onChange={actions.changeShowCellBorders}></Checkbox>
+
+          <Colors {...data} {...worldmap} {...actions}></Colors>
           <h4 className="ui dividing header">Export</h4>
           <Export {...data} {...files} {...worldmap}></Export>
         </div>
