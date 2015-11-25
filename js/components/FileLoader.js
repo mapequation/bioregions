@@ -133,7 +133,7 @@ class FileLoader extends Component {
   }
 
   ErrorMessage = ({message, subMessage, children}) => (
-    <Dimmer onCancel={this.cancelParsing} subHeader={this.props.files[0].name}>
+    <Dimmer onCancel={this.cancelParsing}>
       <div>
         {children}
         <div className="ui negative message">
