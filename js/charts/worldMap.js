@@ -25,6 +25,10 @@ world.create = function(el, props) {
 
   var defs = g.append("defs");
 
+  g.append("path")
+    .attr("id", "land")
+    .attr("class", "land");
+
   var overlayGroup = g.append("g")
     .attr("class", "overlay")
     .attr("clip-path", "url(#clip)");
@@ -36,9 +40,9 @@ world.create = function(el, props) {
   graticuleGroup.append("path")
     .attr("class", "graticule-outline");
 
-  var defsPath = defs.append("path")
-    .attr("id", "land")
-    .attr("class", "land")
+  // var defsPath = defs.append("path")
+  //   .attr("id", "land")
+  //   .attr("class", "land")
 
   defs.append("clipPath")
     .attr("id", "clip")
@@ -107,13 +111,16 @@ world.update = function(el, props) {
     .pointRadius(1)
     .projection(props.projection);
 
-  var defsPath = g.select("defs").select("path");
-  if (!defsPath.datum() && props.worldStatus === DATA_SUCCEEDED) {
+  var landPath = g.select("path.land");
+  if (!landPath.datum() && props.worldStatus === DATA_SUCCEEDED) {
     console.log("Draw world...");
-    defsPath
+    landPath
       .datum(topojson.feature(props.world, props.world.objects.land))
       .attr("d", path);
   }
+  landPath
+    .style("fill", "white")
+    .style("stroke", "#666");
 
   const {graticuleStep, showGraticules} = props;
   var graticule = d3.geo.graticule()
