@@ -1,14 +1,20 @@
 import * as ActionTypes from '../constants/ActionTypes';
+import _ from 'lodash';
 
 const initialState = {
   isLoading: false,
   files: [], // array of File objects to load
+  urls: [], // urls to files to fetch
   basename: "Infomap bioregions",
   haveFile: false,
   sampleFiles: [
+    // {
+    //   name: "Snakes (point occurrences)",
+    //   filenames: ['snakes_global_gbif.txt']
+    // },
     {
-      name: "Snakes in South Africa",
-      filename: 'data/coordinates_snakes_south_america.txt'
+      name: "Mammals (point occurrences)",
+      filenames: ['mammals.txt']
     },
   ],
   error: false,
@@ -21,8 +27,15 @@ const initialState = {
 
 export default function files(state = initialState, action) {
   switch (action.type) {
+    case ActionTypes.FETCH_FILES:
+      return {
+        ...initialState,
+        urls: action.urls,
+        isLoading: true
+      }
     case ActionTypes.LOAD_FILES:
-      const filename = action.files[0].name;
+      let shpFile = action.files.filter(file => /shp$/.test(file.name));
+      const filename = shpFile.length > 0 ? shpFile[0].name : action.files[0].name;
       const lastDot = filename.lastIndexOf(".");
       const basename = lastDot == -1? filename : filename.substring(0, lastDot);
       return {

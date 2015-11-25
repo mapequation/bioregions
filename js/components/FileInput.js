@@ -5,7 +5,7 @@ class FileInput extends Component {
   static propTypes = {
     sampleFiles: PropTypes.array.isRequired,
     loadFiles: PropTypes.func.isRequired,
-    loadSampleFile: PropTypes.func.isRequired,
+    loadSampleFiles: PropTypes.func.isRequired,
   }
 
   componentDidMount() {
@@ -36,7 +36,7 @@ class FileInput extends Component {
           <i className="dropdown icon"></i>
           <div className="menu">
             {this.props.sampleFiles.map((sampleFile) => (
-              <div key={sampleFile.filename} className="item" onClick={() => this.props.loadSampleFile(sampleFile.filename)}>{sampleFile.name}</div>
+              <div key={sampleFile.name} className="item" onClick={() => this.props.loadSampleFiles(sampleFile.filenames)}>{sampleFile.name}</div>
             ))}
           </div>
         </div>

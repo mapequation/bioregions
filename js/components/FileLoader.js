@@ -30,7 +30,7 @@ class FileLoader extends Component {
     parsedHead: PropTypes.array.isRequired,
     parsedFeatureProperty: PropTypes.object,
     loadFiles: PropTypes.func.isRequired,
-    loadSampleFile: PropTypes.func.isRequired,
+    loadSampleFiles: PropTypes.func.isRequired,
     progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
@@ -389,11 +389,11 @@ class FileLoader extends Component {
 
 
   render() {
-    const {isLoading, files, sampleFiles, parsedHead, parsedFeatureProperty, loadFiles, loadSampleFile} = this.props;
+    const {isLoading, files, sampleFiles, parsedHead, parsedFeatureProperty, loadFiles, loadSampleFiles} = this.props;
 
     return (
       <div>
-        <FileInput {...{sampleFiles, loadFiles, loadSampleFile}} />
+        <FileInput {...{sampleFiles, loadFiles, loadSampleFiles}} />
         {this.renderFileLoading()}
       </div>
     );

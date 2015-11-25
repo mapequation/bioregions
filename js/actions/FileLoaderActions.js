@@ -1,5 +1,6 @@
 import {
   LOAD_FILES,
+  FETCH_FILES,
   LOAD_SAMPLE_FILE,
   CANCEL_FILE_ACTIONS,
   FILE_ERROR,
@@ -9,6 +10,7 @@ import {
   SET_FEATURE_NAME_FIELD,
   ADD_SPECIES_AND_BINS,
 } from '../constants/ActionTypes';
+import axios from 'axios'
 
 let exampleGeoJson = {
   type: "FeatureCollection",
@@ -55,6 +57,13 @@ export function loadFiles(files) {
   };
 }
 
+export function fetchFiles(urls) {
+  return {
+    type: FETCH_FILES,
+    urls
+  };
+}
+
 export function cancelFileActions() {
   return {
     type: CANCEL_FILE_ACTIONS
@@ -73,15 +82,27 @@ export function setFileError(error, subMessage = "") {
   }
 }
 
-export function loadSampleFile(filename) {
-  console.log("loadSampleFile not implemented");
-  return {
-    type: LOAD_SAMPLE_FILE,
-    filename
+export function loadSampleFiles(urls) {
+  // const file = new File(["name,lat,long\ntest,0,0\ntest2,0,0"], filename, {type: 'text/plain'});
+  // return loadFiles([file]);
+  return (dispatch, getState) => {
+    dispatch(fetchFiles(urls));
+
+    return axios.all(urls.map(url => axios.get('data/' + url, {
+      responseType: 'blob'
+    })))
+      .then(responses => responses.map(response => response.data))
+      .then(blobs => blobs.map((blob,i) => new File([blob], urls[i])))
+      .then(files => dispatch(loadFiles(files)))
+      .catch(response => {
+        const errorMessage = `Error loading files '${urls.join(', ')}': `;
+        const subMessage = (response.status && response.statusText) ?
+          `${response.status} ${response.statusText}` : (
+          response.message || response.data || response
+        );
+        return dispatch(setFileError(errorMessage, subMessage));
+      });
   }
-  // return dispatch => {
-  //   return dispatch(loadSnakes());
-  // }
 }
 
 /**

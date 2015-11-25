@@ -1,5 +1,6 @@
 //files
 export const LOAD_FILES = 'LOAD_FILES';
+export const FETCH_FILES = 'FETCH_FILES';
 export const LOAD_SAMPLE_FILE = 'LOAD_SAMPLE_FILE';
 export const CANCEL_FILE_ACTIONS = 'CANCEL_FILE_ACTIONS';
 export const FILE_ERROR = 'FILE_ERROR';
