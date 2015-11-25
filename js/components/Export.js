@@ -132,7 +132,12 @@ class ExportWindow extends Component {
 
   clickDownloadShapefile = () => {
     var geoJSON = clusteredBinsToCollectionOfPolygons(this.props.bins);
-    shpWrite.download(geoJSON); // -> location.href = 'data:application/zip;base64,' + content;
+    shpWrite.download(geoJSON, {
+      folder: this.props.basename,
+      types: {
+        polygon: this.props.basename
+      }
+    }); // -> location.href = 'data:application/zip;base64,' + content;
   }
 
   getGeoJSON() {
