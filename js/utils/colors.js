@@ -25,6 +25,8 @@ const CAT_20 = ["#D66F87",
 "#FC739B",
 "#DECE4D"]
 
+const BREWER_PASTEL1 = ['#fbb4ae','#b3cde3','#ccebc5','#decbe4','#fed9a6','#ffffcc','#e5d8bd','#fddaec','#f2f2f2'];
+
 //Differ between implementations/examples!!
 const HCL_LIMITS = {
   hueMin: 0,
@@ -58,25 +60,29 @@ const IWantHueLimits = {
 var defaultIWantHueOptions = {
   hueMin: 0,
   hueMax: 360,
-  chromaMin: 0,
-  chromaMax: 2,
-  lightMin: 0.75,
-  lightMax: 1.0,
-  useForceMode: false,
+  chromaMin: 0.2,
+  chromaMax: 0.7,
+  lightMin: 0.8,
+  lightMax: 1.2,
+  useForceMode: true,
   quality: 50
 }
 
 export default {
   categoryColors(count, options) {
-    let colors = d3.scale.category20().range().map(color => chroma(color));
-    if (count > 20)  {
-      categoryColorsByIWantHue(count - 20, options).forEach(color => {
-        // re-create chroma objects as IWantHue depends on earlier version of chroma-js
-        colors.push(chroma(color.hex()));
-      });
-    }
-    return colors;
+    return categoryColorsByIWantHue(count, options);
+    // return extend(BREWER_PASTEL1.map(color => chroma(color)), count, options);
   }
+}
+
+function categoryColorsByD3(count, options) {
+  return extend(d3.scale.category20().range().map(color => chroma(color)), count, options);
+}
+
+function extend(colors, count, options) {
+  if (count > colors.length)
+    return colors.concat(categoryColorsByIWantHue(count - colors.length, options));
+  return colors;
 }
 
 function categoryColorsByIWantHue(count, options) {
@@ -96,7 +102,8 @@ function categoryColorsByIWantHue(count, options) {
 
   // Sort colors by differentiation
   var sortedColors = iWantHue().diffSort(colors);
-  return sortedColors;
+  // re-create chroma objects as IWantHue depends on earlier version of chroma-js
+  return sortedColors.map(color => chroma(color.hex()));
 }
 
 /**
