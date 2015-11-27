@@ -2,6 +2,7 @@ import $ from 'jquery'
 import d3 from 'd3'
 import topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
+import chroma from 'chroma-js';
 import {DATA_SUCCEEDED} from '../constants/DataFetching'
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 var world = {};
@@ -159,12 +160,19 @@ world.update = function(el, props) {
       .style("stroke", "red");
   }
 
+  function getClusterColor(clusterId) {
+    let clusterColor = props.clusterColors[clusterId];
+    if (props.selectedCluster >= 0)
+      return clusterId === props.selectedCluster? clusterColor : chroma(clusterColor.hex()).alpha(0.2);
+    return clusterColor;
+  }
+
   if (props.bins.length > 0) {
     var colorDomainValue;
     var color;
     if (props.groupBy == BY_CLUSTER) {
-      color = (clusterId) => props.clusterColors[clusterId];
       colorDomainValue = (d) => d.clusterId;
+      color = (clusterId) => getClusterColor(clusterId).css();
     }
     else {
       const bins = props.bins;

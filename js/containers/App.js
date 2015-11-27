@@ -9,6 +9,7 @@ import * as worldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
+import * as FilterActions from '../actions/FilterActions';
 import * as ErrorActions from '../actions/ErrorActions';
 import {CALCULATE_CLUSTERS} from '../constants/ActionTypes';
 import {calculateInfomapClusters} from '../utils/clustering';
@@ -179,6 +180,7 @@ function mapDispatchToProps(dispatch) {
       ClusterActions,
       BinningActions,
       DisplayActions,
+      FilterActions,
       ErrorActions,
     ), dispatch),
     dispatch

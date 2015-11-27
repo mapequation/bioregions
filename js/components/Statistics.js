@@ -8,6 +8,8 @@ class Statistics extends Component {
     species: PropTypes.array.isRequired,
     clusters: PropTypes.array.isRequired,
     clusterColors: PropTypes.array.isRequired,
+    selectedCluster: PropTypes.number.isRequired,
+    selectCluster: PropTypes.func.isRequired,
   }
 
   state = {
@@ -87,18 +89,29 @@ class Statistics extends Component {
     );
   }
 
+  handleClickCluster(clusterId) {
+    const {unselectCluster, selectCluster, selectedCluster} = this.props;
+    if (clusterId === selectedCluster)
+      unselectCluster(clusterId);
+    else
+      selectCluster(clusterId);
+  }
+
+
   renderCluster(cluster) {
     const {clusterId, numBins, numRecords, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
-    const {clusterColors} = this.props;
+    const {clusterColors, selectedCluster} = this.props;
     let clusterColor = clusterColors[clusterId];
+    let btnBorderColor = clusterColor.darker(0.5).css();
     let style = {
-      backgroundColor: clusterColor.hex(),
-      color: clusterColor.luminance() < 0.5 ? 'white' : 'black'
+      backgroundColor: clusterColor.css(),
+      color: clusterColor.luminance() < 0.5 ? 'white' : 'black',
+      border: clusterId === selectedCluster? `2px inset ${btnBorderColor}` : `2px solid ${btnBorderColor}`,
     };
     return (
       <div key={cluster.key} className="ui fluid card">
         <div className="content">
-          <div className="ui top attached button" style={style}>
+          <div className="ui top attached button" style={style} onClick={() => this.handleClickCluster(clusterId)}>
             {`Bioregion ${clusterId + 1}`}
           </div>
           <div className="description">
