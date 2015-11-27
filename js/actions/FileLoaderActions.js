@@ -92,9 +92,11 @@ export function loadSampleFiles(urls) {
       responseType: 'blob'
     })))
       .then(responses => responses.map(response => response.data))
-      .then(blobs => blobs.map((blob,i) => new File([blob], urls[i])))
+      // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
+      .then(blobs => blobs.map((blob,i) => { blob.name = urls[i]; return blob; }))
       .then(files => dispatch(loadFiles(files)))
       .catch(response => {
+        console.log(`Error loading files ${urls.join(', ')}, response: ${JSON.stringify(response)}`);
         const errorMessage = `Error loading files '${urls.join(', ')}': `;
         const subMessage = (response.status && response.statusText) ?
           `${response.status} ${response.statusText}` : (
