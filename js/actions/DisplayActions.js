@@ -1,6 +1,6 @@
 import {
   CHANGE_GROUP_BY,
-  SET_CLUSTER_COLORS
+  SET_CLUSTER_COLORS,
 } from '../constants/ActionTypes';
 
 export function changeGroupBy(groupBy) {

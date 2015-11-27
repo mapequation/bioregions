@@ -73,7 +73,8 @@ const initialState = {
   clusters: [], // features grouped by cluster
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
   clusterColors: [], // array of chroma colors for each cluster
-  selectedcluster: -1, // clusterId if selected
+  selectedCluster: -1, // clusterId if selected
+  selectedSpecies: ""
 };
 
 function getBins(binning, features) {
@@ -167,6 +168,11 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         selectedCluster: action.clusterId
+      };
+    case ActionTypes.SELECT_SPECIES:
+      return {
+        ...state,
+        selectedSpecies: action.species
       };
     default:
       return state;

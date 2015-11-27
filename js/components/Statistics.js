@@ -10,6 +10,7 @@ class Statistics extends Component {
     clusterColors: PropTypes.array.isRequired,
     selectedCluster: PropTypes.number.isRequired,
     selectCluster: PropTypes.func.isRequired,
+    selectSpecies: PropTypes.func.isRequired,
   }
 
   state = {
@@ -24,6 +25,10 @@ class Statistics extends Component {
 
   handleFilterChange = (e) => {
     this.setState({filter: e.target.value});
+  }
+
+  handleClickSpecies = (e) => {
+    this.props.selectSpecies(e.currentTarget.getAttribute("name"));
   }
 
   renderShowMore(numLimited) {
@@ -71,7 +76,7 @@ class Statistics extends Component {
           </thead>
           <tbody>
             {selection.map(({name, count}) => (
-              <tr key={name}>
+              <tr key={name} name={name} onClick={this.handleClickSpecies}>
                 <td>{name}</td>
                 <td>{count}</td>
               </tr>

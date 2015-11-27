@@ -4,6 +4,7 @@ import {bindActionCreators} from 'redux';
 import ControlPanel from '../components/ControlPanel';
 import WorldMap from '../components/WorldMap';
 import Statistics from '../components/Statistics';
+import SpeciesInfo from '../components/SpeciesInfo';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
 import * as worldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
@@ -155,6 +156,7 @@ class App extends Component {
           <p></p>
           <Statistics {...data} {...actions} />
         </div>
+        <SpeciesInfo species={data.selectedSpecies} onHide={actions.unselectSpecies} />
       </div>
     );
   }
