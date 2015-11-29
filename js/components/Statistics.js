@@ -112,6 +112,7 @@ class Statistics extends Component {
       backgroundColor: clusterColor.css(),
       color: clusterColor.luminance() < 0.5 ? 'white' : 'black',
       border: clusterId === selectedCluster? `2px inset ${btnBorderColor}` : `2px solid ${btnBorderColor}`,
+      WebkitPrintColorAdjust: 'exact',
     };
     return (
       <div key={cluster.key} className="ui fluid card">
