@@ -104,11 +104,11 @@ class Binning extends Component {
                         <td>Minimum cell size to accumulate records</td>
                       </tr>
                       <tr>
-                        <td><strong>Cell capacity</strong></td>
+                        <td><strong>Max cell capacity</strong></td>
                         <td>The number of records in a cell before it splits to four sub-cells, if allowed due to min cell size</td>
                       </tr>
                       <tr>
-                        <td><strong>Cell filter</strong></td>
+                        <td><strong>Min cell capacity</strong></td>
                         <td>The minimum number of records in a cell to take it to account</td>
                       </tr>
                     </tbody>
@@ -153,7 +153,7 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Cell capacity</td>
+              <td>Max cell capacity</td>
               <td className="">
                 <TangleInput className="ui label"
                   value={this.props.nodeCapacity}
@@ -166,7 +166,7 @@ class Binning extends Component {
             </tr>
 
             <tr>
-              <td>Cell filter</td>
+              <td>Min cell capacity</td>
               <td className="">
                 <TangleInput className="ui label"
                   value={this.props.lowerThreshold}
