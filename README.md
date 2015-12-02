@@ -1,9 +1,15 @@
 
-# infomap-bioregions (infomap-bioregions)
+# Infomap Bioregions
+### Interactive mapping of biogeographical regions from species distributions
 
-> ...
 
-## Running your project
+## Running locally
+
+First install all dependencies:
+
+```bash
+$ make
+```
 
 The generated project includes a development server on port `3003`, which will rebuild the app whenever you change application code. To start the server, run:
 
@@ -14,7 +20,7 @@ $ npm start
 To run the server with the dev-tools enabled, run:
 
 ```bash
-$ DEBUG=true npm start
+$ npm run dev
 ```
 
 To build for production, this command will output optimized production code:
@@ -22,3 +28,7 @@ To build for production, this command will output optimized production code:
 ```bash
 $ npm run build
 ```
+
+## Contributing
+
+Use the [Fork-and-Branch Git Workflow](http://blog.scottlowe.org/2015/01/27/using-fork-branch-git-workflow/)

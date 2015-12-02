@@ -44,9 +44,9 @@
     "worker-loader": "^0.6.0"
   },
   "scripts": {
-    "start": "DEBUG=true node server.js",
-    "build": "webpack -p --config webpack.production.js --stack_size=100000",
-    "build-dev": "webpack -p"
+    "start": "node server.js",
+    "dev": "DEBUG=true node server.js",
+    "build": "webpack -p --config webpack.production.js --stack_size=100000"
   },
   "devDependencies": {
     "babel-core": "^5.8.25",
