@@ -55,7 +55,7 @@ class Infomap extends Component {
     const {bins, isClustering, getClusters} = this.props;
     if (bins.length === 0)
       return <div></div>;
-    const {activity, stdout, showConsole} = this.state;
+    const {activity, stdout, showConsole, infomapArgs} = this.state;
     const haveConsoleContent = stdout.length > 0;
     let clusterButtonClasses = classNames("ui button", { loading: isClustering });
     let toggleConsoleClasses = classNames("ui basic icon button", {active: haveConsoleContent});
@@ -64,7 +64,7 @@ class Infomap extends Component {
         <span>
           <button className={clusterButtonClasses}
             disabled={isClustering ? "disabled" : false}
-            onClick={() => getClusters()}>
+            onClick={() => getClusters(infomapArgs)}>
             Cluster...
           </button>
           <button className={toggleConsoleClasses} onClick={this.toggleShowConsole}>
