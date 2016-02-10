@@ -1,12 +1,11 @@
-
-SNAKE_DATA = data/coordinates_snakes_south_america.txt
-PLANT_DATA = data/coordinates_plants_west_africa.txt
-
 SEMANTIC_CSS = semantic/dist/semantic.min.css
 
-.PHONY: all maps example_data
+.PHONY: all npm maps example_data
 
-all: Infomap-worker.js example_data maps $(SEMANTIC_CSS) Makefile
+all: npm Infomap-worker.js example_data maps $(SEMANTIC_CSS) Makefile
+
+npm:
+	npm install
 
 build:
 	npm run build
