@@ -13,11 +13,11 @@ const initialState = {
     //   filenames: ['snakes_global_gbif.txt']
     // },
     {
-      name: "Mammals global (point occurrences, 59Mb)",
+      name: "Mammals global (point occurrences, 56Mb)",
       filenames: ['mammals.txt']
     },
     {
-      name: "Mammals South America (point occurrences, 2.7Mb)",
+      name: "Mammals South America (point occurrences, 2.3Mb)",
       filenames: ['mammals_gbif_SA.tsv']
     },
   ],
