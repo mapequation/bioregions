@@ -1,6 +1,6 @@
 SEMANTIC_CSS = semantic/dist/semantic.min.css
 
-.PHONY: all npm maps example_data
+.PHONY: all npm build deploy-mapequation maps example_data
 
 all: npm Infomap-worker.js example_data maps $(SEMANTIC_CSS) Makefile
 
