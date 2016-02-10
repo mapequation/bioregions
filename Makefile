@@ -8,6 +8,12 @@ SEMANTIC_CSS = semantic/dist/semantic.min.css
 
 all: Infomap-worker.js example_data maps $(SEMANTIC_CSS) Makefile
 
+build:
+	npm run build
+
+deploy-mapequation: build
+	rsync -hav static ../
+
 Infomap-worker.js:
 	curl -LO http://www.mapequation.org/downloads/$@
 
