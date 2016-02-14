@@ -4,7 +4,8 @@ import {LOAD_FILES, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_C
   BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
-import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField, addSpeciesAndBins} from '../actions/FileLoaderActions';
+import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
+  addSpeciesAndBins, addPhyloTree} from '../actions/FileLoaderActions';
 import {addClustersAndStatistics, calculateClusters} from '../actions/ClusterActions';
 import io from '../utils/io';
 import shp from 'shpjs';
@@ -16,6 +17,7 @@ import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
 import turfPoint from 'turf-point';
 import turfInside from 'turf-inside';
+import newick from '../utils/newick';
 
 console.log(`[DataWorker] ok`);
 
@@ -219,7 +221,7 @@ function loadTextFile(file) {
     console.log("!!!! io.readFile progress!!", event);
     dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
   }).then(result => {
-    parseDSVHeader(result.data)
+    parseDSVHeader(result.data);
   }).catch(error => {
     console.log("File read error:", error);
     if (error.message && error.name)
@@ -241,6 +243,34 @@ function loadFiles(files) {
     loadTextFile(files[0]);
 }
 
+function loadNexus(file) {
+  console.log("[DataWorker]: Load file:", file.name);
+
+  io.readFile(file, 'text', (event) => {
+    let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
+    console.log("!!!! io.readFile progress!!", event);
+    dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
+  }).then(result => {
+    parseNexus(result.data);
+  }).catch(error => {
+    console.log("File read error:", error);
+    if (error.message && error.name)
+      dispatch(setFileError(error.name, error.message));
+    else
+      dispatch(setFileError("Error reading file", error.toString()));
+  });
+}
+
+function parseNexus(content) {
+  dispatch(setFileProgress("Trying to parse content as Nexus format...", INDETERMINATE));
+  if (content.length === 0)
+    return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
+
+  const phyloTree = newick.parse(content);
+
+  dispatch(setFileProgress("Transferring result...", INDETERMINATE));
+  dispatch(addPhyloTree(phyloTree));
+}
 
 function parseDSVHeader(content) {
   dispatch(setFileProgress("Trying to parse the file as delimiter-separated values...", INDETERMINATE));
@@ -426,9 +456,17 @@ onmessage = function(event) {
   console.log("[DataWorker]: got message of type:", type);
   switch (type) {
     case LOAD_FILES:
-      console.log("Reset data worker state");
-      state = getInitialState();
-      loadFiles(event.data.files);
+      const {files} = event.data;
+      const isNexus = files.length == 1 && files.filter(file => /nex$/.test(file.name));
+      if (isNexus) {
+        console.log("[Worker]: Load nexus file!");
+        loadNexus(files[0]);
+      }
+      else {
+        console.log("Reset data worker state");
+        state = getInitialState();
+        loadFiles(event.data.files);
+      }
       break;
     case SET_FIELDS_TO_COLUMNS_MAPPING:
       parseDSV(event.data.fieldsToColumns);

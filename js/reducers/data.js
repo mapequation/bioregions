@@ -74,7 +74,8 @@ const initialState = {
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
   clusterColors: [], // array of chroma colors for each cluster
   selectedCluster: -1, // clusterId if selected
-  selectedSpecies: ""
+  selectedSpecies: "",
+  phyloTree: {},
 };
 
 function getBins(binning, features) {
@@ -106,6 +107,11 @@ export default function data(state = initialState, action) {
       // Forward to data worker
       state.dataWorker.postMessage(action);
       return state;
+    case ActionTypes.ADD_PHYLO_TREE:
+      return {
+        ...state,
+        phyloTree: action.phyloTree,
+      };
     case ActionTypes.ADD_SPECIES_AND_BINS:
       return {
         ...state,

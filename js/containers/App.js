@@ -3,6 +3,7 @@ import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import ControlPanel from '../components/ControlPanel';
 import WorldMap from '../components/WorldMap';
+import Phylogram from '../components/Phylogram';
 import Statistics from '../components/Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
@@ -154,6 +155,7 @@ class App extends Component {
             </div>
           </div>
           <p></p>
+          <Phylogram {...data} />
           <Statistics {...data} {...actions} />
         </div>
         <SpeciesInfo species={data.selectedSpecies} onHide={actions.unselectSpecies} />

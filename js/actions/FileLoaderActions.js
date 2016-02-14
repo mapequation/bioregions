@@ -9,6 +9,7 @@ import {
   SET_FIELDS_TO_COLUMNS_MAPPING,
   SET_FEATURE_NAME_FIELD,
   ADD_SPECIES_AND_BINS,
+  ADD_PHYLO_TREE,
 } from '../constants/ActionTypes';
 import axios from 'axios'
 
@@ -143,5 +144,12 @@ export function addSpeciesAndBins(species, bins) {
     type: ADD_SPECIES_AND_BINS,
     species,
     bins
+  }
+}
+
+export function addPhyloTree(phyloTree) {
+  return {
+    type: ADD_PHYLO_TREE,
+    phyloTree
   }
 }
