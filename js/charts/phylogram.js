@@ -25,7 +25,9 @@ phylogram.update = function(el, props) {
   const {phyloTree} = props;
 
   let numLeafNodes = 0;
+  let numNodes = 0;
   function countLeafNodes(node) {
+    ++numNodes;
     if (node.branchset) {
       for (var i=0; i < node.branchset.length; i++) {
         countLeafNodes(node.branchset[i])
@@ -36,15 +38,15 @@ phylogram.update = function(el, props) {
   }
   if (phyloTree && phyloTree.branchset)
     countLeafNodes(phyloTree);
-  console.log(numLeafNodes, "leaf nodes in phylo tree!");
-  let calculatedHeight = numLeafNodes * 20;
+  console.log("PhyloTree size:", numNodes, "nodes", numLeafNodes, "leaf nodes");
+  let calculatedHeight = numNodes * 20;
 
   props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
     top: 0,
     bottom: 0,
-    left: 0,
+    left: 10,
     right: 0,
     height: calculatedHeight,
   }, props);
@@ -63,6 +65,8 @@ phylogram.update = function(el, props) {
     g.selectAll("*").remove();
     return;
   }
+  //TODO: Use data enter/exit!
+  g.selectAll("*").remove();
 
   var totalWidth = props.width;
   if (!totalWidth)
@@ -79,7 +83,7 @@ phylogram.update = function(el, props) {
 
 
   phylogram.build('#phylogram', phyloTree, {
-    width: width - 250, //Margin for labels
+    width: width - 250, //Margin for labels. TODO: Set margin in build and trim labels accordingly
     height: height,
     vis: g,
   });
@@ -178,12 +182,12 @@ phylogram.coordinateToAngle = function(coord, radius) {
 }
 
 phylogram.styleTreeNodes = function(vis) {
-  vis.selectAll('g.leaf.node')
-    .append("svg:circle")
-      .attr("r", 4.5)
-      .attr('stroke',  'yellowGreen')
-      .attr('fill', 'greenYellow')
-      .attr('stroke-width', '2px');
+// vis.selectAll('g.leaf.node')
+//   .append("svg:circle")
+//     .attr("r", 4.5)
+//     .attr('stroke',  'yellowGreen')
+//     .attr('fill', 'greenYellow')
+//     .attr('stroke-width', '2px');
 
   vis.selectAll('g.root.node')
     .append('svg:circle')
@@ -191,6 +195,34 @@ phylogram.styleTreeNodes = function(vis) {
       .attr('fill', 'steelblue')
       .attr('stroke', '#369')
       .attr('stroke-width', '2px');
+
+  var color = d3.scale.ordinal()
+      .range(["#98abc5", "#8a89a6", "#7b6888", "#6b486b", "#a05d56", "#d0743c", "#ff8c00"]);
+
+  var arc = d3.svg.arc()
+      .outerRadius(10)
+      .innerRadius(0);
+
+  var pie = d3.layout.pie()
+      .sort(null)
+      .value(function(d) { return d.count; });
+
+  var data = [1,2,3,4,5,6,7].map(index => {
+    return {
+      index,
+      count: Math.random()
+    };
+  });
+
+  var g = vis.selectAll('g.leaf.node').selectAll(".arc")
+      .data(pie(data))
+    .enter().append("g")
+      .attr("class", "arc");
+
+  g.append("path")
+      .attr("d", arc)
+      .style("stroke",  "white")
+      .style("fill", function(d) { return color(d.data.index); });
 }
 
 function scaleBranchLengths(nodes, w) {
@@ -306,7 +338,7 @@ phylogram.build = function(selector, nodes, options) {
         .text(function(d) { return d.length; });
 
     vis.selectAll('g.leaf.node').append("svg:text")
-      .attr("dx", 8)
+      .attr("dx", 20)
       .attr("dy", 3)
       .attr("text-anchor", "start")
       .attr('font-family', 'Helvetica Neue, Helvetica, sans-serif')
