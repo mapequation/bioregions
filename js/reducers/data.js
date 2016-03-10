@@ -70,7 +70,8 @@ const initialState = {
   bins: [], // bins = binner.bins(features)
   clusterIds: [], // array<int> of cluster id:s, matching bins array in index
   isClustering: false,
-  clusters: [], // features grouped by cluster
+  clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
+  clustersPerSpecies: {}, // name -> {count, clusters: [{clusterId, count}, ...]}
   groupBy: Display.BY_NAME, // name or cluster when clusters ready
   clusterColors: [], // array of chroma colors for each cluster
   selectedCluster: -1, // clusterId if selected
@@ -135,13 +136,14 @@ export default function data(state = initialState, action) {
       return state;
     case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
       const bins = mergeClustersToBins(action.clusterIds, state.bins);
-      const clusters = action.clusterStatistics;
+      const { clusters, clustersPerSpecies } = action.clusterStatistics;
       return {
         ...state,
         isClustering: false,
         bins,
         clusterIds: action.clusterIds,
         clusters,
+        clustersPerSpecies,
         groupBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
       };

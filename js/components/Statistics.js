@@ -1,4 +1,5 @@
 import React, {Component, PropTypes} from 'react';
+import PieChart from './PieChart';
 import R from 'ramda';
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
 
@@ -7,6 +8,7 @@ class Statistics extends Component {
   static propTypes = {
     species: PropTypes.array.isRequired,
     clusters: PropTypes.array.isRequired,
+    clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
     selectedCluster: PropTypes.number.isRequired,
     selectCluster: PropTypes.func.isRequired,
@@ -94,6 +96,76 @@ class Statistics extends Component {
     );
   }
 
+  renderSpeciesCountsWithClusters() {
+    let { limit, filter } = this.state;
+    let { species, clustersPerSpecies } = this.props;
+    let regFilter = new RegExp(filter, 'i');
+    // let selection = R.pipe(
+    //   species,
+    //   R.filter(({name}) => regFilter.test(name)),
+    //   // R.take(limit)
+    // );
+    let selection = species.filter(({name}) => regFilter.test(name));
+    let numFilteredSpecies = selection.length;
+    let numLimited = numFilteredSpecies - limit;
+    if (numLimited > 0)
+      selection = R.take(limit, selection);
+    return (
+      <div>
+        <table className="ui sortable celled table">
+          <thead>
+            <tr>
+              <th>
+                <div className="ui form">
+                  <input type="text" placeholder="Filter..." value={filter} onChange={this.handleFilterChange} />
+                </div>
+              </th>
+              <th colSpan="2">{`${numFilteredSpecies} / ${species.length}`}</th>
+            </tr>
+            <tr>
+              <th className="">Name</th>
+              <th className="sorted descending">Count</th>
+              <th className="">Regions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {selection.map(({name, count}) => {
+              return (
+                <tr key={name} name={name} onClick={this.handleClickSpecies}>
+                  <td>{name}</td>
+                  <td>{count}</td>
+                  <td>{this.renderClusterDistribution(name)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th colSpan="2">
+                {this.renderShowMore(numLimited)}
+              </th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    );
+  }
+
+  renderClusterDistribution(name) {
+    const {clustersPerSpecies, clusterColors} = this.props;
+    const speciesClusters = clustersPerSpecies[name];
+    if (!speciesClusters) {
+      return (
+        <span>-</span>
+      );
+    }
+    const {count, clusters} = speciesClusters; // clusters: [{clusterId, count}, ...]
+
+    return (
+      <PieChart size={30} data={clusters} colors={clusterColors} />
+    );
+  }
+
   handleClickCluster(clusterId) {
     const {unselectCluster, selectCluster, selectedCluster} = this.props;
     if (clusterId === selectedCluster)
@@ -167,14 +239,17 @@ class Statistics extends Component {
 
   render() {
 
-    const {species, groupBy} = this.props;
+    const {species, groupBy, clusters} = this.props;
     if (species.length === 0)
       return (<div></div>)
 
     if (groupBy == BY_CLUSTER)
       return this.renderClusters();
 
-    return this.renderSpeciesCounts();
+    if (clusters.length === 0)
+      return this.renderSpeciesCounts();
+
+    return this.renderSpeciesCountsWithClusters();
   }
 }
 

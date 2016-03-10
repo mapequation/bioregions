@@ -11,7 +11,7 @@ import io from '../utils/io';
 import shp from 'shpjs';
 import * as S from '../utils/statistics';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
-import {calculateInfomapClusters, getClusterStatistics, getBipartiteNetwork} from '../utils/clustering';
+import {calculateInfomapClusters, getClusterStatistics, getBipartiteNetwork, mergeClustersToBins} from '../utils/clustering';
 import turfPolygon from 'turf-polygon';
 import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
@@ -412,16 +412,6 @@ function binData(dispatchResult = false) {
   }
 }
 
-function mergeClustersToBins(clusterIds, bins) {
-  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
-  if (clusterIds.length === bins.length) {
-    bins.forEach((bin, i) => {
-      bin.clusterId = clusterIds[i];
-    });
-  }
-  return bins;
-}
-
 function calculateClusterStatistics(clusterIds) {
   mergeClustersToBins(clusterIds, state.bins);
 
@@ -457,7 +447,7 @@ onmessage = function(event) {
   switch (type) {
     case LOAD_FILES:
       const {files} = event.data;
-      const isNexus = files.length == 1 && files.filter(file => /nex$/.test(file.name));
+      const isNexus = files.length == 1 && /nex$/.test(files[0].name);
       if (isNexus) {
         console.log("[Worker]: Load nexus file!");
         loadNexus(files[0]);

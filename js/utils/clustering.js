@@ -28,12 +28,31 @@ export function getBipartiteNetwork(species, features, bins) {
 }
 
 
+/**
+*
+* returns {
+*   clustersPerSpecies: {name -> {count, clusters: [{clusterId, count}, ...]}}
+*   clusters: [{
+*    clusterId,
+*    numBins,
+*    numRecords,
+*    numSpecies,
+*    topCommonSpecies,
+*    topIndicatorSpecies,
+*  }, ...]
+*
+*/
 export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap) {
   if (bins.length === 0)
     return [];
   if (bins[0].clusterId < 0)
     mergeClustersToBins(clusterIds, bins);
-  return d3.nest()
+
+  // Cluster per species, sorted on count
+  let clustersPerSpecies = {}; // species -> {count, clusters: [{clusterId, count}, ...]}
+
+  // Species per cluster
+  const clusters = d3.nest()
     .key((bin) => bin.clusterId)
     .rollup((bins) => {
       // rollup features grouped on bins
@@ -54,6 +73,24 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
           });
         });
       }
+
+      // Save to clustersPerSpecies
+      const {clusterId} = bins[0]; // All bins in this rollup have the same clusterId
+      features.forEach(feature => {
+        const {name} = feature.properties;
+        let speciesClusters = clustersPerSpecies[name];
+        if (!speciesClusters)
+          speciesClusters = clustersPerSpecies[name] = {count: 0, clusters: [{clusterId, count: 0}]};
+        ++speciesClusters.count;
+        let clusters = speciesClusters.clusters;
+        let cluster = clusters[clusters.length - 1];
+        if (cluster.clusterId !== clusterId) {
+          clusters.push({clusterId, count: 0});
+          cluster = clusters[clusters.length - 1];
+        }
+        ++cluster.count;
+      });
+
       // const topCommonSpecies = S.topSortedBy(feature => feature.properties.name, 10, features);
       const species = S.countBy(feature => feature.properties.name, features);
       const topCommonSpecies = S.topSortedBy(d => d.count, 10, species);
@@ -69,7 +106,19 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
         topIndicatorSpecies,
       }
     })
-    .entries(bins)
+    .entries(bins);
+
+  return {clusters, clustersPerSpecies};
+}
+
+export function mergeClustersToBins(clusterIds, bins) {
+  // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
+  if (clusterIds.length === bins.length) {
+    bins.forEach((bin, i) => {
+      bin.clusterId = clusterIds[i];
+    });
+  }
+  return bins;
 }
 
 export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback) {
