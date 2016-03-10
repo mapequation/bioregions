@@ -467,7 +467,7 @@ var ProgressBar = ({value, total, label}) => {
   const percent = `${Math.round(value*100/total)}%`;
   return (
     <div className="ui indicating progress active" data-value={value} data-total={total}>
-      <div className="bar" style={{width: percent, "transitionDuration": "300ms"}}>
+      <div className="bar" style={{width: percent, "transitionDuration": "30ms"}}>
         <div className="progress">{percent}</div>
       </div>
       <div className="label">{label}</div>
