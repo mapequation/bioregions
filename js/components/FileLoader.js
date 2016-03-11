@@ -406,7 +406,7 @@ class FileLoader extends Component {
               <div className="ui horizontal divider">
                 Or
               </div>
-              <table className="ui basic selectable celled table">
+              <table className="ui selectable celled table">
                 <thead>
                   <tr>
                     <th colSpan="3">Load example data:</th>
