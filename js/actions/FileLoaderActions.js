@@ -1,6 +1,8 @@
 import {
+  SHOW_FILE_UI,
   LOAD_FILES,
   FETCH_FILES,
+  LOAD_TREE,
   LOAD_SAMPLE_FILE,
   CANCEL_FILE_ACTIONS,
   FILE_ERROR,
@@ -50,6 +52,12 @@ let exampleGeoJson = {
     }
   ]
 };
+export function showFileUI(isShowingFileUI) {
+  return {
+    type: SHOW_FILE_UI,
+    isShowingFileUI
+  };
+}
 
 export function loadFiles(files) {
   return {
@@ -62,6 +70,13 @@ export function fetchFiles(urls) {
   return {
     type: FETCH_FILES,
     urls
+  };
+}
+
+export function loadTree(file) {
+  return {
+    type: LOAD_TREE,
+    file
   };
 }
 

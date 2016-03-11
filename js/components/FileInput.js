@@ -1,48 +1,52 @@
 import React, {Component, PropTypes} from 'react';
 
+/**
+* A button that triggers a hidden input element of type file.
+* props.loadFiles called with an array of File objects if props.multiple,
+* else with a single File object.
+*/
 class FileInput extends Component {
 
   static propTypes = {
-    sampleFiles: PropTypes.array.isRequired,
     loadFiles: PropTypes.func.isRequired,
-    loadSampleFiles: PropTypes.func.isRequired,
+    children: PropTypes.node.isRequired,
+    multiple: PropTypes.bool,
+  }
+
+  static defaultProps = {
+    children: "Load files...",
+    multiple: false,
   }
 
   componentDidMount() {
-    $('.ui.dropdown').dropdown();
-    $('#inputfile').on('change', (e) => {
-      this.props.loadFiles(Array.from(e.target.files)); // Array from FileList
+    $('#inputFile').on('change', (e) => {
+      if (this.props.multiple)
+        this.props.loadFiles(Array.from(e.target.files)); // Array from FileList
+      else
+        this.props.loadFiles(e.target.files[0]);
     });
   }
 
-  componentDidUpdate() {
-    $('.ui.dropdown').dropdown('refresh');
-  }
-
   componentWillUnmount() {
-    $('#inputfile').off('change');
+    $('#inputFile').off('change');
   }
 
-  handleClickLoadFile() {
-    $(this.refs.inputfile).click();
+  handleClickLoadFile = (e) => {
+    $(this.inputFile).click();
   }
 
   render() {
+    const {multiple} = this.props;
     return (
-      <div className="ui buttons">
-        <div className="ui button" onClick={::this.handleClickLoadFile}>Load data...</div>
-        <input id="inputfile" ref="inputfile" style={{display: "none"}} type="file" multiple placeholder="File input"></input>
-        <div className="ui top left pointing dropdown icon button">
-          <i className="dropdown icon"></i>
-          <div className="menu">
-            {this.props.sampleFiles.map((sampleFile) => (
-              <div key={sampleFile.name} className="item" onClick={() => this.props.loadSampleFiles(sampleFile.filenames)}>{sampleFile.name}</div>
-            ))}
-          </div>
+      <div>
+        <div className="ui button" onClick={this.handleClickLoadFile}>
+          {this.props.children}
         </div>
+        <input id="inputFile" ref={(el) => this.inputFile = el} style={{display: "none"}} type="file" multiple={multiple} placeholder="File input"></input>
       </div>
     );
   }
+
 }
 
 export default FileInput;

@@ -2,10 +2,13 @@ import * as ActionTypes from '../constants/ActionTypes';
 import _ from 'lodash';
 
 const initialState = {
+  isShowingFileUI: false, // UI to load and see loaded files
   isLoading: false,
   files: [], // array of File objects to load
   urls: [], // urls to files to fetch
   basename: "Infomap bioregions",
+  loadedSpecies: [],
+  loadedTree: "", // filename of loaded tree
   haveFile: false,
   sampleFiles: [
     // {
@@ -13,11 +16,15 @@ const initialState = {
     //   filenames: ['snakes_global_gbif.txt']
     // },
     {
-      name: "Mammals global (point occurrences, 56Mb)",
+      name: "Mammals global",
+      type: "point occurrences",
+      size: "56Mb",
       filenames: ['mammals.txt']
     },
     {
-      name: "Mammals South America (point occurrences, 2.3Mb)",
+      name: "Mammals South America",
+      type: "point occurrences",
+      size: "2.3Mb",
       filenames: ['mammals_gbif_SA.tsv']
     },
   ],
@@ -31,9 +38,15 @@ const initialState = {
 
 export default function files(state = initialState, action) {
   switch (action.type) {
+    case ActionTypes.SHOW_FILE_UI:
+      return {
+        ...state,
+        isShowingFileUI: action.isShowingFileUI
+      }
     case ActionTypes.FETCH_FILES:
       return {
         ...initialState,
+        isShowingFileUI: true,
         urls: action.urls,
         isLoading: true
       }
@@ -45,11 +58,17 @@ export default function files(state = initialState, action) {
       const basename = lastDot == -1? filename : filename.substring(0, lastDot);
       return {
         ...initialState, // Restore to initial state
+        isShowingFileUI: true,
         files: action.files,
         basename,
         isLoading: true,
         haveFile: true
       };
+    case ActionTypes.LOAD_TREE:
+      return {
+        ...state,
+        loadedTree: action.file.name,
+      }
     case ActionTypes.FILE_ERROR:
       return {
         ...state,

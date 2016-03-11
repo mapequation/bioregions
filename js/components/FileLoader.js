@@ -24,13 +24,16 @@ const getInitialState = () => {
 class FileLoader extends Component {
 
   static propTypes = {
+    isShowingFileUI: PropTypes.bool.isRequired,
     isLoading: PropTypes.bool.isRequired,
     files: PropTypes.array.isRequired,
     sampleFiles: PropTypes.array.isRequired,
     parsedHead: PropTypes.array.isRequired,
     parsedFeatureProperty: PropTypes.object,
+    showFileUI: PropTypes.func.isRequired,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFiles: PropTypes.func.isRequired,
+    loadTree: PropTypes.func.isRequired,
     progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
@@ -345,9 +348,9 @@ class FileLoader extends Component {
   }
 
   renderFileLoading() {
-    const {isLoading, files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
+    const {isShowingFileUI, isLoading, files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
     const {done} = this.state;
-    if (!isLoading)
+    if (!isShowingFileUI)
       return (<span></span>);
 
     if (done) { // Will soon be restored to initial state with !isLoading
@@ -368,32 +371,86 @@ class FileLoader extends Component {
         </ErrorMessage>
       );
     }
+
     // Loading file...
-    const subHeader = files.map(file => file.name).join(",\n");
-    const {progress} = this.state;
-    if (progress) {
+    if (isLoading) {
+      const subHeader = files.map(file => file.name).join(",\n");
+      const {progress} = this.state;
+      if (progress) {
+        return (
+          <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
+            <Progress {...progress}></Progress>
+          </Dimmer>
+        );
+      }
+
+      let header = files.length > 0? "Loading files..." : "Loading file...";
       return (
         <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-          <Progress {...progress}></Progress>
+          <Loader header={header}></Loader>
         </Dimmer>
       );
     }
 
-    let header = files.length > 0? "Loading files..." : "Loading file...";
+    const {sampleFiles, loadFiles, loadSampleFiles} = this.props;
     return (
-      <Dimmer onCancel={this.cancelParsing} subHeader={subHeader}>
-        <Loader header={header}></Loader>
+      <Dimmer onCancel={this.toggleShowFileUI} header={"Load files..."}>
+        <div className="ui two column grid">
+          <div className="column">
+            <div className="ui segment">
+              <h2 className="ui header">Species data</h2>
+
+              <FileInput multiple={true} loadFiles={loadFiles}>
+                Load species distribution data...
+              </FileInput>
+              <div className="ui horizontal divider">
+                Or
+              </div>
+              <table className="ui basic selectable celled table">
+                <thead>
+                  <tr>
+                    <th colSpan="3">Load example data:</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {
+                    sampleFiles.map((sampleFile, i) => (
+                      <tr key={i} onClick={() => loadSampleFiles(sampleFile.filenames)} style={{cursor: 'pointer'}}>
+                        <td>{sampleFile.name}</td>
+                        <td>{sampleFile.type}</td>
+                        <td>{sampleFile.size}</td>
+                      </tr>
+                    ))
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="column">
+            <div className="ui segment">
+              <h2 className="ui header">Phylogenetic data</h2>
+              <div>
+                <FileInput loadFiles={this.props.loadTree}>
+                  Load tree...
+                </FileInput>
+              </div>
+            </div>
+          </div>
+        </div>
       </Dimmer>
-    );
+    )
   }
 
+  toggleShowFileUI = () => {
+    const {isShowingFileUI, showFileUI} = this.props;
+    showFileUI(!isShowingFileUI);
+  }
 
   render() {
-    const {isLoading, files, sampleFiles, parsedHead, parsedFeatureProperty, loadFiles, loadSampleFiles} = this.props;
 
     return (
       <div>
-        <FileInput {...{sampleFiles, loadFiles, loadSampleFiles}} />
+        <button className="ui button" onClick={this.toggleShowFileUI}>Load data...</button>
         {this.renderFileLoading()}
       </div>
     );
