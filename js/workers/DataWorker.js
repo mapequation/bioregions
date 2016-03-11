@@ -350,7 +350,7 @@ function parseDSV(fieldsToColumns) {
   console.log(`Parsed ${features.length} valid features and skipped ${numSkipped} bad ones.`);
 
   if (features.length === 0)
-    return dispatch(setFileError(`No valid records could be parsed. ${numSkipped} skipped.`));
+    return dispatch(setFileError(`No valid records could be parsed. ${numSkipped} skipped due to missing name or coordinates. Please check the format.`));
 
   // Store features
   state.features = features;
