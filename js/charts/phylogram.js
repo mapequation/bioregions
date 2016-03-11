@@ -276,7 +276,8 @@ phylogram.build = function(selector, nodes, options) {
 
   node.exit().remove();
 
-  var leafNodes = node.filter((d) => !d.children);
+  var leafNodes = node.filter((d) => !d.children).append("g")
+      .attr("transform", "translate(10,0)");
 
   const {clustersPerSpecies, clusterColors} = options;
 
@@ -299,7 +300,7 @@ phylogram.build = function(selector, nodes, options) {
       .data(d => pie(clusterData(d)));
 
   pies.enter().append("path")
-      .attr("class", "pie");
+      .attr("class", "pie")
 
   pies.exit().remove();
 
@@ -307,24 +308,24 @@ phylogram.build = function(selector, nodes, options) {
       .style("stroke", (d) => d.data.clusterId !== undefined ? "white" : "grey")
       .style("fill", (d) => d.data.clusterId !== undefined ? clusterColors[d.data.clusterId] : "white");
 
-  if (!options.skipLabels) {
-    vis.selectAll('g.inner.node')
-      .append("svg:text")
-        .attr("dx", -6)
-        .attr("dy", -6)
-        .attr("text-anchor", 'end')
-        .attr('font-size', '8px')
-        .attr('fill', '#ccc')
-        .text(function(d) { return d.length; });
 
-    vis.selectAll('g.leaf.node').append("svg:text")
+  if (!options.skipLabels) {
+    node.append("svg:text")
+      .attr("dx", -6)
+      .attr("dy", -6)
+      .attr("text-anchor", 'end')
+      .attr('font-size', '8px')
+      .attr('fill', '#ccc')
+      .text((d) => d.length);
+
+    leafNodes.append("svg:text")
       .attr("dx", 20)
       .attr("dy", 3)
       .attr("text-anchor", "start")
       .attr('font-family', 'Helvetica Neue, Helvetica, sans-serif')
       .attr('font-size', '10px')
       .attr('fill', 'black')
-      .text(function(d) { return d.name + ' ('+d.length+')'; });
+      .text((d) => d.name);
   }
 
   return {tree: tree, vis: vis}
