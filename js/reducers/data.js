@@ -103,6 +103,9 @@ export default function data(state = initialState, action) {
       // Forward to data worker
       state.dataWorker.postMessage(action);
       return initialState;
+    case ActionTypes.LOAD_TREE:
+      state.dataWorker.postMessage(action);
+      return state;
     case ActionTypes.SET_FIELDS_TO_COLUMNS_MAPPING:
     case ActionTypes.SET_FEATURE_NAME_FIELD:
       // Forward to data worker

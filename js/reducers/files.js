@@ -52,7 +52,6 @@ export default function files(state = initialState, action) {
       }
     case ActionTypes.LOAD_FILES:
       let shpFile = action.files.filter(file => /shp$/.test(file.name));
-      let isNexus = action.files.length == 1 && action.files.filter(file => /nex$/.test(file.name));
       const filename = shpFile.length > 0 ? shpFile[0].name : action.files[0].name;
       const lastDot = filename.lastIndexOf(".");
       const basename = lastDot == -1? filename : filename.substring(0, lastDot);
@@ -93,6 +92,7 @@ export default function files(state = initialState, action) {
       return {
         ...state,
         isLoading: false,
+        isShowingFileUI: false,
       };
     default:
       return state;

@@ -18,21 +18,15 @@ class FileInput extends Component {
     multiple: false,
   }
 
-  componentDidMount() {
-    $('#inputFile').on('change', (e) => {
-      if (this.props.multiple)
-        this.props.loadFiles(Array.from(e.target.files)); // Array from FileList
-      else
-        this.props.loadFiles(e.target.files[0]);
-    });
-  }
-
-  componentWillUnmount() {
-    $('#inputFile').off('change');
-  }
-
   handleClickLoadFile = (e) => {
     $(this.inputFile).click();
+  }
+
+  handleInputChange = (e) => {
+    if (this.props.multiple)
+      this.props.loadFiles(Array.from(e.target.files)); // Array from FileList
+    else
+      this.props.loadFiles(e.target.files[0]);
   }
 
   render() {
@@ -42,7 +36,8 @@ class FileInput extends Component {
         <div className="ui button" onClick={this.handleClickLoadFile}>
           {this.props.children}
         </div>
-        <input id="inputFile" ref={(el) => this.inputFile = el} style={{display: "none"}} type="file" multiple={multiple} placeholder="File input"></input>
+        <input id="inputFile" ref={(el) => this.inputFile = el} style={{display: "none"}} type="file"
+          multiple={multiple} placeholder="File input" onChange={this.handleInputChange}></input>
       </div>
     );
   }

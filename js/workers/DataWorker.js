@@ -446,17 +446,12 @@ onmessage = function(event) {
   console.log("[DataWorker]: got message of type:", type);
   switch (type) {
     case LOAD_FILES:
-      const {files} = event.data;
-      const isNexus = files.length == 1 && /nex$/.test(files[0].name);
-      if (isNexus) {
-        console.log("[Worker]: Load nexus file!");
-        loadNexus(files[0]);
-      }
-      else {
-        console.log("Reset data worker state");
-        state = getInitialState();
-        loadFiles(event.data.files);
-      }
+      console.log("Reset data worker state");
+      state = getInitialState();
+      loadFiles(event.data.files);
+      break;
+    case LOAD_TREE:
+      loadNexus(event.data.file);
       break;
     case SET_FIELDS_TO_COLUMNS_MAPPING:
       parseDSV(event.data.fieldsToColumns);
