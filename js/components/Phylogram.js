@@ -7,6 +7,7 @@ class Phylogram extends Component {
     // width: PropTypes.number.isRequired,
     // height: PropTypes.number.isRequired,
     // bins: PropTypes.array.isRequired,
+    clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
     phyloTree: PropTypes.object,
   }

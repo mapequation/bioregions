@@ -22,7 +22,7 @@ phylogram.create = function(el, props) {
 phylogram.update = function(el, props) {
   console.log("phylogram.update()");
 
-  const {phyloTree} = props;
+  const {phyloTree, clustersPerSpecies, clusterColors} = props;
 
   let numLeafNodes = 0;
   let numNodes = 0;
@@ -86,6 +86,8 @@ phylogram.update = function(el, props) {
     width: width - 250, //Margin for labels. TODO: Set margin in build and trim labels accordingly
     height: height,
     vis: g,
+    clustersPerSpecies,
+    clusterColors,
   });
 
   return phylogram;
@@ -181,50 +183,6 @@ phylogram.coordinateToAngle = function(coord, radius) {
   return coordAngle
 }
 
-phylogram.styleTreeNodes = function(vis) {
-// vis.selectAll('g.leaf.node')
-//   .append("svg:circle")
-//     .attr("r", 4.5)
-//     .attr('stroke',  'yellowGreen')
-//     .attr('fill', 'greenYellow')
-//     .attr('stroke-width', '2px');
-
-  vis.selectAll('g.root.node')
-    .append('svg:circle')
-      .attr("r", 4.5)
-      .attr('fill', 'steelblue')
-      .attr('stroke', '#369')
-      .attr('stroke-width', '2px');
-
-  var color = d3.scale.ordinal()
-      .range(["#98abc5", "#8a89a6", "#7b6888", "#6b486b", "#a05d56", "#d0743c", "#ff8c00"]);
-
-  var arc = d3.svg.arc()
-      .outerRadius(10)
-      .innerRadius(0);
-
-  var pie = d3.layout.pie()
-      .sort(null)
-      .value(function(d) { return d.count; });
-
-  var data = [1,2,3,4,5,6,7].map(index => {
-    return {
-      index,
-      count: Math.random()
-    };
-  });
-
-  var g = vis.selectAll('g.leaf.node').selectAll(".arc")
-      .data(pie(data))
-    .enter().append("g")
-      .attr("class", "arc");
-
-  g.append("path")
-      .attr("d", arc)
-      .style("stroke",  "white")
-      .style("fill", function(d) { return color(d.data.index); });
-}
-
 function scaleBranchLengths(nodes, w) {
   // Visit all nodes and adjust y pos width distance metric
   var visitPreOrder = function(root, callback) {
@@ -310,22 +268,44 @@ phylogram.build = function(selector, nodes, options) {
       .attr("stroke-width", "4px");
 
   var node = vis.selectAll("g.node")
-      .data(nodes)
-    .enter().append("svg:g")
-      .attr("class", function(n) {
-        if (n.children) {
-          if (n.depth == 0) {
-            return "root node"
-          } else {
-            return "inner node"
-          }
-        } else {
-          return "leaf node"
-        }
-      })
-      .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; })
+      .data(nodes);
 
-  phylogram.styleTreeNodes(vis)
+  node.enter().append("svg:g")
+      .attr("class", (n) => n.children ? (n.depth === 0 ? "root node" : "inner node") : "leaf node")
+      .attr("transform", (d) => `translate(${d.y},${d.x})`);
+
+  node.exit().remove();
+
+  var leafNodes = node.filter((d) => !d.children);
+
+  const {clustersPerSpecies, clusterColors} = options;
+
+  var arc = d3.svg.arc()
+      .outerRadius(10)
+      .innerRadius(0);
+
+  var pie = d3.layout.pie()
+      .sort(null)
+      .value(function(d) { return d.count; });
+
+  var clusterData = (d) => {
+    const clusters = clustersPerSpecies[d.name];
+    if (!clusters)
+      return [{count: 1}];
+    return clusters.clusters;
+  };
+
+  var pies = leafNodes.selectAll(".pie")
+      .data(d => pie(clusterData(d)));
+
+  pies.enter().append("path")
+      .attr("class", "pie");
+
+  pies.exit().remove();
+
+  pies.attr("d", arc)
+      .style("stroke", (d) => d.data.clusterId !== undefined ? "white" : "grey")
+      .style("fill", (d) => d.data.clusterId !== undefined ? clusterColors[d.data.clusterId] : "white");
 
   if (!options.skipLabels) {
     vis.selectAll('g.inner.node')
