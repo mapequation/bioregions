@@ -128,7 +128,7 @@ class App extends Component {
   render() {
     const {data, files, worldmap, errorMessage, actions} = this.props;
     return (
-      <div className="">
+      <div className="app">
         <div className="ui secondary pointing menu">
           <a className="active item">Infomap Bioregions</a>
           <div className="item">

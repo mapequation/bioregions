@@ -10,9 +10,194 @@
 
   <div id="root"></div>
 
-  <script src="node_modules/jquery/dist/jquery.min.js"></script>
-  <script src="node_modules/jquery-tablesort/jquery.tablesort.min.js"></script>
-  <script src="semantic/dist/semantic.min.js"></script>
-  <script src="static/bundle.js"></script>
-</body>
+  <div class="ui container">
+    <div class="ui stackable grid">
+      <div class="bottom aligned row">
+        <div class="three wide column"></div>
+        <div class="ten wide column">
+          <h1 class="ui header">
+            Infomap Bioregions
+            <div class="sub header">Interactive mapping of biogeographical regions from species distributions</div>
+          </h1>
+
+          <div class="ui raised segment">
+            <a class="ui red ribbon label">Example output</a>
+            <img class="ui image" src="http://mapequation.org/assets/img/bioregions-amphibians.png" alt="Bioregions example output map" />
+            <p>Bioregion map of the world’s amphibians generated with Infomap Bioregions, using the IUCN species range maps.</p>
+          </div>
+
+        </div>
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Bioregion
+            </div>
+            <p>A bioregion, or biogeographical region, reveal how species are spatially grouped and therefore are important units for conservation, historical biogeography, ecology and evolution.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+          <div class="ui blue message">
+            <div class="header">
+              Step-by-step explanation
+            </div>
+          </div>
+        </div>
+        <div class="ten wide column">
+
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">1</div>
+            <div class="content">
+              Input
+              <div class="sub header">Load species distribution data</div>
+            </div>
+          </h2>
+          <p>As input, Infomap Bioregions supports both point occurrence data and species range maps.</p>
+
+          <p>Tip: <a href="https://github.com/azizka/sampbias">sampbias</a> is an R package for cleaning erroneous geographical coordinates and assessing sampling biases in biological collection databases.</p>
+
+          <h3 class="ui header">Point occurrences</h3>
+          <p>Point occurrences are specified in a text file with either comma-separated (CSV) or tab-separated (TSV) values. The application requires a header with the column names, and the user must identify which columns that should be parsed as name, latitude and longitude, respectively.</p>
+
+          <h4 class="ui header">Example input format:</h4>
+
+          <pre>Name, Lat, Long
+Sp1, -5.61, -53.43
+Sp1, -8.22, -48.90
+Sp2, -8.17, -50.06
+          </pre>
+
+          <h3 class="ui header">Range maps</h3>
+          <p>Range maps are specified in the <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format, which includes multiple files: a <code>.shp</code> file for species range polygons, a <code>.dbf</code> file for the attributes of each range polygon and, optionally, a <code>.prj</code> file for projection information. As for point occurrence data, the user must identify which attribute to parse as the name of the species.</p>
+
+          <div class="three wide column">
+            A quadtree is a tree data structure in which each internal node has exactly four children. Quadtrees are most often used to partition a two-dimensional space by recursively subdividing it into four quadrants or regions.
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">2</div>
+            <div class="content">
+              Adaptive resolution
+              <div class="sub header">Discretize geographical space</div>
+            </div>
+          </h2>
+          <p>Infomap Bioregions bins the species records into quadratic grid cells. To allow for adaptive spatial resolution, each grid cell can be recursively subdivided into four cells. The adaptive binning generates a so-called quadtree with subdivided grid cells that satisfy the following user-specified criteria, with decreasing priority from 1 to 3:</p>
+
+          <div class="ui list">
+            <div class="item">1. Given in degrees, no grid cell is larger than the specified <div class="ui label">max cell size</div> or smaller than the specified <div class="ui label">min cell size</div>.</div>
+            <div class="item">2. Given as a natural number, no grid cell contains fewer records than the specified <div class="ui label">min cell capacity</div>.</div>
+            <div class="item">3. Given as a natural number, no grid cell contains more records than the specified <div class="ui label">max cell capacity</div>.</div>
+          </div>
+
+          <p>For point occurrence data, these criteria make the adaptive binning straightforward. For range maps, the application first adds a species record to each cell of minimum size that intersects with the corresponding species range polygon, and then proceeds with the adaptive binning to satisfy the user-specified criteria.</p>
+
+          <img class="ui image" src="http://mapequation.org/assets/img/bioregions/1_quadtree_binning.png" alt="1. Quadtree binning" />
+        </div>
+
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Quadtree
+            </div>
+            <p>A quadtree is a tree data structure in which each internal node has exactly four children. Quadtrees are most often used to partition a two-dimensional space by recursively subdividing it into four quadrants or regions.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">3</div>
+            <div class="content">
+              Bipartite occurrence network
+              <div class="sub header">Connect grid cells through common species</div>
+            </div>
+          </h2>
+          <p>Infomap Bioregions generates a bipartite network of species and grid cells. Each species is connected by an unweighted link to each grid cell in which it is present. The network is clustered with the <a href="mapequation.org/code.html">Infomap</a> clustering algorithm for bipartite networks. In that process, the geographical grid cells are merged into different clusters which become the resulting bioregions.</p>
+
+          <img class="ui image" src="http://mapequation.org/assets/img/bioregions/2_bipartite_network.png" alt="2. Bipartite network" />
+
+        </div>
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Bipartite network
+            </div>
+            <p>A bipartite network is network with two types of nodes, where the links always connect one type of nodes with the other.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">4</div>
+            <div class="content">
+              Clustering
+              <div class="sub header">Merge grid cells with similar species distribution</div>
+            </div>
+          </h2>
+          <p>The bipartite network of species and geographical grid cells is clustered with the Infomap clustering algorithm to find an optimal partition of the geographical space with respect to the <a href="http://mapequation.org/publications.html#Rosvall-Axelsson-Bergstrom-2009-Map-equation">map equation</a>.</p>
+
+          <img class="ui image" src="http://mapequation.org/assets/img/bioregions/3_network_clustering.png" alt="3. Network clustering" />
+
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">5</div>
+            <div class="content">
+              Bioregions
+              <div class="sub header">Map clusters to geographical space</div>
+            </div>
+          </h2>
+          <p>Each cluster of grid cells is given a unique color and forms a bioregion.</p>
+
+          <img class="ui image" src="http://mapequation.org/assets/img/bioregions/4_bioregions.png" alt="4. Bioregions" />
+
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">6</div>
+            <div class="content">
+              Output
+              <div class="sub header">Export bioregions map and statistics</div>
+            </div>
+          </h2>
+          <p>The bioregions can be exported both as a visual map (<code>.png</code> or <code>.svg</code>) and as structured data for further analysis (in the <a href="https://en.wikipedia.org/wiki/GeoJSON">GeoJSON</a> or <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format).</p>
+
+          <p>The application also identifies the most common and the most indicative species in each grid cell and bioregion, and shows the results as an interactive map together with supporting tables with information about the bioregions. These tables can be exported in the <code>.csv</code> format.</p>
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+    </div>
+
+    <footer>
+    </footer>
+
+    <script src="node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="node_modules/jquery-tablesort/jquery.tablesort.min.js"></script>
+    <script src="semantic/dist/semantic.min.js"></script>
+    <script src="static/bundle.js"></script>
+  </body>
 </html>
