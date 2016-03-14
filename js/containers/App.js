@@ -137,7 +137,7 @@ class App extends Component {
               ) : (<i></i>)}
           </div>
           <div className="right menu">
-            <a className="item">About</a>
+            <a className="item" href="#about">About</a>
           </div>
         </div>
         <div className="ui container">

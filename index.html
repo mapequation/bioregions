@@ -10,7 +10,7 @@
 
   <div id="root"></div>
 
-  <div class="ui container">
+  <div id="about" class="ui container">
     <div class="ui stackable grid">
       <div class="bottom aligned row">
         <div class="three wide column"></div>
@@ -53,7 +53,7 @@
               <div class="sub header">Load species distribution data</div>
             </div>
           </h2>
-          <p>As input, Infomap Bioregions supports both point occurrence data and species range maps.</p>
+          <p>As species distribution input, Infomap Bioregions supports both point occurrence data and species range maps.</p>
 
           <p>Tip: <a href="https://github.com/azizka/sampbias">sampbias</a> is an R package for cleaning erroneous geographical coordinates and assessing sampling biases in biological collection databases.</p>
 
@@ -71,9 +71,19 @@ Sp2, -8.17, -50.06
           <h3 class="ui header">Range maps</h3>
           <p>Range maps are specified in the <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format, which includes multiple files: a <code>.shp</code> file for species range polygons, a <code>.dbf</code> file for the attributes of each range polygon and, optionally, a <code>.prj</code> file for projection information. As for point occurrence data, the user must identify which attribute to parse as the name of the species.</p>
 
-          <div class="three wide column">
-            A quadtree is a tree data structure in which each internal node has exactly four children. Quadtrees are most often used to partition a two-dimensional space by recursively subdividing it into four quadrants or regions.
-          </div>
+          <h3 class="ui header">Phylogenetic tree</h3>
+          <p>Infomap Bioregions also supports loading a phylogenetic tree to show a phylogram and how it maps to the bioregions, if the names in the tree match with the names in the species distribution data.</p>
+
+          <h4 class="ui header">Example tree format:</h4>
+
+          <pre>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</pre>
+
+          <p>The above example represents this tree:</p>
+
+          <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/NewickExample.svg" alt="Newick tree example" class="ui image">
+
+        </div>
+        <div class="three wide column">
         </div>
       </div>
       <div class="top aligned row">
