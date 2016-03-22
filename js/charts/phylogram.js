@@ -1,7 +1,6 @@
 import $ from 'jquery'
 import d3 from 'd3'
 import chroma from 'chroma-js';
-import newick from '../utils/newick';
 
 var phylogram = {};
 export default phylogram;
@@ -207,7 +206,7 @@ function scaleBranchLengths(nodes, w) {
 }
 
 
-phylogram.build = function(selector, nodes, options) {
+phylogram.build = function(selector, phyloTree, options) {
   options = options || {}
   var w = options.width || d3.select(selector).style('width') || d3.select(selector).attr('width'),
       h = options.height || d3.select(selector).style('height') || d3.select(selector).attr('height'),
@@ -225,7 +224,7 @@ phylogram.build = function(selector, nodes, options) {
       .attr("height", h + 30)
     .append("svg:g")
       .attr("transform", "translate(20, 20)");
-  var nodes = tree(nodes);
+  var nodes = tree(phyloTree);
 
   if (options.skipBranchLengthScaling) {
     var yscale = d3.scale.linear()

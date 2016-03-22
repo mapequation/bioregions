@@ -57,9 +57,8 @@
  *   ]
  * }
  */
-var newick = {};
 
-newick.parse = function(s) {
+export function parseNewick(s) {
   var ancestors = [];
   var tree = {};
   var tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
@@ -93,5 +92,15 @@ newick.parse = function(s) {
   }
   return tree;
 };
+
+export function traverseTree(tree, callback) {
+  callback(tree);
+  if (tree.branchset) {
+    tree.branchset.forEach(subTree => traverseTree(subTree, callback));
+  }
+}
+
+var newick = {};
+newick.parse = parseNewick;
 
 export default newick;
