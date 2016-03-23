@@ -1,6 +1,6 @@
 SEMANTIC_CSS = semantic/dist/semantic.min.css
 
-.PHONY: all npm build update-remote update-test-remot maps
+.PHONY: all npm build update-remote update-test-remote maps
 
 all: npm Infomap-worker.js maps $(SEMANTIC_CSS) Makefile
 
