@@ -21,5 +21,5 @@ render(
       renderDevTools(store)
     }
   </div>,
-  document.getElementById('root')
+  document.getElementById('app')
 );

@@ -3,49 +3,65 @@
 <head>
   <meta charset="utf-8">
   <title>Infomap Bioregions - Interactive mapping of biogeographical regions from species distributions</title>
+
+  <link href='http://fonts.googleapis.com/css?family=Lato:300,700,300italic,700italic|Philosopher:400,700' rel='stylesheet' type='text/css'>
   <link href="semantic/dist/semantic.min.css" rel="stylesheet" type="text/css" />
+  <link href="index.css" rel="stylesheet" type="text/css" />
   <link href="static/app.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
+  <header class="documentation">
+    <div class="ui container">
+      <div class="menu">
+        <div>
+          <h1 class="ui header">
+            <span class="brand">
+              <span class="brand-infomap">Infomap</span> <span class="brand-bioregions">Bioregions</span>
+            </span>
+            <div class="sub header">Interactive mapping of biogeographical regions from species distributions</div>
+          </h1>
+        </div>
+        <div>
+          <h1 class="ui header">
+            <a href="#about">About</a>
+          </h1>
+        </div>
+      </div>
+    </div>
+  </header>
 
-  <div id="root"></div>
+  <div id="app"></div>
 
-  <div id="about" class="ui container">
+  <div id="about" class="ui container documentation">
     <div class="ui stackable grid">
       <div class="bottom aligned row">
         <div class="three wide column"></div>
         <div class="ten wide column">
           <h1 class="ui header">
-            Infomap Bioregions
-            <div class="sub header">Interactive mapping of biogeographical regions from species distributions</div>
+            Step-by-step explanation
+            <div class="sub header">From species distributions to bioregions</div>
           </h1>
 
-          <div class="ui raised segment">
+          <!-- <div class="ui raised segment">
             <a class="ui red ribbon label">Example output</a>
             <img class="ui image" src="http://mapequation.org/assets/img/bioregions-amphibians.png" alt="Bioregions example output map" />
             <p>Bioregion map of the world’s amphibians generated with Infomap Bioregions, using the IUCN species range maps.</p>
-          </div>
+          </div> -->
 
         </div>
         <div class="three wide column">
-          <div class="ui yellow message">
-            <div class="header">
-              Bioregion
-            </div>
-            <p>A bioregion, or biogeographical region, reveal how species are spatially grouped and therefore are important units for conservation, historical biogeography, ecology and evolution.</p>
-          </div>
         </div>
       </div>
       <div class="top aligned row">
         <div class="three wide column">
           <div class="ui blue message">
             <div class="header">
-              Step-by-step explanation
+              Input quality?
             </div>
+            <p>Tip: <strong><a href="https://github.com/azizka/sampbias">sampbias</a></strong> is an R package for cleaning erroneous geographical coordinates and assessing sampling biases in biological collection databases.</p>
           </div>
         </div>
         <div class="ten wide column">
-
           <h2 class="ui header">
             <div class="ui grey massive circular label">1</div>
             <div class="content">
@@ -54,8 +70,6 @@
             </div>
           </h2>
           <p>As species distribution input, Infomap Bioregions supports both point occurrence data and species range maps.</p>
-
-          <p>Tip: <a href="https://github.com/azizka/sampbias">sampbias</a> is an R package for cleaning erroneous geographical coordinates and assessing sampling biases in biological collection databases.</p>
 
           <h3 class="ui header">Point occurrences</h3>
           <p>Point occurrences are specified in a text file with either comma-separated (CSV) or tab-separated (TSV) values. The application requires a header with the column names, and the user must identify which columns that should be parsed as name, latitude and longitude, respectively.</p>
@@ -180,6 +194,12 @@ Sp2, -8.17, -50.06
 
         </div>
         <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Bioregion
+            </div>
+            <p>A bioregion, or biogeographical region, reveal how species are spatially grouped and therefore are important units for conservation, historical biogeography, ecology and evolution.</p>
+          </div>
         </div>
       </div>
       <div class="top aligned row">
