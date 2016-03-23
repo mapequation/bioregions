@@ -1,8 +1,8 @@
 SEMANTIC_CSS = semantic/dist/semantic.min.css
 
-.PHONY: all npm build deploy-mapequation maps example_data
+.PHONY: all npm build update-remote update-test-remot maps
 
-all: npm Infomap-worker.js example_data maps $(SEMANTIC_CSS) Makefile
+all: npm Infomap-worker.js maps $(SEMANTIC_CSS) Makefile
 
 npm:
 	npm install
@@ -10,20 +10,14 @@ npm:
 build:
 	npm run build
 
-deploy-mapequation: build
-	rsync -hav static ../
+update-remote:
+	rsync -hav index.html index.css static mapequation:/var/www/bioregions/
+
+update-test-remote:
+	rsync -hav index.html index.css static mapequation:/var/www/test.bioregions/
 
 Infomap-worker.js:
 	curl -LO http://www.mapequation.org/downloads/$@
-
-example_data: data/mammals.txt
-	@echo "Example data up-to-date!"
-
-data/%:
-	@echo "Downloading data: $@"
-	@mkdir -p $(dir $@)
-	curl http://www.mapequation.org/downloads/$(notdir $@) -o $@.download
-	mv $@.download $@
 
 maps:
 	$(MAKE) -C maps
