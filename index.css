@@ -34,6 +34,13 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.mapequation-logo {
+	padding-top: 7px;
+	width: 57px;
+	height: 57px;
 }
 
 .brand {
@@ -74,10 +81,53 @@ header {
   margin: 10px 0;
 }
 
-.documentation .image {
+.schematic-image {
   margin: 20px 0;
 }
 
+.paper {
+	overflow: hidden;
+	border: 1px solid #cccccc;
+	background-color: #f9f9f9;
+	padding: 10px;
+}
+
+.paper-authors {
+	font-weight: 300;
+	color: #999;
+}
+
+.paper-links {
+	font-weight: 300;
+}
+
+.paper-figure {
+	margin: 0;
+	border: 1px solid #cccccc;
+	background-color: #f9f9f9;
+}
+
+.paper-figure-caption {
+	padding: 5px;
+}
+
+.paper-thumbnail {
+	background: url(http://mapequation.org/assets/img/papers/EdlerEtAl2015-3-200.jpg) no-repeat;
+	display: inline-block;
+	width: 100px;
+	height: 129px;
+	margin-right: 15px;
+	margin-top: 7px;
+	float: left;
+	clear: left;
+	-webkit-background-size: contain !important;
+	-moz-background-size: contain !important;
+	-o-background-size: contain !important;
+	background-size: contain !important;
+}
+
+.paper-thumbnail:hover {
+	background: url(http://mapequation.org/assets/img/papers/EdlerEtAl2015-1-200.jpg) no-repeat;
 
 footer {
   padding-top: 4em;

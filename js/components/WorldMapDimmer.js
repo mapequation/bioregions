@@ -35,7 +35,7 @@ class WorldMapDimmer extends Component {
               </div>
               <div>
                 <h3 className="ui header">
-                  <a href="#about">
+                  <a href="#documentation">
                     <div>Check documentation</div>
                     <i className="angle double down icon"></i>
                   </a>
