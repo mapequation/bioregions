@@ -116,6 +116,7 @@
             Step-by-step explanation
             <div class="sub header">From species distributions to bioregions</div>
           </h1>
+          <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-wrap.svg" alt="Schematics - Input to output" />
         </div>
         <div class="three wide column"></div>
       </div>
@@ -178,6 +179,8 @@ Sp2, -8.17, -50.06
               <div class="sub header">Discretize geographical space</div>
             </div>
           </h2>
+          <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-quadtree-mapping.svg" alt="Schematics - Quadtree mapping" />
+
           <p>Infomap Bioregions bins the species records into quadratic grid cells. To allow for adaptive spatial resolution, each grid cell can be recursively subdivided into four cells. The adaptive binning generates a so-called quadtree with subdivided grid cells that satisfy the following user-specified criteria, with decreasing priority from 1 to 3:</p>
 
           <div class="ui list">
@@ -188,7 +191,6 @@ Sp2, -8.17, -50.06
 
           <p>For point occurrence data, these criteria make the adaptive binning straightforward. For range maps, the application first adds a species record to each cell of minimum size that intersects with the corresponding species range polygon, and then proceeds with the adaptive binning to satisfy the user-specified criteria.</p>
 
-          <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-quadtree-mapping.svg" alt="Schematics - Quadtree mapping" />
         </div>
 
         <div class="three wide column">
@@ -211,9 +213,9 @@ Sp2, -8.17, -50.06
               <div class="sub header">Connect grid cells through common species</div>
             </div>
           </h2>
-          <p>Infomap Bioregions generates a bipartite network of species and grid cells. Each species is connected by an unweighted link to each grid cell in which it is present. The network is clustered with the <a href="mapequation.org/code.html">Infomap</a> clustering algorithm for bipartite networks. In that process, the geographical grid cells are merged into different clusters which become the resulting bioregions.</p>
-
           <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-network-mapping.svg" alt="Schematics - Network mapping" />
+
+          <p>Infomap Bioregions generates a bipartite network of species and grid cells. Each species is connected by an unweighted link to each grid cell in which it is present. The network is clustered with the <a href="mapequation.org/code.html">Infomap</a> clustering algorithm for bipartite networks. In that process, the geographical grid cells are merged into different clusters which become the resulting bioregions.</p>
 
         </div>
         <div class="three wide column">
@@ -236,9 +238,9 @@ Sp2, -8.17, -50.06
               <div class="sub header">Merge grid cells with similar species distribution</div>
             </div>
           </h2>
-          <p>The bipartite network of species and geographical grid cells is clustered with the Infomap clustering algorithm to find an optimal partition of the geographical space with respect to the <a href="http://mapequation.org/publications.html#Rosvall-Axelsson-Bergstrom-2009-Map-equation">map equation</a>.</p>
-
           <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-network-clustering.svg" alt="Schematics - Network clustering" />
+
+          <p>The bipartite network of species and geographical grid cells is clustered with the Infomap clustering algorithm to find an optimal partition of the geographical space with respect to the <a href="http://mapequation.org/publications.html#Rosvall-Axelsson-Bergstrom-2009-Map-equation">map equation</a>.</p>
 
         </div>
         <div class="three wide column">
@@ -255,9 +257,9 @@ Sp2, -8.17, -50.06
               <div class="sub header">Map clusters to geographical space</div>
             </div>
           </h2>
-          <p>Each cluster of grid cells is given a unique color and forms a bioregion.</p>
-
           <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-bioregions.svg" alt="Schematics - Bioregions" />
+
+          <p>Each cluster of grid cells is given a unique color and forms a bioregion.</p>
 
         </div>
         <div class="three wide column">
@@ -280,6 +282,8 @@ Sp2, -8.17, -50.06
               <div class="sub header">Export bioregions map and statistics</div>
             </div>
           </h2>
+          <img class="ui image schematic-image" src="http://mapequation.org/assets/img/bioregions/schematics-exporting.svg" alt="Schematics - Bioregions" />
+
           <p>The bioregions can be exported both as a visual map (<code>.png</code> or <code>.svg</code>) and as structured data for further analysis (in the <a href="https://en.wikipedia.org/wiki/GeoJSON">GeoJSON</a> or <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format).</p>
 
           <p>The application also identifies the most common and the most indicative species in each grid cell and bioregion, and shows the results as an interactive map together with supporting tables with information about the bioregions. These tables can be exported in the <code>.csv</code> format.</p>
