@@ -112,7 +112,7 @@ header {
 }
 
 .paper-thumbnail {
-	background: url(http://mapequation.org/assets/img/papers/EdlerEtAl2015-3-200.jpg) no-repeat;
+	background: url(http://www.mapequation.org/assets/img/papers/EdlerEtAl2015-3-200.jpg) no-repeat;
 	display: inline-block;
 	width: 100px;
 	height: 129px;
@@ -127,7 +127,7 @@ header {
 }
 
 .paper-thumbnail:hover {
-	background: url(http://mapequation.org/assets/img/papers/EdlerEtAl2015-1-200.jpg) no-repeat;
+	background: url(http://www.mapequation.org/assets/img/papers/EdlerEtAl2015-1-200.jpg) no-repeat;
 
 footer {
   padding-top: 4em;
