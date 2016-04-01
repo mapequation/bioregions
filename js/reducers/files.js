@@ -88,11 +88,19 @@ export default function files(state = initialState, action) {
     case ActionTypes.CANCEL_FILE_ACTIONS:
       return initialState;
     case ActionTypes.ADD_SPECIES_AND_BINS:
+      return {
+        ...state,
+        isShowingFileUI: false,
+        isLoading: false,
+        headLines: [],
+        parsedHead: [],
+        parsedFeatureProperty: null,
+      };
     case ActionTypes.ADD_PHYLO_TREE:
       return {
         ...state,
-        isLoading: false,
         isShowingFileUI: false,
+        isLoading: false,
       };
     default:
       return state;

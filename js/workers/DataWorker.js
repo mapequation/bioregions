@@ -17,7 +17,7 @@ import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
 import turfPoint from 'turf-point';
 import turfInside from 'turf-inside';
-import newick from '../utils/newick';
+import { parseTree } from '../utils/phylogeny';
 
 console.log(`[DataWorker] ok`);
 
@@ -262,14 +262,19 @@ function loadNexus(file) {
 }
 
 function parseNexus(content) {
-  dispatch(setFileProgress("Trying to parse content as Nexus format...", INDETERMINATE));
+  dispatch(setFileProgress("Trying to parse content as a phylogenetic tree...", INDETERMINATE));
   if (content.length === 0)
     return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
 
-  const phyloTree = newick.parse(content);
+  parseTree(content)
+    .then(tree => {
+      dispatch(setFileProgress("Transferring result...", INDETERMINATE));
+      dispatch(addPhyloTree(tree));
+    })
+    .catch(error => {
+      dispatch(setFileError(error, "Please check the format."));
+    });
 
-  dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addPhyloTree(phyloTree));
 }
 
 function parseDSVHeader(content) {

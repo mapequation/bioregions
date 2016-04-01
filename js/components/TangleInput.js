@@ -58,7 +58,8 @@ class TangleInput extends Component {
 
     getStep(value, props) {
       if (props.logStep) {
-        return value == 0? 1 : Math.pow(10, Math.floor(Math.log10(value))) * props.logStep;
+        console.log(`getStep(${value}, logStep: ${props.logStep}) -> ${value == 0? 1 : Math.pow(10, Math.floor(Math.log10(value))) * props.logStep}`);
+        return value <= 0? 1 : Math.pow(10, Math.floor(Math.log10(value))) * props.logStep;
       }
       return props.step;
     }
