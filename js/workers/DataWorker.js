@@ -218,7 +218,7 @@ function loadTextFile(file) {
 
   io.readFile(file, 'text', (event) => {
     let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
-    console.log("!!!! io.readFile progress!!", event);
+    console.log(`io.readFile progress`);
     dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
   }).then(result => {
     parseDSVHeader(result.data);
@@ -248,7 +248,6 @@ function loadNexus(file) {
 
   io.readFile(file, 'text', (event) => {
     let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
-    console.log("!!!! io.readFile progress!!", event);
     dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
   }).then(result => {
     parseNexus(result.data);
@@ -264,7 +263,7 @@ function loadNexus(file) {
 function parseNexus(content) {
   dispatch(setFileProgress("Trying to parse content as a phylogenetic tree...", INDETERMINATE));
   if (content.length === 0)
-    return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
+    return dispatch(setFileError("No file content to read.", "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."));
 
   parseTree(content)
     .then(tree => {
@@ -278,9 +277,10 @@ function parseNexus(content) {
 }
 
 function parseDSVHeader(content) {
+  console.log("[DataWorker]: parseDSVHeader(content)...");
   dispatch(setFileProgress("Trying to parse the file as delimiter-separated values...", INDETERMINATE));
   if (content.length === 0)
-    return dispatch(setFileError("No file content to read.", "Please check the file, or try with another browser."));
+    return dispatch(setFileError("No file content to read.", "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."));
   var extractLine = /^(.+)(\r\n|\n|\r)?$/gm;
   var result;
   let headLines = [];

@@ -22,15 +22,28 @@ io.readFile = function(file, format, progressCallback) {
           progressCallback(event);
       };
 
+      reader.onerror = function(event) {
+        console.log("Error reading file!:", event);
+        reject(event);
+      }
 
       reader.onloadend = (event) => {
-        const {result, error} = event.target;
+        try {
+          const {result, error} = event.target; // allocation size overflow in Firefox for ~300Mb files!
 
-        if (error) {
-          reject(error);
+          console.log("[readFile] onloadend, error:", error);
+          if (error) {
+            reject(error);
+          }
+          else {
+            resolve({name: file.name, data: result});
+          }
         }
-        else {
-          resolve({name: file.name, data: result});
+        catch(e) {
+          console.log("Error retrieving loaded file content!:", e);
+          if (e.message === "allocation size overflow")
+            e.message += ". (This may happen in Firefox for big files, please try another browser if this is the case.)";
+          reject(e);
         }
       };
     }
@@ -47,10 +60,12 @@ io.readFile = function(file, format, progressCallback) {
         result = reader.readAsArrayBuffer(file);
     }
     catch (e) {
+      console.log("[readFile] Error loading file sync:", e);
       successful = false;
       reject(e);
     }
     finally {
+      console.log("[readFile] finally, successful?:", successful);
       if (!usingAsyncReader && successful) {
         resolve({name: file.name, data: result});
       }
