@@ -133,6 +133,7 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
 
   console.log("Creating Infomap Worker...");
   dispatch(setClusteringProgress("Loading Infomap clustering algorithm...", INDETERMINATE));
+
   var worker = new Worker('/Infomap-worker.js');
 
   infomapArgs += " -i bipartite --clu --skip-adjust-bipartite-flow -2";
@@ -180,7 +181,9 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
   };
 
   worker.onerror = function worker_onerror(event) {
-    console.log("Worker error:", event.toString(), event.message);
+    console.log("Worker error:", typeof event, event.type);
+    dispatch(setClusteringProgress("Error loading Infomap, please report the issue.", PERCENT, 0));
+    callback("Error loading Infomap worker. Please report the issue.");
   }
 
   setTimeout(function() {

@@ -43,10 +43,12 @@ class App extends Component {
       // Workaround as spawning sub workers only supported in Firefox.
       function onInfomapFinished(error, clusterIds) {
         console.log("[App]: Infomap finished in main thread.");
-        if (error)
+        if (error) {
           console.log("Infomap got error:", error);
-        else
+        }
+        else {
           dispatch(ClusterActions.addClusters(clusterIds));
+        }
       }
       function progressDispatch(progressAction) {
         progressEmitter.emit(progressAction.type, progressAction);
