@@ -97,19 +97,19 @@ class Binning extends Component {
                     <tbody>
                       <tr>
                         <td><strong>Max cell size</strong></td>
-                        <td>Maximum cell size to accumulate records</td>
+                        <td>Maximum grid cell size to accumulate records.</td>
                       </tr>
                       <tr>
                         <td><strong>Min cell size</strong></td>
-                        <td>Minimum cell size to accumulate records</td>
+                        <td>Minimum grid cell size to accumulate records.</td>
                       </tr>
                       <tr>
                         <td><strong>Max cell capacity</strong></td>
-                        <td>The number of records in a cell before it splits to four sub-cells, if allowed due to min cell size</td>
+                        <td>The number of records in a grid cell before it splits to four sub-cells, if allowed by the min cell size.</td>
                       </tr>
                       <tr>
                         <td><strong>Min cell capacity</strong></td>
-                        <td>The minimum number of records in a cell to take it to account</td>
+                        <td>The minimum number of records in a grid cell to include it in the map and analysis. If less, the records will be included in a parent grid cell if available, else ignored.</td>
                       </tr>
                     </tbody>
                   </table>
