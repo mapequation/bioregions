@@ -12,6 +12,7 @@ class Infomap extends Component {
 
   static propTypes = {
     bins: PropTypes.array.isRequired,
+    clusters: PropTypes.array.isRequired,
     isClustering: PropTypes.bool.isRequired,
     getClusters: PropTypes.func.isRequired,
     progressEmitter: PropTypes.object.isRequired,
@@ -47,28 +48,27 @@ class Infomap extends Component {
     }
   }
 
-  toggleShowConsole = () => {
+  handleClickCluster = () => {
+    const {clusters, isClustering, getClusters} = this.props;
+    const {infomapArgs} = this.state;
     this.setState({showConsole: !this.state.showConsole});
+    if (!isClustering && clusters.length === 0)
+      getClusters(infomapArgs);
   }
 
   render() {
-    const {bins, isClustering, getClusters} = this.props;
+    const {bins, clusters, isClustering} = this.props;
     if (bins.length === 0)
       return <div></div>;
-    const {activity, stdout, showConsole, infomapArgs} = this.state;
-    const haveConsoleContent = stdout.length > 0;
-    let clusterButtonClasses = classNames("ui button", { loading: isClustering });
-    let toggleConsoleClasses = classNames("ui basic icon button", {active: haveConsoleContent});
+    const {activity, stdout, showConsole} = this.state;
+    const clusterButtonClasses = classNames("ui button", { loading: isClustering });
     return (
       <div>
         <span>
           <button className={clusterButtonClasses}
             disabled={isClustering ? "disabled" : false}
-            onClick={() => getClusters(infomapArgs)}>
+            onClick={this.handleClickCluster}>
             Cluster...
-          </button>
-          <button className={toggleConsoleClasses} onClick={this.toggleShowConsole}>
-            <i className="terminal icon"></i>
           </button>
         </span>
 
