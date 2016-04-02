@@ -17,7 +17,8 @@ world.create = function(el, props) {
   anchorElement.selectAll("*").remove();
   var svg = anchorElement.append('svg')
     .attr('width', props.width)
-    .attr('height', props.height);
+    .attr('height', props.height)
+    .attr('class', "worldmap");
 
   var g = svg.append("g");
 

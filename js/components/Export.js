@@ -3,11 +3,7 @@ import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPol
 import shpWrite from "shp-write"
 import R from 'ramda';
 import d3 from 'd3';
-
-const MAP_SVG = 'MAP_SVG';
-const BIOREGIONS_GEOJSON = 'BIOREGIONS_GEOJSON';
-const BIOREGIONS_SHAPEFILE = 'BIOREGIONS_SHAPEFILE';
-const CLUSTERS_CSV = 'CLUSTERS_CSV';
+import _ from 'lodash';
 
 class Export extends Component {
 
@@ -60,117 +56,277 @@ class ExportWindow extends Component {
     basename: PropTypes.string.isRequired,
   }
 
-  componentDidMount() {
-    let $svg = $('svg');
-    const [width, height] = [$svg.width(), $svg.height()];
-    // let svgContent = $svg[0].outerHTML;
-    let svgContent = $svg.parent().html();
-    console.log("svgContent before:", svgContent.substring(0, 250));
-    svgContent = svgContent.replace(/^<svg/, ['<svg',
-      'xmlns="http://www.w3.org/2000/svg"',
-      'xmlns:xlink="http://www.w3.org/1999/xlink"',
-      'version="1.1"'].join(' '));
-    // Safari inserts NS1/NS2 namespaces as xlink is not defined within the svg html
-    svgContent = svgContent.replace("NS1", "xlink");
-    svgContent = svgContent.replace("NS2", "xlink");
-    console.log("svgContent after:", svgContent.substring(0, 250));
-
-    this.svgURL = this.contentToBase64URL(svgContent, 'image/svg+xml');
-    // var svgUrl = contentToBase64URL(svgContent, 'image/svg+xml;charset=utf-8');
-
-    this.canvas.width = width;
-    this.canvas.height = height;
-    var ctx = this.canvas.getContext('2d');
-
-    var image = new Image(width, height)
-    image.onload = () => {
-      console.log("Image loaded! Draw to canvas...");
-      ctx.drawImage(image, 0, 0);
-      this.generateLinks();
-    }
-    image.onerror = (e) => {
-      console.log("ERROR setting image src:", e.type, e, e.message);
-      this.generateLinks();
-    }
-    console.log("Set img src to svg...");
-    image.src = this.svgURL;
-    console.log("src set, complete:", image.complete);
-
+  constructor(props) {
+    super(props);
+    this.state = {
+      files: {
+        svg: {
+          group: 'map',
+          filename: `${props.basename}.svg`,
+          icon: 'file image outline icon',
+          url: null
+        },
+        png: {
+          filename: `${props.basename}.png`,
+          group: 'map',
+          icon: 'file image outline icon',
+          url: null
+        },
+        geojson: {
+          filename: `${props.basename}.geojson`,
+          group: 'bioregions',
+          icon: 'world icon',
+          url: null
+        },
+        shapefile: {
+          filename: `${props.basename}_shapefile.zip`,
+          group: 'bioregions',
+          icon: 'file archive outline icon',
+          url: null
+        },
+        csv: {
+          filename: `${props.basename}.csv`,
+          group: 'cluster statistics',
+          icon: 'file text outline icon',
+          url: null
+        }
+      }
+    };
   }
 
-  generateLinks() {
-    this.anchorSvg.innerHTML = `${this.props.basename}.svg`;
-    this.anchorSvg.download = `${this.props.basename}.svg`;
-    this.anchorSvg.target = "_blank";
-    this.anchorSvg.href = this.svgURL;
+  componentDidMount() {
+    let { files } = this.state;
+    _.forEach(files, file => { file.isLoading = true });
+    this.getSvgUrl()
+      .then(svgUrl => {
+        files.svg.url = svgUrl;
+        files.svg.isLoading = false;
+        return this.getPngUrl(svgUrl);
+      })
+      .then(pngUrl => {
+        files.png.url = pngUrl;
+        files.png.isLoading = false;
+        this.setState({ files });
+      })
+      .catch(error => {
+        console.log("!!! Error getting map files:", error);
+        this.setState({ error });
+      });
 
-    this.anchorPng.innerHTML = `${this.props.basename}.png`;
-    this.anchorPng.download = `${this.props.basename}.png`;
-    this.anchorPng.target = "_blank";
-    this.anchorPng.href = this.canvas.toDataURL("image/png");
+    Promise.all([this.getGeoJSONUrl(), this.getShapefileUrl(), this.getClustersCSVUrl()])
+      .then(([geojsonUrl, shapefileUrl, csvUrl]) => {
+        files.geojson.url = geojsonUrl;
+        files.geojson.isLoading = false;
+        files.shapefile.url = shapefileUrl;
+        files.shapefile.isLoading = false;
+        files.csv.url = csvUrl;
+        files.csv.isLoading = false;
+        this.setState({ files });
+      })
+      .catch(error => {
+        console.log("!!! Error getting cluster files:", error);
+        this.setState({ error });
+      });
+  }
 
+  componentWillUnmount() {
+    console.log("Unmounting ExportWindow, revoking object urls...");
+    _.filter(this.state.files, file => file.url).forEach(file => {
+      console.log(`Revoking blob url ${file.url} for ${file.filename}...`);
+      URL.revokeObjectURL(file.url);
+    });
+  }
 
-    this.anchorGeoJSON.innerHTML = `${this.props.basename}.geojson`;
-    this.anchorGeoJSON.download = `${this.props.basename}.geojson`;
-    this.anchorGeoJSON.target = "_blank";
-    this.anchorGeoJSON.href = this.contentToBase64URL(this.getGeoJSON(), 'application/vnd.geo+json');
+  getSvgUrl() {
+    return this.getSvg()
+      .then(_.partial(this.dataToBlobURL, 'image/svg+xml'));
+  }
 
-    this.anchorShapefile.innerHTML = `${this.props.basename}_shapefile.zip`;
-    this.anchorShapefile.download = `${this.props.basename}_shapefile.zip`;
-    this.anchorShapefile.target = "_blank";
-    // this.anchorShapefile.href = this.contentToBase64URL(this.getGeoJSON(), 'application/vnd.geo+json');
+  getPngUrl(svgUrl) {
+    if (!svgUrl)
+      return Promise.resolve(null);
+    return this.getPng(svgUrl)
+      .then(_.partial(this.dataToBlobURL, 'image/png'));
+  }
 
-    this.anchorClustersCSV.innerHTML = `${this.props.basename}.csv`;
-    this.anchorClustersCSV.download = `${this.props.basename}.csv`;
-    this.anchorClustersCSV.target = "_blank";
-    this.anchorClustersCSV.href = this.contentToBase64URL(this.getClustersCSV(), 'text/csv');
+  getGeoJSONUrl() {
+    if (this.props.clusters.length === 0)
+      return Promise.resolve(null);
+    return this.getGeoJSON()
+      .then(this.prettyStringifyJSON)
+      .then(_.partial(this.dataToBlobURL, 'application/vnd.geo+json'));
+  }
+
+  getShapefileUrl() {
+    if (this.props.clusters.length === 0)
+      return Promise.resolve(null);
+    return this.getShapefile()
+      .then(_.partial(this.dataToBlobURL, 'application/zip'));
+  }
+
+  getClustersCSVUrl() {
+    if (this.props.clusters.length === 0)
+      return Promise.resolve(null);
+    return this.getClustersCSV()
+      .then(_.partial(this.dataToBlobURL, 'text/csv'));
+  }
+
+  dataURLtoData(dataURL) {
+    return Promise.resolve(dataURL.split(',')[1]).then(this.base64toData);
+  }
+
+  base64toData(content) {
+    return new Promise(resolve => {
+      let binary = atob(content);
+      let array = [];
+      for(let i = 0; i < binary.length; i++) {
+        array.push(binary.charCodeAt(i));
+      }
+      resolve(new Uint8Array(array));
+    });
+  }
+
+  dataToBlobURL(type, data) {
+    return Promise.resolve(data ? URL.createObjectURL(new Blob([data], { type })) : null);
   }
 
   contentToBase64URL(content, type) {
     return 'data:' + type + ';base64,' + window.btoa(content);
   }
 
-  clickDownloadShapefile = () => {
-    var geoJSON = clusteredBinsToCollectionOfPolygons(this.props.bins);
-    shpWrite.download(geoJSON, {
+  getSvg() {
+    return new Promise(resolve => {
+      let $svg = $('svg.worldmap')
+      console.log("$(svg.worldmap):", $svg);
+      if ($svg.length === 0)
+        return resolve(null);
+      // let svgContent = $svg[0].outerHTML;
+      let svgContent = $svg.parent().html();
+      // console.log("svgContent before:", svgContent.substring(0, 250));
+      svgContent = svgContent.replace(/^<svg/, ['<svg',
+      'xmlns="http://www.w3.org/2000/svg"',
+      'xmlns:xlink="http://www.w3.org/1999/xlink"',
+      'version="1.1"'].join(' '));
+      // Safari inserts NS1/NS2 namespaces as xlink is not defined within the svg html
+      svgContent = svgContent.replace("NS1", "xlink");
+      svgContent = svgContent.replace("NS2", "xlink");
+      // console.log("svgContent after:", svgContent.substring(0, 250));
+      resolve(svgContent);
+    });
+  }
+
+  getPng(svgUrl) {
+    return new Promise((resolve, reject) => {
+      const $svg = $('svg.worldmap');
+      const [width, height] = [$svg.width(), $svg.height()];
+      this.canvas.width = width;
+      this.canvas.height = height;
+      var ctx = this.canvas.getContext('2d');
+
+      var image = new Image(width, height)
+      image.onload = () => {
+        console.log("Image loaded! Draw to canvas...");
+        ctx.drawImage(image, 0, 0);
+        resolve(this.dataURLtoData(this.canvas.toDataURL('image/png')));
+      }
+      image.onerror = (e) => {
+        console.log("ERROR setting image src:", e.type, e, e.message);
+        reject(e);
+      }
+      console.log("Set img src to svg url:", svgUrl);
+      image.src = svgUrl; // Trigger onload
+    });
+  }
+
+  getGeoJSON() {
+    return Promise.resolve(clusteredBinsToCollectionOfMultiPolygons(this.props.bins));
+  }
+
+  prettyStringifyJSON(data) {
+    return new Promise(resolve => resolve(JSON.stringify(data, null, '\t')));
+  }
+
+  getShapefile() {
+    const shpOptions = {
       folder: this.props.basename,
       types: {
         polygon: this.props.basename
       }
-    }); // -> location.href = 'data:application/zip;base64,' + content;
-  }
-
-  getGeoJSON() {
-    var geoJSON = clusteredBinsToCollectionOfMultiPolygons(this.props.bins);
-    return JSON.stringify(geoJSON, null, '\t');
+    };
+    return Promise.resolve(clusteredBinsToCollectionOfPolygons(this.props.bins)) // No MultiPolygon
+      .then(data => shpWrite.zip(data, shpOptions))
+      .then(this.base64toData);
   }
 
   getClustersCSV() {
-    const {clusters, clusterColors} = this.props;
-    if (clusters.length == 0)
-      return;
-    let rows = [];
-    clusters.forEach(cluster => {
-      const {clusterId, numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
-      let clusterColor = clusterColors[clusterId];
-      R.zip(topCommonSpecies, topIndicatorSpecies).forEach(([common, indicator], i) => {
-        rows.push({
-          commonSpecies: common.name,
-          commonSpeciesCount: common.count,
-          indicatorSpecies: indicator.name,
-          indicatorSpeciesScore: indicator.score,
-          bioregion: clusterId + 1,
-          clusterColor: clusterColor.hex()
+    return new Promise(resolve => {
+      const {clusters, clusterColors} = this.props;
+      if (clusters.length == 0)
+        return "";
+      let rows = [];
+      clusters.forEach(cluster => {
+        const {clusterId, numBins, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
+        let clusterColor = clusterColors[clusterId];
+        R.zip(topCommonSpecies, topIndicatorSpecies).forEach(([common, indicator], i) => {
+          rows.push({
+            commonSpecies: common.name,
+            commonSpeciesCount: common.count,
+            indicatorSpecies: indicator.name,
+            indicatorSpeciesScore: indicator.score,
+            bioregion: clusterId + 1,
+            clusterColor: clusterColor.hex()
+          });
         });
       });
-    });
 
-    let csvData = d3.csv.format(rows);
-    return csvData;
+      let csvData = d3.csv.format(rows);
+      resolve(csvData);
+    });
   }
 
-  // <img ref={(el) => {this.image = el}} width="300" height="300"></img>
   render() {
+    const { files, error } = this.state;
+    const FileGroups = _(files)
+      .map()
+      .groupBy(({group}) => group)
+      .map((files, group) => {
+        return (
+          <div key={group} className="ui left aligned segment">
+            <h4 className="ui center aligned header">Save {group}</h4>
+            <div className="ui link list">
+              {
+                files.map(({filename, icon, url, isLoading}, i) => (
+                  <a key={i} href={url} download={filename} target="_blank" className={`item ${url ? "active" : "disabled"}`}>
+                    <div className="">
+                      <i className="large icons">
+                        <i className={icon}></i>
+                        <i className={`corner ${isLoading? "notched circle loading" : "download"} icon`}></i>
+                      </i>
+                      {filename}
+                    </div>
+                  </a>
+                ))
+              }
+            </div>
+          </div>
+        );
+      })
+      .value();
+
+    const ErrorMessage = error ? (
+      <div className="ui left aligned very basic segment">
+        <div className="ui negative icon message">
+          <i className="warning icon"></i>
+          <div className="content">
+            <div className="header">
+              {error.name}
+            </div>
+            <p>{`${error.message}. Please report the issue.`}</p>
+          </div>
+        </div>
+      </div>
+    ) : (<span></span>)
+
     return (
       <div className="ui inverted active page dimmer" style={{overflow: 'auto'}}>
         <div className="ui container" style={{background: "white"}}>
@@ -179,62 +335,16 @@ class ExportWindow extends Component {
             <div className="sub header">{this.props.basename}</div>
           </h1>
 
+          { ErrorMessage }
+
           <div className="ui two column grid">
             <div className="column">
-              <div className="ui segment">
-                <h4 className="ui header">Save map</h4>
-                <div className="ui list">
-                  <div className="item">
-                    <i className="file image outline icon"></i>
-                    <div className="content">
-                      <a ref={(el) => {this.anchorSvg = el}}></a>
-                    </div>
-                  </div>
-                  <div className="item">
-                    <i className="file image outline icon"></i>
-                    <div className="content">
-                      <a ref={(el) => {this.anchorPng = el}}></a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className={`ui segment${this.props.clusters.length === 0? " disabled" : ""}`}>
-                <h4 className="ui header">Save bioregions</h4>
-                <div className="ui list">
-                  <div className="item">
-                    <i className="world icon"></i>
-                    <div className="content">
-                      <a ref={(el) => {this.anchorGeoJSON = el}}></a>
-                    </div>
-                  </div>
-                  <div className="item">
-                    <i className="file archive outline icon"></i>
-                    <div className="content">
-                      <a ref={(el) => {this.anchorShapefile = el}} onClick={this.clickDownloadShapefile}></a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className={`ui segment${this.props.clusters.length === 0? " disabled" : ""}`}>
-                <h4 className="ui header">Save cluster statistics</h4>
-                <div className="ui list">
-                  <div className="item">
-                    <i className="file text outline icon"></i>
-                    <div className="content">
-                      <a ref={(el) => {this.anchorClustersCSV = el}}></a>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              { FileGroups }
             </div>
-
             <div className="column">
               <canvas className="ui fluid image" ref={(el) => {this.canvas = el}} width="500" height="500"></canvas>
             </div>
           </div>
-
-
-
           <div className="ui divider"></div>
           <button className="ui very basic button" tabIndex="0" onClick={this.props.onHide}>Back</button>
         </div>
