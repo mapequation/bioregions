@@ -85,7 +85,39 @@ class ControlPanel extends Component {
           <div className="ui form">
             {this.renderSelectGroupBy()}
           </div>
-          <h4 className="ui dividing header">Map</h4>
+          <h4 className="ui dividing header">
+            Map
+            <span className="">
+              <Tooltip>
+                <i className="help icon" style={{color: '#ccc'}}></i>
+                <div className="ui floating segment">
+                  <table className="ui very basic celled table" style={{
+                      backgroundColor: "white",
+                      width: "400px"
+                    }}>
+                    <tbody>
+                      <tr>
+                        <td><strong>Grid resolution</strong></td>
+                        <td>The resolution of the grid overlay.</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Show grid</strong></td>
+                        <td>Toggle the visibility of the grid.</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Clip to land</strong></td>
+                        <td>Clip the occupied grid cells to the land borders.</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Show cell borders</strong></td>
+                        <td>Show borders on occupied grid cells.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </Tooltip>
+            </span>
+          </h4>
           <InlineForm label="Grid resolution">
             <TangleInput className="ui label" suffix="˚"
               value={worldmap.graticuleStep}
