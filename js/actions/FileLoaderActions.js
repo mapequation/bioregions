@@ -13,6 +13,7 @@ import {
   ADD_SPECIES_AND_BINS,
   ADD_PHYLO_TREE,
   REMOVE_PHYLO_TREE,
+  REMOVE_SPECIES,
 } from '../constants/ActionTypes';
 import axios from 'axios'
 
@@ -173,5 +174,11 @@ export function addPhyloTree(phyloTree) {
 export function removePhyloTree() {
   return {
     type: REMOVE_PHYLO_TREE,
+  }
+}
+
+export function removeSpecies() {
+  return {
+    type: REMOVE_SPECIES,
   }
 }

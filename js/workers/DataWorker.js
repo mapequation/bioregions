@@ -1,7 +1,8 @@
 import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
-  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD} from '../constants/ActionTypes';
+  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD,
+CANCEL_FILE_ACTIONS, REMOVE_SPECIES} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
@@ -24,6 +25,7 @@ console.log(`[DataWorker] ok`);
 // Worker state
 const getInitialState = () => {
   return {
+    isInitial: true,
     geoJSON: null,
     DSVType: null, // "TSV" or "CSV"
     DSVStringContent: null, // string content for dsv files
@@ -489,6 +491,12 @@ onmessage = function(event) {
     case BINNING_LOWER_THRESHOLD:
       state.binning.lowerThreshold = event.data.lowerThreshold;
       binData(true);
+      break;
+    case REMOVE_SPECIES:
+      state = getInitialState();
+      break;
+    case CANCEL_FILE_ACTIONS:
+      state = getInitialState();
       break;
     default:
       console.log("[DataWorker]: Unrecognised message type:", type);

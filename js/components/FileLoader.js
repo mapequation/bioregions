@@ -33,9 +33,10 @@ class FileLoader extends Component {
     showFileUI: PropTypes.func.isRequired,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFiles: PropTypes.func.isRequired,
+    removeSpecies: PropTypes.func.isRequired,
     loadTree: PropTypes.func.isRequired,
     removePhyloTree: PropTypes.func.isRequired,
-    phyloTree: PropTypes.object.isRequired,
+    phyloTree: PropTypes.object,
     progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
@@ -394,11 +395,17 @@ class FileLoader extends Component {
       );
     }
 
-    const {sampleFiles, loadFiles, loadSampleFiles, removePhyloTree, phyloTree} = this.props;
+    const {sampleFiles, loadFiles, loadSampleFiles, phyloTree, removePhyloTree, removeSpecies} = this.props;
     const RemoveTree = !phyloTree ? "" : (
       <div>
         <div className="ui divider"></div>
         <button className="ui very basic red button" onClick={removePhyloTree}>Remove tree</button>
+      </div>
+    );
+    const RemoveSpecies = files.length === 0 ? "" : (
+      <div>
+        <div className="ui divider"></div>
+        <button className="ui very basic red button" onClick={removeSpecies}>Remove species</button>
       </div>
     );
 

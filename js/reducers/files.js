@@ -69,6 +69,8 @@ export default function files(state = initialState, action) {
         loadedTree: action.file.name,
       }
     case ActionTypes.FILE_ERROR:
+      if (!state.isLoading) //  If canceled, ignore further loading events
+        return;
       return {
         ...state,
         error: true,
@@ -76,11 +78,15 @@ export default function files(state = initialState, action) {
         subMessage: action.subMessage
       };
     case ActionTypes.REQUEST_DSV_COLUMN_MAPPING:
+      if (!state.isLoading) //  If canceled, ignore further loading events
+        return state;
       return {
         ...state,
         parsedHead: action.parsedHead
       };
     case ActionTypes.REQUEST_GEOJSON_NAME_FIELD:
+      if (!state.isLoading) //  If canceled, ignore further loading events
+        return state;
       return {
         ...state,
         parsedFeatureProperty: action.parsedFeatureProperty
@@ -88,6 +94,8 @@ export default function files(state = initialState, action) {
     case ActionTypes.CANCEL_FILE_ACTIONS:
       return initialState;
     case ActionTypes.ADD_SPECIES_AND_BINS:
+      if (!state.isLoading) //  If canceled, ignore further loading events
+        return state;
       return {
         ...state,
         isShowingFileUI: false,
@@ -97,10 +105,17 @@ export default function files(state = initialState, action) {
         parsedFeatureProperty: null,
       };
     case ActionTypes.ADD_PHYLO_TREE:
+      if (!state.isLoading) //  If canceled, ignore further loading events
+        return state;
       return {
         ...state,
         isShowingFileUI: false,
         isLoading: false,
+      };
+    case ActionTypes.REMOVE_SPECIES:
+      return {
+        ...initialState,
+        isShowingFileUI: state.isShowingFileUI,
       };
     default:
       return state;

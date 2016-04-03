@@ -10,18 +10,20 @@ import * as colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
 
-const initialBinningState = {
-  binnerType: Binning.QUAD_TREE,
-  binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
-  minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
-  maxNodeSizeLog2: 2,
-  nodeCapacity: 100,
-  lowerThreshold: 10,
-  renderer: QuadtreeGeoBinner.renderer,
-  binningLoading: false,
+const getInitialBinningState = () => {
+  return {
+    binnerType: Binning.QUAD_TREE,
+    binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
+    minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
+    maxNodeSizeLog2: 2,
+    nodeCapacity: 100,
+    lowerThreshold: 10,
+    renderer: QuadtreeGeoBinner.renderer,
+    binningLoading: false,
+  };
 };
 
-function binning(state = initialBinningState, action) {
+function binning(state = getInitialBinningState(), action) {
   switch (action.type) {
     case ActionTypes.BINNING_CHANGE_TYPE:
       return {
@@ -54,34 +56,38 @@ function binning(state = initialBinningState, action) {
 }
 
 var dataWorker = new DataWorker();
+var dataWorkerInitiated = false;
 var progressEmitter = new EventEmitter2({
   wildcard: false,
   delimiter: '.',
 });
 
-const initialState = {
-  dataWorker,
-  progressEmitter,
-  havePolygons: false,
-  features: [], // GeoJSON features
-  species: [], // features count by name, array of {name: string, count: number}
-  binning: initialBinningState,
-  binningLoading: false,
-  bins: [], // bins = binner.bins(features)
-  clusterIds: [], // array<int> of cluster id:s, matching bins array in index
-  isClustering: false,
-  clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
-  clustersPerSpecies: {}, // name -> {count, clusters: [{clusterId, count}, ...]}
-  groupBy: Display.BY_NAME, // name or cluster when clusters ready
-  clusterColors: [], // array of chroma colors for each cluster
-  selectedCluster: -1, // clusterId if selected
-  selectedSpecies: "",
-  phyloTree: null, // { name: "root", branchset: [{name, length}, {name, length, branchset}, ...] }
-  isShowingInfomapUI: false,
-  infomap: {
-    numTrials: 1,
-    markovTime: 1.0
-  },
+const getInitialState = () => {
+  return {
+    dataWorker,
+    dataWorkerInitiated, // Init event listener in App.js
+    progressEmitter,
+    havePolygons: false,
+    features: [], // GeoJSON features
+    species: [], // features count by name, array of {name: string, count: number}
+    binning: getInitialBinningState(),
+    binningLoading: false,
+    bins: [], // bins = binner.bins(features)
+    clusterIds: [], // array<int> of cluster id:s, matching bins array in index
+    isClustering: false,
+    clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
+    clustersPerSpecies: {}, // name -> {count, clusters: [{clusterId, count}, ...]}
+    groupBy: Display.BY_NAME, // name or cluster when clusters ready
+    clusterColors: [], // array of chroma colors for each cluster
+    selectedCluster: -1, // clusterId if selected
+    selectedSpecies: "",
+    phyloTree: null, // { name: "root", branchset: [{name, length}, {name, length, branchset}, ...] }
+    isShowingInfomapUI: false,
+    infomap: {
+      numTrials: 1,
+      markovTime: 1.0
+    },
+  };
 };
 
 function getBins(binning, features) {
@@ -102,12 +108,14 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
-export default function data(state = initialState, action) {
+export default function data(state = getInitialState(), action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
       // Forward to data worker
       state.dataWorker.postMessage(action);
-      return initialState;
+      return {
+        ...getInitialState(),
+      };
     case ActionTypes.LOAD_TREE:
       state.dataWorker.postMessage(action);
       return state;
@@ -216,6 +224,27 @@ export default function data(state = initialState, action) {
           ...state.infomap,
           markovTime: action.markovTime
         }
+      };
+    case ActionTypes.REMOVE_SPECIES:
+      state.dataWorker.postMessage(action);
+      return {
+        ...getInitialState(),
+        phyloTree: state.phyloTree,
+      };
+    case ActionTypes.DATA_WORKER_INITIATED:
+      dataWorkerInitiated = true;
+      return {
+        ...state,
+        dataWorkerInitiated: true,
+      };
+    case ActionTypes.CANCEL_FILE_ACTIONS:
+      // state.dataWorker.postMessage(action);
+      console.log("\n\nTERMINATE WORKER -> NEW WORKER");
+      state.dataWorker.terminate();
+      dataWorker = new DataWorker();
+      dataWorkerInitiated = false;
+      return {
+        ...getInitialState(),
       };
     default:
       return state;
