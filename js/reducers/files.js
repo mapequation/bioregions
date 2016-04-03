@@ -22,7 +22,7 @@ const initialState = {
       filenames: ['mammals.txt']
     },
     {
-      name: "Mammals South America",
+      name: "Neotropical mammals",
       type: "point occurrences",
       size: "2.3Mb",
       filenames: ['mammals_gbif_SA.tsv']
