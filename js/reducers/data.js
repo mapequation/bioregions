@@ -77,6 +77,11 @@ const initialState = {
   selectedCluster: -1, // clusterId if selected
   selectedSpecies: "",
   phyloTree: {},
+  isShowingInfomapUI: false,
+  infomap: {
+    numTrials: 1,
+    markovTime: 1.0
+  },
 };
 
 function getBins(binning, features) {
@@ -149,6 +154,7 @@ export default function data(state = initialState, action) {
         clustersPerSpecies,
         groupBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
+        isShowingInfomapUI: false,
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
@@ -184,6 +190,27 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         selectedSpecies: action.species
+      };
+    case ActionTypes.SHOW_INFOMAP_UI:
+      return {
+        ...state,
+        isShowingInfomapUI: action.isShowingInfomapUI
+      };
+    case ActionTypes.INFOMAP_NUM_TRIALS:
+      return {
+        ...state,
+        infomap: {
+          ...state.infomap,
+          numTrials: action.numTrials
+        }
+      };
+    case ActionTypes.INFOMAP_MARKOV_TIME:
+      return {
+        ...state,
+        infomap: {
+          ...state.infomap,
+          markovTime: action.markovTime
+        }
       };
     default:
       return state;

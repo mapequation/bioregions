@@ -92,7 +92,8 @@ class Binning extends Component {
                 <div className="ui floating segment">
                   <table className="ui very basic celled table" style={{
                       backgroundColor: "white",
-                      width: "400px"
+                      width: "400px",
+                      fontWeight: 300,
                     }}>
                     <tbody>
                       <tr>

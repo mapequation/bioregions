@@ -1,4 +1,12 @@
-import {GET_CLUSTERS, CALCULATE_CLUSTERS, ADD_CLUSTERS, ADD_CLUSTERS_AND_STATISTICS} from '../constants/ActionTypes';
+import {
+  GET_CLUSTERS,
+  CALCULATE_CLUSTERS,
+  ADD_CLUSTERS,
+  ADD_CLUSTERS_AND_STATISTICS,
+  SHOW_INFOMAP_UI,
+  INFOMAP_NUM_TRIALS,
+  INFOMAP_MARKOV_TIME,
+} from '../constants/ActionTypes';
 
 /**
 * Add the bioregions clusters
@@ -39,4 +47,25 @@ export function calculateClusters(networkData, infomapArgs = "-v") {
     },
     infomapArgs,
   }
+}
+
+export function showInfomapUI(isShowingInfomapUI) {
+  return {
+    type: SHOW_INFOMAP_UI,
+    isShowingInfomapUI
+  };
+}
+
+export function setInfomapNumTrials(numTrials) {
+  return {
+    type: INFOMAP_NUM_TRIALS,
+    numTrials
+  };
+}
+
+export function setInfomapMarkovTime(markovTime) {
+  return {
+    type: INFOMAP_MARKOV_TIME,
+    markovTime
+  };
 }
