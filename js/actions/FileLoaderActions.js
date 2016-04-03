@@ -12,6 +12,7 @@ import {
   SET_FEATURE_NAME_FIELD,
   ADD_SPECIES_AND_BINS,
   ADD_PHYLO_TREE,
+  REMOVE_PHYLO_TREE,
 } from '../constants/ActionTypes';
 import axios from 'axios'
 
@@ -166,5 +167,11 @@ export function addPhyloTree(phyloTree) {
   return {
     type: ADD_PHYLO_TREE,
     phyloTree
+  }
+}
+
+export function removePhyloTree() {
+  return {
+    type: REMOVE_PHYLO_TREE,
   }
 }

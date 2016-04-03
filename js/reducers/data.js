@@ -76,7 +76,7 @@ const initialState = {
   clusterColors: [], // array of chroma colors for each cluster
   selectedCluster: -1, // clusterId if selected
   selectedSpecies: "",
-  phyloTree: {},
+  phyloTree: null, // { name: "root", branchset: [{name, length}, {name, length, branchset}, ...] }
   isShowingInfomapUI: false,
   infomap: {
     numTrials: 1,
@@ -120,6 +120,11 @@ export default function data(state = initialState, action) {
       return {
         ...state,
         phyloTree: action.phyloTree,
+      };
+    case ActionTypes.REMOVE_PHYLO_TREE:
+      return {
+        ...state,
+        phyloTree: null,
       };
     case ActionTypes.ADD_SPECIES_AND_BINS:
       return {

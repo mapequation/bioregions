@@ -34,6 +34,8 @@ class FileLoader extends Component {
     loadFiles: PropTypes.func.isRequired,
     loadSampleFiles: PropTypes.func.isRequired,
     loadTree: PropTypes.func.isRequired,
+    removePhyloTree: PropTypes.func.isRequired,
+    phyloTree: PropTypes.object.isRequired,
     progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
@@ -392,7 +394,14 @@ class FileLoader extends Component {
       );
     }
 
-    const {sampleFiles, loadFiles, loadSampleFiles} = this.props;
+    const {sampleFiles, loadFiles, loadSampleFiles, removePhyloTree, phyloTree} = this.props;
+    const RemoveTree = !phyloTree ? "" : (
+      <div>
+        <div className="ui divider"></div>
+        <button className="ui very basic red button" onClick={removePhyloTree}>Remove tree</button>
+      </div>
+    );
+
     return (
       <Dimmer onCancel={this.toggleShowFileUI} header={"Load files..."}>
         <div className="ui two column grid">
@@ -433,6 +442,7 @@ class FileLoader extends Component {
                 <FileInput loadFiles={this.props.loadTree}>
                   Load tree...
                 </FileInput>
+                {RemoveTree}
               </div>
             </div>
           </div>
