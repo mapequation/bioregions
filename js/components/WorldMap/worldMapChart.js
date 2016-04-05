@@ -9,10 +9,8 @@ var world = {};
 
 export default world;
 
-var _zoom;
-
 world.create = function(el, props) {
-  console.log("world.create()");
+  console.log("!!!! world.create()");
   var anchorElement = d3.select(el);
   anchorElement.selectAll("*").remove();
   var svg = anchorElement.append('svg')
@@ -55,7 +53,7 @@ world.create = function(el, props) {
 }
 
 world.update = function(el, props) {
-  console.log("world.update()");
+  console.log("!!!! world.update()");
   props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
@@ -84,24 +82,23 @@ world.update = function(el, props) {
   var height = props.height - props.top - props.bottom;
   var width = totalWidth - props.left - props.right;
 
+  console.log(`--> totalWidth: ${totalWidth}, width: ${width}`);
+
   svg.attr("width", totalWidth)
     .attr("height", props.height);
 
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
-  var zoom = _zoom;
-  if (zoom === undefined) {
-    console.log("Creating worldmap zoom behavior...");
-    zoom = _zoom = d3.behavior.zoom()
-      .scaleExtent([1, 12])
-      .on("zoom", onZoom);
+  console.log("Creating worldmap zoom behavior...");
+  let zoom = d3.behavior.zoom()
+    .scaleExtent([1, 12])
+    .on("zoom", onZoom);
 
-    svg.call(zoom)
-      .on("click", onClick);
+  svg.call(zoom)
+    .on("click", onClick);
 
-    world._zoomTranslation = [0, 0];
-    world._zoomScale = 1;
-  }
+  world._zoomTranslation = [0, 0];
+  world._zoomScale = 1;
 
   doZoom(world._zoomTranslation, world._zoomScale);
 
@@ -114,7 +111,7 @@ world.update = function(el, props) {
     .projection(props.projection);
 
   var landPath = g.select("path.land");
-  if (!landPath.datum() && props.worldStatus === DATA_SUCCEEDED) {
+  if (props.worldStatus === DATA_SUCCEEDED) {
     console.log("Draw world...");
     landPath
       .datum(topojson.feature(props.world, props.world.objects.land))
@@ -151,8 +148,9 @@ world.update = function(el, props) {
 
 
   function drawRawFeatures() {
-    console.log("Draw raw features...");
-    let testFeatures = props.features.slice(0, 100);
+    let rawLimit = 100;
+    console.log(`Draw ${rawLimit}/${props.features.length} raw feature...`);
+    let testFeatures = props.features.slice(0, rawLimit);
     let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
     svgFeature.exit().remove();
     svgFeature.enter().append("path").attr("class", "feature");
@@ -160,6 +158,7 @@ world.update = function(el, props) {
       .style("fill", "none")
       .style("stroke", "red");
   }
+
 
   function getClusterColor(clusterId) {
     let clusterColor = props.clusterColors[clusterId];
