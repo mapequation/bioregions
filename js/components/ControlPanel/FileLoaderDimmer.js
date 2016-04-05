@@ -21,7 +21,7 @@ const getInitialState = () => {
   }
 };
 
-class FileLoader extends Component {
+class FileLoaderDimmer extends Component {
 
   static propTypes = {
     isShowingFileUI: PropTypes.bool.isRequired,
@@ -65,6 +65,11 @@ class FileLoader extends Component {
       else
         this.guessFeatureNameField(parsedFeatureProperty);
     }
+  }
+
+  toggleShowFileUI = () => {
+    const {isShowingFileUI, showFileUI} = this.props;
+    showFileUI(!isShowingFileUI);
   }
 
   guessColumns(parsedHead) {
@@ -350,7 +355,8 @@ class FileLoader extends Component {
     );
   }
 
-  renderFileLoading() {
+
+  render() {
     const {isShowingFileUI, isLoading, files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
     const {done} = this.state;
     if (!isShowingFileUI)
@@ -456,21 +462,6 @@ class FileLoader extends Component {
         </div>
       </Dimmer>
     )
-  }
-
-  toggleShowFileUI = () => {
-    const {isShowingFileUI, showFileUI} = this.props;
-    showFileUI(!isShowingFileUI);
-  }
-
-  render() {
-
-    return (
-      <div>
-        <button className="ui button" onClick={this.toggleShowFileUI}>Load data...</button>
-        {this.renderFileLoading()}
-      </div>
-    );
   }
 }
 
@@ -579,4 +570,4 @@ Progress.propTypes = {
   meta: PropTypes.object.isRequired,
 };
 
-export default FileLoader;
+export default FileLoaderDimmer;

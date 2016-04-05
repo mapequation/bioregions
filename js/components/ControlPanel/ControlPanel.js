@@ -1,5 +1,5 @@
 import React, {Component, PropTypes} from 'react';
-import FileLoader from './FileLoader';
+import FileLoaderDimmer from './FileLoaderDimmer';
 import Binning from './Binning';
 import Export from './Export';
 import {BY_NAME, BY_CLUSTER} from '../../constants/Display';
@@ -20,6 +20,11 @@ class ControlPanel extends Component {
     $('.ui.accordion').accordion();
   }
 
+  toggleShowFileUI = () => {
+    this.props.actions.showFileUI(!this.props.files.isShowingFileUI);
+  }
+
+
   render() {
     const {files, data, worldmap, actions} = this.props;
     return (
@@ -30,7 +35,7 @@ class ControlPanel extends Component {
             Data
           </div>
           <Div className="active content" paddingTop="0">
-            <FileLoader {...data} {...files} {...actions} />
+            <button className="ui button" onClick={this.toggleShowFileUI}>Load data...</button>
             <Binning {...data.binning} binningLoading={data.binningLoading} progressEmitter={data.progressEmitter} {...actions} />
             <ShowInfomapButton {...data} {...actions} />
             <Export {...data} {...files} {...worldmap}></Export>
@@ -44,6 +49,8 @@ class ControlPanel extends Component {
             <GridControl {...worldmap} {...actions}/>
           </Div>
         </div>
+        {/*Render dimmers outside so always visible when triggered*/}
+        <FileLoaderDimmer {...data} {...files} {...actions} />
         <InfomapDimmer {...data} {...actions} />
       </div>
     );
