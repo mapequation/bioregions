@@ -1,9 +1,9 @@
 import React, {Component, PropTypes} from 'react';
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
-import ControlPanel from '../components/ControlPanel';
-import WorldMap from '../components/WorldMap';
-import WorldMapDimmer from '../components/WorldMapDimmer';
+import ControlPanel from '../components/ControlPanel/ControlPanel';
+import WorldMap from '../components/WorldMap/WorldMap';
+import WorldMapDimmer from '../components/WorldMap/WorldMapDimmer';
 import Phylogram from '../components/Phylogram';
 import Statistics from '../components/Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';

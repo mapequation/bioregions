@@ -1,8 +1,8 @@
 import React, {Component, PropTypes} from 'react';
-import TangleInput from './TangleInput';
 import classNames from 'classnames';
-import {BINNING_PROGRESS} from '../constants/ActionTypes';
-import Tooltip from './Tooltip';
+import {BINNING_PROGRESS} from '../../constants/ActionTypes';
+import TangleInput from '../lib/TangleInput';
+import Tooltip from '../lib/Tooltip';
 
 class Binning extends Component {
 

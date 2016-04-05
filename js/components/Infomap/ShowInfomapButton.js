@@ -1,5 +1,6 @@
 import React, { PropTypes } from 'react'
 import classNames from 'classnames';
+import Div from '../helpers/Div';
 
 class ShowInfomapButton extends React.Component {
 
@@ -21,7 +22,9 @@ class ShowInfomapButton extends React.Component {
 
     const clusterButtonClasses = classNames("ui button", { loading: isClustering });
     return (
-      <button className={clusterButtonClasses} onClick={this.toggleShowInfomapUI}>Cluster...</button>
+      <Div paddingTop="10px">
+        <button className={clusterButtonClasses} onClick={this.toggleShowInfomapUI}>Cluster...</button>
+      </Div>
     )
   }
 }

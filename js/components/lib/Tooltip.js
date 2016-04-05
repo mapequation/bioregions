@@ -21,10 +21,10 @@ class Tooltip extends Component {
   }
 
   render() {
-    let node = this.props.children[0];
-    let tooltipNodes = this.state.showTooltip? Children.toArray(this.props.children.slice(1)) : "";
+    const node = this.props.children[0];
+    const tooltipNodes = this.state.showTooltip? Children.toArray(this.props.children.slice(1)) : "";
     return (
-      <span onMouseOver={this.handleMouseOver} onMouseOut={this.handleMouseOut} style={{position: 'relative'}}>
+      <span className="tooltip-parent" onMouseOver={this.handleMouseOver} onMouseOut={this.handleMouseOut}>
         {node}
           <span className="tooltip">
             {tooltipNodes}

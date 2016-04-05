@@ -1,9 +1,9 @@
 import React, {Component, PropTypes} from 'react';
 import _ from 'lodash';
-import FileInput from './FileInput'
-import {FILE_PROGRESS} from '../constants/ActionTypes';
 import R from 'ramda';
-import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
+import FileInput from '../helpers/FileInput'
+import {FILE_PROGRESS} from '../../constants/ActionTypes';
+import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../../actions/ProgressActions';
 
 const getInitialState = () => {
   return {

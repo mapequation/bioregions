@@ -1,7 +1,7 @@
 import React, {Component, PropTypes} from 'react';
-import worldChart from '../charts/worldMap.js';
-import * as DataFetching from '../constants/DataFetching';
-import {BY_NAME, BY_CLUSTER} from '../constants/Display';
+import worldMapChart from './worldMapChart.js';
+import * as DataFetching from '../../constants/DataFetching';
+import {BY_NAME, BY_CLUSTER} from '../../constants/Display';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import d3tipStyles from './d3-tip.css';
@@ -21,7 +21,7 @@ class WorldMap extends Component {
     features: PropTypes.array.isRequired,
     binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
-    groupBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
+    mapBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
   }
 
@@ -71,19 +71,19 @@ class WorldMap extends Component {
     window.addEventListener('resize', this.onResize, false);
     this.loadWorldIfNotFetched();
     let props = Object.assign({}, this.props, this.state);
-    worldChart.create(this.svgParent, props);
+    worldMapChart.create(this.svgParent, props);
 
     this.initTooltip();
   }
 
   componentDidUpdate() {
     let props = Object.assign({}, this.props, this.state);
-    worldChart.update(this.svgParent, props);
+    worldMapChart.update(this.svgParent, props);
   }
 
   componentWillUnmount() {
     window.removeEventListener('resize', this.onResize);
-    worldChart.destroy(this.svgParent);
+    worldMapChart.destroy(this.svgParent);
   }
 
   loadWorldIfNotFetched() {

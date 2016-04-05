@@ -1,7 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import classNames from 'classnames';
-import TangleInput from '../TangleInput';
-import Tooltip from '../Tooltip';
+import TangleInput from '../lib/TangleInput';
+import Tooltip from '../lib/Tooltip';
 import {CLUSTERING_PROGRESS} from '../../constants/ActionTypes';
 
 class InfomapDimmer extends Component {

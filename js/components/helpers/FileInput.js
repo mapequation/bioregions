@@ -1,11 +1,11 @@
-import React, {Component, PropTypes} from 'react';
+import React, {PropTypes} from 'react';
 
 /**
 * A button that triggers a hidden input element of type file.
 * props.loadFiles called with an array of File objects if props.multiple,
 * else with a single File object.
 */
-class FileInput extends Component {
+export default class FileInput extends React.Component {
 
   static propTypes = {
     loadFiles: PropTypes.func.isRequired,
@@ -41,7 +41,4 @@ class FileInput extends Component {
       </div>
     );
   }
-
 }
-
-export default FileInput;

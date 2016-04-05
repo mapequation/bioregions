@@ -1,0 +1,10 @@
+.tooltip {
+  position:absolute;
+  z-index: 999;
+}
+.tooltip-parent {
+  position: relative;
+}
+.ui.horizontal.divider {
+  overflow: auto;
+}

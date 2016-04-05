@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import PieChart from './PieChart';
+import Div from './helpers/Div';
 import R from 'ramda';
 import _ from 'lodash';
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
@@ -14,7 +15,8 @@ class Statistics extends Component {
     selectedCluster: PropTypes.number.isRequired,
     selectCluster: PropTypes.func.isRequired,
     selectSpecies: PropTypes.func.isRequired,
-    changeGroupBy: PropTypes.func.isRequired,
+    statisticsBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
+    changeStatisticsBy: PropTypes.func.isRequired,
   }
 
   state = {
@@ -277,8 +279,8 @@ class Statistics extends Component {
     )
   }
 
-  renderSelectGroupBy() {
-    const {species, groupBy, clusters, changeGroupBy} = this.props;
+  renderSelectStatisticsBy() {
+    const {species, statisticsBy, clusters, changeStatisticsBy} = this.props;
     const {limitSpecies, limitClusters} = this.state;
     if (clusters.length == 0)
       return (<span></span>);
@@ -286,37 +288,37 @@ class Statistics extends Component {
     const availableGroupings = [BY_NAME, BY_CLUSTER];
 
     return (
-      <div className="ui form" style={{display: 'inline-block', marginRight: '10px'}}>
+      <Div className="ui form" display="inline-block" marginRight="10px">
         <div className="inline fields">
           <label>Statistics by</label>
           <div className="field">
             <div className="ui compact basic buttons">
               {availableGroupings.map((grouping) => (
                 <button key={grouping}
-                  className={`ui button ${grouping === groupBy? "active" : ""}`}
-                  onClick={() => changeGroupBy(grouping)}>{grouping}</button>
+                  className={`ui button ${grouping === statisticsBy? "active" : ""}`}
+                  onClick={() => changeStatisticsBy(grouping)}>{grouping}</button>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      </Div>
     );
   }
 
   handleChangeLimit = (event) => {
     const limit = event.target.value;
-    if (this.props.groupBy == BY_NAME)
+    if (this.props.statisticsBy == BY_NAME)
       this.setState({limitSpecies: limit});
     else
       this.setState({limitClusters: limit});
   }
 
   renderSelectLimit() {
-    const {species, groupBy, clusters} = this.props;
+    const {species, statisticsBy, clusters} = this.props;
     const {limitSpecies, limitClusters} = this.state;
 
-    const currentLimit = groupBy === BY_NAME ? limitSpecies : limitClusters;
-    const currentMax = groupBy === BY_NAME ? species.length : clusters.length;
+    const currentLimit = statisticsBy === BY_NAME ? limitSpecies : limitClusters;
+    const currentMax = statisticsBy === BY_NAME ? species.length : clusters.length;
     const limitThresholds = this.getLimitThresholds(currentMax);
 
     if (limitThresholds.length <= 1)
@@ -325,7 +327,7 @@ class Statistics extends Component {
     const suffix = `of ${currentMax}`
 
     return (
-      <div className="ui form" style={{display: 'inline-block', marginRight: '10px'}}>
+      <Div className="ui form" display="inline-block" marginRight="10px">
         <div className="inline fields">
           <label>Show</label>
           <div className="field">
@@ -338,23 +340,23 @@ class Statistics extends Component {
             </select>
           </div>
           <div className="field">
-            {`of ${currentMax} ${ groupBy === BY_NAME ? "species" : "clusters" }`}
+            {`of ${currentMax} ${ statisticsBy === BY_NAME ? "species" : "clusters" }`}
           </div>
         </div>
-      </div>
+      </Div>
     );
   }
 
   render() {
-    const {species, groupBy, clusters} = this.props;
+    const {species, statisticsBy, clusters} = this.props;
     if (species.length === 0)
       return (<div></div>);
 
     return (
       <div>
-        { this.renderSelectGroupBy() }
+        { this.renderSelectStatisticsBy() }
         { this.renderSelectLimit() }
-        { groupBy === BY_CLUSTER ?
+        { statisticsBy === BY_CLUSTER ?
           this.renderClusters() :
           this.renderSpeciesCounts()
         }

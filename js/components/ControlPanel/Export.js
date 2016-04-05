@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
-import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../utils/polygons';
+import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
+import Div from '../helpers/Div';
 import shpWrite from "shp-write"
 import R from 'ramda';
 import d3 from 'd3';
@@ -28,13 +29,16 @@ class Export extends Component {
 
 
   render() {
+    if (this.props.bins.length === 0)
+      return (<span></span>);
+
     return (
-      <div>
+      <Div paddingTop="10px">
         <button className="ui button" onClick={this.showExport}>Export...</button>
         {this.state.showExport? (
           <ExportWindow {...this.props} onHide={this.hideExport}></ExportWindow>
         ) : (<i></i>)}
-      </div>
+      </Div>
     );
   }
 }

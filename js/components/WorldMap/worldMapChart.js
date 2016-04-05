@@ -3,8 +3,8 @@ import d3 from 'd3'
 import topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
 import chroma from 'chroma-js';
-import {DATA_SUCCEEDED} from '../constants/DataFetching'
-import {BY_NAME, BY_CLUSTER} from '../constants/Display';
+import {DATA_SUCCEEDED} from '../../constants/DataFetching'
+import {BY_NAME, BY_CLUSTER} from '../../constants/Display';
 var world = {};
 
 export default world;
@@ -171,7 +171,7 @@ world.update = function(el, props) {
   if (props.bins.length > 0) {
     var colorDomainValue;
     var color;
-    if (props.groupBy == BY_CLUSTER) {
+    if (props.mapBy == BY_CLUSTER) {
       colorDomainValue = (d) => d.clusterId;
       color = (clusterId) => getClusterColor(clusterId).css();
     }

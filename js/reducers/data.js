@@ -77,7 +77,8 @@ const getInitialState = () => {
     isClustering: false,
     clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
     clustersPerSpecies: {}, // name -> {count, clusters: [{clusterId, count}, ...]}
-    groupBy: Display.BY_NAME, // name or cluster when clusters ready
+    statisticsBy: Display.BY_NAME, // name or cluster when clusters ready
+    mapBy: Display.BY_NAME, // name or cluster when clusters ready
     clusterColors: [], // array of chroma colors for each cluster
     selectedCluster: -1, // clusterId if selected
     selectedSpecies: "",
@@ -165,7 +166,8 @@ export default function data(state = getInitialState(), action) {
         clusterIds: action.clusterIds,
         clusters,
         clustersPerSpecies,
-        groupBy: Display.BY_CLUSTER,
+        statisticsBy: Display.BY_CLUSTER,
+        mapBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
         isShowingInfomapUI: false,
       };
@@ -182,12 +184,18 @@ export default function data(state = getInitialState(), action) {
         clusters: [],
         binning: nextBinning,
         binningLoading: state.species.length > 0,
-        groupBy: Display.BY_NAME,
+        statisticsBy: Display.BY_NAME,
+        mapBy: Display.BY_NAME,
       }
-    case ActionTypes.CHANGE_GROUP_BY:
+    case ActionTypes.CHANGE_MAP_BY:
       return {
         ...state,
-        groupBy: action.groupBy
+        mapBy: action.mapBy
+      }
+    case ActionTypes.CHANGE_STATISTICS_BY:
+      return {
+        ...state,
+        statisticsBy: action.statisticsBy
       }
     case ActionTypes.SET_CLUSTER_COLORS:
       return {
