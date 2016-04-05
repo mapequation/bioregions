@@ -20,51 +20,6 @@ class ControlPanel extends Component {
     $('.ui.accordion').accordion();
   }
 
-  renderSelectGroupBy() {
-    const {data, actions} = this.props;
-    if (data.clusterIds.length == 0)
-      return (<div></div>);
-
-    let availableGroupings = [BY_NAME, BY_CLUSTER];
-
-    // return (
-    //   <div className="field">
-    //     <select className="ui dropdown" value={BY_CLUSTER}>
-    //       <option value={BY_NAME}>BY_NAME</option>
-    //       <option value={BY_CLUSTER}>BY_CLUSTER</option>
-    //     </select>
-    //   </div>
-    // )
-
-    return (
-      <div class="field">
-        <label>Statistics by</label>
-        <div className="ui compact basic buttons">
-          {availableGroupings.map((grouping) => (
-            <button key={grouping}
-              className={`ui button ${grouping == data.groupBy? "active" : ""}`}
-              onClick={() => actions.changeGroupBy(grouping)}>{grouping}</button>
-          ))}
-        </div>
-      </div>
-    )
-
-
-    // return (
-    //   <div class="field">
-    //     <label>Group by</label>
-    //     <select className="ui fluid dropdown" value={data.groupBy}>
-    //       {availableGroupings.map(grouping => {
-    //         console.log(`option: ${grouping}, data.groupBy: ${data.groupBy} => selected: ${grouping == data.groupBy}`);
-    //         return (
-    //           <option key={grouping} value={grouping}>{grouping}</option>
-    //         );
-    //       })}
-    //     </select>
-    //   </div>
-    // );
-  }
-
   render() {
     const {files, data, worldmap, actions} = this.props;
     return (
@@ -84,9 +39,6 @@ class ControlPanel extends Component {
             Display
           </div>
           <div className="content">
-            <div className="ui form">
-              {this.renderSelectGroupBy()}
-            </div>
             <h4 className="ui dividing header">
               Map
               <span className="">
