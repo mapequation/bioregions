@@ -1,9 +1,9 @@
 import React, {Component, PropTypes} from 'react';
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
-import ControlPanel from '../components/ControlPanel';
-import WorldMap from '../components/WorldMap';
-import WorldMapDimmer from '../components/WorldMapDimmer';
+import ControlPanel from '../components/ControlPanel/ControlPanel';
+import WorldMap from '../components/WorldMap/WorldMap';
+import WorldMapDimmer from '../components/WorldMap/WorldMapDimmer';
 import Phylogram from '../components/Phylogram';
 import Statistics from '../components/Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';
@@ -14,23 +14,36 @@ import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
 import * as FilterActions from '../actions/FilterActions';
 import * as ErrorActions from '../actions/ErrorActions';
-import {CALCULATE_CLUSTERS} from '../constants/ActionTypes';
+import {CALCULATE_CLUSTERS, DATA_WORKER_INITIATED} from '../constants/ActionTypes';
 import {calculateInfomapClusters} from '../utils/clustering';
 import AppStyles from './App.scss';
 
 class App extends Component {
   constructor(props) {
     super(props);
+    this.dataWorkerInitiatedGuard = false;
   }
 
   componentDidMount() {
     console.log("App::componentDidMount()");
-    this.initDataWorker();
+    this.checkDataWorkerInitiated(this.props.data);
   }
 
-  initDataWorker() {
+  componentWillReceiveProps(nextProps) {
+    this.checkDataWorkerInitiated(nextProps.data);
+  }
+
+  checkDataWorkerInitiated(data) {
+    if (!data.dataWorkerInitiated && !this.dataWorkerInitiatedGuard) {
+      this.initDataWorker(data.dataWorker);
+    }
+    else if (data.dataWorkerInitiated && this.dataWorkerInitiatedGuard)
+      this.dataWorkerInitiatedGuard = false;
+  }
+
+  initDataWorker(dataWorker) {
     const {data, dispatch} = this.props;
-    let {progressEmitter, dataWorker} = data;
+    let {progressEmitter} = data;
 
     dataWorker.addEventListener("message", (event) => {
       const action = event.data;
@@ -57,12 +70,18 @@ class App extends Component {
         console.log("[App]: Spawn Infomap worker from main thread...");
         calculateInfomapClusters(progressDispatch, action.infomapArgs, action.payload.networkData, onInfomapFinished);
       }
+    }, false);
+
+    console.log("\n[App] Initiated data worker!");
+    dispatch({
+      type: DATA_WORKER_INITIATED
     });
   }
 
 
   render() {
     const {data, files, worldmap, errorMessage, actions} = this.props;
+
     return (
       <div className="app">
         <div className="ui container">

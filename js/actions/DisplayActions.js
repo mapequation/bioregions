@@ -1,12 +1,20 @@
 import {
-  CHANGE_GROUP_BY,
+  CHANGE_STATISTICS_BY,
+  CHANGE_MAP_BY,
   SET_CLUSTER_COLORS,
 } from '../constants/ActionTypes';
 
-export function changeGroupBy(groupBy) {
+export function changeStatisticsBy(statisticsBy) {
   return {
-    type: CHANGE_GROUP_BY,
-    groupBy
+    type: CHANGE_STATISTICS_BY,
+    statisticsBy
+  }
+}
+
+export function changeMapBy(mapBy) {
+  return {
+    type: CHANGE_MAP_BY,
+    mapBy
   }
 }
 

@@ -1,9 +1,9 @@
 import React, {Component, PropTypes} from 'react';
 import _ from 'lodash';
-import FileInput from './FileInput'
-import {FILE_PROGRESS} from '../constants/ActionTypes';
 import R from 'ramda';
-import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
+import FileInput from '../helpers/FileInput'
+import {FILE_PROGRESS} from '../../constants/ActionTypes';
+import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../../actions/ProgressActions';
 
 const getInitialState = () => {
   return {
@@ -21,7 +21,7 @@ const getInitialState = () => {
   }
 };
 
-class FileLoader extends Component {
+class FileLoaderDimmer extends Component {
 
   static propTypes = {
     isShowingFileUI: PropTypes.bool.isRequired,
@@ -33,7 +33,10 @@ class FileLoader extends Component {
     showFileUI: PropTypes.func.isRequired,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFiles: PropTypes.func.isRequired,
+    removeSpecies: PropTypes.func.isRequired,
     loadTree: PropTypes.func.isRequired,
+    removePhyloTree: PropTypes.func.isRequired,
+    phyloTree: PropTypes.object,
     progressEmitter: PropTypes.object.isRequired,
     setFieldsToColumnsMapping: PropTypes.func.isRequired,
     setFeatureNameField: PropTypes.func.isRequired,
@@ -62,6 +65,11 @@ class FileLoader extends Component {
       else
         this.guessFeatureNameField(parsedFeatureProperty);
     }
+  }
+
+  toggleShowFileUI = () => {
+    const {isShowingFileUI, showFileUI} = this.props;
+    showFileUI(!isShowingFileUI);
   }
 
   guessColumns(parsedHead) {
@@ -347,7 +355,8 @@ class FileLoader extends Component {
     );
   }
 
-  renderFileLoading() {
+
+  render() {
     const {isShowingFileUI, isLoading, files, parsedHead, parsedFeatureProperty, error, message, subMessage} = this.props;
     const {done} = this.state;
     if (!isShowingFileUI)
@@ -392,7 +401,20 @@ class FileLoader extends Component {
       );
     }
 
-    const {sampleFiles, loadFiles, loadSampleFiles} = this.props;
+    const {sampleFiles, loadFiles, loadSampleFiles, phyloTree, removePhyloTree, removeSpecies} = this.props;
+    const RemoveTree = !phyloTree ? "" : (
+      <div>
+        <div className="ui divider"></div>
+        <button className="ui very basic red button" onClick={removePhyloTree}>Remove tree</button>
+      </div>
+    );
+    const RemoveSpecies = files.length === 0 ? "" : (
+      <div>
+        <div className="ui divider"></div>
+        <button className="ui very basic red button" onClick={removeSpecies}>Remove species</button>
+      </div>
+    );
+
     return (
       <Dimmer onCancel={this.toggleShowFileUI} header={"Load files..."}>
         <div className="ui two column grid">
@@ -433,27 +455,13 @@ class FileLoader extends Component {
                 <FileInput loadFiles={this.props.loadTree}>
                   Load tree...
                 </FileInput>
+                {RemoveTree}
               </div>
             </div>
           </div>
         </div>
       </Dimmer>
     )
-  }
-
-  toggleShowFileUI = () => {
-    const {isShowingFileUI, showFileUI} = this.props;
-    showFileUI(!isShowingFileUI);
-  }
-
-  render() {
-
-    return (
-      <div>
-        <button className="ui button" onClick={this.toggleShowFileUI}>Load data...</button>
-        {this.renderFileLoading()}
-      </div>
-    );
   }
 }
 
@@ -562,4 +570,4 @@ Progress.propTypes = {
   meta: PropTypes.object.isRequired,
 };
 
-export default FileLoader;
+export default FileLoaderDimmer;
