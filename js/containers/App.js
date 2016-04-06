@@ -4,7 +4,7 @@ import {bindActionCreators} from 'redux';
 import ControlPanel from '../components/ControlPanel/ControlPanel';
 import WorldMap from '../components/WorldMap/WorldMap';
 import WorldMapDimmer from '../components/WorldMap/WorldMapDimmer';
-import Phylogram from '../components/Phylogram';
+import Phylogram from '../components/Phylogram/Phylogram';
 import Statistics from '../components/Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';
 import * as fileLoaderActions from '../actions/FileLoaderActions';
@@ -100,7 +100,7 @@ class App extends Component {
             </div>
           </div>
           <p></p>
-          <Phylogram {...data} />
+          <Phylogram {...data} {...actions} />
           <Statistics {...data} {...actions} />
         </div>
         <SpeciesInfo species={data.selectedSpecies} onHide={actions.unselectSpecies} />

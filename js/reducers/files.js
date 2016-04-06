@@ -67,6 +67,7 @@ export default function files(state = initialState, action) {
       return {
         ...state,
         loadedTree: action.file.name,
+        isLoading: true,
       }
     case ActionTypes.FILE_ERROR:
       if (!state.isLoading) //  If canceled, ignore further loading events

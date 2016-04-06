@@ -1,5 +1,5 @@
 import React, {Component, PropTypes} from 'react';
-import phylogram from '../charts/phylogram.js';
+import phylogramChart from './phylogramChart.js';
 
 class Phylogram extends Component {
 
@@ -7,8 +7,8 @@ class Phylogram extends Component {
     // width: PropTypes.number.isRequired,
     // height: PropTypes.number.isRequired,
     // bins: PropTypes.array.isRequired,
-    clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
+    clustersPerSpecies: PropTypes.object.isRequired,
     phyloTree: PropTypes.object,
   }
 
@@ -51,17 +51,17 @@ class Phylogram extends Component {
     this.updateDimensions();
     window.addEventListener('resize', this.onResize, false);
     let props = Object.assign({}, this.props, this.state);
-    phylogram.create(this.svgParent, props);
+    phylogramChart.create(this.svgParent, props);
   }
 
   componentDidUpdate() {
     let props = Object.assign({}, this.props, this.state);
-    phylogram.update(this.svgParent, props);
+    phylogramChart.update(this.svgParent, props);
   }
 
   componentWillUnmount() {
     window.removeEventListener('resize', this.onResize);
-    phylogram.destroy(this.svgParent);
+    phylogramChart.destroy(this.svgParent);
   }
 
   render() {
