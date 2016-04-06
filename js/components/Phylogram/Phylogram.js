@@ -12,6 +12,13 @@ class Phylogram extends Component {
     phyloTree: PropTypes.object,
   }
 
+  shouldComponentUpdate(nextProps, nextState) {
+    const {clustersPerSpecies, clusterColors, phyloTree} = this.props;
+    return clusterColors !== nextProps.clusterColors ||
+      clustersPerSpecies !== nextProps.clustersPerSpecies ||
+      phyloTree !== nextProps.phyloTree;
+  }
+
   getSvg() {
     return this.svgParent.getElementsByTagName('svg')[0];
   }
