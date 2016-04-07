@@ -30,7 +30,7 @@ module.exports = {
   devtool: "source-map", // or "inline-source-map"
   module: {
     loaders: [
-      { test: /\.js$/, loaders: ['react-hot', 'babel'], exclude: /node_modules/ },
+      { test: /\.js$/, loaders: ['babel'], exclude: /node_modules/ },
       { test: /\.css$/, loaders: ["style", "css", ""] },
       { test: /\.scss$/, loaders: ["style", "css", "sass"] },
       // { test: /\.scss$/, loaders: ["style", "css?sourceMap", "sass?sourceMap"] }
