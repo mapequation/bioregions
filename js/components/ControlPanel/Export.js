@@ -1,10 +1,11 @@
 import React, {Component, PropTypes} from 'react';
-import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
-import Div from '../helpers/Div';
 import shpWrite from "shp-write"
 import R from 'ramda';
 import d3 from 'd3';
 import _ from 'lodash';
+import Div from '../helpers/Div';
+import io from '../../utils/io';
+import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
 
 class Export extends Component {
 
@@ -143,59 +144,36 @@ class ExportWindow extends Component {
 
   getSvgUrl() {
     return this.getSvg()
-      .then(_.partial(this.dataToBlobURL, 'image/svg+xml'));
+      .then(_.partial(io.dataToBlobURL, 'image/svg+xml'));
   }
 
   getPngUrl(svgUrl) {
     if (!svgUrl)
       return Promise.resolve(null);
     return this.getPng(svgUrl)
-      .then(_.partial(this.dataToBlobURL, 'image/png'));
+      .then(_.partial(io.dataToBlobURL, 'image/png'));
   }
 
   getGeoJSONUrl() {
     if (this.props.clusters.length === 0)
       return Promise.resolve(null);
     return this.getGeoJSON()
-      .then(this.prettyStringifyJSON)
-      .then(_.partial(this.dataToBlobURL, 'application/vnd.geo+json'));
+      .then(io.prettyStringifyJSON)
+      .then(_.partial(io.dataToBlobURL, 'application/vnd.geo+json'));
   }
 
   getShapefileUrl() {
     if (this.props.clusters.length === 0)
       return Promise.resolve(null);
     return this.getShapefile()
-      .then(_.partial(this.dataToBlobURL, 'application/zip'));
+      .then(_.partial(io.dataToBlobURL, 'application/zip'));
   }
 
   getClustersCSVUrl() {
     if (this.props.clusters.length === 0)
       return Promise.resolve(null);
     return this.getClustersCSV()
-      .then(_.partial(this.dataToBlobURL, 'text/csv'));
-  }
-
-  dataURLtoData(dataURL) {
-    return Promise.resolve(dataURL.split(',')[1]).then(this.base64toData);
-  }
-
-  base64toData(content) {
-    return new Promise(resolve => {
-      let binary = atob(content);
-      let array = [];
-      for(let i = 0; i < binary.length; i++) {
-        array.push(binary.charCodeAt(i));
-      }
-      resolve(new Uint8Array(array));
-    });
-  }
-
-  dataToBlobURL(type, data) {
-    return Promise.resolve(data ? URL.createObjectURL(new Blob([data], { type })) : null);
-  }
-
-  contentToBase64URL(content, type) {
-    return 'data:' + type + ';base64,' + window.btoa(content);
+      .then(_.partial(io.dataToBlobURL, 'text/csv'));
   }
 
   getSvg() {
@@ -231,7 +209,7 @@ class ExportWindow extends Component {
       image.onload = () => {
         console.log("Image loaded! Draw to canvas...");
         ctx.drawImage(image, 0, 0);
-        resolve(this.dataURLtoData(this.canvas.toDataURL('image/png')));
+        resolve(io.dataURLtoData(this.canvas.toDataURL('image/png')));
       }
       image.onerror = (e) => {
         console.log("ERROR setting image src:", e.type, e, e.message);
@@ -246,9 +224,6 @@ class ExportWindow extends Component {
     return Promise.resolve(clusteredBinsToCollectionOfMultiPolygons(this.props.bins));
   }
 
-  prettyStringifyJSON(data) {
-    return new Promise(resolve => resolve(JSON.stringify(data, null, '\t')));
-  }
 
   getShapefile() {
     const shpOptions = {
@@ -259,7 +234,7 @@ class ExportWindow extends Component {
     };
     return Promise.resolve(clusteredBinsToCollectionOfPolygons(this.props.bins)) // No MultiPolygon
       .then(data => shpWrite.zip(data, shpOptions))
-      .then(this.base64toData);
+      .then(io.base64toData);
   }
 
   getClustersCSV() {

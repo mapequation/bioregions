@@ -7,6 +7,7 @@ import { Provider } from 'react-redux';
 import App from './containers/App';
 import configureStore from './store/configureStore';
 import {renderDevTools} from './utils/devTools';
+import ExamplePhylogram from './examples/ExamplePhylogram';
 
 const store = configureStore();
 
@@ -23,3 +24,8 @@ render(
   </div>,
   document.getElementById('app')
 );
+
+render(
+  <ExamplePhylogram/>,
+  document.getElementById('example-phylogram')
+)

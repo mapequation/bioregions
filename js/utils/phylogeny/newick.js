@@ -34,13 +34,13 @@
  * Converted to JSON:
  * {
  *   name: "F",
- *   branchset: [
+ *   children: [
  *     {name: "A", length: 0.1},
  *     {name: "B", length: 0.2},
  *     {
  *       name: "E",
  *       length: 0.5,
- *       branchset: [
+ *       children: [
  *         {name: "C", length: 0.3},
  *         {name: "D", length: 0.4}
  *       ]
@@ -50,9 +50,9 @@
  *
  * Converted to JSON, but with no names or lengths:
  * {
- *   branchset: [
+ *   children: [
  *     {}, {}, {
- *       branchset: [{}, {}]
+ *       children: [{}, {}]
  *     }
  *   ]
  * }
@@ -65,15 +65,15 @@ export function parseNewick(s) {
   for (var i=0; i<tokens.length; i++) {
     var token = tokens[i];
     switch (token) {
-      case '(': // new branchset
+      case '(': // new children
         var subtree = {};
-        tree.branchset = [subtree];
+        tree.children = [subtree];
         ancestors.push(tree);
         tree = subtree;
         break;
       case ',': // another branch
         var subtree = {};
-        ancestors[ancestors.length-1].branchset.push(subtree);
+        ancestors[ancestors.length-1].children.push(subtree);
         tree = subtree;
         break;
       case ')': // optional name next
@@ -95,8 +95,8 @@ export function parseNewick(s) {
 
 export function traverseTree(tree, callback) {
   callback(tree);
-  if (tree.branchset) {
-    tree.branchset.forEach(subTree => traverseTree(subTree, callback));
+  if (tree.children) {
+    tree.children.forEach(subTree => traverseTree(subTree, callback));
   }
 }
 

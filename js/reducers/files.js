@@ -1,5 +1,6 @@
 import * as ActionTypes from '../constants/ActionTypes';
 import _ from 'lodash';
+import io from '../utils/io';
 
 const initialState = {
   isShowingFileUI: false, // UI to load and see loaded files
@@ -8,7 +9,7 @@ const initialState = {
   urls: [], // urls to files to fetch
   basename: "Infomap bioregions",
   loadedSpecies: [],
-  loadedTree: "", // filename of loaded tree
+  treeFilename: "", // filename of loaded tree
   haveFile: false,
   sampleFiles: [
     // {
@@ -53,8 +54,7 @@ export default function files(state = initialState, action) {
     case ActionTypes.LOAD_FILES:
       let shpFile = action.files.filter(file => /shp$/.test(file.name));
       const filename = shpFile.length > 0 ? shpFile[0].name : action.files[0].name;
-      const lastDot = filename.lastIndexOf(".");
-      const basename = lastDot == -1? filename : filename.substring(0, lastDot);
+      const basename = io.basename(filename);
       return {
         ...initialState, // Restore to initial state
         isShowingFileUI: true,
@@ -66,7 +66,7 @@ export default function files(state = initialState, action) {
     case ActionTypes.LOAD_TREE:
       return {
         ...state,
-        loadedTree: action.file.name,
+        treeFilename: action.file.name,
         isLoading: true,
       }
     case ActionTypes.FILE_ERROR:

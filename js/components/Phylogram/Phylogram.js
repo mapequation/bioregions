@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import phylogramChart from './phylogramChart.js';
+import chroma from 'chroma-js';
 
 class Phylogram extends Component {
 
@@ -53,17 +54,18 @@ class Phylogram extends Component {
     })
   }
 
+  getChartProps() {
+    return Object.assign({}, this.props, this.state);
+  }
 
   componentDidMount() {
     this.updateDimensions();
     window.addEventListener('resize', this.onResize, false);
-    let props = Object.assign({}, this.props, this.state);
-    phylogramChart.create(this.svgParent, props);
+    phylogramChart.create(this.svgParent, this.getChartProps());
   }
 
   componentDidUpdate() {
-    let props = Object.assign({}, this.props, this.state);
-    phylogramChart.update(this.svgParent, props);
+    phylogramChart.update(this.svgParent, this.getChartProps());
   }
 
   componentWillUnmount() {

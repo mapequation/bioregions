@@ -27,15 +27,15 @@ phylogram.update = function(el, props) {
   let numNodes = 0;
   function countLeafNodes(node) {
     ++numNodes;
-    if (node.branchset) {
-      for (var i=0; i < node.branchset.length; i++) {
-        countLeafNodes(node.branchset[i])
+    if (node.children) {
+      for (var i=0; i < node.children.length; i++) {
+        countLeafNodes(node.children[i])
       }
     }
     else
       ++numLeafNodes;
   }
-  if (phyloTree && phyloTree.branchset)
+  if (phyloTree && phyloTree.children)
     countLeafNodes(phyloTree);
   console.log("PhyloTree size:", numNodes, "nodes", numLeafNodes, "leaf nodes");
   let calculatedHeight = numNodes * 20;
@@ -43,7 +43,7 @@ phylogram.update = function(el, props) {
   props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
-    top: 0,
+    top: 20,
     bottom: 0,
     left: 10,
     right: 0,
@@ -82,11 +82,13 @@ phylogram.update = function(el, props) {
 
 
   phylogram.build('#phylogram', phyloTree, {
-    width: width - 250, //Margin for labels. TODO: Set margin in build and trim labels accordingly
+    width: width,
     height: height,
     vis: g,
     clustersPerSpecies,
     clusterColors,
+    skipBranchLengthScaling: false,
+    labelWidth: 250,
   });
 
   return phylogram;
@@ -211,12 +213,14 @@ phylogram.build = function(selector, phyloTree, options) {
   var w = options.width || d3.select(selector).style('width') || d3.select(selector).attr('width'),
       h = options.height || d3.select(selector).style('height') || d3.select(selector).attr('height'),
       w = parseInt(w),
-      h = parseInt(h);
+      h = parseInt(h),
+      labelWidth = options.labelWidth || 200;
+  w -= labelWidth;
   var tree = options.tree || d3.layout.cluster()
     .size([h, w])
     .sort(function(node) { return node.children ? node.children.length : -1; })
     .children(options.children || function(node) {
-      return node.branchset
+      return node.children
     });
   var diagonal = options.diagonal || phylogram.rightAngleDiagonal();
   var vis = options.vis || d3.select(selector).append("svg:svg")
@@ -224,7 +228,9 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr("height", h + 30)
     .append("svg:g")
       .attr("transform", "translate(20, 20)");
+  console.log("==== Before tree layout =====");
   var nodes = tree(phyloTree);
+  console.log("==== After tree layout =====");
 
   if (options.skipBranchLengthScaling) {
     var yscale = d3.scale.linear()
@@ -252,7 +258,7 @@ phylogram.build = function(selector, phyloTree, options) {
         .attr("y", 0)
         .attr("dy", -3)
         .attr("text-anchor", "middle")
-        .attr('font-size', '8px')
+        .attr('font-size', '10px')
         .attr('fill', '#ccc')
         .text(function(d) { return Math.round(d*100) / 100; });
   }
@@ -264,7 +270,7 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr("d", diagonal)
       .attr("fill", "none")
       .attr("stroke", "#aaa")
-      .attr("stroke-width", "4px");
+      .attr("stroke-width", "2px");
 
   var node = vis.selectAll("g.node")
       .data(nodes);
@@ -276,7 +282,7 @@ phylogram.build = function(selector, phyloTree, options) {
   node.exit().remove();
 
   var leafNodes = node.filter((d) => !d.children).append("g")
-      .attr("transform", "translate(10,0)");
+      // .attr("transform", "translate(10,0)");
 
   const {clustersPerSpecies, clusterColors} = options;
 
@@ -295,6 +301,8 @@ phylogram.build = function(selector, phyloTree, options) {
     return clusters.clusters;
   };
 
+  console.log("==== Before pies =====");
+
   var pies = leafNodes.selectAll(".pie")
       .data(d => pie(clusterData(d)));
 
@@ -307,18 +315,19 @@ phylogram.build = function(selector, phyloTree, options) {
       .style("stroke", (d) => d.data.clusterId !== undefined ? "white" : "grey")
       .style("fill", (d) => d.data.clusterId !== undefined ? clusterColors[d.data.clusterId] : "white");
 
+  console.log("==== After pies =====");
 
   if (!options.skipLabels) {
     node.append("svg:text")
-      .attr("dx", -6)
-      .attr("dy", -6)
+      .attr("dx", -16)
+      .attr("dy", -3)
       .attr("text-anchor", 'end')
       .attr('font-size', '8px')
       .attr('fill', '#ccc')
       .text((d) => d.length);
 
     leafNodes.append("svg:text")
-      .attr("dx", 20)
+      .attr("dx", 15)
       .attr("dy", 3)
       .attr("text-anchor", "start")
       .attr('font-family', 'Helvetica Neue, Helvetica, sans-serif')
@@ -326,6 +335,7 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr('fill', 'black')
       .text((d) => d.name);
   }
+  console.log("==== Phylogram finished! =====");
 
   return {tree: tree, vis: vis}
 }
@@ -346,7 +356,7 @@ phylogram.buildRadial = function(selector, nodes, options) {
     .size([360, r - labelWidth])
     .sort(function(node) { return node.children ? node.children.length : -1; })
     .children(options.children || function(node) {
-      return node.branchset
+      return node.children
     })
     .separation(function(a, b) { return (a.parent == b.parent ? 1 : 2) / a.depth; });
 
@@ -356,7 +366,9 @@ phylogram.buildRadial = function(selector, nodes, options) {
     skipBranchLengthScaling: true,
     skipTicks: true,
     skipLabels: options.skipLabels,
-    diagonal: phylogram.radialRightAngleDiagonal()
+    diagonal: phylogram.radialRightAngleDiagonal(),
+    width: options.width,
+    height: options.height,
   })
   vis.selectAll('g.node')
     .attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; })

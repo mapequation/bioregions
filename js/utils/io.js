@@ -1,12 +1,19 @@
 
-var io = {};
-export {io as default};
+export default {
+  readFile,
+  dataURLtoData,
+  base64toData,
+  dataToBlobURL,
+  contentToBase64URL,
+  prettyStringifyJSON,
+  basename
+};
 
 /**
 * File in FileList, format in ['text', 'buffer']
 * @return promise
 */
-io.readFile = function(file, format, progressCallback) {
+export function readFile(file, format, progressCallback) {
   let promise = new Promise( function(resolve, reject) {
     // FileReader not available in workers in Firefox: https://bugzilla.mozilla.org/show_bug.cgi?id=1051150
     var usingAsyncReader = typeof FileReader === 'function';
@@ -72,4 +79,38 @@ io.readFile = function(file, format, progressCallback) {
     }
   });
   return promise;
+}
+
+
+
+export function dataURLtoData(dataURL) {
+  return Promise.resolve(dataURL.split(',')[1]).then(base64toData);
+}
+
+export function base64toData(content) {
+  return new Promise(resolve => {
+    let binary = atob(content);
+    let array = [];
+    for(let i = 0; i < binary.length; i++) {
+      array.push(binary.charCodeAt(i));
+    }
+    resolve(new Uint8Array(array));
+  });
+}
+
+export function dataToBlobURL(type, data) {
+  return Promise.resolve(data ? URL.createObjectURL(new Blob([data], { type })) : null);
+}
+
+export function contentToBase64URL(content, type) {
+  return 'data:' + type + ';base64,' + window.btoa(content);
+}
+
+export function prettyStringifyJSON(data) {
+  return new Promise(resolve => resolve(JSON.stringify(data, null, '\t')));
+}
+
+export function basename(filename) {
+  const lastDot = filename.lastIndexOf(".");
+  return lastDot === -1 ? filename : filename.substring(0, lastDot);
 }
