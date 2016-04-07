@@ -6,7 +6,7 @@ import R from 'ramda';
 import crossfilter from 'crossfilter';
 import d3 from 'd3';
 import * as S from '../utils/statistics';
-import * as colors from '../utils/colors';
+import colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
 
