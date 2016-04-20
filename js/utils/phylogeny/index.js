@@ -5,14 +5,19 @@ export function parseTree(str) {
 
   let promise = new Promise(function(resolve, reject) {
 
+    console.log("Try parse tree...");
     str = str.trim();
     if (!str)
       return reject("No content in tree file")
 
     if (str.charAt(0) === '(') { // If newick format
-      return resolve(parseNewick(str));
+      console.log("Parse Newick...");
+      let nwk = parseNewick(str);
+      console.log("Newick tree parsed successfully");
+      return resolve(nwk);
     }
 
+    console.log("Parse Nexus...");
     if (str.substr(0, 6).toLowerCase() === '#nexus') { // If nexus format
       let nexus = parseNexus(str);
       if (nexus.error) {
