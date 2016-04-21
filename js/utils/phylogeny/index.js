@@ -12,9 +12,7 @@ export function parseTree(str) {
 
     if (str.charAt(0) === '(') { // If newick format
       console.log("Parse Newick...");
-      let nwk = parseNewick(str);
-      console.log("Newick tree parsed successfully");
-      return resolve(nwk);
+      return resolve(parseNewick(str));
     }
 
     console.log("Parse Nexus...");

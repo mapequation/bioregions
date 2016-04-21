@@ -9,3 +9,4 @@ Infomap-worker.js
 maps/physical
 esdoc
 .vscode
+.tmp

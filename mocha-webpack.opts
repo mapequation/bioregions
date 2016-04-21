@@ -1,0 +1,6 @@
+--colors
+--include js/__tests__/testHelper.js
+--reporter spec
+--require source-map-support/register
+--webpack-config webpack.config.js
+js/**/*-test.js

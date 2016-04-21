@@ -28,17 +28,19 @@ phylogram.update = function(el, props) {
   function countLeafNodes(node) {
     ++numNodes;
     if (node.children) {
-      for (var i=0; i < node.children.length; i++) {
-        countLeafNodes(node.children[i])
+      for (let i = 0; i < node.children.length; i++) {
+        countLeafNodes(node.children[i]);
       }
     }
-    else
+    else {
       ++numLeafNodes;
+    }
   }
-  if (phyloTree && phyloTree.children)
+  if (phyloTree && phyloTree.children) {
     countLeafNodes(phyloTree);
+  }
   console.log("PhyloTree size:", numNodes, "nodes", numLeafNodes, "leaf nodes");
-  let calculatedHeight = numNodes * 20;
+  const calculatedHeight = numNodes * 20;
 
   props = Object.assign({
     autoResize: true,
@@ -50,15 +52,15 @@ phylogram.update = function(el, props) {
     height: calculatedHeight,
   }, props);
 
-  var anchorElement = d3.select(el);
-  var svg = anchorElement.select("svg");
+  const anchorElement = d3.select(el);
+  const svg = anchorElement.select("svg");
   if (svg.empty()) {
     console.log("Update map without created svg, calling create...");
     phylogram.create(el, props);
     return;
   }
 
-  var g = svg.select("g");
+  const g = svg.select("g");
 
   if (numLeafNodes === 0) {
     g.selectAll("*").remove();
@@ -67,12 +69,12 @@ phylogram.update = function(el, props) {
   //TODO: Use data enter/exit!
   g.selectAll("*").remove();
 
-  var totalWidth = props.width;
+  let totalWidth = props.width;
   if (!totalWidth)
     totalWidth = $(anchorElement.node()).innerWidth();
 
-  var height = props.height - props.top - props.bottom;
-  var width = totalWidth - props.left - props.right;
+  const height = props.height - props.top - props.bottom;
+  const width = totalWidth - props.left - props.right;
 
   svg.attr("width", totalWidth)
     .attr("height", props.height);

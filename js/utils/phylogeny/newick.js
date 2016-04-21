@@ -59,48 +59,88 @@
  */
 
 export function parseNewick(s) {
-  var ancestors = [];
-  var tree = {};
-  var tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
-  for (var i=0; i<tokens.length; i++) {
-    var token = tokens[i];
-    switch (token) {
-      case '(': // new children
-        var subtree = {};
-        tree.children = [subtree];
-        ancestors.push(tree);
-        tree = subtree;
-        break;
-      case ',': // another branch
-        var subtree = {};
-        ancestors[ancestors.length-1].children.push(subtree);
-        tree = subtree;
-        break;
-      case ')': // optional name next
-        tree = ancestors.pop();
-        break;
-      case ':': // optional length next
-        break;
-      default:
-        var x = tokens[i-1];
-        if (x == ')' || x == '(' || x == ',') {
-          tree.name = token;
-        } else if (x == ':') {
-          tree.length = parseFloat(token);
-        }
+  return new Promise((resolve) => {
+    var ancestors = [];
+    var tree = {};
+    var tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
+    for (var i=0; i<tokens.length; i++) {
+      var token = tokens[i];
+      switch (token) {
+        case '(': // new children
+          var subtree = {};
+          tree.children = [subtree];
+          ancestors.push(tree);
+          tree = subtree;
+          break;
+        case ',': // another branch
+          var subtree = {};
+          ancestors[ancestors.length-1].children.push(subtree);
+          tree = subtree;
+          break;
+        case ')': // optional name next
+          tree = ancestors.pop();
+          break;
+        case ':': // optional length next
+          break;
+        default:
+          var x = tokens[i-1];
+          if (x == ')' || x == '(' || x == ',') {
+            tree.name = token;
+          } else if (x == ':') {
+            tree.length = parseFloat(token);
+          }
+      }
     }
-  }
-  return tree;
+    resolve(tree);
+  });
 };
 
-export function traverseTree(tree, callback) {
-  callback(tree);
-  if (tree.children) {
-    tree.children.forEach(subTree => traverseTree(subTree, callback));
-  }
-}
+const defaultGetName = (node) => node.name;
+const defaultGetBranchLength = (node) => node.length;
 
-var newick = {};
-newick.parse = parseNewick;
+/**
+ * @param root:Object The tree
+ * @param getName:Function called on each node to get the name
+ * @param getBranchLength:Function called on each node to get the branch length
+ */
+export function writeNewick(root, getName = defaultGetName, getBranchLength = defaultGetBranchLength) {
+	function nested(nest) {
+		let subtree = '';
+		if(nest.hasOwnProperty('children')) {
+			let children = [];
+			nest.children.forEach(function(child) {
+				let subsubtree = nested(child);
+				children.push(subsubtree);
+			});
+      subtree = '(' + children.join() + ')';
+      const name = getName(nest);
+      if (name) {
+        subtree = subtree + name;
+      }
+      const branchLength = getBranchLength(nest);
+      if (branchLength !== undefined) {
+        subtree = subtree + ':' + branchLength;
+      }
+		}
+		else{
+      let leaf = "";
+      const name = getName(nest);
+      if(name) {
+        leaf = name;
+      }
+      const branchLength = getBranchLength(nest);
+      if(branchLength !== undefined) {
+        leaf = leaf + ':' + branchLength;
+      }
+      subtree = subtree + leaf;
+		}
+		return subtree;
+	}
+	return nested(root) + ';';
+};
 
-export default newick;
+
+export default {
+  parse: parseNewick,
+  write: writeNewick,
+};
