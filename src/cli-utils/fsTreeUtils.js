@@ -1,8 +1,8 @@
 import sentenceCase from 'sentence-case';
 import _ from 'lodash';
-import { parseTree, printTree } from '../js/utils/phylogeny';
-import phyloUtils from '../js/utils/phylogeny/phyloUtils';
-import treeUtils from '../js/utils/treeUtils';
+import { parseTree, printTree } from '../client/utils/phylogeny';
+import phyloUtils from '../client/utils/phylogeny/phyloUtils';
+import treeUtils from '../client/utils/treeUtils';
 import { readFile, promiseWriteStream } from './fsUtils';
 import { getSpeciesCounts } from './fsSpeciesGeoUtils';
 
@@ -80,3 +80,10 @@ export function printIntersection(treePath, speciesPath, nameColumn, outputPath)
       console.log('Done!');
   }));
 }
+
+export default {
+  countNodes,
+  printNames,
+  countIntersection,
+  printIntersection,
+};

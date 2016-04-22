@@ -11,7 +11,7 @@ module.exports = {
     'webpack-dev-server/client?http://localhost:3003',
     // 'webpack/hot/only-dev-server',
     'webpack/hot/dev-server',
-    './js/index.js'
+    './src/client/index.js'
   ],
   output: {
     path: path.join(__dirname, '../static'),

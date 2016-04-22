@@ -7,7 +7,7 @@ var devFlagPlugin = new webpack.DefinePlugin({
 
 module.exports = {
   entry: [
-    './js/index.js'
+    './src/client/index.js'
   ],
   output: {
     path: __dirname + '/static/',

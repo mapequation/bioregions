@@ -5,9 +5,11 @@
     "start": "pm2 start ecosystem.json",
     "logs": "pm2 logs --merge-logs --lines 0 --timestamp \"YYYY-MM-DD HH:mm Z\"",
     "dev": "DEBUG=true node server.js",
-    "build": "webpack -p --config webpack.production.js --stack_size=100000",
+    "build": "NODE_ENV=production webpack -p --config webpack/production.js --stack_size=100000",
     "test": "NODE_ENV=test ./node_modules/.bin/mocha-webpack",
-    "test:watch": "npm run test -- --watch"
+    "test:watch": "npm run test -- --watch",
+    "test:cliOld": "node_modules/.bin/mocha --require babel-register src/cli-utils/__tests__/fsTreeUtils-test.js",
+    "test:cli": "node_modules/.bin/mocha --opts mocha.opts"
   },
   "dependencies": {
     "axios": "^0.7.0",

@@ -14,7 +14,7 @@ const config = {
 //     './js/index.js'
 //   ],
   entry: {
-    client: [path.resolve(__dirname, '../js/index.js')]
+    client: [path.resolve(__dirname, '../src/client/index.js')]
   },
 //   output: {
 //     path: path.join(__dirname, '../static'),

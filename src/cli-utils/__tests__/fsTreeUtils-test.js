@@ -1,8 +1,7 @@
+import '../../__tests__/testHelper'
 import { expect } from 'chai'
-// import sinon from 'sinon'
-import fsTreeUtils from '../fsTreeUtils'
-import fsUtils from '../fsUtils'
 import fs from 'fs-promise'
+import fsTreeUtils from '../fsTreeUtils'
 
 describe('cli-utils', () => {
   const speciesSample = `name,geo
@@ -14,7 +13,7 @@ D,2
 D,3`;
   const treeSample = '((A,B),C,(D,E));';
   
-  describe('treeUtils', () => {       
+  describe('fsTreeUtils', () => {
     
     before(() => {
       console.log('Creating temporary files...');
@@ -36,7 +35,7 @@ D,3`;
       it('should count nodes and leaf nodes', () => {
         const res = fsTreeUtils.countNodes('tmptree');
         return expect(res).to.eventually.deep.eq({
-          numNodes: 9,
+          numNodes: 8,
           numLeafNodes: 5,
         });
       })
