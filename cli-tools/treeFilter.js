@@ -1,6 +1,6 @@
 import fsp from 'fs-promise';
 import { parseTree } from '../js/utils/phylogeny';
-import { visitTreeDepthFirst, getLeafNodes } from '../js/utils/tree';
+import treeUtils from '../js/utils/treeUtils';
 import tabularStream from 'tabular-stream';
 import sentenceCase from 'sentence-case';
 import es from 'event-stream';
@@ -62,7 +62,7 @@ export function printNames(treePath, outputPath) {
       readTree(treePath)
         .then(tree => {
           console.log("Visit tree...");
-          visitTreeDepthFirst(tree, node => {
+          treeUtils.visitTreeDepthFirst(tree, node => {
             if (!node.children)
               out.write(node.name + '\n');
           });
@@ -111,9 +111,13 @@ export function intersection(treePath, speciesPath, nameColumn, outputPath) {
     promiseWriteStream(outputPath)
   ])
   .then(([tree, species, out]) => {
-    let leafNodes = getLeafNodes(tree);
+    const leafNodes = treeUtils.filterDepthFirst(tree, node => {
+      node.count = 0; // Reset count
+      return !node.children;
+    });
+    // let leafNodes = treeUtils.getLeafNodes(tree);
     console.log(`Intersecting ${leafNodes.length} leaf nodes on name...`);
-    let sizeIntersection = leafNodes.reduce((sum, {name}) => {
+    const sizeIntersection = leafNodes.reduce((sum, {name}) => {
       return sum + (species[sentenceCase(name)] ? 1 : 0);
     }, 0);
     console.log(`${sizeIntersection} / ${leafNodes.length} intersecting species`);

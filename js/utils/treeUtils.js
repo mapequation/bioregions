@@ -43,7 +43,8 @@ export function filterDepthFirst(root, callback, preorder = true) {
  * @return true if the visitation was interrupted with an early exit
  */
 export function visitTreeBreadthFirst(root, callback) {
-	let q = [], x;
+  const q = [];
+  let x;
 
 	q.push(root);
 	while (q.length > 0) {
@@ -55,16 +56,25 @@ export function visitTreeBreadthFirst(root, callback) {
 
 export function visitLeafNodes(root, callback) {
   visitTreeDepthFirst(root, node => {
-    if (!node.children)
+    if (!node.children) {
       callback(node);
+    }
+  });
+}
+
+export function mapLeafNodes(root, callback) {
+  const res = [];
+  visitLeafNodes(root, (leaf) => {
+    res.push(callback(leaf));
   });
 }
 
 export function getLeafNodes(root) {
-  let leafNodes = [];
+  const leafNodes = [];
   visitTreeDepthFirst(root, node => {
-    if (!node.children)
+    if (!node.children) {
       leafNodes.push(node);
+    }
   });
   return leafNodes;
 }
@@ -79,7 +89,7 @@ export function collapse(node) {
 
 /**
  * Visit the tree from bottom to top with mutator callbacks
- * to set aggregated values on the nodes 
+ * to set aggregated values on the nodes
  * @param root:Object The tree
  * @param parentMutator Function called on non-leaf nodes
  * @param leafMutator Function called on leaf nodes
@@ -93,3 +103,13 @@ export function aggregate(root, parentMutator, leafMutator) {
   }, false);
 }
 
+export default {
+  visitTreeDepthFirst,
+  mapDepthFirst,
+  filterDepthFirst,
+  visitTreeBreadthFirst,
+  visitLeafNodes,
+  mapLeafNodes,
+  getLeafNodes,
+  collapse,
+};

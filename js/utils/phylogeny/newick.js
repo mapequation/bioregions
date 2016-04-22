@@ -95,15 +95,25 @@ export function parseNewick(s) {
   });
 };
 
-const defaultGetName = (node) => node.name;
-const defaultGetBranchLength = (node) => node.length;
+
+const defaultOpts = {
+  getName: (node) => node.name,
+  getBranchLength: (node) => node.length,
+}
 
 /**
+ * Write tree to newick formatted string.
+ * @param [opts]: Object Optional object with getters getName and getBranchLength
  * @param root:Object The tree
- * @param getName:Function called on each node to get the name
- * @param getBranchLength:Function called on each node to get the branch length
  */
-export function writeNewick(root, getName = defaultGetName, getBranchLength = defaultGetBranchLength) {
+export function writeNewick(opts, root) {
+  if (root === undefined) {
+    root = opts;
+    opts = defaultOpts;
+  }
+  else {
+    opts = Object.assign({}, defaultOpts, opts);
+  }
 	function nested(nest) {
 		let subtree = '';
 		if(nest.hasOwnProperty('children')) {
@@ -113,22 +123,22 @@ export function writeNewick(root, getName = defaultGetName, getBranchLength = de
 				children.push(subsubtree);
 			});
       subtree = '(' + children.join() + ')';
-      const name = getName(nest);
+      const name = opts.getName(nest);
       if (name) {
         subtree = subtree + name;
       }
-      const branchLength = getBranchLength(nest);
+      const branchLength = opts.getBranchLength(nest);
       if (branchLength !== undefined) {
         subtree = subtree + ':' + branchLength;
       }
 		}
 		else{
       let leaf = "";
-      const name = getName(nest);
+      const name = opts.getName(nest);
       if(name) {
         leaf = name;
       }
-      const branchLength = getBranchLength(nest);
+      const branchLength = opts.getBranchLength(nest);
       if(branchLength !== undefined) {
         leaf = leaf + ':' + branchLength;
       }

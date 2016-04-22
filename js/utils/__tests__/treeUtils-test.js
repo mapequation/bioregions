@@ -2,7 +2,7 @@
 import { expect } from 'chai'
 // import sinon from 'sinon'
 import { visitTreeDepthFirst, visitTreeBreadthFirst, visitLeafNodes,
-    mapDepthFirst, filterDepthFirst } from '../tree'
+    mapDepthFirst, filterDepthFirst } from '../treeUtils'
 import { parseTree } from '../phylogeny'
 
 

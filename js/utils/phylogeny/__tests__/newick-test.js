@@ -35,7 +35,7 @@ describe('newick', () => {
 
     describe('parse', () => {
         it('should parse a newick formatted string to json', () => {
-            expect(newick.parse(newick1)).to.eventually.deep.eq(tree1);
+            return expect(newick.parse(newick1)).to.eventually.deep.eq(tree1);
         })
 
         it('should parse newick data with branch lengths', () => {
@@ -50,6 +50,18 @@ describe('newick', () => {
         
         it('should write branch lengths if exist', () => {
             expect(newick.write(treeWithBranchLengths)).to.eq(newickWithBranchLengths);
+        })
+        
+        it('should write with custom names', () => {
+            expect(newick.write({
+                getName: (node) => `*${node.name}`,
+            }, treeWithBranchLengths)).to.eq('(*A:1,*B:2)*:3;');
+        })
+        
+        it('should write with custom lengths', () => {
+            expect(newick.write({
+                getBranchLength: (node) => node.length * 2,
+            }, treeWithBranchLengths)).to.eq('(A:2,B:4):6;');
         })
     })
 })
