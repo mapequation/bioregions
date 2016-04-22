@@ -2,6 +2,8 @@ import { parseNexus } from './nexus';
 import { parseNewick, writeNewick } from './newick';
 import { visitTreeDepthFirst } from '../treeUtils';
 
+export { writeNewick as printTree };
+
 export function parseTree(str) {
 
   let promise = new Promise(function(resolve, reject) {
@@ -48,8 +50,4 @@ export function parseTree(str) {
     console.log('Error parsing tree:', error);
     throw(new Error(`Error parsing tree: ${error.message || error}.`));
   });
-}
-
-export function printTree(tree) {
-  return writeNewick(tree);
 }

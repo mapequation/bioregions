@@ -1,9 +1,9 @@
 #!/usr/bin/env node --max-old-space-size=4096
 require('babel-register');
-// require('../bin-babel/treeFilter');
 var yargs = require('yargs');
 var fs = require('fs');
-var treeFilter = require('../cli-tools/treeFilter');
+var fsTreeUtils = require('../cli-tools/fsTreeUtils');
+var fsSpeciesGeoUtils = require('../cli-tools/fsSpeciesGeoUtils');
 var moment = require('moment');
 
 var argv = yargs
@@ -35,17 +35,17 @@ function onError(err) {
 
 switch (argv._[0]) {
   case 'count':
-    treeFilter.countNodes(argv.input_tree).then(onEnd).catch(onError);
+    fsTreeUtils.countNodes(argv.input_tree).then(onEnd).catch(onError);
     break;
   case 'names':
-    treeFilter.printNames(argv.input_tree, argv.output_names).then(onEnd).catch(onError);
+    fsTreeUtils.printNames(argv.input_tree, argv.output_names).then(onEnd).catch(onError);
     break;
   case 'count-intersection':
-    treeFilter.countIntersection(argv.input_tree, argv.input_species, argv.name_column)
+    fsTreeUtils.countIntersection(argv.input_tree, argv.input_species, argv.name_column)
       .then(onEnd).catch(onError);
     break;
   case 'print-intersection':
-    treeFilter.printIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_tree)
+    fsTreeUtils.printIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_tree)
       .then(onEnd).catch(onError);
     break;
   default:
