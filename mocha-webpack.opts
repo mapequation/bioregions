@@ -3,4 +3,4 @@
 --reporter spec
 --require source-map-support/register
 --webpack-config webpack.config.js
-src/**/*-test.js
+src/client/**/*-test.js

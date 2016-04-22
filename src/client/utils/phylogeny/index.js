@@ -8,17 +8,17 @@ export function parseTree(str) {
 
   let promise = new Promise(function(resolve, reject) {
 
-    console.log("Try parse tree...");
+    // console.log("Try parse tree...");
     str = str.trim();
     if (!str)
       return reject("No content in tree file")
 
     if (str.charAt(0) === '(') { // If newick format
-      console.log("Parse Newick...");
+      // console.log("Parse Newick...");
       return resolve(parseNewick(str));
     }
 
-    console.log("Parse Nexus...");
+    // console.log("Parse Nexus...");
     if (str.substr(0, 6).toLowerCase() === '#nexus') { // If nexus format
       let nexus = parseNexus(str);
       if (nexus.error) {
@@ -28,7 +28,7 @@ export function parseTree(str) {
       if (nexus.treesblock.trees.length == 0)
         return reject("No trees in nexus file.");
 
-      console.log("Nexus tree parsed successfully:", nexus);
+      // console.log("Nexus tree parsed successfully:", nexus);
       const {label, newick} = nexus.treesblock.trees[0];
       const {translate} = nexus.treesblock;
 

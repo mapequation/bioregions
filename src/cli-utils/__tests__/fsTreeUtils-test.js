@@ -2,21 +2,22 @@ import '../../__tests__/testHelper'
 import { expect } from 'chai'
 import fs from 'fs-promise'
 import fsTreeUtils from '../fsTreeUtils'
+import treeUtils from '../../client/utils/treeUtils'
+import { printTree } from '../../client/utils/phylogeny'
 
 describe('cli-utils', () => {
   const speciesSample = `name,geo
-A,0
-A,1
-B,1
-D,1
-D,2
-D,3`;
-  const treeSample = '((A,B),C,(D,E));';
+Sp A,0
+Sp A,1
+Sp B,1
+Sp D,1
+Sp D,2
+Sp D,3`;
+  const treeSample = '((Sp_A,Sp_B),Sp_C,(Sp_d,Sp_e));';
   
   describe('fsTreeUtils', () => {
     
     before(() => {
-      console.log('Creating temporary files...');
         return Promise.all([
           fs.writeFile('tmptree', treeSample),
           fs.writeFile('tmpspecies', speciesSample),
@@ -24,10 +25,10 @@ D,3`;
     });
     
     after(() => {
-      console.log('Removing temporary files...');
       return Promise.all([
           fs.unlink('tmptree'),
-          fs.unlink('tmpspecies'),        
+          fs.unlink('tmpspecies'),
+          fs.unlink('tmpresult').catch(() => {}), // Avoid Error: ENOENT: no such file...
       ]);
     })
     
@@ -35,9 +36,29 @@ D,3`;
       it('should count nodes and leaf nodes', () => {
         const res = fsTreeUtils.countNodes('tmptree');
         return expect(res).to.eventually.deep.eq({
-          numNodes: 8,
-          numLeafNodes: 5,
+          numTreeNodes: 8,
+          numTreeSpecies: 5,
         });
+      })
+    })
+    
+    describe('countIntersection', () => {
+      it('should count intersection between species tree and species geo records', () => {
+        const res = fsTreeUtils.countIntersection('tmptree', 'tmpspecies', 'name');
+        return expect(res).to.eventually.deep.eq({
+          numTreeSpecies: 5,
+          numGeoSpecies: 3,
+          numCommonSpecies: 3,
+        });
+      })
+    })
+    
+    describe('normalizeNames', () => {
+      it('should normalize names', () => {
+        const res = fsTreeUtils.normalizeNames('tmptree','tmpresult')
+          .then(fsTreeUtils.readTree)
+          .then(printTree)
+        return expect(res).to.eventually.eq('((sp a,sp b),sp c,(sp d,sp e));');
       })
     })
   })

@@ -1,3 +1,4 @@
+import '../../__tests__/testHelper'
 import { expect } from 'chai'
 import fs from 'fs-promise'
 import fsSpeciesGeoUtils from '../fsSpeciesGeoUtils'
@@ -14,14 +15,12 @@ D,3`;
   describe('fsSpeciesGeoUtils', () => {
     
     before(() => {
-      console.log('Creating temporary files...');
         return Promise.all([
           fs.writeFile('tmpspecies', speciesSample),
         ]);
     });
     
     after(() => {
-      console.log('Removing temporary files...');
       return Promise.all([
           fs.unlink('tmpspecies'),        
       ]);

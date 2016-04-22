@@ -7,9 +7,9 @@
     "dev": "DEBUG=true node server.js",
     "build": "NODE_ENV=production webpack -p --config webpack/production.js --stack_size=100000",
     "test": "NODE_ENV=test ./node_modules/.bin/mocha-webpack",
-    "test:watch": "npm run test -- --watch",
-    "test:cliOld": "node_modules/.bin/mocha --require babel-register src/cli-utils/__tests__/fsTreeUtils-test.js",
-    "test:cli": "node_modules/.bin/mocha --opts mocha.opts"
+    "test-watch": "npm run test -- --watch",
+    "test-cli": "node_modules/.bin/mocha --opts mocha.opts",
+    "test-cli-watch": "npm run test-cli -- --watch"
   },
   "dependencies": {
     "axios": "^0.7.0",

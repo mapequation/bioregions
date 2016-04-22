@@ -46,7 +46,7 @@ const config = {
   },
   resolve: {
     extensions: ['', '.js', '.json'],
-    root: path.resolve(__dirname, '../js'),
+    root: path.resolve(__dirname, '../src/client'),
   }
 //   entry: {
 //     client: [path.resolve(__dirname, '../client/index.js')]
