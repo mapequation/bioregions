@@ -2,8 +2,8 @@
 require('babel-register');
 var yargs = require('yargs');
 var fs = require('fs');
-var fsTreeUtils = require('../cli-tools/fsTreeUtils');
-var fsSpeciesGeoUtils = require('../cli-tools/fsSpeciesGeoUtils');
+var fsTreeUtils = require('../src/cli-utils/fsTreeUtils');
+var fsSpeciesGeoUtils = require('../src/cli-utils/fsSpeciesGeoUtils');
 var moment = require('moment');
 
 var argv = yargs
@@ -16,6 +16,10 @@ var argv = yargs
   .example('$0 count-intersection tree.nwk species.tsv name')
   .command('print-intersection <input_tree> <input_species> <name_column> <output_tree>', 'Prune <input_tree> to species in <input_species> and write to <output_tree>')
   .example('$0 print-intersection tree.nwk species.tsv name intersection.nwk')
+  .command('normalize-tree-species-names <input_tree> <output_tree>', 'Normalize names in <input_tree> and write new tree to <output_tree>')
+  .example('$0 normalize-tree-species-names tree.nwk tree-normalized.nwk')
+  .command('normalize-geo-species-names <input_species> <name_column> <output_species>', 'Normalize names in <input_species> and write new species distribution to <output_species>')
+  .example('$0 normalize-geo-species-names species.csv species species-normalized.csv')
   .help('h')
   .alias('h', 'help')
   .argv;
@@ -46,6 +50,14 @@ switch (argv._[0]) {
     break;
   case 'print-intersection':
     fsTreeUtils.printIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_tree)
+      .then(onEnd).catch(onError);
+    break;
+  case 'normalize-tree-species-names':
+    fsTreeUtils.normalizeNames(argv.input_tree, argv.output_tree)
+      .then(onEnd).catch(onError);
+    break;
+  case 'normalize-geo-species-names':
+    fsSpeciesGeoUtils.copyWithNormalizedNames(argv.input_species, argv.name_column, argv.output_species)
       .then(onEnd).catch(onError);
     break;
   default:

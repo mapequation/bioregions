@@ -1,5 +1,5 @@
 import _ from 'lodash';
-import sentenceCase from 'sentence-case';
+import { normalizeSpeciesName } from './naming'
 
 /**
  * Visits the subtree rooted at this node using a depth first search,
@@ -169,7 +169,7 @@ export function clone(tree) {
 export function normalizeNames(tree) {
     visitTreeDepthFirst(tree, (node) => {
         if (node.name) {
-            node.name = sentenceCase(node.name);
+            node.name = normalizeSpeciesName(node.name);
         }
     });
 }

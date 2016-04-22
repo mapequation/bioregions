@@ -23,3 +23,8 @@ export function promiseWriteStream(path) {
   });
 
 }
+
+export default {
+  readFile,
+  promiseWriteStream,
+}

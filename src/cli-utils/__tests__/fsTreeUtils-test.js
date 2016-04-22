@@ -2,7 +2,6 @@ import '../../__tests__/testHelper'
 import { expect } from 'chai'
 import fs from 'fs-promise'
 import fsTreeUtils from '../fsTreeUtils'
-import treeUtils from '../../client/utils/treeUtils'
 import { printTree } from '../../client/utils/phylogeny'
 
 describe('cli-utils', () => {
@@ -13,17 +12,17 @@ Sp B,1
 Sp D,1
 Sp D,2
 Sp D,3`;
-  const treeSample = '((Sp_A,Sp_B),Sp_C,(Sp_d,Sp_e));';
-  
+  const treeSample = '((Sp_a,Sp_b),Sp_c,(Sp_d,Sp_e));';
+
   describe('fsTreeUtils', () => {
-    
+
     before(() => {
         return Promise.all([
           fs.writeFile('tmptree', treeSample),
           fs.writeFile('tmpspecies', speciesSample),
         ]);
     });
-    
+
     after(() => {
       return Promise.all([
           fs.unlink('tmptree'),
@@ -31,7 +30,7 @@ Sp D,3`;
           fs.unlink('tmpresult').catch(() => {}), // Avoid Error: ENOENT: no such file...
       ]);
     })
-    
+
     describe('countNodes', () => {
       it('should count nodes and leaf nodes', () => {
         const res = fsTreeUtils.countNodes('tmptree');
@@ -41,7 +40,7 @@ Sp D,3`;
         });
       })
     })
-    
+
     describe('countIntersection', () => {
       it('should count intersection between species tree and species geo records', () => {
         const res = fsTreeUtils.countIntersection('tmptree', 'tmpspecies', 'name');
@@ -52,13 +51,13 @@ Sp D,3`;
         });
       })
     })
-    
+
     describe('normalizeNames', () => {
       it('should normalize names', () => {
         const res = fsTreeUtils.normalizeNames('tmptree','tmpresult')
           .then(fsTreeUtils.readTree)
           .then(printTree)
-        return expect(res).to.eventually.eq('((sp a,sp b),sp c,(sp d,sp e));');
+        return expect(res).to.eventually.eq('((Sp a,Sp b),Sp c,(Sp d,Sp e));');
       })
     })
   })

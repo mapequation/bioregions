@@ -1,8 +1,9 @@
 import fsp from 'fs-promise';
 import tabularStream from 'tabular-stream';
-import sentenceCase from 'sentence-case';
 import es from 'event-stream';
 import _ from 'lodash';
+import { promiseWriteStream } from './fsUtils';
+import { normalizeSpeciesName } from '../client/utils/naming';
 
 /**
  * Read species records and return some statistics.
@@ -20,7 +21,7 @@ export function getSpeciesCounts(speciesPath, nameColumn, normalizeNames = true)
     const speciesCounts = {};
     let totalCount = 0;
     let uniqueCount = 0;
-    const normalize = normalizeNames ? sentenceCase : (name) => name;
+    const normalize = normalizeNames ? normalizeSpeciesName : (name) => name;
     // console.log(`Reading species from ${speciesPath} on column ${nameColumn}...`);
     fsp.createReadStream(speciesPath)
       .pipe(tabularStream())
@@ -48,6 +49,40 @@ export function getSpeciesCounts(speciesPath, nameColumn, normalizeNames = true)
   });
 }
 
+export function copyWithNormalizedNames(speciesPath, nameColumn, outputPath) {
+  return promiseWriteStream(outputPath)
+    .then(out => new Promise((resolve, reject) => {
+      // console.log(`Reading species from ${speciesPath} on column ${nameColumn}...`);
+      let numRows = 0;
+      let numNamedRows = 0;
+      fsp.createReadStream(speciesPath)
+        .pipe(tabularStream())
+        .pipe(es.map((row, cb) => {
+          if (numRows === 0) {
+            out.write(_.keys(row) + '\n');
+          }
+          ++numRows;
+          const name = row[nameColumn];
+          if (name) {
+            ++numNamedRows;
+            const normalizedName = normalizeSpeciesName(name);
+            row[nameColumn] = normalizedName;
+            cb(null, _.values(row).join(',') + '\n');
+          }
+          else {
+            cb(); // Drop data
+          }
+        }))
+        .pipe(out)
+        .on('error', reject)
+        .on('finish', () => {
+          // console.log(`Normalized ${numNamedRows} named rows out of ${numRows}.`);
+          resolve(outputPath);
+        });
+    }));
+}
+
 export default {
   getSpeciesCounts,
+  copyWithNormalizedNames,
 };

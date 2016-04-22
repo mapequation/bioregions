@@ -1,9 +1,9 @@
-import sentenceCase from 'sentence-case';
 import _ from 'lodash';
 import { parseTree, printTree } from '../client/utils/phylogeny';
 import treeUtils from '../client/utils/treeUtils';
 import { readFile, promiseWriteStream } from './fsUtils';
 import { getSpeciesCounts } from './fsSpeciesGeoUtils';
+import { normalizeSpeciesName } from '../client/utils/naming';
 
 export function readTree(path) {
   return readFile(path, 'utf8')
@@ -49,7 +49,7 @@ export function countIntersection(treePath, speciesPath, nameColumn) {
     const leafNodes = treeUtils.getLeafNodes(tree);
     // console.log(`Intersecting ${leafNodes.length} leaf nodes with ${species.uniqueCount} species on name...`);
     const sizeIntersection = leafNodes.reduce((sum, {name}) => {
-      return sum + (species.speciesCounts[sentenceCase(name)] ? 1 : 0);
+      return sum + (species.speciesCounts[normalizeSpeciesName(name)] ? 1 : 0);
     }, 0);
     // console.log(`${sizeIntersection} / ${leafNodes.length} intersecting species`);
     return {
@@ -67,7 +67,7 @@ export function printIntersection(treePath, speciesPath, nameColumn, outputPath)
     promiseWriteStream(outputPath),
   ])
   .then(([tree, species, out]) => new Promise((resolve, reject) => {
-      const getLeafCount = ({name}) => species.speciesCounts[sentenceCase(name)] || 0;
+      const getLeafCount = ({name}) => species.speciesCounts[normalizeSpeciesName(name)] || 0;
       // console.log('Aggregating intersection counts...');
       treeUtils.aggregateCount(tree, getLeafCount);
       // console.log('Pruning...');
