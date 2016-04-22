@@ -2,15 +2,16 @@
 import { expect } from 'chai'
 // import sinon from 'sinon'
 import { visitTreeDepthFirst, visitTreeBreadthFirst, visitLeafNodes,
-    mapDepthFirst, filterDepthFirst } from '../treeUtils'
-import { parseTree } from '../phylogeny'
+    mapDepthFirst, filterDepthFirst, collapse } from '../treeUtils'
+import { parseTree, printTree } from '../phylogeny'
 
 
-describe('tree', () => {
-  let tree = '((00,01)0,1,(20,21)2)root;';
+describe('treeUtils', () => {
+  const newickTree = '((00,01)0,1,(20,21)2)root;';
+  let tree = null;
   
   before(() => {
-      return parseTree(tree).then(data => {
+      return parseTree(newickTree).then(data => {
           tree = data;
       })
   });
@@ -26,9 +27,9 @@ describe('tree', () => {
     
     it('should visit in post-order', () => {
       const names = [];
-      visitTreeDepthFirst(tree, node => {
+      visitTreeDepthFirst({ postOrder: true }, tree, node => {
           names.push(node.name);
-      }, false)
+      })
       expect(names.join(',')).to.eq('00,01,0,1,20,21,2,root');
     })
     
@@ -52,20 +53,40 @@ describe('tree', () => {
     
     it('should exit early post', () => {
       const names = [];
-      visitTreeDepthFirst(tree, node => {
+      visitTreeDepthFirst({ postOrder: true }, tree, node => {
           names.push(node.name);
           return node.name === '1';
-      }, false)
+      })
       expect(names.join(',')).to.eq('00,01,0,1');
     })
     
     it('should exit earlier post', () => {
       const names = [];
-      visitTreeDepthFirst(tree, node => {
+      visitTreeDepthFirst({ postOrder: true }, tree, node => {
           names.push(node.name);
           return node.name === '00';
-      }, false)
+      })
       expect(names.join(',')).to.eq('00');
+    })
+    
+    it('should include all but one node', () => {
+      const names = [];
+      visitTreeDepthFirst({
+        include: (node) => node.name !== '0'
+      }, tree, node => {
+        names.push(node.name);
+      });
+      expect(names.join(',')).to.eq('root,00,01,1,2,20,21');
+    })
+    
+    it('should include only non-leaf nodes', () => {
+      const names = [];
+      visitTreeDepthFirst({
+        include: (node) => node.children
+      }, tree, node => {
+        names.push(node.name);
+      });
+      expect(names.join(',')).to.eq('root,0,2');
     })
   })
   
@@ -76,17 +97,6 @@ describe('tree', () => {
     })
   })
   
-  describe('filterDepthFirst', () => {
-    it('should map depth first with one omitted node', () => {
-      const names = filterDepthFirst(tree, node => node.name !== '0' && node.name);
-      expect(names.join(',')).to.eq('root,00,01,1,2,20,21');
-    })
-    
-    it('should map depth first with only non-leaf nodes', () => {
-      const names = filterDepthFirst(tree, node => node.children && node.name);
-      expect(names.join(',')).to.eq('root,0,2');
-    })
-  })
   
   describe('visitTreeBreadthFirst', () => {
     it('should visit in breath first order', () => {
@@ -105,6 +115,16 @@ describe('tree', () => {
       })
       expect(names.join(',')).to.eq('root,0,1,2,00');
     })
+    
+    it('should include only specified nodes', () => {
+      const names = [];
+      visitTreeBreadthFirst({
+        include: (node) => node.name !== '2'
+      }, tree, node => {
+          names.push(node.name);
+      })
+      expect(names.join(',')).to.eq('root,0,1,00,01');
+    })
   })
   
   describe('visitLeafNodes', () => {
@@ -114,6 +134,25 @@ describe('tree', () => {
           names.push(node.name);
       })
       expect(names.join(',')).to.eq('00,01,1,20,21');
+    })
+  })
+  
+  describe('collapse', () => {
+    it('should collapse tree from root', () => {
+      const res = parseTree(newickTree)
+        .then(collapse)
+        .then(printTree);
+      return expect(res).to.eventually.eq('root;');
+    })
+    
+    it('should collapse tree one level deep', () => {
+      const res = parseTree(newickTree)
+        .then(tree => {
+            tree.children.forEach(collapse);
+            return tree;
+        })
+        .then(printTree);
+      return expect(res).to.eventually.eq('(0,1,2)root;');
     })
   })
 })

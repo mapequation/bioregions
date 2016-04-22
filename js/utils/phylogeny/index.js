@@ -1,5 +1,6 @@
 import { parseNexus } from './nexus';
-import { parseNewick, traverseTree } from './newick';
+import { parseNewick, writeNewick } from './newick';
+import { visitTreeDepthFirst } from '../treeUtils';
 
 export function parseTree(str) {
 
@@ -32,7 +33,7 @@ export function parseTree(str) {
       let tree = parseNewick(newick);
 
       if (translate) {
-        traverseTree(tree, node => {
+        visitTreeDepthFirst(tree, node => {
           node.name = translate[node.name] || node.name;
         });
       }
@@ -47,4 +48,8 @@ export function parseTree(str) {
     console.log('Error parsing tree:', error);
     throw(new Error(`Error parsing tree: ${error.message || error}.`));
   });
+}
+
+export function printTree(tree) {
+  return writeNewick(tree);
 }

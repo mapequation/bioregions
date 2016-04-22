@@ -116,7 +116,7 @@ export function writeNewick(opts, root) {
   }
 	function nested(nest) {
 		let subtree = '';
-		if(nest.hasOwnProperty('children')) {
+		if(nest.children) {
 			let children = [];
 			nest.children.forEach(function(child) {
 				let subsubtree = nested(child);

@@ -1,6 +1,7 @@
 import fsp from 'fs-promise';
-import { parseTree } from '../js/utils/phylogeny';
+import { parseTree, printTree } from '../js/utils/phylogeny';
 import treeUtils from '../js/utils/treeUtils';
+import phyloUtils from '../js/utils/phylogeny/phyloUtils';
 import tabularStream from 'tabular-stream';
 import sentenceCase from 'sentence-case';
 import es from 'event-stream';
@@ -56,7 +57,7 @@ export function countNodes(treePath) {
 export function printNames(treePath, outputPath) {
   return new Promise((resolve, reject) => {
     let out = fsp.createWriteStream(outputPath);
-    out.on('finished', resolve);
+    out.on('finish', resolve);
     out.on('error', reject);
     out.on('open', () => {
       readTree(treePath)
@@ -104,18 +105,13 @@ function getSpecies(speciesPath, nameColumn) {
   });
 }
 
-export function intersection(treePath, speciesPath, nameColumn, outputPath) {
+export function countIntersection(treePath, speciesPath, nameColumn) {
   return Promise.all([
     readTree(treePath),
     getSpecies(speciesPath, nameColumn),
-    promiseWriteStream(outputPath)
   ])
-  .then(([tree, species, out]) => {
-    const leafNodes = treeUtils.filterDepthFirst(tree, node => {
-      node.count = 0; // Reset count
-      return !node.children;
-    });
-    // let leafNodes = treeUtils.getLeafNodes(tree);
+  .then(([tree, species]) => {
+    const leafNodes = treeUtils.getLeafNodes(tree);
     console.log(`Intersecting ${leafNodes.length} leaf nodes on name...`);
     const sizeIntersection = leafNodes.reduce((sum, {name}) => {
       return sum + (species[sentenceCase(name)] ? 1 : 0);
@@ -125,10 +121,26 @@ export function intersection(treePath, speciesPath, nameColumn, outputPath) {
   });
 }
 
-
-
-// fs.readFileSync()
-
-// parseTree(treeString).then(tree => {
-//   console.log("tree:", tree);
-// });
+export function printIntersection(treePath, speciesPath, nameColumn, outputPath) {
+  return Promise.all([
+    readTree(treePath),
+    getSpecies(speciesPath, nameColumn),
+    promiseWriteStream(outputPath),
+  ])
+  .then(([tree, species, out]) => new Promise((resolve, reject) => {
+      const getLeafCount = ({name}) => species[sentenceCase(name)] || 0;
+      console.log('Aggregating intersection counts...');
+      phyloUtils.aggregateCount(tree, getLeafCount);
+      console.log('Pruning...');
+      const prunedTree = phyloUtils.prune(tree, ({count}) => count > 0);
+      console.log('Printing newick...');
+      const prunedNewick = printTree(prunedTree);
+      console.log('Writing to file...');
+      out.on('finish', resolve);
+      out.on('error', reject);
+      out.write(prunedNewick);
+      out.write('\n');
+      out.end();
+      console.log('Done!');
+  }));
+}
