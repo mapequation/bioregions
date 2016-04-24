@@ -7,19 +7,26 @@ var fsSpeciesGeoUtils = require('../src/cli-utils/fsSpeciesGeoUtils');
 var moment = require('moment');
 
 var argv = yargs
+  .wrap(yargs.terminalWidth())
   .usage('Usage: $0 <command> [options]')
-  .command('count <input_tree>', 'Count the number of nodes in the tree')
-  .example('$0 count tree.nwk')
-  .command('names <input_tree> <output_names>', 'Print the names of leaf nodes in the tree')
-  .example('$0 names tree.nwk names.txt')
-  .command('count-intersection <input_tree> <input_species> <name_column>', 'Count the number of nodes that co-occur in <input_tree> and <input_species>')
-  .example('$0 count-intersection tree.nwk species.tsv name')
-  .command('print-intersection <input_tree> <input_species> <name_column> <output_tree>', 'Prune <input_tree> to species in <input_species> and write to <output_tree>')
-  .example('$0 print-intersection tree.nwk species.tsv name intersection.nwk')
-  .command('normalize-tree-species-names <input_tree> <output_tree>', 'Normalize names in <input_tree> and write new tree to <output_tree>')
-  .example('$0 normalize-tree-species-names tree.nwk tree-normalized.nwk')
+  // tree-count
+  .command('tree-count <input_tree>', 'Count the number of nodes in the tree')
+  .example('$0 tree-count tree.nwk')
+  // tree-names
+  .command('tree-names <input_tree> <output_names>', 'Print the names of leaf nodes in the tree')
+  .example('$0 tree-names tree.nwk names.txt')
+  // common-nodes-count
+  .command('common-nodes-count <input_tree> <input_species> <name_column>', 'Count the number of nodes that co-occur in <input_tree> and <input_species>')
+  .example('$0 common-nodes-count tree.nwk species.tsv name')
+  // prune-tree-common-nodes
+  .command('prune-tree-common-nodes <input_tree> <input_species> <name_column> <output_tree>', 'Prune <input_tree> to species in <input_species> and write to <output_tree>')
+  .example('$0 prune-tree-common-nodes tree.nwk species.tsv name intersection.nwk')
+  // normalize-tree-species-names
+  .command('normalize-tree-species-names <input_tree> <output_tree>', 'Normalize names in <input_tree> and write new tree to <output_tree>. ("Genus_species" -> "Genus species")')
+  .example('$0 normalize-tree-species-names tree.nwk tree-normalized-names.nwk')
+  // normalize-geo-species-names
   .command('normalize-geo-species-names <input_species> <name_column> <output_species>', 'Normalize names in <input_species> and write new species distribution to <output_species>')
-  .example('$0 normalize-geo-species-names species.csv species species-normalized.csv')
+  .example('$0 normalize-geo-species-names species.csv species species-normalized-names.csv')
   .help('h')
   .alias('h', 'help')
   .argv;
@@ -38,17 +45,17 @@ function onError(err) {
 }
 
 switch (argv._[0]) {
-  case 'count':
+  case 'tree-count':
     fsTreeUtils.countNodes(argv.input_tree).then(onEnd).catch(onError);
     break;
-  case 'names':
+  case 'tree-names':
     fsTreeUtils.printNames(argv.input_tree, argv.output_names).then(onEnd).catch(onError);
     break;
-  case 'count-intersection':
+  case 'common-nodes-count':
     fsTreeUtils.countIntersection(argv.input_tree, argv.input_species, argv.name_column)
       .then(onEnd).catch(onError);
     break;
-  case 'print-intersection':
+  case 'prune-tree-common-nodes':
     fsTreeUtils.printIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_tree)
       .then(onEnd).catch(onError);
     break;
