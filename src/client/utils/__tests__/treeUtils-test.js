@@ -145,6 +145,27 @@ describe('treeUtils', () => {
     })
   })
   
+  describe('visitAncestors', () => {
+    it('should visit ancestors from leaf nodes to root', () => {
+      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(tree, ({name}) => [name, []]));
+      treeUtils.visitTreeDepthFirst(tree, node => {
+        treeUtils.visitAncestors(node, ancestor => {
+            ancestors[node.name].push(ancestor.name);
+        });
+      })
+      expect(ancestors).to.deep.eq({
+        root: [],
+        '0': ['root'],
+        '00': ['0', 'root'],
+        '01': ['0', 'root'],
+        '1': ['root'],
+        '2': ['root'],
+        '20': ['2', 'root'],
+        '21': ['2', 'root'],
+      });
+    })
+  })
+  
   describe('collapse', () => {
     it('should collapse tree from root', () => {
       const res = parseTree(newickTree)

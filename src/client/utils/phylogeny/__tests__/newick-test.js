@@ -26,12 +26,20 @@ describe('newick', () => {
             },
         ]
     };
+    function setParents(node) {
+        (node.children || []).forEach(child => {
+            child.parent = node;
+            setParents(child);
+        });
+    }
+    setParents(tree1);
     
     const newickWithBranchLengths = '(A:1,B:2):3;';
     const treeWithBranchLengths = { length: 3, name: '', children: [
         { name: 'A', length: 1 },
         { name: 'B', length: 2 },
     ]};
+    setParents(treeWithBranchLengths);
 
     describe('parse', () => {
         it('should parse a newick formatted string to json', () => {

@@ -86,6 +86,14 @@ export function getLeafNodes(root) {
   return leafNodes;
 }
 
+export function visitAncestors(node, callback) {
+  let current = node;
+  while (current.parent) {
+    current = current.parent;
+    callback(current);
+  }
+}
+
 export function collapse(node) {
   if (node.children) {
     node._children = node.children;
@@ -182,6 +190,7 @@ export default {
   visitLeafNodes,
   mapLeafNodes,
   getLeafNodes,
+  visitAncestors,
   collapse,
   aggregateCount,
   prune,
