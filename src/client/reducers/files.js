@@ -17,16 +17,16 @@ const initialState = {
     //   filenames: ['snakes_global_gbif.txt']
     // },
     {
-      name: "Mammals global",
+      name: "Global mammals",
       type: "point occurrences",
       size: "56Mb",
-      filenames: ['mammals.txt']
+      filenames: ['mammals_global.tsv']
     },
     {
       name: "Neotropical mammals",
       type: "point occurrences",
-      size: "2.3Mb",
-      filenames: ['mammals_gbif_SA.tsv']
+      size: "2.8Mb",
+      filenames: ['mammals_neotropics.csv']
     },
   ],
   error: false,
