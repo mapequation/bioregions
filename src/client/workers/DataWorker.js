@@ -237,7 +237,7 @@ function loadTextFile(file) {
 function loadFiles(files) {
   const numFiles = files.length;
 
-  let isShapefile = _.any(files, file => /shp$/.test(file.name));
+  let isShapefile = !_.every(files, file => !/shp$/.test(file.name));
 
   if (isShapefile)
     loadShapefiles(files);
