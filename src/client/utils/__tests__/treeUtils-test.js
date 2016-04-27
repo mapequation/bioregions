@@ -146,7 +146,7 @@ describe('treeUtils', () => {
   })
   
   describe('visitAncestors', () => {
-    it('should visit ancestors from leaf nodes to root', () => {
+    it('should visit ancestors above leaf nodes to root', () => {
       const ancestors = _.fromPairs(treeUtils.mapDepthFirst(tree, ({name}) => [name, []]));
       treeUtils.visitTreeDepthFirst(tree, node => {
         treeUtils.visitAncestors(node, ancestor => {
@@ -162,6 +162,25 @@ describe('treeUtils', () => {
         '2': ['root'],
         '20': ['2', 'root'],
         '21': ['2', 'root'],
+      });
+    })
+    
+    it('should visit ancestors including start node', () => {
+      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(tree, ({name}) => [name, []]));
+      treeUtils.visitTreeDepthFirst(tree, node => {
+        treeUtils.visitAncestors({ includeStartNode: true }, node, ancestor => {
+            ancestors[node.name].push(ancestor.name);
+        });
+      })
+      expect(ancestors).to.deep.eq({
+        root: ['root'],
+        '0': ['0', 'root'],
+        '00': ['00', '0', 'root'],
+        '01': ['01', '0', 'root'],
+        '1': ['1', 'root'],
+        '2': ['2', 'root'],
+        '20': ['20', '2', 'root'],
+        '21': ['21', '2', 'root'],
       });
     })
   })

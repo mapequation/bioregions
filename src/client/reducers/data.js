@@ -9,6 +9,7 @@ import * as S from '../utils/statistics';
 import colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
+import geoTreeUtils from '../utils/phylogeny/geoTreeUtils'
 
 const getInitialBinningState = () => {
   return {
@@ -82,7 +83,8 @@ const getInitialState = () => {
     clusterColors: [], // array of chroma colors for each cluster
     selectedCluster: -1, // clusterId if selected
     selectedSpecies: "",
-    phyloTree: null, // { name: "root", branchset: [{name, length}, {name, length, branchset}, ...] }
+    phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
+    clusterFractionLimit: 0.7, // For cluster pie charts
     isShowingInfomapUI: false,
     infomap: {
       numTrials: 1,
@@ -128,7 +130,7 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.ADD_PHYLO_TREE:
       return {
         ...state,
-        phyloTree: action.phyloTree,
+        phyloTree: geoTreeUtils.aggregateSortAndLimitClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit),
       };
     case ActionTypes.REMOVE_PHYLO_TREE:
       return {
@@ -170,6 +172,7 @@ export default function data(state = getInitialState(), action) {
         mapBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
         isShowingInfomapUI: false,
+        phyloTree: Object.assign({}, geoTreeUtils.aggregateSortAndLimitClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:

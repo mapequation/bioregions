@@ -86,8 +86,12 @@ export function getLeafNodes(root) {
   return leafNodes;
 }
 
-export function visitAncestors(node, callback) {
+export function visitAncestors(opts, node, callback) {
+  if (!callback)
+    [opts, node, callback] = [{}, opts, node];
   let current = node;
+  if (opts.includeStartNode)
+    callback(current);
   while (current.parent) {
     current = current.parent;
     callback(current);

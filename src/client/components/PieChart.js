@@ -1,24 +1,23 @@
 import React, {PropTypes} from 'react';
 import d3 from 'd3';
 
-function renderPieChart(data) {
 
-}
+const PieChart = ({size, data, colors}) => {
+  // data: {totCount, clusters: [{clusterId, count}, ..., {clusterId: 'rest', count}], rest: [{clusterId, count}, ...]}
 
-var PieChart = ({size, data, colors}) => {
-  // data: [{clusterId, count}, ...]
-
-  var arc = d3.svg.arc()
+  const arc = d3.svg.arc()
       .outerRadius(size / 2)
       .innerRadius(0);
 
-  var pie = d3.layout.pie()
+  const pie = d3.layout.pie()
       .sort(null)
       .value(function(d) { return d.count; });
 
-  var arcDescriptors = pie(data);
-  var arcs = arcDescriptors.map((arcDescriptor, i) => (
-    <path key={i} d={arc(arcDescriptor)} style={{stroke: 'white', fill: colors[arcDescriptor.data.clusterId]}}/>
+  const fillColors = (clusterId) => clusterId === 'rest' ? '#ccc' : colors[clusterId];  
+
+  const arcDescriptors = pie(data);
+  const arcs = arcDescriptors.map((arcDescriptor, i) => (
+    <path key={i} d={arc(arcDescriptor)} style={{stroke: 'white', fill: fillColors(arcDescriptor.data.clusterId)}}/>
   ));
 
   return (
