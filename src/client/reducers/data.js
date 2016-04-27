@@ -77,7 +77,7 @@ const getInitialState = () => {
     clusterIds: [], // array<int> of cluster id:s, matching bins array in index
     isClustering: false,
     clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
-    clustersPerSpecies: {}, // name -> {count, clusters: [{clusterId, count}, ...]}
+    clustersPerSpecies: {}, // name -> {count, clusters: limitRest([{clusterId, count}, ...])}
     statisticsBy: Display.BY_NAME, // name or cluster when clusters ready
     mapBy: Display.BY_NAME, // name or cluster when clusters ready
     clusterColors: [], // array of chroma colors for each cluster
@@ -172,7 +172,7 @@ export default function data(state = getInitialState(), action) {
         mapBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
         isShowingInfomapUI: false,
-        phyloTree: Object.assign({}, geoTreeUtils.aggregateSortAndLimitClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
+        phyloTree: !state.phyloTree ? null : Object.assign({}, geoTreeUtils.aggregateSortAndLimitClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:

@@ -1,7 +1,13 @@
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import d3 from 'd3';
-import * as S from '../utils/statistics';
+import {
+  countBy,
+  topSortedBy,
+  topIndicatorItems,
+  reduceLimitRest,
+} from '../utils/statistics';
+import _ from 'lodash';
 
 export function getBipartiteNetwork(species, features, bins) {
 
@@ -27,11 +33,10 @@ export function getBipartiteNetwork(species, features, bins) {
   return network.join('\n');
 }
 
-
 /**
 *
 * returns {
-*   clustersPerSpecies: {name -> {count, clusters: [{clusterId, count}, ...]}}
+*   clustersPerSpecies: {name -> {totCount, clusters: limitRest([{clusterId, count}, ... ])}}
 *   clusters: [{
 *    clusterId,
 *    numBins,
@@ -42,7 +47,7 @@ export function getBipartiteNetwork(species, features, bins) {
 *  }, ...]
 *
 */
-export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap) {
+export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap, clustersFractionLimit = 0.8) {
   if (bins.length === 0)
     return [];
   if (bins[0].clusterId < 0)
@@ -91,10 +96,10 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
         ++cluster.count;
       });
 
-      // const topCommonSpecies = S.topSortedBy(feature => feature.properties.name, 10, features);
-      const species = S.countBy(feature => feature.properties.name, features);
-      const topCommonSpecies = S.topSortedBy(d => d.count, 10, species);
-      const topIndicatorSpecies = S.topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies);
+      // const topCommonSpecies = topSortedBy(feature => feature.properties.name, 10, features);
+      const species = countBy(feature => feature.properties.name, features);
+      const topCommonSpecies = topSortedBy(d => d.count, 10, species);
+      const topIndicatorSpecies = topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies);
       const numRecords = features.length;
       const numSpecies = species.length;
       return {
@@ -107,6 +112,19 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
       }
     })
     .entries(bins);
+
+  // sort and limit clusters per species
+  _.forEach(clustersPerSpecies, cluPerSpecies => {
+    const sortedClusters = _(cluPerSpecies.clusters).sortBy('count').reverse().value();
+    const totCount = cluPerSpecies.count;
+
+    const limitedClusters = reduceLimitRest(0,
+        (sum, {count}) => sum + count,
+        sum => sum / totCount <= clustersFractionLimit,
+        (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
+        sortedClusters);
+    cluPerSpecies.clusters = limitedClusters;
+  });
 
   return {clusters, clustersPerSpecies};
 }

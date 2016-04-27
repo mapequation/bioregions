@@ -3,7 +3,7 @@ import d3 from 'd3';
 
 
 const PieChart = ({size, data, colors}) => {
-  // data: {totCount, clusters: [{clusterId, count}, ..., {clusterId: 'rest', count}], rest: [{clusterId, count}, ...]}
+  // data: limitRest([{clusterId, count}, ...])
 
   const arc = d3.svg.arc()
       .outerRadius(size / 2)
@@ -11,9 +11,9 @@ const PieChart = ({size, data, colors}) => {
 
   const pie = d3.layout.pie()
       .sort(null)
-      .value(function(d) { return d.count; });
+      .value(d => d.count);
 
-  const fillColors = (clusterId) => clusterId === 'rest' ? '#ccc' : colors[clusterId];  
+  const fillColors = (clusterId) => clusterId === 'rest' ? '#eee' : colors[clusterId];  
 
   const arcDescriptors = pie(data);
   const arcs = arcDescriptors.map((arcDescriptor, i) => (

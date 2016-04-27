@@ -99,15 +99,17 @@ describe('geoTreeUtils', () => {
             const clusterMap = new Map([[0,100], [1,11], [2,22], [3,33]]);
             const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
             const clusters = {count: totCount, clusters: clusterMap};
-            const result = _sortAndLimitClusters(clusters, 0.9);
+            const result = _sortAndLimitClusters(clusters, 0.8);
             return expect(result).to.deep.eq({
                 totCount,
                 clusters: [
                     { clusterId: 0, count: 100 },
-                    { clusterId: 3, count: 33 },
-                    { clusterId: 'rest', count: 33 },
+                    { clusterId: 'rest', count: 66, rest: [
+                        { clusterId: 3, count: 33 },
+                        { clusterId: 2, count: 22 },
+                        { clusterId: 1, count: 11 },
+                    ]},
                 ],
-                rest: [{ clusterId: 2, count: 22 }, { clusterId: 1, count: 11 }],
             });
         })
         
@@ -118,12 +120,13 @@ describe('geoTreeUtils', () => {
             const result = _sortAndLimitClusters(clusters, 0.1);
             return expect(result).to.deep.eq({
                 totCount,
-                clusters: [{ clusterId: 'rest', count: totCount }],
-                rest: [
-                    { clusterId: 0, count: 100 },
-                    { clusterId: 3, count: 33 },
-                    { clusterId: 2, count: 22 },
-                    { clusterId: 1, count: 11 },
+                clusters: [
+                    { clusterId: 'rest', count: 166, rest: [
+                        { clusterId: 0, count: 100 },
+                        { clusterId: 3, count: 33 },
+                        { clusterId: 2, count: 22 },
+                        { clusterId: 1, count: 11 },
+                    ]},
                 ],
             });
         })

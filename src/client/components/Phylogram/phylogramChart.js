@@ -295,6 +295,8 @@ phylogram.build = function(selector, phyloTree, options) {
   var pie = d3.layout.pie()
       .sort(null)
       .value(function(d) { return d.count; });
+  
+  const fillColor = (clusterId) => clusterId === 'rest' ? '#eee' : clusterColors[clusterId];  
 
   var clusterData = (d) => {
     const clusters = clustersPerSpecies[d.name];
@@ -302,8 +304,6 @@ phylogram.build = function(selector, phyloTree, options) {
       return [{count: 1}];
     return clusters.clusters;
   };
-
-  console.log("==== Before pies =====");
 
   var pies = leafNodes.selectAll(".pie")
       .data(d => pie(clusterData(d)));
@@ -315,9 +315,7 @@ phylogram.build = function(selector, phyloTree, options) {
 
   pies.attr("d", arc)
       .style("stroke", (d) => d.data.clusterId !== undefined ? "white" : "grey")
-      .style("fill", (d) => d.data.clusterId !== undefined ? clusterColors[d.data.clusterId] : "white");
-
-  console.log("==== After pies =====");
+      .style("fill", (d) => d.data.clusterId !== undefined ? fillColor(d.data.clusterId) : "white");
 
   if (!options.skipLabels) {
     node.append("svg:text")
@@ -337,7 +335,7 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr('fill', 'black')
       .text((d) => d.name);
   }
-  console.log("==== Phylogram finished! =====");
+  console.log("==== Phylogram rendered! =====");
 
   return {tree: tree, vis: vis}
 }

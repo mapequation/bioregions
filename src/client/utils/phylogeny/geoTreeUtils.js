@@ -1,5 +1,6 @@
 import treeUtils from '../treeUtils';
-import _ from 'lodash'
+import _ from 'lodash';
+import { reduceLimitRest } from '../statistics';
 
 
 /**
@@ -42,29 +43,36 @@ export function _aggregateClusters(tree, clustersPerSpecies = {}) {
  * @return object {totCount, main: [{clusterId, count}, ...], rest: [{clusterId, count}, ...]}
  */
 export function _sortAndLimitClusters({count:totCount, clusters}, fractionLimit = 0.9) {
-    let sumCount = 0;
-    let sumRestCount = 0;
-    let sortedClusters = _(Array.from(clusters)).map(([clusterId, count]) => {
+    const sortedClusters = _(Array.from(clusters)).map(([clusterId, count]) => {
         return {clusterId, count};
-    }).sortBy('count').reverse()
-    .groupBy(d => {
-        sumCount += d.count;
-        if (sumCount / totCount <= fractionLimit) {
-            return 'clusters';
-        } else {
-            sumRestCount += d.count;
-            return 'rest';
-        };
-    }).value();
-    sortedClusters.totCount = totCount;
-    if (!sortedClusters.clusters) {
-        sortedClusters.clusters = [];
+    }).sortBy('count').reverse().value();
+    
+    const limitedClusters = reduceLimitRest(0,
+        (sum, {count}) => sum + count,
+        sum => sum / totCount <= fractionLimit,
+        (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
+        sortedClusters);
+        // d => {
+        // console.log(`clusterId: ${d.clusterId}, count: ${d.count}, sum: ${sumRestCount + d.count}, < restLimit ? ${(sumRestCount + d.count) / totCount < restLimit}`);
+        // if ((sumRestCount + d.count) / totCount < restLimit) {
+        //     sumRestCount += d.count;
+        //     console.log(` --> sumRestCount: ${sumRestCount}`);
+        //     return true;
+        // }
+        // return false;
+    // }, rest => {
+    //     console.log(`========> sumRestCount: ${sumRestCount}, rest: ${JSON.stringify(rest)}`);
+    //     return {
+    //         clusterId: 'rest',
+    //         count: sumRestCount,
+    //         rest,
+    //     };
+    // }, sortedClusters);
+    
+    return {
+        totCount,
+        clusters: limitedClusters,
     }
-    // Add the rest as a 'virtual' cluster element for easier pie charts etc
-    if (sortedClusters.rest) {
-        sortedClusters.clusters.push({clusterId: 'rest', count: sumRestCount});
-    }
-    return sortedClusters;
 }
 
 export function aggregateSortAndLimitClusters(tree, clustersPerSpecies = {}, fractionLimit = 0.9) {
