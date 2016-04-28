@@ -2,6 +2,7 @@
 export const SHOW_FILE_UI = 'SHOW_FILE_UI';
 export const LOAD_FILES = 'LOAD_FILES';
 export const FETCH_FILES = 'FETCH_FILES';
+export const FETCH_TREE = 'FETCH_TREE';
 export const LOAD_TREE = 'LOAD_TREE';
 export const LOAD_SAMPLE_FILE = 'LOAD_SAMPLE_FILE';
 export const CANCEL_FILE_ACTIONS = 'CANCEL_FILE_ACTIONS';

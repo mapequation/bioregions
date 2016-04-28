@@ -33,6 +33,7 @@ class FileLoaderDimmer extends Component {
     showFileUI: PropTypes.func.isRequired,
     loadFiles: PropTypes.func.isRequired,
     loadSampleFiles: PropTypes.func.isRequired,
+    loadSampleTreeFile: PropTypes.func.isRequired,
     removeSpecies: PropTypes.func.isRequired,
     loadTree: PropTypes.func.isRequired,
     removePhyloTree: PropTypes.func.isRequired,
@@ -401,8 +402,8 @@ class FileLoaderDimmer extends Component {
       );
     }
 
-    const {sampleFiles, loadFiles, loadSampleFiles, phyloTree, removePhyloTree, removeSpecies} = this.props;
-    const RemoveTree = !phyloTree ? "" : (
+    const {sampleFiles, sampleTreeFiles, loadFiles, loadSampleFiles, loadSampleTreeFile, phyloTree, removePhyloTree, removeSpecies} = this.props;
+    const RemoveTree = !phyloTree ? null : (
       <div>
         <div className="ui divider"></div>
         <button className="ui very basic red button" onClick={removePhyloTree}>Remove tree</button>
@@ -455,6 +456,27 @@ class FileLoaderDimmer extends Component {
                 <FileInput loadFiles={this.props.loadTree}>
                   Load tree...
                 </FileInput>
+                <div className="ui horizontal divider">
+                  Or
+                </div>
+                <table className="ui selectable celled table">
+                  <thead>
+                    <tr>
+                      <th colSpan="3">Load example data:</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {
+                      sampleTreeFiles.map((sampleFile, i) => (
+                        <tr key={i} onClick={() => loadSampleTreeFile(sampleFile.filename)} style={{cursor: 'pointer'}}>
+                          <td>{sampleFile.name}</td>
+                          <td>{sampleFile.type}</td>
+                          <td>{sampleFile.size}</td>
+                        </tr>
+                      ))
+                    }
+                  </tbody>
+                </table>
                 {RemoveTree}
               </div>
             </div>

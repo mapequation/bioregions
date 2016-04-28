@@ -2,6 +2,7 @@ import {
   SHOW_FILE_UI,
   LOAD_FILES,
   FETCH_FILES,
+  FETCH_TREE,
   LOAD_TREE,
   LOAD_SAMPLE_FILE,
   CANCEL_FILE_ACTIONS,
@@ -75,6 +76,13 @@ export function fetchFiles(urls) {
   };
 }
 
+export function fetchTree(url) {
+  return {
+    type: FETCH_TREE,
+    url
+  };
+}
+
 export function loadTree(file) {
   return {
     type: LOAD_TREE,
@@ -115,6 +123,29 @@ export function loadSampleFiles(urls) {
       .then(files => dispatch(loadFiles(files)))
       .catch(response => {
         console.log(`Error loading files ${urls.join(', ')}, response: ${JSON.stringify(response)}`);
+        const errorMessage = `Error loading files '${urls.join(', ')}': `;
+        const subMessage = (response.status && response.statusText) ?
+          `${response.status} ${response.statusText}` : (
+          response.message || response.data || response
+        );
+        return dispatch(setFileError(errorMessage, subMessage));
+      });
+  }
+}
+
+export function loadSampleTreeFile(url) {
+  return (dispatch, getState) => {
+    dispatch(fetchTree(url));
+
+    return axios.get('data/' + url, {
+        responseType: 'blob'
+      })
+      .then(response => response.data)
+      // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
+      .then(blob => { blob.name = url; return blob; })
+      .then(file => dispatch(loadTree(file)))
+      .catch(response => {
+        console.log(`Error loading tree file ${url}, response: ${JSON.stringify(response)}`);
         const errorMessage = `Error loading files '${urls.join(', ')}': `;
         const subMessage = (response.status && response.statusText) ?
           `${response.status} ${response.statusText}` : (

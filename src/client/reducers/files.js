@@ -12,10 +12,6 @@ const initialState = {
   treeFilename: "", // filename of loaded tree
   haveFile: false,
   sampleFiles: [
-    // {
-    //   name: "Snakes (point occurrences)",
-    //   filenames: ['snakes_global_gbif.txt']
-    // },
     {
       name: "Global mammals",
       type: "point occurrences",
@@ -27,6 +23,20 @@ const initialState = {
       type: "point occurrences",
       size: "2.8Mb",
       filenames: ['mammals_neotropics.csv']
+    },
+  ],
+  sampleTreeFiles: [
+    {
+      name: "Global mammals",
+      type: "phylogeny",
+      size: "191Kb",
+      filename: 'mammals_global.nwk',
+    },
+    {
+      name: "Neotropical mammals",
+      type: "phylogeny",
+      size: "54Kb",
+      filename: 'mammals_neotropics.nwk',
     },
   ],
   error: false,
