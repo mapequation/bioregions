@@ -265,6 +265,15 @@ phylogram.build = function(selector, phyloTree, options) {
         .attr('fill', '#ccc')
         .text(function(d) { return Math.round(d*100) / 100; });
   }
+  
+  const {clustersPerSpecies, clusterColors} = options;
+  
+  function diagonalColor(d) {
+    const { clusters } = d.target;
+    if (!clusters || clusters.clusters.length === 0)
+      return "#aaa";
+    return clusterColors[clusters.clusters[0].clusterId];
+  }
 
   var link = vis.selectAll("path.link")
       .data(tree.links(nodes))
@@ -272,7 +281,8 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr("class", "link")
       .attr("d", diagonal)
       .attr("fill", "none")
-      .attr("stroke", "#aaa")
+      // .attr("stroke", "#aaa")
+      .attr("stroke", diagonalColor)
       .attr("stroke-width", "2px");
 
   var node = vis.selectAll("g.node")
@@ -286,8 +296,6 @@ phylogram.build = function(selector, phyloTree, options) {
 
   var leafNodes = node.filter((d) => !d.children).append("g")
       // .attr("transform", "translate(10,0)");
-
-  const {clustersPerSpecies, clusterColors} = options;
 
   var arc = d3.svg.arc()
       .outerRadius(10)
