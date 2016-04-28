@@ -151,8 +151,8 @@ class Statistics extends Component {
               return (
                 <tr key={name} name={name} onClick={this.handleClickSpecies}>
                   <td>{name}</td>
-                  <td>{count}</td>
-                  <td>{this.renderClusterDistribution(name)}</td>
+                  <td className="collapsing">{count}</td>
+                  <td className="collapsing">{this.renderClusterDistribution(name)}</td>
                 </tr>
               );
             })}
@@ -216,14 +216,16 @@ class Statistics extends Component {
           <table className="ui very basic compact celled table">
             <thead>
               <tr>
-                <th colSpan="2" className="center aligned">Most common species</th>
-                <th colSpan="2" className="center aligned">Most indicative species</th>
+                <th colSpan="3" className="center aligned">Most common species</th>
+                <th colSpan="3" className="center aligned">Most indicative species</th>
               </tr>
               <tr>
                 <th>Name</th>
                 <th>Count</th>
+                <th>Regions</th>
                 <th>Name</th>
                 <th>Score</th>
+                <th>Regions</th>
               </tr>
             </thead>
             <tbody>
@@ -232,9 +234,11 @@ class Statistics extends Component {
                   return (
                     <tr key={`${cluster.key}-${i}`}>
                       <td className="name">{common.name}</td>
-                      <td className="value">{common.count}</td>
+                      <td className="collapsing value">{common.count}</td>
+                      <td className="collapsing">{this.renderClusterDistribution(common.name)}</td>
                       <td className="name">{indicator.name}</td>
-                      <td className="value">{indicator.score.toPrecision(3)}</td>
+                      <td className="collapsing value">{indicator.score.toPrecision(3)}</td>
+                      <td className="collapsing">{this.renderClusterDistribution(indicator.name)}</td>
                     </tr>
                   );
                 })
