@@ -299,13 +299,12 @@ phylogram.build = function(selector, phyloTree, options) {
   const fillColor = (clusterId) => clusterId === 'rest' ? '#eee' : clusterColors[clusterId];  
 
   var clusterData = (d) => {
-    const clusters = clustersPerSpecies[d.name];
-    if (!clusters)
+    if (!d.clusters || d.clusters.totCount === 0)
       return [{count: 1}];
-    return clusters.clusters;
+    return d.clusters.clusters;
   };
 
-  var pies = leafNodes.selectAll(".pie")
+  var pies = node.selectAll(".pie")
       .data(d => pie(clusterData(d)));
 
   pies.enter().append("path")

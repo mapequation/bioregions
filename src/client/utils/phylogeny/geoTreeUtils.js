@@ -50,50 +50,49 @@ export function _aggregateClusters(tree, clustersPerSpecies = {}) {
  * Internal function to transform cluster map to sorted array grouped on fraction limit
  * @param clusters {totCount, clusters: Map([[clusterId,count],...])
  * @param totCount sum count in clusterMap
- * @param fractionLimit group clusters into main while below fractionLimit
+ * @param fractionThreshold limit clusters if count less than fractionThreshold
  * @return object {totCount, main: [{clusterId, count}, ...], rest: [{clusterId, count}, ...]}
  */
-export function _sortAndLimitClusters({count:totCount, clusters}, fractionLimit = 0.9) {
-    const sortedClusters = _(Array.from(clusters)).map(([clusterId, count]) => {
-        return {clusterId, count};
-    }).sortBy('count').reverse().value();
+export function _sortAndLimitClusters({totCount, clusters}, fractionThreshold = 0.1) {
+    const sortedClusters = _(Array.from(clusters))
+        .map(([clusterId, count]) => {
+            return {clusterId, count};
+        })
+        // Sort on descending count and then increasing clusterId (from Map)
+        .reverse()
+        .sortBy('count') // stable sort, keeps order for equal items
+        .reverse()
+        .value();
     
     const limitedClusters = reduceLimitRest(0,
         (sum, {count}) => sum + count,
-        sum => sum / totCount <= fractionLimit,
+        (sum, {count}) => count / totCount > fractionThreshold || sum / totCount < fractionThreshold,
         (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
         sortedClusters);
-        // d => {
-        // console.log(`clusterId: ${d.clusterId}, count: ${d.count}, sum: ${sumRestCount + d.count}, < restLimit ? ${(sumRestCount + d.count) / totCount < restLimit}`);
-        // if ((sumRestCount + d.count) / totCount < restLimit) {
-        //     sumRestCount += d.count;
-        //     console.log(` --> sumRestCount: ${sumRestCount}`);
-        //     return true;
-        // }
-        // return false;
-    // }, rest => {
-    //     console.log(`========> sumRestCount: ${sumRestCount}, rest: ${JSON.stringify(rest)}`);
-    //     return {
-    //         clusterId: 'rest',
-    //         count: sumRestCount,
-    //         rest,
-    //     };
-    // }, sortedClusters);
-    
+
     return {
         totCount,
         clusters: limitedClusters,
     }
 }
 
-export function aggregateSortAndLimitClusters(tree, clustersPerSpecies = {}, fractionLimit = 0.9) {
+/**
+ * Aggregate clusters on the tree, sorted and limited by fractionThreshold.
+ * @param tree:Object the tree
+ * * @param clustersPerSpecies: {}, // name -> {totCount, clusters: limitRest([{clusterId, count}, ...])}
+ * @param fractionThreshold limit clusters if count less than fractionThreshold
+ * 
+ * Each node in the tree will get .clusters: { totCount:Number, clusters: limitRest([{clusterId,count}, ...]) }
+ * @return the modified tree
+ */
+export function aggregateClusters(tree, clustersPerSpecies = {}, fractionThreshold = 0.1) {
     _aggregateClusters(tree, clustersPerSpecies);
     treeUtils.visitTreeDepthFirst(tree, (node) => {
-        node.clusters = _sortAndLimitClusters(node.clusters, fractionLimit);
+        node.clusters = _sortAndLimitClusters(node.clusters, fractionThreshold);
     });
     return tree;
 }
 
 export default {
-    aggregateSortAndLimitClusters,
+    aggregateClusters,
 }

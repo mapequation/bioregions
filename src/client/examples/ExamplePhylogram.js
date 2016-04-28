@@ -2,6 +2,7 @@ import React, { PropTypes } from 'react'
 import chroma from 'chroma-js'
 import { parseTree } from '../utils/phylogeny'
 import Phylogram from '../components/Phylogram/Phylogram';
+import geoTreeUtils from '../utils/phylogeny/geoTreeUtils'
 
 class ExamplePhylogram extends React.Component {
 
@@ -13,26 +14,26 @@ class ExamplePhylogram extends React.Component {
     ],
     clustersPerSpecies: {
       'Species A': {
-        count: 3,
+        totCount: 3,
         clusters: [
           { clusterId: 0, count: 3 },
         ]
       },
       'Species B': {
-        count: 3,
+        totCount: 3,
         clusters: [
           { clusterId: 0, count: 2 },
           { clusterId: 1, count: 1 },
         ]
       },
       'Species C': {
-        count: 3,
+        totCount: 3,
         clusters: [
           { clusterId: 1, count: 3 },
         ]
       },
       'Species D': {
-        count: 2,
+        totCount: 2,
         clusters: [
           { clusterId: 1, count: 2 }
         ]
@@ -41,7 +42,9 @@ class ExamplePhylogram extends React.Component {
   }
 
   componentDidMount() {
-    parseTree(this.state.treeString).then(phyloTree => this.setState({ phyloTree }));
+    parseTree(this.state.treeString)
+      .then(tree => geoTreeUtils.aggregateClusters(tree, this.state.clustersPerSpecies, 0.1))
+      .then(phyloTree => this.setState({ phyloTree }));
   }
 
   render () {
@@ -50,7 +53,7 @@ class ExamplePhylogram extends React.Component {
     return (
       <div>
         <pre style={{overflow: 'auto', whiteSpace: 'pre-wrap'}}>{treeString}</pre>
-        <p>The example data above may generate this phylogram:</p>
+        <p>Together with the example species distribution data and clusters it may generate this phylogram:</p>
         <Phylogram {...treeData}/>
       </div>
     )

@@ -130,7 +130,7 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.ADD_PHYLO_TREE:
       return {
         ...state,
-        phyloTree: geoTreeUtils.aggregateSortAndLimitClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit),
+        phyloTree: geoTreeUtils.aggregateClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit),
       };
     case ActionTypes.REMOVE_PHYLO_TREE:
       return {
@@ -172,7 +172,7 @@ export default function data(state = getInitialState(), action) {
         mapBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
         isShowingInfomapUI: false,
-        phyloTree: !state.phyloTree ? null : Object.assign({}, geoTreeUtils.aggregateSortAndLimitClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
+        phyloTree: !state.phyloTree ? null : Object.assign({}, geoTreeUtils.aggregateClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:

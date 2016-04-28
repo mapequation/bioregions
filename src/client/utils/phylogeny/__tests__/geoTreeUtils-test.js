@@ -172,7 +172,6 @@ describe('geoTreeUtils', () => {
                     treeUtils.visitTreeDepthFirst(tree, node => {
                         node.clusters.clusters = _(Array.from(node.clusters.clusters))
                             .map(([clusterId, count]) => { return {clusterId, count} })
-                            .sortBy(({clusterId}) => clusterId)
                             .reverse()
                             .sortBy(({count}) => count)
                             .reverse()
@@ -190,7 +189,6 @@ describe('geoTreeUtils', () => {
                     treeUtils.visitTreeDepthFirst(tree, node => {
                         node.clusters.clusters = _(Array.from(node.clusters.clusters))
                             .map(([clusterId, count]) => { return {clusterId, count} })
-                            .sortBy(({clusterId}) => clusterId)
                             .reverse()
                             .sortBy(({count}) => count)
                             .reverse()
@@ -206,7 +204,7 @@ describe('geoTreeUtils', () => {
         it('should sort and limit clusters with a rest element for fraction limit', () => {
             const clusterMap = new Map([[0,100], [1,11], [2,22], [3,33]]);
             const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
-            const clusters = {count: totCount, clusters: clusterMap};
+            const clusters = {totCount, clusters: clusterMap};
             const result = _sortAndLimitClusters(clusters, 0.8);
             return expect(result).to.deep.eq({
                 totCount,
@@ -221,29 +219,29 @@ describe('geoTreeUtils', () => {
             });
         })
         
-        it('should only have a rest element if low enough fraction', () => {
-            const clusterMap = new Map([[0,100], [1,11], [2,22], [3,33]]);
+        it('should keep at least one item even if below fraction threshold', () => {
+            const clusterMap = new Map([[0,10], [1,11], [2,12], [3,13]]);
             const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
-            const clusters = {count: totCount, clusters: clusterMap};
-            const result = _sortAndLimitClusters(clusters, 0.1);
+            const clusters = {totCount, clusters: clusterMap};
+            const result = _sortAndLimitClusters(clusters, 0.3);
             return expect(result).to.deep.eq({
                 totCount,
                 clusters: [
-                    { clusterId: 'rest', count: 166, rest: [
-                        { clusterId: 0, count: 100 },
-                        { clusterId: 3, count: 33 },
-                        { clusterId: 2, count: 22 },
+                    { clusterId: 3, count: 13 },
+                    { clusterId: 'rest', count: 33, rest: [
+                        { clusterId: 2, count: 12 },
                         { clusterId: 1, count: 11 },
+                        { clusterId: 0, count: 10 },
                     ]},
                 ],
             });
         })
         
-        it('should have no rest element for fraction 1.0', () => {
+        it('should have no rest element for zero threshold', () => {
             const clusterMap = new Map([[0,100], [1,11], [2,22], [3,33]]);
             const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
-            const clusters = {count: totCount, clusters: clusterMap};
-            const result = _sortAndLimitClusters(clusters, 1.0);
+            const clusters = {totCount, clusters: clusterMap};
+            const result = _sortAndLimitClusters(clusters, 0.0);
             return expect(result).to.deep.eq({
                 totCount,
                 clusters: [
@@ -256,7 +254,7 @@ describe('geoTreeUtils', () => {
         })
     })
     
-    describe('aggregateSortAndLimitClusters', () => {
+    describe('aggregateClusters', () => {
         it('should aggregate clusters sorted and grouped on limit', () => {
             // // TODO: Should clone testTreeWithClusters first!
             // treeUtils.visitTreeDepthFirst(testTreeWithClusters, (node) => {
@@ -265,9 +263,9 @@ describe('geoTreeUtils', () => {
             //     node.clusters.clusters = clusterMap;
             //     node.clusters = _sortAndLimitClusters(node.clusters, 0.9);
             // });
-            // const result = newick.parse(newick1)
-            //     .then(tree => geoTreeUtils.aggregateSortAndLimitClusters(tree, clustersPerSpecies, 0.9));
-            // return expect(result).to.eventually.deep.eq(testTreeWithClusterMap);
+            const result = newick.parse(newick1)
+                .then(tree => geoTreeUtils.aggregateClusters(tree, clustersPerSpeciesLimited, 0.01));
+            return expect(result).to.eventually.deep.eq(testTreeWithClusters);
         })
     })
 })
