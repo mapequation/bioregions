@@ -123,7 +123,7 @@ describe('statistics', () => {
             ]);
         })
         
-        it('should limit array with a rest sum break even', () => {
+        it('should limit array with a rest sum including limit', () => {
             const res = statistics.reduceLimitRest(
                 0,
                 (sum, {count}) => sum + count,
@@ -146,7 +146,7 @@ describe('statistics', () => {
             const res = statistics.reduceLimitRest(
                 0,
                 (sum, {count}) => sum + count,
-                sum => sum <= 0,
+                sum => false,
                 (sum, restItems) => { return { clusterId: 'rest', count: totCount - sum, rest: restItems }; },
                 items
             );
@@ -157,6 +157,75 @@ describe('statistics', () => {
                     { clusterId: 3, count: 2},
                     { clusterId: 0, count: 1},
                     { clusterId: 4, count: 1},
+                ]},
+            ]);
+        })
+        
+        it('should return no rest for fraction limit threshold on one item', () => {
+            const items = [{ clusterId: 2, count: 5}];
+            const totCount = _.sumBy(items, ({count}) => count);
+            const res = statistics.reduceLimitRest(
+                0,
+                (sum, {count}) => sum + count,
+                (sum, {count}) => count / totCount > 0.1,
+                (sum, restItems) => { return { clusterId: 'rest', count: totCount - sum, rest: restItems }; },
+                items
+            );
+            return expect(res).to.deep.eq([
+                { clusterId: 2, count: 5},
+            ]);
+        })
+        
+        it('should return all in rest if individual threshold too high', () => {
+            const items = [
+                { clusterId: 1, count: 2},
+                { clusterId: 2, count: 2},
+                { clusterId: 3, count: 2},
+                { clusterId: 4, count: 2},
+                { clusterId: 5, count: 2},
+            ];
+            const totCount = _.sumBy(items, ({count}) => count);
+            const res = statistics.reduceLimitRest(
+                0,
+                (sum, {count}) => sum + count,
+                (sum, {count}) => count / totCount > 0.25,
+                (sum, restItems) => { return { clusterId: 'rest', count: totCount - sum, rest: restItems }; },
+                items
+            );
+            return expect(res).to.deep.eq([
+                { clusterId: 'rest', count: totCount, rest: [
+                    { clusterId: 1, count: 2},
+                    { clusterId: 2, count: 2},
+                    { clusterId: 3, count: 2},
+                    { clusterId: 4, count: 2},
+                    { clusterId: 5, count: 2},
+                ]},
+            ]);
+        })
+        
+        it('should fix above by adding total threshold', () => {
+            const items = [
+                { clusterId: 1, count: 2},
+                { clusterId: 2, count: 2},
+                { clusterId: 3, count: 2},
+                { clusterId: 4, count: 2},
+                { clusterId: 5, count: 2},
+            ];
+            const totCount = _.sumBy(items, ({count}) => count);
+            const res = statistics.reduceLimitRest(
+                0,
+                (sum, {count}) => sum + count,
+                (sum, {count}) => count / totCount > 0.25 || sum / totCount < 0.25,
+                (sum, restItems) => { return { clusterId: 'rest', count: totCount - sum, rest: restItems }; },
+                items
+            );
+            return expect(res).to.deep.eq([
+                { clusterId: 1, count: 2},
+                { clusterId: 'rest', count: totCount - 2, rest: [
+                    { clusterId: 2, count: 2},
+                    { clusterId: 3, count: 2},
+                    { clusterId: 4, count: 2},
+                    { clusterId: 5, count: 2},
                 ]},
             ]);
         })

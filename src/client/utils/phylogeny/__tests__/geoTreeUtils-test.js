@@ -3,72 +3,10 @@ import { expect } from 'chai'
 import geoTreeUtils, { _aggregateClusters, _sortAndLimitClusters } from '../geoTreeUtils'
 import treeUtils from '../../treeUtils'
 import newick from '../newick'
+import { reduceLimitRest } from '../../statistics'
 import _ from 'lodash'
 
 describe('geoTreeUtils', () => {
-    const newick1 = '((00,01)0,1,(20,21)2)root;';
-    const clustersPerSpecies = {
-        '00': { count: 5, clusters: [
-            {clusterId: 0, count: 2},
-            {clusterId: 1, count: 3},
-            ]},
-        '01': { count: 2, clusters: [
-            {clusterId: 1, count: 2},
-            ]},
-        '1': { count: 6, clusters: [
-            {clusterId: 1, count: 2},
-            {clusterId: 2, count: 4},
-            ]},
-        '20': { count: 10, clusters: [
-            {clusterId: 0, count: 2},
-            {clusterId: 1, count: 2},
-            {clusterId: 2, count: 3},
-            {clusterId: 3, count: 3},
-            ]},
-        '21': { count: 4, clusters: [
-            {clusterId: 2, count: 2},
-            {clusterId: 3, count: 2},
-            ]},
-    };
-    
-    const testTreeWithClusterMap = {
-        name: 'root',
-        clusters: { count: 27, clusters: { 0: 4, 1: 9, 2: 9, 3: 5} },
-        children: [
-            {
-                name: '0',
-                clusters: { count: 7, clusters: { 0: 2, 1: 5 } },
-                children: [
-                    {
-                        name: '00',
-                        clusters: { count: 5, clusters: { 0: 2, 1: 3 } },
-                    },
-                    {
-                        name: '01',
-                        clusters: { count: 2, clusters: { 1: 2 } },
-                    },
-                ]
-            },
-            {
-                name: '1',
-                clusters: { count: 6, clusters: { 1: 2, 2: 4 } },
-            },
-            {
-                name: '2',
-                clusters: { count: 14, clusters: { 0: 2, 1: 2, 2: 5, 3: 5} },
-                children: [
-                    {
-                        name: '20',
-                        clusters: { count: 10, clusters: { 0: 2, 1: 2, 2: 3, 3: 3 } },
-                    },
-                    {
-                        name: '21',
-                        clusters: { count: 4, clusters: { 2: 2, 3: 2 } },
-                    },
-                ]
-            },
-        ]
-    };
     
     function setParents(node) {
         (node.children || []).forEach(child => {
@@ -77,8 +15,154 @@ describe('geoTreeUtils', () => {
         });
     }
     
-    setParents(testTreeWithClusterMap);
+    let newick1, clustersPerSpecies, clustersPerSpeciesLimited, testTreeWithClusters;
     
+    before(() => {
+        newick1 = '((00,01)0,1,(20,21)2)root;';
+        clustersPerSpecies = {
+            '00': { totCount: 5, clusters: [
+                {clusterId: 1, count: 3},
+                {clusterId: 0, count: 2},
+            ]},
+            '01': { totCount: 2, clusters: [
+                {clusterId: 1, count: 2},
+            ]},
+            '1': { totCount: 6, clusters: [
+                {clusterId: 2, count: 4},
+                {clusterId: 1, count: 2},
+            ]},
+            '20': { totCount: 12, clusters: [
+                {clusterId: 2, count: 3},
+                {clusterId: 3, count: 3},
+                {clusterId: 0, count: 2},
+                {clusterId: 1, count: 2},
+                {clusterId: 4, count: 1},
+                {clusterId: 5, count: 1},
+            ]},
+            '21': { totCount: 4, clusters: [
+                {clusterId: 2, count: 2},
+                {clusterId: 3, count: 2},
+            ]},
+        };
+    
+        testTreeWithClusters = {
+            name: 'root',
+            clusters: { totCount: 29, clusters: [
+                { clusterId: 1, count: 9},
+                { clusterId: 2, count: 9},
+                { clusterId: 3, count: 5},
+                { clusterId: 0, count: 4},
+                { clusterId: 4, count: 1},
+                { clusterId: 5, count: 1},
+            ] },
+            children: [
+                {
+                    name: '0',
+                    clusters: { totCount: 7, clusters: [
+                        { clusterId: 1, count: 5},
+                        { clusterId: 0, count: 2},
+                    ] },
+                    children: [
+                        {
+                            name: '00',
+                            clusters: { totCount: 5, clusters: [
+                                { clusterId: 1, count: 3},
+                                { clusterId: 0, count: 2},
+                            ] },
+                        },
+                        {
+                            name: '01',
+                            clusters: { totCount: 2, clusters: [
+                                { clusterId: 1, count: 2},
+                            ] },
+                        },
+                    ]
+                },
+                {
+                    name: '1',
+                    clusters: { totCount: 6, clusters: [
+                        { clusterId: 2, count: 4},
+                        { clusterId: 1, count: 2},
+                    ] },
+                },
+                {
+                    name: '2',
+                    clusters: { totCount: 16, clusters: [
+                        { clusterId: 2, count: 5},
+                        { clusterId: 3, count: 5},
+                        { clusterId: 0, count: 2},
+                        { clusterId: 1, count: 2},
+                        { clusterId: 4, count: 1},
+                        { clusterId: 5, count: 1},
+                    ] },
+                    children: [
+                        {
+                            name: '20',
+                            clusters: { totCount: 12, clusters: [
+                                { clusterId: 2, count: 3},
+                                { clusterId: 3, count: 3},
+                                { clusterId: 0, count: 2},
+                                { clusterId: 1, count: 2},
+                                { clusterId: 4, count: 1},
+                                { clusterId: 5, count: 1},
+                            ] },
+                        },
+                        {
+                            name: '21',
+                            clusters: { totCount: 4, clusters: [
+                                { clusterId: 2, count: 2},
+                                { clusterId: 3, count: 2},
+                            ] },
+                        },
+                    ]
+                },
+            ]
+        };
+        
+        setParents(testTreeWithClusters);
+        
+        clustersPerSpeciesLimited = _(clustersPerSpecies)
+            .map((originalClusters, nodeName) => {
+                const clusters = _.cloneDeep(originalClusters);
+                const { totCount } = clusters;
+                clusters.clusters = reduceLimitRest(
+                    0,
+                    (sum, {count}) => sum + count,
+                    (sum, {count}) => count / totCount > 0.1 || sum / totCount < 0.1,
+                    (sum, restItems) => { return { clusterId: 'rest', count: totCount - sum, rest: restItems }; },
+                    clusters.clusters);
+                return [nodeName, clusters];
+            })
+            .fromPairs()
+            .value();
+        expect(clustersPerSpeciesLimited).to.deep.equal({
+            '00': { totCount: 5, clusters: [
+                {clusterId: 1, count: 3},
+                {clusterId: 0, count: 2},
+            ]},
+            '01': { totCount: 2, clusters: [
+                {clusterId: 1, count: 2},
+            ]},
+            '1': { totCount: 6, clusters: [
+                {clusterId: 2, count: 4},
+                {clusterId: 1, count: 2},
+            ]},
+            '20': { totCount: 12, clusters: [
+                {clusterId: 2, count: 3},
+                {clusterId: 3, count: 3},
+                {clusterId: 0, count: 2},
+                {clusterId: 1, count: 2},
+                {clusterId: 'rest', count: 2, rest: [
+                    {clusterId: 4, count: 1},
+                    {clusterId: 5, count: 1},
+                ]},
+            ]},
+            '21': { totCount: 4, clusters: [
+                {clusterId: 2, count: 2},
+                {clusterId: 3, count: 2},
+            ]},
+        });        
+    })
 
     describe('_aggregateClusters', () => {
         it('should aggregate clusters from leaf nodes to root', () => {
@@ -86,11 +170,35 @@ describe('geoTreeUtils', () => {
                 .then(tree => _aggregateClusters(tree, clustersPerSpecies))
                 .then(tree => {
                     treeUtils.visitTreeDepthFirst(tree, node => {
-                        node.clusters.clusters = _.fromPairs(Array.from(node.clusters.clusters));
+                        node.clusters.clusters = _(Array.from(node.clusters.clusters))
+                            .map(([clusterId, count]) => { return {clusterId, count} })
+                            .sortBy(({clusterId}) => clusterId)
+                            .reverse()
+                            .sortBy(({count}) => count)
+                            .reverse()
+                            .value();
+                    })
+                   return tree;
+                });
+            return expect(result).to.eventually.deep.eq(testTreeWithClusters);
+        })
+        
+        it('should aggregate clusters with rest limit', () => {
+            const result = newick.parse(newick1)
+                .then(tree => _aggregateClusters(tree, clustersPerSpeciesLimited))
+                .then(tree => {
+                    treeUtils.visitTreeDepthFirst(tree, node => {
+                        node.clusters.clusters = _(Array.from(node.clusters.clusters))
+                            .map(([clusterId, count]) => { return {clusterId, count} })
+                            .sortBy(({clusterId}) => clusterId)
+                            .reverse()
+                            .sortBy(({count}) => count)
+                            .reverse()
+                            .value();
                     })
                    return tree; 
                 });
-            return expect(result).to.eventually.deep.eq(testTreeWithClusterMap);
+            return expect(result).to.eventually.deep.eq(testTreeWithClusters);
         })
     })
 
@@ -150,16 +258,16 @@ describe('geoTreeUtils', () => {
     
     describe('aggregateSortAndLimitClusters', () => {
         it('should aggregate clusters sorted and grouped on limit', () => {
-            // TODO: Should clone testTreeWithClusterMap first!
-            treeUtils.visitTreeDepthFirst(testTreeWithClusterMap, (node) => {
-                const {clusters} = node.clusters;
-                const clusterMap = new Map(_(clusters).toPairs().map(([id,count]) => [+id,count]).value());
-                node.clusters.clusters = clusterMap;
-                node.clusters = _sortAndLimitClusters(node.clusters, 0.9);
-            });
-            const result = newick.parse(newick1)
-                .then(tree => geoTreeUtils.aggregateSortAndLimitClusters(tree, clustersPerSpecies, 0.9));
-            return expect(result).to.eventually.deep.eq(testTreeWithClusterMap);
+            // // TODO: Should clone testTreeWithClusters first!
+            // treeUtils.visitTreeDepthFirst(testTreeWithClusters, (node) => {
+            //     const {clusters} = node.clusters;
+            //     const clusterMap = new Map(_(clusters).toPairs().map(([id,count]) => [+id,count]).value());
+            //     node.clusters.clusters = clusterMap;
+            //     node.clusters = _sortAndLimitClusters(node.clusters, 0.9);
+            // });
+            // const result = newick.parse(newick1)
+            //     .then(tree => geoTreeUtils.aggregateSortAndLimitClusters(tree, clustersPerSpecies, 0.9));
+            // return expect(result).to.eventually.deep.eq(testTreeWithClusterMap);
         })
     })
 })

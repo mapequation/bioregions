@@ -47,7 +47,7 @@ export function getBipartiteNetwork(species, features, bins) {
 *  }, ...]
 *
 */
-export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap, clustersFractionLimit = 0.8) {
+export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCountMap, clustersFractionThreshold = 0.1) {
   if (bins.length === 0)
     return [];
   if (bins[0].clusterId < 0)
@@ -85,8 +85,8 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
         const {name} = feature.properties;
         let speciesClusters = clustersPerSpecies[name];
         if (!speciesClusters)
-          speciesClusters = clustersPerSpecies[name] = {count: 0, clusters: [{clusterId, count: 0}]};
-        ++speciesClusters.count;
+          speciesClusters = clustersPerSpecies[name] = {totCount: 0, clusters: [{clusterId, count: 0}]};
+        ++speciesClusters.totCount;
         let clusters = speciesClusters.clusters;
         let cluster = clusters[clusters.length - 1];
         if (cluster.clusterId !== clusterId) {
@@ -116,11 +116,11 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
   // sort and limit clusters per species
   _.forEach(clustersPerSpecies, cluPerSpecies => {
     const sortedClusters = _(cluPerSpecies.clusters).sortBy('count').reverse().value();
-    const totCount = cluPerSpecies.count;
+    const { totCount } = cluPerSpecies;
 
     const limitedClusters = reduceLimitRest(0,
         (sum, {count}) => sum + count,
-        sum => sum / totCount <= clustersFractionLimit,
+        (sum, {count}) => count / totCount > clustersFractionThreshold || sum / totCount < clustersFractionThreshold,
         (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
         sortedClusters);
     cluPerSpecies.clusters = limitedClusters;
