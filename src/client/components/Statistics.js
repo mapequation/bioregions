@@ -18,16 +18,29 @@ class Statistics extends Component {
     statisticsBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     changeStatisticsBy: PropTypes.func.isRequired,
   }
+  
+  initialState = {
+    limitSpecies: 100,
+    limitClusters: 10,
+    filter: "",
+  }
 
   state = {
-    limitSpecies: 100,
-    limitClusters: 100,
-    filter: ""
+    ...this.initialState,
   }
 
   componentDidMount() {
     // TODO: tablesort undefined here
     // $('.sortable.table').tablesort();
+  }
+  
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.species.length !== this.props.species.length) {
+      this.setState({ limitSpecies: Math.min(this.initialState.limitSpecies, nextProps.species.length)});
+    }
+    if (nextProps.clusters.length !== this.props.clusters.length) {
+      this.setState({ limitClusters: Math.min(this.initialState.limitClusters, nextProps.clusters.length)});
+    }
   }
 
   handleFilterChange = (e) => {
@@ -285,7 +298,6 @@ class Statistics extends Component {
 
   renderSelectStatisticsBy() {
     const {species, statisticsBy, clusters, changeStatisticsBy} = this.props;
-    const {limitSpecies, limitClusters} = this.state;
     if (clusters.length == 0)
       return (<span></span>);
 
