@@ -64,6 +64,7 @@ phylogram.update = function(el, props) {
 
   if (numLeafNodes === 0) {
     g.selectAll("*").remove();
+    svg.attr("height", 100);
     return;
   }
   //TODO: Use data enter/exit!
