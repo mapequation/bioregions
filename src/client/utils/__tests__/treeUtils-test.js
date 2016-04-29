@@ -96,6 +96,23 @@ describe('treeUtils', () => {
       });
       expect(names.join(',')).to.eq('root,0,2');
     })
+    
+    it('should provide depth for nodes', () => {
+      const namesAndDepth = [];
+      treeUtils.visitTreeDepthFirst(tree, ({name}, depth) => {
+        namesAndDepth.push({name, depth});
+      });
+      expect(namesAndDepth).to.deep.eq([
+        { name: 'root', depth: 0 },
+        { name: '0', depth: 1 },
+        { name: '00', depth: 2 },
+        { name: '01', depth: 2 },
+        { name: '1', depth: 1 },
+        { name: '2', depth: 1 },
+        { name: '20', depth: 2 },
+        { name: '21', depth: 2 },
+      ]);
+    })
   })
   
   describe('mapDepthFirst', () => {

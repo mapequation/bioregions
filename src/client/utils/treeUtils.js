@@ -14,13 +14,13 @@ import { normalizeSpeciesName } from './naming'
  *  if false, they are visited in a post-order traversal
  * @return true if the visitation was interrupted with an early exit
  */
-export function visitTreeDepthFirst(opts, root, callback) {
+export function visitTreeDepthFirst(opts, root, callback, depth = 0) {
   if (!callback) {
     [opts, root, callback] = [{}, opts, root];
   }
-  if (!opts.postOrder && (!opts.include || opts.include(root)) && callback(root)) return true;
-  let childExit = !_.every(root.children || [], child => !visitTreeDepthFirst(opts, child, callback));
-	if (childExit || opts.postOrder && (!opts.include || opts.include(root)) && callback(root)) return true;
+  if (!opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth)) return true;
+  let childExit = !_.every(root.children || [], child => !visitTreeDepthFirst(opts, child, callback, depth + 1));
+	if (childExit || opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth)) return true;
 	return false;
 }
 
