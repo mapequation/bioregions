@@ -69,39 +69,45 @@ class ExportWindow extends Component {
           group: 'map',
           filename: `${props.basename}.svg`,
           icon: 'file image outline icon',
-          url: null
+          url: null,
         },
         png: {
           filename: `${props.basename}.png`,
           group: 'map',
           icon: 'file image outline icon',
-          url: null
+          url: null,
         },
         geojson: {
           filename: `${props.basename}.geojson`,
           group: 'bioregions',
           icon: 'world icon',
-          url: null
+          url: null,
         },
         shapefile: {
           filename: `${props.basename}_shapefile.zip`,
           group: 'bioregions',
           icon: 'file archive outline icon',
-          url: null
+          url: null,
         },
         csv: {
           filename: `${props.basename}.csv`,
           group: 'cluster statistics',
           icon: 'file text outline icon',
-          url: null
-        }
-      }
+          url: null,
+        },
+        treeSvg: {
+          filename: `${props.basename}_tree.svg`,
+          group: 'tree',
+          icon: 'file image outline icon',
+          url: null,
+        },
+      },
     };
   }
 
   componentDidMount() {
     let { files } = this.state;
-    _.forEach(files, file => { file.isLoading = true });
+    _.forEach(files, file => { file.isLoading = true; });
     this.getSvgUrl()
       .then(svgUrl => {
         files.svg.url = svgUrl;
@@ -132,6 +138,17 @@ class ExportWindow extends Component {
         console.log("!!! Error getting cluster files:", error);
         this.setState({ error });
       });
+    
+    this.getTreeSvgUrl()
+      .then(svgUrl => {
+        files.treeSvg.url = svgUrl;
+        files.treeSvg.isLoading = false;
+        this.setState({ files });
+      })
+      .catch(error => {
+        console.log("!!! Error getting tree svg file:", error);
+        this.setState({ error });
+      });
   }
 
   componentWillUnmount() {
@@ -143,7 +160,12 @@ class ExportWindow extends Component {
   }
 
   getSvgUrl() {
-    return this.getSvg()
+    return this.getSvg('worldmap')
+      .then(_.partial(io.dataToBlobURL, 'image/svg+xml'));
+  }
+
+  getTreeSvgUrl() {
+    return this.getSvg('phylogram')
       .then(_.partial(io.dataToBlobURL, 'image/svg+xml'));
   }
 
@@ -176,12 +198,12 @@ class ExportWindow extends Component {
       .then(_.partial(io.dataToBlobURL, 'text/csv'));
   }
 
-  getSvg() {
+  getSvg(elementId) {
     return new Promise(resolve => {
-      let $svg = $('svg.worldmap')
-      console.log("$(svg.worldmap):", $svg);
+      let $svg = $(`svg#${elementId}`);
       if ($svg.length === 0)
         return resolve(null);
+      console.log(`svg content: ${$svg}`);
       // let svgContent = $svg[0].outerHTML;
       let svgContent = $svg.parent().html();
       // console.log("svgContent before:", svgContent.substring(0, 250));

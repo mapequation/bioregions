@@ -47,7 +47,7 @@ class Tree extends Component {
 
     return (
       <div style={{position: 'relative', overflow: 'auto'}}>
-        <svg ref={(el) => this.svg = el}>
+        <svg id="phylogram" ref={(el) => this.svg = el}>
         </svg>
       </div>
     );
