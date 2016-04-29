@@ -183,6 +183,7 @@ chart.render = function(el, props) {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
         .attr("stroke", biggestClusterColor)
+        .attr("font-family", "'Open Sans', Helvetica, sans-serif")
         .text(d => d.name);
 
 
