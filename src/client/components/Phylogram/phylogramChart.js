@@ -242,6 +242,19 @@ phylogram.build = function(selector, phyloTree, options) {
   } else {
     var yscale = scaleBranchLengths(nodes, w)
   }
+  
+  
+  // Define the zoom function for the zoomable tree
+  function zoom() {
+      vis.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+  }
+
+  // define the zoomListener which calls the zoom function on the "zoom" event constrained within the scaleExtents
+  // var zoomListener = d3.behavior.zoom()
+  //   .scaleExtent([0.1, 3]).on("zoom", zoom);
+
+  // vis.call(zoomListener);
+  
 
   if (!options.skipTicks) {
     vis.selectAll('line')
