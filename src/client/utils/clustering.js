@@ -120,7 +120,7 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
 
     const limitedClusters = reduceLimitRest(0,
         (sum, {count}) => sum + count,
-        (sum, {count}) => count / totCount > clustersFractionThreshold || sum / totCount < clustersFractionThreshold,
+        (sum, {count}) => count / totCount >= clustersFractionThreshold || sum / totCount < clustersFractionThreshold,
         (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
         sortedClusters);
     cluPerSpecies.clusters = limitedClusters;

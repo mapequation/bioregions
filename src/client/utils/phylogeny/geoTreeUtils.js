@@ -66,10 +66,10 @@ export function _sortAndLimitClusters({totCount, clusters}, fractionThreshold = 
     
     const limitedClusters = reduceLimitRest(0,
         (sum, {count}) => sum + count,
-        (sum, {count}) => count / totCount > fractionThreshold || sum / totCount < fractionThreshold,
+        (sum, {count}) => count / totCount >= fractionThreshold || sum / totCount < fractionThreshold,
         (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
         sortedClusters);
-
+    
     return {
         totCount,
         clusters: limitedClusters,

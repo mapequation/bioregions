@@ -119,13 +119,9 @@ chart.render = function(el, props) {
     }
 
     function biggestClusterColor(d) {
-        if (!d.clusters || d.clusters.clusters.length === 0)
-            return "#aaa";
-        const color = clusterColors[d.clusters.clusters[0].clusterId];
-        if (color)
-            return color;
-        console.log('!!!!!!! biggestClusterColor!!!! node:', d);
-        return '#000';
+        // return (!d.clusters || d.clusters.clusters.length === 0) ? '#aaa' :
+        //     clusterColors[d.clusters.clusters[0].clusterId];
+        return d.clusters.clusters.length === 0 ? '#aaa' : clusterColors[d.clusters.clusters[0].clusterId];
     }
     
     var clusterData = (d) => {

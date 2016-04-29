@@ -237,6 +237,23 @@ describe('geoTreeUtils', () => {
             });
         })
         
+        it('should keep at least one item even if exactly on fraction threshold', () => {
+            const clusterMap = new Map([[16,2], [5,7], [0,1]]);
+            const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
+            const clusters = {totCount, clusters: clusterMap};
+            const result = _sortAndLimitClusters(clusters, 0.7);
+            return expect(result).to.deep.eq({
+                totCount,
+                clusters: [
+                    { clusterId: 5, count: 7 },
+                    { clusterId: 'rest', count: 3, rest: [
+                        { clusterId: 16, count: 2 },
+                        { clusterId: 0, count: 1 },
+                    ]},
+                ],
+            });
+        })
+        
         it('should have no rest element for zero threshold', () => {
             const clusterMap = new Map([[0,100], [1,11], [2,22], [3,33]]);
             const totCount = _.sumBy(Array.from(clusterMap), v => v[1]);
