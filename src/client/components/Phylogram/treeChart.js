@@ -115,12 +115,9 @@ chart.render = function(el, props) {
         if (clusterId === 'rest')
             return '#eee';
         return 'white';
-        // clusterId === 'rest' ? '#eee' : clusterId >= 0 ? clusterColors[clusterId].hex() : 'white';
     }
 
     function biggestClusterColor(d) {
-        // return (!d.clusters || d.clusters.clusters.length === 0) ? '#aaa' :
-        //     clusterColors[d.clusters.clusters[0].clusterId];
         return d.clusters.clusters.length === 0 ? '#aaa' : clusterColors[d.clusters.clusters[0].clusterId];
     }
     

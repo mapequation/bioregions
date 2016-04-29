@@ -9,28 +9,24 @@ import {
 } from '../utils/statistics';
 import _ from 'lodash';
 
-export function getBipartiteNetwork(species, features, bins) {
-
-  // Map names to index
-  var speciesNameToIndex = new Map();
-  var speciesCounter = 0;
-  species.forEach(({name}) => {
-      ++speciesCounter;
-      speciesNameToIndex.set(name, speciesCounter);
-  });
-
-  // Create network with links from species to bins
-  var network = [];
-  network.push("# speciesId binId [speciesCount]");
-  var binCounter = 0;
-  bins.forEach((bin) => {
-    ++binCounter;
-    bin.features.forEach((feature) => {
-      network.push(`f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`);
-    })
-  });
-  console.log("First 10 links:", network.slice(0,10));
-  return network.join('\n');
+/**
+ * Aggregate clusters below a count fraction threshold in a rest cluster.
+ * Assume sorted on biggest first. If that is below threshold, keep add while sum
+ * is less than the threshold
+ * @param fractionThreshold:Number count/totCount >= threshold or sum/totCount < threshold
+ * @param [totCount]:Number optional, otherwise it will be calculated from sortedClusters
+ * @param sortedClusters:Object {totCount, clusters: [{count, clusterId},...]}
+ * @return {totCount, clusters: [{count, clusterId}, ...., {count, clusterId: 'rest', rest: [
+ * {count, clusterId}, ...]}]}
+ */
+export function aggregateSmallClusters(fractionThreshold, totCount, sortedClusters) {
+  if (!sortedClusters)
+    [totCount, sortedClusters] = [_.sumBy(sortedClusters, 'count'), totCount];
+  return reduceLimitRest(0,
+    (sum, {count}) => sum + count,
+    (sum, {count}) => count / totCount >= fractionThreshold || sum / totCount < fractionThreshold,
+    (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
+    sortedClusters);
 }
 
 /**
@@ -117,13 +113,8 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
   _.forEach(clustersPerSpecies, cluPerSpecies => {
     const sortedClusters = _(cluPerSpecies.clusters).sortBy('count').reverse().value();
     const { totCount } = cluPerSpecies;
-
-    const limitedClusters = reduceLimitRest(0,
-        (sum, {count}) => sum + count,
-        (sum, {count}) => count / totCount >= clustersFractionThreshold || sum / totCount < clustersFractionThreshold,
-        (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
-        sortedClusters);
-    cluPerSpecies.clusters = limitedClusters;
+    
+    cluPerSpecies.clusters = aggregateSmallClusters(clustersFractionThreshold, totCount, sortedClusters);
   });
 
   return {clusters, clustersPerSpecies};
@@ -137,6 +128,30 @@ export function mergeClustersToBins(clusterIds, bins) {
     });
   }
   return bins;
+}
+
+export function getBipartiteNetwork(species, features, bins) {
+
+  // Map names to index
+  var speciesNameToIndex = new Map();
+  var speciesCounter = 0;
+  species.forEach(({name}) => {
+      ++speciesCounter;
+      speciesNameToIndex.set(name, speciesCounter);
+  });
+
+  // Create network with links from species to bins
+  var network = [];
+  network.push("# speciesId binId [speciesCount]");
+  var binCounter = 0;
+  bins.forEach((bin) => {
+    ++binCounter;
+    bin.features.forEach((feature) => {
+      network.push(`f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`);
+    })
+  });
+  console.log("First 10 links:", network.slice(0,10));
+  return network.join('\n');
 }
 
 export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback) {
