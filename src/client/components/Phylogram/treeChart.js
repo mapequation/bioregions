@@ -73,6 +73,7 @@ chart.render = function(el, props) {
         .sort(null)
         .value(d => d.length)
         .separation((a, b) => 1);
+        // .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth );
 
     function project(d) {
         let r = d.y,
@@ -98,22 +99,76 @@ chart.render = function(el, props) {
             "L" + t[0] + "," + t[1]);
     }
 
+    var arc = d3.svg.arc()
+        .outerRadius(5)
+        .innerRadius(0);
+
+    var pie = d3.layout.pie()
+        .sort(null)
+        .value(function(d) {
+            return d.count;
+        });
+
+    const fillColor = (clusterId) => {
+        if (clusterId >= 0)
+            return clusterColors[clusterId];
+        if (clusterId === 'rest')
+            return '#eee';
+        return 'white';
+        // clusterId === 'rest' ? '#eee' : clusterId >= 0 ? clusterColors[clusterId].hex() : 'white';
+    }
+
+    function biggestClusterColor(d) {
+        if (!d.clusters || d.clusters.clusters.length === 0)
+            return "#aaa";
+        const color = clusterColors[d.clusters.clusters[0].clusterId];
+        if (color)
+            return color;
+        console.log('!!!!!!! biggestClusterColor!!!! node:', d);
+        return '#000';
+    }
+    
+    var clusterData = (d) => {
+        if (!d.clusters || d.clusters.totCount === 0)
+            return [{
+                count: 1
+            }];
+        return d.clusters.clusters;
+    };
+
     var link = vis.selectAll("path.link")
         .data(cluster.links(nodes))
-        .enter().append("path")
+       .enter().append("path")
         .attr("class", "link")
+        .attr("fill", "none")
+        .attr("stroke", (d) => biggestClusterColor(d.target))
+        .attr("stroke-width", "4px")
         .attr("d", step);
 
     var node = vis.selectAll("g.node")
-        .data(nodes.filter(function(n) {
-            return n.x !== undefined;
-        }))
-        .enter().append("g")
+        .data(nodes);
+    
+    node.enter()
+        .append("g")
         .attr("class", "node")
         .attr("transform", (d) => `rotate(${d.x - 90})translate(${d.y})`);
+    
+    node.exit().remove();
 
-    node.append("circle")
-        .attr("r", 2.5);
+    var pies = node.selectAll(".pie")
+        .data(d => pie(clusterData(d)));
+
+    pies.enter().append("path")
+        .attr("class", "pie")
+
+    pies.exit().remove();
+
+    pies.attr("d", arc)
+        .style("stroke", (d) => d.data.clusterId !== undefined ? "white" : "grey")
+        .style("fill", (d) => d.data.clusterId !== undefined ? fillColor(d.data.clusterId) : "white");
+    
+
+
 
     var label = vis.selectAll("text")
         .data(nodes.filter(function(d) {
@@ -127,6 +182,7 @@ chart.render = function(el, props) {
         .attr("transform", function(d) {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
+        .attr("stroke", biggestClusterColor)
         .text(d => d.name);
 
 
