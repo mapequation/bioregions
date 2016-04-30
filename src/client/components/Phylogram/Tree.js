@@ -18,7 +18,7 @@ class Tree extends Component {
   }
    
   initialState = {
-    leafCountLimit: 100,
+    leafCountLimit: 150,
     filter: "",
   }
   
