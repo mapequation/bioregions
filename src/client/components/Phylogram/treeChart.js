@@ -105,9 +105,7 @@ chart.render = function(el, props) {
 
     var pie = d3.layout.pie()
         .sort(null)
-        .value(function(d) {
-            return d.count;
-        });
+        .value(d => d.count);
 
     const fillColor = (clusterId) => {
         if (clusterId >= 0)
@@ -128,6 +126,27 @@ chart.render = function(el, props) {
             }];
         return d.clusters.clusters;
     };
+    
+    var radialAxis = vis.selectAll(".axis")
+        .data(yscale.ticks(5).slice(2))
+    .enter().append("g")
+        .attr("class", "axis");
+
+    radialAxis.append("circle")
+        .attr("r", yscale)
+        .style("fill", "none")
+        .style("stroke", "#777")
+        .style("stroke-dasharray", "1,4");
+
+    radialAxis.append("text")
+        .attr("y", d => yscale(d) + 0)
+        // .attr("transform", "rotate(15)")
+        .attr("dy", "1em")
+        .style("text-anchor", "middle")
+        .style("stroke", "#ccc")
+        .style("font-family", "'Open Sans', Helvetica, sans-serif")
+        .text(d => d);
+
 
     var link = vis.selectAll("path.link")
         .data(cluster.links(nodes))
@@ -436,7 +455,9 @@ function scaleBranchLengths(nodes, w) {
     var rootDists = nodes.map(function(n) {
         return n.rootDist;
     });
-    var yscale = d3.scale.linear()
+    var yscale = d3.scale.pow()
+        .exponent(4)
+        .nice()
         .domain([0, d3.max(rootDists)])
         .range([0, w]);
     visitPreOrder(nodes[0], function(node) {
