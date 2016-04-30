@@ -95,7 +95,7 @@ export function parseNewick(s) {
     }
     resolve(tree);
   });
-};
+}
 
 
 const defaultOpts = {

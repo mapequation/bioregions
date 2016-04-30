@@ -23,20 +23,22 @@ chart.render = function(el, props) {
         return;
     }
 
-    const root = phyloTree;
+    // const root = phyloTree;
     // root.children && root.children.forEach(treeUtils.collapse);
-    console.log(`!!!!!!! ${root.children ? root.children.length : 0} root children!`);
-
-    let numLeafNodes = 0;
+    
+    const leafNodes = [];
     let numNodes = 0;
     let maxDepth = 0;
     treeUtils.visitTreeDepthFirst(phyloTree, (node, depth) => {
         ++numNodes;
-        if (!node.children)
-            ++numLeafNodes;
-        if (depth > maxDepth)
-            maxDepth = depth;
+        if (node.isLeaf) {
+            leafNodes.push(node);
+            if (depth > maxDepth) {
+                maxDepth = depth;
+            }
+        }
     });
+    const numLeafNodes = leafNodes.length;
 
     console.log(`[treeChart], numLeafNodes: ${numLeafNodes}, numNodes: ${numNodes}, maxDepth: ${maxDepth}`);
 
@@ -48,7 +50,7 @@ chart.render = function(el, props) {
     svg.selectAll('*').remove();
 
 
-    const innerDiameter = Math.max(15 * numLeafNodes / Math.PI, 200);
+    const innerDiameter = Math.max(16 * numLeafNodes / Math.PI, 200);
     const labelWidth = 250;
     const outerDiameter = 2 * labelWidth + innerDiameter;
     const R = outerDiameter / 2;
@@ -163,7 +165,10 @@ chart.render = function(el, props) {
     node.enter()
         .append("g")
         .attr("class", "node")
-        .attr("transform", (d) => `rotate(${d.x - 90})translate(${d.y})`);
+        .attr("transform", (d) => `rotate(${d.x - 90})translate(${d.y})`)
+        .on("click", d => {
+            console.log(`Click tree node:`, d)
+        });
     
     node.exit().remove();
 
@@ -181,17 +186,13 @@ chart.render = function(el, props) {
     
 
 
-
-    var label = vis.selectAll("text")
-        .data(nodes.filter(function(d) {
-            return d.x !== undefined && !d.children;
-        }))
-        .enter().append("text")
+    var label = vis.selectAll(".label")
+        .data(leafNodes)
+      .enter().append("text")
+        .attr("class", "label")
         .attr("dy", ".31em")
-        .attr("text-anchor", function(d) {
-            return d.x < 180 ? "start" : "end";
-        })
-        .attr("transform", function(d) {
+        .attr("text-anchor", d => d.x < 180 ? "start" : "end")
+        .attr("transform", d => {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
         .attr("stroke", biggestClusterColor)

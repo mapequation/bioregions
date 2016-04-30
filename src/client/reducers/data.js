@@ -85,7 +85,7 @@ const getInitialState = () => {
     selectedCluster: -1, // clusterId if selected
     selectedSpecies: "",
     phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
-    clusterFractionLimit: 0.7, // For cluster pie charts
+    clusterFractionLimit: 0.1, // For cluster pie charts //TODO: Not used in DataWorker
     isShowingInfomapUI: false,
     infomap: {
       numTrials: 1,
@@ -112,6 +112,17 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
+function prepareTree(tree, state) {
+  treeUtils.aggregateCount(tree, () => 1, 'leafCount');
+  geoTreeUtils.aggregateClusters(tree, state.clustersPerSpecies, state.clusterFractionLimit);
+  
+  treeUtils.visitTreeDepthFirst(tree, (node, depth) => {
+    node.depth = depth;
+    node.isLeaf = !node.children;
+  });
+  return tree;
+}
+
 export default function data(state = getInitialState(), action) {
   switch (action.type) {
     case ActionTypes.LOAD_FILES:
@@ -119,6 +130,7 @@ export default function data(state = getInitialState(), action) {
       state.dataWorker.postMessage(action);
       return {
         ...getInitialState(),
+        phyloTree: state.phyloTree,
       };
     case ActionTypes.LOAD_TREE:
       state.dataWorker.postMessage(action);
@@ -131,7 +143,7 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.ADD_PHYLO_TREE:
       return {
         ...state,
-        phyloTree: treeUtils.aggregateCount(geoTreeUtils.aggregateClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit), () => 1, 'leafCount'),
+        phyloTree: prepareTree(action.phyloTree, state),
       };
     case ActionTypes.REMOVE_PHYLO_TREE:
       return {

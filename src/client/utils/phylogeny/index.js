@@ -15,7 +15,8 @@ export function parseTree(str) {
 
     if (str.charAt(0) === '(') { // If newick format
       // console.log("Parse Newick...");
-      return resolve(parseNewick(str));
+      const tree = parseNewick(str);
+      return resolve(tree);
     }
 
     // console.log("Parse Nexus...");
