@@ -48,7 +48,7 @@ chart.render = function(el, props) {
     svg.selectAll('*').remove();
 
 
-    const innerDiameter = 15 * numLeafNodes / Math.PI;
+    const innerDiameter = Math.max(15 * numLeafNodes / Math.PI, 200);
     const labelWidth = 250;
     const outerDiameter = 2 * labelWidth + innerDiameter;
     const R = outerDiameter / 2;

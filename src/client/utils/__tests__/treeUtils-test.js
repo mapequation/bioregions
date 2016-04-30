@@ -230,15 +230,52 @@ describe('treeUtils', () => {
                 }));
             return expect(result).to.eventually.eq('((A:10,B:0):10,C:4,(D:3,E:2):5):19;');
         })
-    })
-
-    describe('clone', () => {
-        it('should clone the tree', () => {
+        
+        it('should aggregate counts on tree to custom field', () => {
             const result = newick.parse(newickInput)
-                .then(tree => treeUtils.clone(tree))
-                .then(newick.write);
-            return expect(result).to.eventually.eq('((A,B),C,(D,E));');
+                .then(tree => treeUtils.aggregateCount(tree, () => 1, 'leafCount'))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({leafCount}) => leafCount
+                }));
+            return expect(result).to.eventually.eq('((A:1,B:1):2,C:1,(D:1,E:1):2):5;');
         })
+    })
+    
+    describe('limitLeafCount', () => {
+      it('should first aggregate leafCount if not done, and sort on that', () => {
+        const result = newick.parse(newickInput)
+            .then(tree => treeUtils.limitLeafCount(tree))
+            .then(_.partial(newick.write, {
+                getBranchLength: ({leafCount}) => leafCount
+            }));
+        return expect(result).to.eventually.eq('((A:1,B:1):2,(D:1,E:1):2,C:1):5;');
+      })
+      
+      it('should collapse smallest branches until below or equal limit', () => {
+        const result = newick.parse('((00,01,02,03)0,(10,11)1,(20,21,22)2);')
+            .then(tree => treeUtils.limitLeafCount(tree, 4))
+            .then(_.partial(newick.write, {
+                getBranchLength: ({leafCount}) => leafCount
+            }));
+        return expect(result).to.eventually
+          .eq('((00:1,01:1,02:1,03:1)0:4,2:3,1:2):9;');
+      })
+
+      it('should skip leafs until collapse possible', () => {
+        const result = newick.parse('((00,01)0,1);')
+            .then(tree => treeUtils.limitLeafCount(tree, 2))
+            .then(_.partial(newick.write));
+        return expect(result).to.eventually
+          .eq('(0,1);');
+      })
+
+      it('should collapse recursively small branches', () => {
+        const result = newick.parse('(((((A,B,C)0000,(00010)0001)000,(0010)001)00,(010)01)0,(10)1)_;')
+            .then(tree => treeUtils.limitLeafCount(tree, 4))
+            .then(_.partial(newick.write));
+        return expect(result).to.eventually
+          .eq('(((((A,B,C)0000,(00010)0001)000,001)00,01)0,1)_;');
+      })
     })
     
     describe('prune', () => {
@@ -262,6 +299,15 @@ describe('treeUtils', () => {
                 .then(tree => treeUtils.prune(tree, ({count}) => count > 0))
                 .then(newick.write);
             return expect(result).to.eventually.eq('((A),C,(D,E));');
+        })
+    })
+
+    describe('clone', () => {
+        it('should clone the tree', () => {
+            const result = newick.parse(newickInput)
+                .then(tree => treeUtils.clone(tree))
+                .then(newick.write);
+            return expect(result).to.eventually.eq('((A,B),C,(D,E));');
         })
     })
 

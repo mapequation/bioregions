@@ -10,6 +10,7 @@ import colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
 import geoTreeUtils from '../utils/phylogeny/geoTreeUtils'
+import treeUtils from '../utils/treeUtils'
 
 const getInitialBinningState = () => {
   return {
@@ -130,7 +131,7 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.ADD_PHYLO_TREE:
       return {
         ...state,
-        phyloTree: geoTreeUtils.aggregateClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit),
+        phyloTree: treeUtils.aggregateCount(geoTreeUtils.aggregateClusters(action.phyloTree, state.clustersPerSpecies, state.clusterFractionLimit), () => 1, 'leafCount'),
       };
     case ActionTypes.REMOVE_PHYLO_TREE:
       return {

@@ -6,7 +6,7 @@ import { normalizeSpeciesName } from './naming'
  * invoking the callback function on each visited node.
  * @param opts:Object Optional options:
  *  postOrder:Boolean to visit post order (children before parents). Pre-order by default.
- *  include:Function if give, only visit nodes that predicates true in the include function.
+ *  include:Function if given, only visit nodes that predicates true in the include function.
  * @param root the root node to start the visit.
  * @param callback the function to invoke on the nodes. If the function
  *  returns true, the visitation is ended with an early exit.
@@ -101,9 +101,36 @@ export function visitAncestors(opts, node, callback) {
 export function collapse(node) {
   if (node.children) {
     node._children = node.children;
-    node._children.forEach(collapse);
     node.children = null;
   }
+  return node;
+}
+
+export function collapseAll(node) {
+  if (node.children) {
+    node._children = node.children;
+    node._children.forEach(collapseAll);
+    node.children = null;
+  }
+  return node;
+}
+
+export function expand(node) {
+  if (node._children) {
+    node.children = node._children;
+    node._children = null;
+  }
+  return node;
+}
+
+export function expandAll(node) {
+  if (node._children) {
+    node.children = node._children;
+    node._children = null;
+  }
+  // Even if not collapsed, expand possibly collapsed nodes further down
+  if (node.children)
+    node.children.forEach(expandAll);
   return node;
 }
 
@@ -115,12 +142,12 @@ export function collapse(node) {
  * @param leafMutator Function called on leaf nodes
  */
 export function aggregate(root, parentMutator, leafMutator) {
-  visitTreeDepthFirst(root, (node) => {
+  visitTreeDepthFirst({ postOrder: true }, root, (node) => {
     if (!node.children)
       leafMutator(node);
     else
       parentMutator(node);
-  }, false);
+  });
 }
 
 
@@ -129,17 +156,116 @@ export function aggregate(root, parentMutator, leafMutator) {
  * Aggregate counts from leaf nodes to root (modifies the tree)
  * @param tree:Object The tree
  * @param getLeafCount:Function (leafNode) => count. Default to zero.
+ * @param field {String}, the field to store the count
  */
-export function aggregateCount(tree, getLeafCount) {
+export function aggregateCount(tree, getLeafCount, field = 'count') {
     // Reset counts on leaf nodes and aggregate on parents
     visitTreeDepthFirst({ postOrder: true }, tree, node => {
         if (!node.children) {
-            node.count = getLeafCount(node) || 0;
+            node[field] = getLeafCount(node) || 0;
             return;
         }
-        node.count = _.reduce(node.children, (sum, { count }) => sum + count, 0);
+        node[field] = _.reduce(node.children, (sum, child) => sum + child[field], 0);
     });
     return tree;
+}
+
+function _limitLeafCount(node, limit) {
+  
+  node.limitedLeafCount = node.leafCount;
+  
+  if (!node.children)
+    return node;
+  
+  // Sort children TODO: Sort once to not have to repeat this
+  node.children.sort((a,b) => b.leafCount - a.leafCount);
+  
+  if (node.leafCount <= limit)
+    return node;
+
+  const minCollapsedLeafCount = node.leafCount - limit;
+  
+  // const LOG = (s) => console.log(`${'    '.repeat(node.depth)}${s}`);
+  // LOG(`>>>> Limit node ${node.name}:${node.leafCount} with limit: ${limit} -> minCollapsedLeafCount: ${minCollapsedLeafCount}`);
+  let collapsedLeafCount = 0;
+  // Collapse from right until limit ok
+  for (let i = node.children.length - 1; i !== -1; --i) {
+    const child = node.children[i];
+    // LOG(` -> ${child.name}:${child.leafCount}`);
+    if (collapsedLeafCount + child.leafCount <= minCollapsedLeafCount) {
+      // Collapse if below or equal limit
+      if (child.children) {
+        collapseAll(child);
+        collapsedLeafCount += child.leafCount;
+        // LOG(` => collapse -> collapsedLeafCount: ${collapsedLeafCount}`);
+      }
+      else {
+        // LOG(` => skip leaf`);
+      }
+    }
+    else {
+      // Can only come here if last is collapsed. By the leafCount sorting,
+      // this also have children. The minCollapsedLeafCount can thus always
+      // be met by collapsing the whole node, but try finer-grained collapse
+      // by recursion. May not be enough if enough leaf nodes on next level,
+      // as child arrays are not mutated by this algorithm.
+      const subMinCollapsedLeafCount = minCollapsedLeafCount - collapsedLeafCount;
+      const subLimit = child.leafCount - subMinCollapsedLeafCount;
+      // LOG(` -> recurse with subLimit: ${subLimit}`);
+      
+      // Recursively prune branch
+      _limitLeafCount(child, subLimit);
+      
+      const subCollapsedLeafCount = child.leafCount - child.limitedLeafCount;      
+      collapsedLeafCount += subCollapsedLeafCount;
+      // LOG(` => collapsed ${subCollapsedLeafCount} -> ∑ ${collapsedLeafCount + subCollapsedLeafCount} >= ${minCollapsedLeafCount} ?`)
+      
+      if (collapsedLeafCount + subCollapsedLeafCount >= minCollapsedLeafCount) {
+        collapsedLeafCount += subCollapsedLeafCount;
+        break;
+      }
+      else {
+        // Collapse whole node if recursive collapse wasn't enough
+        collapseAll(child);
+        collapsedLeafCount += child.leafCount;
+        // LOG(` ==> Collapse whole node! -> collapsedLeafCount: ${collapsedLeafCount}`);
+        break;
+      }
+    }
+  }
+  
+  node.limitedLeafCount -= collapsedLeafCount;
+  return node;
+}
+
+/**
+ * Collapse small branches recursively until visible leaf count
+ * is below or equal a limit
+ * @param tree {Object} the tree
+ * @param limit {Number} the leaf count limit under which a branch is collapsed
+ * 
+ * @note The function stores 'limitedLeafCount' on some node,
+ * which is the number of visible leaf nodes under the node.
+ * 
+ * @return tree {Object} the modified tree
+ */
+export function limitLeafCount(tree, limit = Number.MAX_VALUE) {
+  // Prepare for recursive collapse
+  expandAll(tree);
+  
+  if (!tree.leafCount) {
+    aggregateCount(tree, () => 1, 'leafCount');
+  }
+  
+  // function setDepth(node, depth = 0) {
+  //   node.depth = depth;
+  //   _.each(node.children || [], (child) => {
+  //     setDepth(child, depth + 1);
+  //   });
+  // }
+  // setDepth(tree);
+
+  return _limitLeafCount(tree, limit);
 }
 
 /**
@@ -149,6 +275,8 @@ export function aggregateCount(tree, getLeafCount) {
  * else the whole branch will not be included.
  */
 export function prune(tree, include) {
+    if (!tree)
+      return tree;
     const newTree = Object.assign({}, tree);
     newTree.children = [];
     let current = newTree;
@@ -197,6 +325,7 @@ export default {
   visitAncestors,
   collapse,
   aggregateCount,
+  limitLeafCount,
   prune,
   clone,
   normalizeNames,
