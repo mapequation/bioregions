@@ -83,9 +83,11 @@ export function _sortAndLimitClusters({totCount, clusters}, fractionThreshold = 
  * @param fractionThreshold limit clusters if count less than fractionThreshold
  * 
  * Each node in the tree will get .clusters: { totCount:Number, clusters: limitRest([{clusterId,count}, ...]) }
+ * @note it will expand all nodes before aggregating clusters
  * @return the modified tree
  */
 export function aggregateClusters(tree, clustersPerSpecies = {}, fractionThreshold = 0.1) {
+    treeUtils.expandAll(tree);
     _aggregateClusters(tree, clustersPerSpecies);
     treeUtils.visitTreeDepthFirst(tree, (node) => {
         node.clusters = _sortAndLimitClusters(node.clusters, fractionThreshold);

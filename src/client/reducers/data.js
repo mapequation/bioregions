@@ -174,6 +174,12 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
       const bins = mergeClustersToBins(action.clusterIds, state.bins);
       const { clusters, clustersPerSpecies } = action.clusterStatistics;
+      let geoPhyloTree = state.phyloTree;
+      if (geoPhyloTree) {
+        geoPhyloTree = geoTreeUtils.aggregateClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
+        // Create new tree object to get behind shouldComponentUpdate
+        geoPhyloTree = Object.assign({}, geoPhyloTree);
+      } 
       return {
         ...state,
         isClustering: false,
@@ -185,7 +191,7 @@ export default function data(state = getInitialState(), action) {
         mapBy: Display.BY_CLUSTER,
         clusterColors: colors.categoryColors(clusters.length),
         isShowingInfomapUI: false,
-        phyloTree: !state.phyloTree ? null : Object.assign({}, geoTreeUtils.aggregateClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit)), // Create new tree object to get behind shouldComponentUpdate 
+        phyloTree: geoPhyloTree,
       };
     case ActionTypes.BINNING_CHANGE_TYPE:
     case ActionTypes.BINNING_MIN_NODE_SIZE:
