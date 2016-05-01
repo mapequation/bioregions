@@ -15,7 +15,8 @@ describe('geoTreeUtils', () => {
         });
     }
     
-    let newick1, clustersPerSpecies, clustersPerSpeciesLimited, testTreeWithClusters;
+    let newick1, clustersPerSpecies, clustersPerSpeciesLimited,
+        testTreeWithClusters, testTreeWithResetClusters;
     
     before(() => {
         newick1 = '((00,01)0,1,(20,21)2)root;';
@@ -118,8 +119,48 @@ describe('geoTreeUtils', () => {
                 },
             ]
         };
+    
+        testTreeWithResetClusters = {
+            name: 'root',
+            clusters: { totCount: 0, clusters: [] },
+            children: [
+                {
+                    name: '0',
+                    clusters: { totCount: 0, clusters: [] },
+                    children: [
+                        {
+                            name: '00',
+                            clusters: { totCount: 0, clusters: [] },
+                        },
+                        {
+                            name: '01',
+                            clusters: { totCount: 0, clusters: [] },
+                        },
+                    ]
+                },
+                {
+                    name: '1',
+                    clusters: { totCount: 0, clusters: [] },
+                },
+                {
+                    name: '2',
+                    clusters: { totCount: 0, clusters: [] },
+                    children: [
+                        {
+                            name: '20',
+                            clusters: { totCount: 0, clusters: [] },
+                        },
+                        {
+                            name: '21',
+                            clusters: { totCount: 0, clusters: [] },
+                        },
+                    ]
+                },
+            ]
+        };
         
         setParents(testTreeWithClusters);
+        setParents(testTreeWithResetClusters);
         
         clustersPerSpeciesLimited = _(clustersPerSpecies)
             .map((originalClusters, nodeName) => {
@@ -283,6 +324,15 @@ describe('geoTreeUtils', () => {
             const result = newick.parse(newick1)
                 .then(tree => geoTreeUtils.aggregateClusters(tree, clustersPerSpeciesLimited, 0.01));
             return expect(result).to.eventually.deep.eq(testTreeWithClusters);
+        })
+    })
+    
+    describe('resetClusters', () => {
+        it('should reset aggregate clusters', () => {
+            const result = newick.parse(newick1)
+                .then(tree => geoTreeUtils.aggregateClusters(tree, clustersPerSpeciesLimited, 0.01))
+                .then(tree => geoTreeUtils.resetClusters(tree));
+            return expect(result).to.eventually.deep.eq(testTreeWithResetClusters);
         })
     })
 })

@@ -152,10 +152,14 @@ export default function data(state = getInitialState(), action) {
       };
     case ActionTypes.ADD_SPECIES_AND_BINS:
       return {
-        ...state,
+        ...getInitialState(),
         species: action.species,
         bins: action.bins,
         binningLoading: false,
+        // Keep some state
+        binning: state.binning,
+        // Reset possibly stored clusters on the tree
+        phyloTree: state.phyloTree ? geoTreeUtils.resetClusters(state.phyloTree) : state.phyloTree,        
       };
     case ActionTypes.GET_CLUSTERS:
       // Forward to data worker

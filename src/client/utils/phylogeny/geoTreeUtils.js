@@ -51,7 +51,7 @@ export function _aggregateClusters(tree, clustersPerSpecies = {}) {
  * @param clusters {totCount, clusters: Map([[clusterId,count],...])
  * @param totCount sum count in clusterMap
  * @param fractionThreshold limit clusters if count less than fractionThreshold
- * @return object {totCount, main: [{clusterId, count}, ...], rest: [{clusterId, count}, ...]}
+ * @return object {totCount, [{clusterId, count}, ..., [{clusterId: 'rest', count, rest: [{clusterId, count}, ...]}]}
  */
 export function _sortAndLimitClusters({totCount, clusters}, fractionThreshold = 0.1) {
     const sortedClusters = _(Array.from(clusters))
@@ -95,6 +95,14 @@ export function aggregateClusters(tree, clustersPerSpecies = {}, fractionThresho
     return tree;
 }
 
+export function resetClusters(tree) {
+    treeUtils.visitTreeDepthFirst(tree, (node) => {
+        node.clusters = { totCount: 0, clusters: [] }
+    });
+    return tree;
+}
+
 export default {
     aggregateClusters,
+    resetClusters,
 }
