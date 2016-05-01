@@ -170,15 +170,15 @@ export function aggregateCount(tree, getLeafCount, field = 'count') {
     return tree;
 }
 
-function _limitLeafCount(node, limit) {
+function _limitLeafCount(node, limit, comparator) {
   
   node.limitedLeafCount = node.leafCount;
   
   if (!node.children)
     return node;
   
-  // Sort children TODO: Sort once to not have to repeat this
-  node.children.sort((a,b) => b.leafCount - a.leafCount);
+  // Sort children TODO: cache on comparator?
+  node.children.sort(comparator);
   
   if (node.leafCount <= limit)
     return node;
@@ -204,17 +204,18 @@ function _limitLeafCount(node, limit) {
       }
     }
     else {
-      // Can only come here if last is collapsed. By the leafCount sorting,
-      // this also have children. The minCollapsedLeafCount can thus always
-      // be met by collapsing the whole node, but try finer-grained collapse
-      // by recursion. May not be enough if enough leaf nodes on next level,
-      // as child arrays are not mutated by this algorithm.
+      if (!node.children) {
+        // LOG(` => skip pivotal leaf!`);
+        continue;
+      }
+      // Try finer-grained collapse by recursion. If not enough (due to leaf nodes
+      // on next level), collapse the whole node.
       const subMinCollapsedLeafCount = minCollapsedLeafCount - collapsedLeafCount;
       const subLimit = child.leafCount - subMinCollapsedLeafCount;
       // LOG(` -> recurse with subLimit: ${subLimit}`);
       
       // Recursively prune branch
-      _limitLeafCount(child, subLimit);
+      _limitLeafCount(child, subLimit, comparator);
       
       const subCollapsedLeafCount = child.leafCount - child.limitedLeafCount;      
       collapsedLeafCount += subCollapsedLeafCount;
@@ -238,23 +239,35 @@ function _limitLeafCount(node, limit) {
   return node;
 }
 
+
 /**
  * Collapse small branches recursively until visible leaf count
  * is below or equal a limit
  * @param tree {Object} the tree
  * @param limit {Number} the leaf count limit under which a branch is collapsed
+ * @param [comparator] {Function|String} sort by comparator,
+ * default '-leafCount' wich corresponds to (a, b) => -1 * (a.leafCount - b.leafCount). 
  * 
  * @note The function stores 'limitedLeafCount' on some node,
  * which is the number of visible leaf nodes under the node.
  * 
  * @return tree {Object} the modified tree
  */
-export function limitLeafCount(tree, limit = Number.MAX_VALUE) {
+export function limitLeafCount(tree, limit = Number.MAX_VALUE, comparator = '-leafCount') {
   // Prepare for recursive collapse
   expandAll(tree);
   
   if (!tree.leafCount) {
     aggregateCount(tree, () => 1, 'leafCount');
+  }
+  
+  let _comparator = comparator;
+  if (typeof comparator === 'string') {
+    const first = comparator.charAt(0);
+    const descending = first === '-';
+    const sortField = descending || first === '+' ? comparator.substr(1) : comparator;
+    const sign = descending ? -1 : 1;
+    _comparator = (a, b) => sign * ( a[sortField] - b[sortField]);
   }
   
   // function setDepth(node, depth = 0) {
@@ -265,7 +278,7 @@ export function limitLeafCount(tree, limit = Number.MAX_VALUE) {
   // }
   // setDepth(tree);
 
-  return _limitLeafCount(tree, limit);
+  return _limitLeafCount(tree, limit, _comparator);
 }
 
 /**

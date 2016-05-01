@@ -59,10 +59,7 @@ class Tree extends Component {
     
     return {
       clusterColors,
-      // phyloTree,
-      // phyloTree: treeUtils.prune(phyloTree, (node) => {
-      //   return node.clusters.totCount > 100;
-      phyloTree: treeUtils.limitLeafCount(phyloTree, leafCountLimit),
+      phyloTree: treeUtils.limitLeafCount(phyloTree, leafCountLimit, '-leafCount'),
     };
   }
 
