@@ -2,15 +2,12 @@ import * as ActionTypes from '../constants/ActionTypes';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import * as Binning from '../constants/Binning';
 import * as Display from '../constants/Display';
-import R from 'ramda';
-import crossfilter from 'crossfilter';
-import d3 from 'd3';
-import * as S from '../utils/statistics';
+import _ from 'lodash';
 import colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
-import geoTreeUtils from '../utils/phylogeny/geoTreeUtils'
-import treeUtils from '../utils/treeUtils'
+import geoTreeUtils from '../utils/phylogeny/geoTreeUtils';
+import treeUtils from '../utils/treeUtils';
 
 const getInitialBinningState = () => {
   return {
@@ -72,6 +69,7 @@ const getInitialState = () => {
     havePolygons: false,
     features: [], // GeoJSON features
     species: [], // features count by name, array of {name: string, count: number}
+    speciesCount: {}, // {name -> count} generated from species
     binning: getInitialBinningState(),
     binningLoading: false,
     bins: [], // bins = binner.bins(features)
@@ -112,13 +110,26 @@ function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
+// Generate state.speciesCount from state.species
+function getSpeciesCount(species) {
+  const speciesCount = {};
+  _.forEach(species, ({name, count}) => {
+    speciesCount[name] = count;
+  });
+  return speciesCount;
+}
+
 function prepareTree(tree, state) {
   treeUtils.aggregateCount(tree, () => 1, 'leafCount');
+  geoTreeUtils.aggregateSpeciesCount(tree, state.speciesCount);
   geoTreeUtils.aggregateClusters(tree, state.clustersPerSpecies, state.clusterFractionLimit);
-  
-  treeUtils.visitTreeDepthFirst(tree, (node, depth) => {
+
+  let uid = 0;
+  treeUtils.visitTreeDepthFirst(tree, (node, depth, childIndex) => {
     node.depth = depth;
     node.isLeaf = !node.children;
+    node.originalIndex = childIndex;
+    node.uid = ++uid;
   });
   return tree;
 }
@@ -151,15 +162,18 @@ export default function data(state = getInitialState(), action) {
         phyloTree: null,
       };
     case ActionTypes.ADD_SPECIES_AND_BINS:
+      const speciesCount = getSpeciesCount(action.species);
       return {
         ...getInitialState(),
         species: action.species,
+        speciesCount,
         bins: action.bins,
         binningLoading: false,
         // Keep some state
         binning: state.binning,
         // Reset possibly stored clusters on the tree
-        phyloTree: state.phyloTree ? geoTreeUtils.resetClusters(state.phyloTree) : state.phyloTree,        
+        phyloTree: state.phyloTree ? geoTreeUtils.aggregateSpeciesCount(
+          geoTreeUtils.resetClusters(state.phyloTree), speciesCount) : state.phyloTree,        
       };
     case ActionTypes.GET_CLUSTERS:
       // Forward to data worker

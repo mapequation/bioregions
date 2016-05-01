@@ -97,7 +97,7 @@ describe('treeUtils', () => {
       expect(names.join(',')).to.eq('root,0,2');
     })
     
-    it('should provide depth for nodes', () => {
+    it('should provide node depth on callback', () => {
       const namesAndDepth = [];
       treeUtils.visitTreeDepthFirst(tree, ({name}, depth) => {
         namesAndDepth.push({name, depth});
@@ -111,6 +111,23 @@ describe('treeUtils', () => {
         { name: '2', depth: 1 },
         { name: '20', depth: 2 },
         { name: '21', depth: 2 },
+      ]);
+    })
+    
+    it('should provide node childIndex on callback', () => {
+      const namesAndChildIndex = [];
+      treeUtils.visitTreeDepthFirst(tree, ({name}, depth, childIndex) => {
+        namesAndChildIndex.push({name, childIndex});
+      });
+      expect(namesAndChildIndex).to.deep.eq([
+        { name: 'root', childIndex: 0 },
+        { name: '0', childIndex: 0 },
+        { name: '00', childIndex: 0 },
+        { name: '01', childIndex: 1 },
+        { name: '1', childIndex: 1 },
+        { name: '2', childIndex: 2 },
+        { name: '20', childIndex: 0 },
+        { name: '21', childIndex: 1 },
       ]);
     })
   })

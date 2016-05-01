@@ -1,6 +1,13 @@
 import _ from 'lodash';
 import { normalizeSpeciesName } from './naming'
 
+function _visitTreeDepthFirst(opts, root, callback, depth, childIndex) {
+  if (!opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth, childIndex)) return true;
+  let childExit = !_.every(root.children || [], (child, i) => !_visitTreeDepthFirst(opts, child, callback, depth + 1, i));
+	if (childExit || opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth, childIndex)) return true;
+	return false;  
+}
+
 /**
  * Visits the subtree rooted at this node using a depth first search,
  * invoking the callback function on each visited node.
@@ -14,14 +21,11 @@ import { normalizeSpeciesName } from './naming'
  *  if false, they are visited in a post-order traversal
  * @return true if the visitation was interrupted with an early exit
  */
-export function visitTreeDepthFirst(opts, root, callback, depth = 0) {
+export function visitTreeDepthFirst(opts, root, callback) {
   if (!callback) {
     [opts, root, callback] = [{}, opts, root];
   }
-  if (!opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth)) return true;
-  let childExit = !_.every(root.children || [], child => !visitTreeDepthFirst(opts, child, callback, depth + 1));
-	if (childExit || opts.postOrder && (!opts.include || opts.include(root)) && callback(root, depth)) return true;
-	return false;
+  return _visitTreeDepthFirst(opts, root, callback, 0, 0);
 }
 
 export function mapDepthFirst(opts, root, callback) {

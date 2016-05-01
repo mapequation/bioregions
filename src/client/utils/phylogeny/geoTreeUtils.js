@@ -102,7 +102,37 @@ export function resetClusters(tree) {
     return tree;
 }
 
+/**
+ * Aggregate speciesCount and occurrenceCount on each node
+ * @param tree {Object} the tree
+ * @param speciesCount {Object} map {name -> count} for each species
+ * 
+ * @note it will expand all nodes
+ */
+export function aggregateSpeciesCount(tree, speciesCount) {
+    treeUtils.expandAll(tree);
+    treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, node => {
+        if (!node.children) {
+            const count = speciesCount[node.name];
+            node.speciesCount = count ? 1 : 0;
+            node.occurrenceCount = count || 0;
+        }
+        else {
+            let sumSpeciesCount = 0;
+            let sumOccurrenceCount = 0;
+            _.forEach(node.children, (child) => {
+                sumSpeciesCount += child.speciesCount;
+                sumOccurrenceCount += child.occurrenceCount;
+            });
+            node.speciesCount = sumSpeciesCount;
+            node.occurrenceCount = sumOccurrenceCount;
+        }
+    });
+    return tree;
+}
+
 export default {
     aggregateClusters,
     resetClusters,
+    aggregateSpeciesCount,
 }

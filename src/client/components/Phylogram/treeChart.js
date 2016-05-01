@@ -63,11 +63,25 @@ chart.render = function(el, props) {
     if (g.empty()) {
         g = svg.append('g');
     }
+    
+    const vis = g;
+    const s = props.minimap ? 200 / outerDiameter : 1;
 
-    svg.attr("width", outerDiameter)
-        .attr("height", outerDiameter);
+    svg.attr("width", s * outerDiameter)
+        .attr("height", s * outerDiameter);
 
-    g.attr("transform", `translate(${R}, ${R})`);
+    vis.attr("transform", `translate(${s * R}, ${s * R})scale(${s})`);
+    
+    function onZoom() {
+        vis.attr("transform", `translate(${d3.event.translate})scale(${d3.event.scale})`);
+    }
+
+    if (!props.minimap) {
+        // const zoomListener = d3.behavior.zoom()
+        // .scaleExtent([0.1, 3]).on("zoom", onZoom);
+        // vis.call(zoomListener);
+    }
+
 
 
     var cluster = d3.layout.cluster()
@@ -86,8 +100,6 @@ chart.render = function(el, props) {
     const nodes = cluster.nodes(phyloTree);
     const yscale = scaleBranchLengths(nodes, r - 20);
     nodes.forEach(node => { node.y = yscale(node.rootDist); });
-    
-    const vis = g;
     
     function step(d) {
         var s = project(d.source),
