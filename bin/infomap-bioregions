@@ -42,6 +42,8 @@ function onEnd(res) {
 
 function onError(err) {
   console.log("Error:", err);
+  console.trace();
+  console.log('stack:', err.stack);
 }
 
 switch (argv._[0]) {
