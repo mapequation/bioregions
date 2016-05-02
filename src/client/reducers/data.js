@@ -172,8 +172,8 @@ export default function data(state = getInitialState(), action) {
         // Keep some state
         binning: state.binning,
         // Reset possibly stored clusters on the tree
-        phyloTree: state.phyloTree ? geoTreeUtils.aggregateSpeciesCount(
-          geoTreeUtils.resetClusters(state.phyloTree), speciesCount) : state.phyloTree,        
+        phyloTree: state.phyloTree ? Object.assign({}, geoTreeUtils.aggregateSpeciesCount(
+          geoTreeUtils.resetClusters(state.phyloTree), speciesCount)) : state.phyloTree,        
       };
     case ActionTypes.GET_CLUSTERS:
       // Forward to data worker

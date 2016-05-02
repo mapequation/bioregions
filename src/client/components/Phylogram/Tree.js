@@ -21,7 +21,7 @@ class Tree extends Component {
     // bins: PropTypes.array.isRequired,
     clusterColors: PropTypes.array.isRequired,
     clustersPerSpecies: PropTypes.object.isRequired,
-    speciesCount: PropTypes.object.isRequired,
+    species: PropTypes.array.isRequired,
     phyloTree: PropTypes.object,
   }
    
@@ -38,20 +38,17 @@ class Tree extends Component {
     ...this.initialState,
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    const {clustersPerSpecies, clusterColors, phyloTree} = this.props;
-    return clusterColors !== nextProps.clusterColors ||
-      clustersPerSpecies !== nextProps.clustersPerSpecies ||
-      phyloTree !== nextProps.phyloTree ||
-      !_.isEqual(this.state, nextState);
-  }
-
   componentDidMount() {
     this.updateTree();
   }
-
-  componentDidUpdate() {
-    this.updateTree();
+  
+  componentWillReceiveProps(nextProps) {
+    const {clusterColors, phyloTree} = this.props;
+    const shouldUpdate = clusterColors !== nextProps.clusterColors ||
+      phyloTree !== nextProps.phyloTree;
+    if (shouldUpdate) {
+      this.updateTree(nextProps);
+    }
   }
 
   componentWillUnmount() {
@@ -74,33 +71,28 @@ class Tree extends Component {
     this.setState({ currentSpeciesCount, currentOccurrenceCount });
   }
   
-  updateTree(newState) {
-    console.log('Update tree!');
-    const state = Object.assign({}, this.state, newState);
-    const data = this.getData(state);
-    treeChart.render(this.svg, data);
-    treeChart.render(this.minimap, Object.assign({}, data, {
+  updateTree(newPropsOrState) {
+    const state = Object.assign({}, this.props, this.state, newPropsOrState);
+    state.phyloTree = this.getFilteredTree(state);
+    console.log('RENDER TREE... have tree?', !!state.phyloTree);
+    treeChart.render(this.svg, state);
+    treeChart.render(this.minimap, Object.assign({}, state, {
       minimap: true,
     }));
-    this.calculateCurrentAggregate(data.phyloTree);
+    this.calculateCurrentAggregate(state.phyloTree);
   }
-  
-  getData(state) {
-    const { clusterColors, phyloTree } = this.props;
-    if (!phyloTree)
-      return this.props;
+
+  getFilteredTree(state) {
+    if (!state.phyloTree)
+      return null;
     const comparator = {
       [BY_ORIGINAL_ORDER]: 'originalIndex',
       [BY_BRANCH_SIZE_ASC]: 'leafCount',
       [BY_BRANCH_SIZE_DESC]: '-leafCount',
       [BY_OCCURRENCE_COUNT]: '-occurrenceCount',
-    }
-    const comp = comparator[state.currentSortOption];
-    
-    return {
-      clusterColors,
-      phyloTree: treeUtils.limitLeafCount(phyloTree, state.leafCountLimit, comp),
     };
+    const comp = comparator[state.currentSortOption];
+    return treeUtils.limitLeafCount(state.phyloTree, state.leafCountLimit, comp);
   }
 
   getSvg() {
@@ -123,61 +115,81 @@ class Tree extends Component {
     this.setState({ currentSortOption });
   }
   
-  render() {
-    console.log("Tree::render()");
+  renderMapTreeTable() {
+    const { species } = this.props;
+    // Only render if there are any species distribution
+    if (species.length === 0)
+      return null;
+    const { phyloTree } = this.props;
+    const { speciesCount, occurrenceCount } = phyloTree;
+    const { currentSpeciesCount, currentOccurrenceCount } = this.state;
+    return (
+      <table className="ui small celled definition table">
+        <thead>
+          <tr>
+            <th>Map\Tree</th>
+            <th>selection</th>
+            <th>whole</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>species</td>
+            <td>{currentSpeciesCount}</td>
+            <td>{speciesCount}</td>
+          </tr>
+          <tr>
+            <td>occurrences</td>
+            <td>{currentOccurrenceCount}</td>
+            <td>{occurrenceCount}</td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  
+  renderControlPanel() {
     const { phyloTree } = this.props;
     if (!phyloTree)
       return null;
+    const { leafCount } = phyloTree;
+    const { currentSortOption, sortOptions } = this.state;
     
-    const { leafCount, speciesCount, occurrenceCount } = phyloTree;
-    const { currentSortOption, sortOptions, currentSpeciesCount, currentOccurrenceCount } = this.state;
-    
-    // {speciesCount ? `${occurrenceCount} records of ${speciesCount} species aggregated in the tree` : null}
+    return (
+      <div>
+        <p>Show max  
+          <TangleInput className="ui label"
+              value={this.state.leafCountLimit}
+              min={1}
+              max={leafCount}
+              logStep={1}
+              speed={0.2}
+              onChange={this.onChangeLeafCountLimit} />
+        of {leafCount} species</p>
+        <select className="ui fluid dropdown" value={currentSortOption} onChange={this.handleChangeSort}>
+          {
+            sortOptions.map((sort, i) => (
+              <option key={i} value={sort}>{sort}</option>
+            ))
+          }
+        </select>
+        { this.renderMapTreeTable() }
+      </div>
+    );
+  }
+  
+  render() {
+    const { phyloTree } = this.props;
+    console.log("Tree::render()");
 
     return (
-      <div className="ui two column stackable grid">
+      <Div className="ui two column stackable grid" display={phyloTree ? 'block' : 'none'}>
         <div className="four wide column">
           <div className="ui segment">
             <h4 className="ui header">Tree</h4>
             <svg id="treeMinimap" ref={(el) => this.minimap = el}>
             </svg>
-            <p>Show max  
-              <TangleInput className="ui label"
-                  value={this.state.leafCountLimit}
-                  min={1}
-                  max={leafCount}
-                  logStep={1}
-                  speed={0.2}
-                  onChange={this.onChangeLeafCountLimit} />
-            of {leafCount} species</p>
-            <select className="ui fluid dropdown" value={currentSortOption} onChange={this.handleChangeSort}>
-              {
-                sortOptions.map((sort, i) => (
-                  <option key={i} value={sort}>{sort}</option>
-                ))
-              }
-            </select>
-            <table className="ui small celled definition table">
-                <thead>
-                  <tr>
-                    <th>Map\Tree</th>
-                    <th>selection</th>
-                    <th>whole</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>species</td>
-                    <td>{currentSpeciesCount}</td>
-                    <td>{speciesCount}</td>
-                  </tr>
-                  <tr>
-                    <td>occurrences</td>
-                    <td>{currentOccurrenceCount}</td>
-                    <td>{occurrenceCount}</td>
-                  </tr>
-                </tbody>
-              </table>
+            { this.renderControlPanel() }
           </div>
         </div>
         <div className="twelve wide column">
@@ -186,7 +198,7 @@ class Tree extends Component {
             </svg>
           </div>
         </div>
-      </div>
+      </Div>
     );
   }
 }
