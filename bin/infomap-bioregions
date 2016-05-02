@@ -37,7 +37,7 @@ function onEnd(res) {
   var diff = moment().diff(startDate);
   console.log(`Ended in ${moment.duration(diff).humanize()}`);
   if (res)
-    console.log(`Result: ${res}`);
+    console.log(`Result: ${JSON.stringify(res)}`);
 }
 
 function onError(err) {
