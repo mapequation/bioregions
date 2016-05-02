@@ -246,6 +246,7 @@ chart.render = function(el, props) {
         .attr("transform", d => {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
+        .attr("fill", linkColor)
         .attr("stroke", linkColor)
         .attr("font-family", "'Open Sans', Helvetica, sans-serif")
         .text(d => d.name);
