@@ -43,7 +43,8 @@ class TangleInput extends Component {
     }
 
     propsToState(props) {
-      let { min, max } = this.adjustedMinMax(props);
+      // let { min, max } = this.adjustedMinMax(props);
+      let { min, max } = this.getMinMax(props);
       let value = clamp(props.value, min, max);
       let currentStep = this.getStep(value, props);
       return {
@@ -69,6 +70,11 @@ class TangleInput extends Component {
       let maxStep = this.getStep(props.max, props);
       let min = Math.ceil(props.min / minStep) * minStep;
       let max = Math.floor(props.max / maxStep) * maxStep;
+      return { min, max };
+    }
+    
+    getMinMax(props) {
+      const { min, max } = props;
       return { min, max };
     }
 
