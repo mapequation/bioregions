@@ -220,6 +220,7 @@ chart.render = function(el, props) {
     const circleArcData = d => [{ startAngle: 0, endAngle: 2 * Math.PI, data: d }];
     const arcData = haveClusters ? clusterArcData : circleArcData;
 
+    console.log(`[treeChart]: render nodes...`)
     const pies = node.selectAll(".pie")
         .data(arcData);
 
@@ -244,7 +245,7 @@ chart.render = function(el, props) {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
         .attr("fill", linkColor)
-        .attr("stroke", linkColor)
+        .attr("stroke", "none")
         .attr("font-family", "'Open Sans', Helvetica, sans-serif")
         .text(d => d.name);
 
