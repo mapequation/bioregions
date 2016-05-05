@@ -1,10 +1,11 @@
 /* eslint-disable camelcase */
 import { expect } from 'chai'
-import newick from '../newick'
+import newick, { _parseNewick } from '../newick'
+import treeUtils from '../../treeUtils'
 
 describe('newick', () => {
-    const newick1 = '((00,01)0,1,(20,21)2)root;';
-    const tree1 = {
+    const newickTree = '((00,01)0,1,(20,21)2)root;';
+    const jsonTree = {
         name: 'root',
         children: [
             {
@@ -26,34 +27,32 @@ describe('newick', () => {
             },
         ]
     };
-    function setParents(node) {
-        (node.children || []).forEach(child => {
-            child.parent = node;
-            setParents(child);
-        });
-    }
-    setParents(tree1);
     
-    const newickWithBranchLengths = '(A:1,B:2):3;';
-    const treeWithBranchLengths = { length: 3, name: '', children: [
+    const newickWithBranchLengths = '(A:1,B:2):0;';
+    const treeWithBranchLengths = { name: '', length: 0, children: [
         { name: 'A', length: 1 },
         { name: 'B', length: 2 },
     ]};
-    setParents(treeWithBranchLengths);
 
-    describe('parse', () => {
+    describe('_parseNewick', () => {
         it('should parse a newick formatted string to json', () => {
-            return expect(newick.parse(newick1)).to.eventually.deep.eq(tree1);
+            return expect(_parseNewick(newickTree)).to.deep.eq(jsonTree);
         })
 
         it('should parse newick data with branch lengths', () => {
-            return expect(newick.parse(newickWithBranchLengths)).to.eventually.deep.eq(treeWithBranchLengths);
+            return expect(_parseNewick(newickWithBranchLengths)).to.deep.eq(treeWithBranchLengths);
+        })
+    })
+
+    describe('parse', () => {
+        it('should parse a newick formatted string to json', () => {
+            return expect(newick.parse(newickTree)).to.eventually.deep.eq(jsonTree);
         })
     })
 
     describe('write', () => {
         it('should write json tree to newick format', () => {
-            expect(newick.write(tree1)).to.eq(newick1);
+            expect(newick.write(jsonTree)).to.eq(newickTree);
         })
         
         it('should write branch lengths if exist', () => {
@@ -63,13 +62,13 @@ describe('newick', () => {
         it('should write with custom names', () => {
             expect(newick.write({
                 getName: (node) => `*${node.name}`,
-            }, treeWithBranchLengths)).to.eq('(*A:1,*B:2)*:3;');
+            }, treeWithBranchLengths)).to.eq('(*A:1,*B:2)*:0;');
         })
         
         it('should write with custom lengths', () => {
             expect(newick.write({
                 getBranchLength: (node) => node.length * 2,
-            }, treeWithBranchLengths)).to.eq('(A:2,B:4):6;');
+            }, treeWithBranchLengths)).to.eq('(A:2,B:4):0;');
         })
     })
 })

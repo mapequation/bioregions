@@ -120,17 +120,9 @@ function getSpeciesCount(species) {
 }
 
 function prepareTree(tree, state) {
-  treeUtils.aggregateCount(tree, () => 1, 'leafCount');
+  treeUtils.prepareTree(tree);
   geoTreeUtils.aggregateSpeciesCount(tree, state.speciesCount);
   geoTreeUtils.aggregateClusters(tree, state.clustersPerSpecies, state.clusterFractionLimit);
-
-  let uid = 0;
-  treeUtils.visitTreeDepthFirst(tree, (node, depth, childIndex) => {
-    node.depth = depth;
-    node.isLeaf = !node.children;
-    node.originalIndex = childIndex;
-    node.uid = ++uid;
-  });
   return tree;
 }
 

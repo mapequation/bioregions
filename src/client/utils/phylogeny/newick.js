@@ -1,3 +1,5 @@
+import treeUtils from '../treeUtils';
+
 /**
  * Newick format parser in JavaScript.
  *
@@ -58,41 +60,52 @@
  * }
  */
 
+/**
+ * Raw Newick parser, exported for testing
+ */
+export function _parseNewick(s) {
+  let ancestors = [];
+  let tree = {};
+  let subtree = {};
+  const tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
+  for (let i=0; i<tokens.length; i++) {
+    let token = tokens[i];
+    switch (token) {
+      case '(': // new children
+        subtree = {};
+        tree.children = [subtree];
+        ancestors.push(tree);
+        tree = subtree;
+        break;
+      case ',': // another branch
+				subtree = {};
+				ancestors[ancestors.length - 1].children.push(subtree);
+        tree = subtree;
+        break;
+      case ')': // optional name next
+        tree = ancestors.pop();
+        break;
+      case ':': // optional length next
+        break;
+      default:
+        const x = tokens[i - 1];
+        if (x === ')' || x === '(' || x === ',') {
+          tree.name = token;
+        } else if (x === ':') {
+          tree.length = parseFloat(token);
+        }
+    }
+  }
+  return tree;
+}
+
+/**
+ * Parse newick tree
+ * @return Promise -> tree
+ */
 export function parseNewick(s) {
   return new Promise((resolve) => {
-    let ancestors = [];
-    let tree = {};
-    let subtree = {};
-    const tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
-    for (let i=0; i<tokens.length; i++) {
-      let token = tokens[i];
-      switch (token) {
-        case '(': // new children
-          subtree = { parent: tree };
-          tree.children = [subtree];
-          ancestors.push(tree);
-          tree = subtree;
-          break;
-        case ',': // another branch
-          const parent = ancestors[ancestors.length - 1];
-          subtree = { parent };
-          parent.children.push(subtree);
-          tree = subtree;
-          break;
-        case ')': // optional name next
-          tree = ancestors.pop();
-          break;
-        case ':': // optional length next
-          break;
-        default:
-          const x = tokens[i - 1];
-          if (x === ')' || x === '(' || x === ',') {
-            tree.name = token;
-          } else if (x === ':') {
-            tree.length = parseFloat(token);
-          }
-      }
-    }
+    const tree = _parseNewick(s);
     resolve(tree);
   });
 }

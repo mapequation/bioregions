@@ -9,6 +9,8 @@ import geoTreeUtils from '../../utils/phylogeny/geoTreeUtils';
 import TreeStyles from './Tree.scss';
 
 const BY_ORIGINAL_ORDER = 'by original order';
+const BY_MAX_BRANCH_LENGTH_DESC = 'by max branch length (descending)';
+const BY_MAX_BRANCH_LENGTH_ASC = 'by max branch length (ascending)';
 const BY_BRANCH_SIZE_DESC = 'by branch size (descending)';
 const BY_BRANCH_SIZE_ASC = 'by branch size (ascending)';
 const BY_OCCURRENCE_COUNT = 'by occurrence count';
@@ -28,7 +30,6 @@ class Tree extends Component {
   initialState = {
     leafCountLimit: 200,
     filter: "",
-    sortOptions: [BY_ORIGINAL_ORDER, BY_BRANCH_SIZE_DESC, BY_BRANCH_SIZE_ASC, BY_OCCURRENCE_COUNT],
     currentSortOption: BY_ORIGINAL_ORDER,
     currentSpeciesCount: 0,
     currentOccurrenceCount: 0,
@@ -87,6 +88,8 @@ class Tree extends Component {
       return null;
     const comparator = {
       [BY_ORIGINAL_ORDER]: 'originalIndex',
+      [BY_MAX_BRANCH_LENGTH_ASC]: 'maxLength',
+      [BY_MAX_BRANCH_LENGTH_DESC]: '-maxLength',
       [BY_BRANCH_SIZE_ASC]: 'leafCount',
       [BY_BRANCH_SIZE_DESC]: '-leafCount',
       [BY_OCCURRENCE_COUNT]: '-occurrenceCount',
@@ -153,7 +156,12 @@ class Tree extends Component {
     if (!phyloTree)
       return null;
     const { leafCount } = phyloTree;
-    const { currentSortOption, sortOptions } = this.state;
+    const { currentSortOption } = this.state;
+    const sortOptions = [BY_ORIGINAL_ORDER, BY_MAX_BRANCH_LENGTH_DESC, BY_MAX_BRANCH_LENGTH_ASC, BY_BRANCH_SIZE_DESC, BY_BRANCH_SIZE_ASC];
+    if (phyloTree.occurrenceCount > 0) {
+      sortOptions.push(BY_OCCURRENCE_COUNT);
+    }
+    console.log(`!!!!!!! tree.occurrenceCount: ${phyloTree.occurrenceCount}`, phyloTree)
     
     return (
       <div>

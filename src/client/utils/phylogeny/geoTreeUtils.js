@@ -11,6 +11,11 @@ import { reduceLimitRest } from '../statistics';
  * @return the modified tree
  */
 export function _aggregateClusters(tree, clustersPerSpecies = {}) {
+    // Ensure parents set
+    if (tree.children && !tree.children[0].parent) {
+        treeUtils.setParents(tree);
+    }
+    
     treeUtils.visitTreeDepthFirst(tree, (node) => {
         // Use Map instead of Object to keep clusterIds as numbers
         node.clusters = { totCount: 0, clusters: new Map() };

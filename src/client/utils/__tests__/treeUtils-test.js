@@ -8,6 +8,100 @@ import _ from 'lodash'
 describe('treeUtils', () => {
   const newickTree = '((00,01)0,1,(20,21)2)root;';
   let tree = null;
+  const preparedJsonTree = {
+      name: 'root',
+      length: 0,
+      depth: 0,
+      rootDist: 0,
+      maxLength: 2,
+      leafCount: 5,
+      originalChildIndex: 0,
+      uid: 8,
+      isLeaf: false,
+      children: [
+          {
+              name: '0',
+              length: 1,
+              depth: 1,
+              rootDist: 1,
+              maxLength: 2,
+              leafCount: 2,
+              originalChildIndex: 0,
+              uid: 3,
+              isLeaf: false,
+              children: [
+                  {
+                      name: '00',
+                      length: 1,
+                      depth: 2,
+                      rootDist: 2,
+                      maxLength: 1,
+                      leafCount: 1,
+                      originalChildIndex: 0,
+                      uid: 1,
+                      isLeaf: true
+                  },
+                  {
+                      name: '01',
+                      length: 1,
+                      depth: 2,
+                      rootDist: 2,
+                      maxLength: 1,
+                      leafCount: 1,
+                      originalChildIndex: 1,
+                      uid: 2,
+                      isLeaf: true
+                  },
+              ]
+          },
+          {
+              name: '1',
+              length: 1,
+              depth: 1,
+              rootDist: 1,
+              maxLength: 1,
+              leafCount: 1,
+              originalChildIndex: 1,
+              uid: 4,
+              isLeaf: true,
+          },
+          {
+              name: '2',
+              length: 1,
+              depth: 1,
+              rootDist: 1,
+              maxLength: 2,
+              leafCount: 2,
+              originalChildIndex: 2,
+              uid: 7,
+              isLeaf: false,
+              children: [
+                  {
+                      name: '20',
+                      length: 1,
+                      depth: 2,
+                      rootDist: 2,
+                      maxLength: 1,
+                      leafCount: 1,
+                      originalChildIndex: 0,
+                      uid: 5,
+                      isLeaf: true
+                  },
+                  {
+                      name: '21',
+                      length: 1,
+                      depth: 2,
+                      rootDist: 2,
+                      maxLength: 1,
+                      leafCount: 1,
+                      originalChildIndex: 1,
+                      uid: 6,
+                      isLeaf: true
+                  },
+              ]
+          },
+      ]
+  };
   
   const newickInput = '((A,B),C,(D,E));';
   const speciesCounts = {
@@ -19,6 +113,10 @@ describe('treeUtils', () => {
   const getLeafCount = ({name}) => speciesCounts[name];
   
   before(() => {
+      treeUtils.visitTreeDepthFirst(preparedJsonTree, (node, depth, childIndex, parent) => {
+          node.parent = parent;
+      });
+    
       return parseTree(newickTree).then(data => {
           tree = data;
       })
@@ -179,10 +277,31 @@ describe('treeUtils', () => {
     })
   })
   
+  describe('setParents', () => {
+    it('should set parents', () => {
+      const treeWithParents = treeUtils.setParents(_.cloneDeep(tree));
+      const parentNames = {};
+      treeUtils.visitTreeDepthFirst(treeWithParents, node => {
+        parentNames[node.name] = node.parent ? node.parent.name : '-';
+      })
+      expect(parentNames).to.deep.eq({
+        'root': '-',
+        '0': 'root',
+        '00': '0',
+        '01': '0',
+        '1': 'root',
+        '2': 'root',
+        '20': '2',
+        '21': '2',
+      });
+    })
+  })
+  
   describe('visitAncestors', () => {
     it('should visit ancestors above leaf nodes to root', () => {
-      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(tree, ({name}) => [name, []]));
-      treeUtils.visitTreeDepthFirst(tree, node => {
+      const treeWithParents = treeUtils.setParents(_.cloneDeep(tree));
+      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(treeWithParents, ({name}) => [name, []]));
+      treeUtils.visitTreeDepthFirst(treeWithParents, node => {
         treeUtils.visitAncestors(node, ancestor => {
             ancestors[node.name].push(ancestor.name);
         });
@@ -200,8 +319,9 @@ describe('treeUtils', () => {
     })
     
     it('should visit ancestors including start node', () => {
-      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(tree, ({name}) => [name, []]));
-      treeUtils.visitTreeDepthFirst(tree, node => {
+      const treeWithParents = treeUtils.setParents(_.cloneDeep(tree));
+      const ancestors = _.fromPairs(treeUtils.mapDepthFirst(treeWithParents, ({name}) => [name, []]));
+      treeUtils.visitTreeDepthFirst(treeWithParents, node => {
         treeUtils.visitAncestors({ includeStartNode: true }, node, ancestor => {
             ancestors[node.name].push(ancestor.name);
         });
@@ -279,6 +399,16 @@ describe('treeUtils', () => {
         return expect(result).to.eventually
           .eq('((00:1,01:1,02:1,03:1)0:4,2:3,1:2):9;');
       })
+      
+      it('should store limitedLeafCount on limited nodes', () => {
+        const result = newick.parse('((00,01,02,03)0,(10,11)1,(20,21,22)2);')
+            .then(tree => treeUtils.limitLeafCount(tree, 4))
+            .then(_.partial(newick.write, {
+                getBranchLength: ({limitedLeafCount}) => limitedLeafCount
+            }));
+        return expect(result).to.eventually
+          .eq('((00,01,02,03)0:4,2:0,1:0):4;');
+      })
 
       it('should skip leafs until collapse possible', () => {
         const result = newick.parse('((00,01)0,1);')
@@ -290,9 +420,11 @@ describe('treeUtils', () => {
       it('should collapse recursively small branches', () => {
         const result = newick.parse('(((((A,B,C)0000,(00010)0001)000,(0010)001)00,(010)01)0,(10)1)_;')
             .then(tree => treeUtils.limitLeafCount(tree, 4))
-            .then(newick.write);
+            .then(_.partial(newick.write, {
+                getBranchLength: ({limitedLeafCount}) => limitedLeafCount
+            }));
         return expect(result).to.eventually
-          .eq('(((((A,B,C)0000,(00010)0001)000,001)00,01)0,1)_;');
+          .eq('(((((A,B,C)0000,(00010)0001)000:4,001:0)00:4,01:0)0:4,1:0)_:4;');
       })
 
       it('should skip biggest branches with sort on (+)leafCount', () => {
@@ -348,6 +480,14 @@ describe('treeUtils', () => {
                 .then(tree => treeUtils.clone(tree))
                 .then(newick.write);
             return expect(result).to.eventually.eq('((A,B),C,(D,E));');
+        })
+    })
+
+    describe('prepareTree', () => {
+        it('should prepare the tree with default and aggregated properties', () => {
+            const result = newick.parse(newickTree)
+                .then(tree => treeUtils.prepareTree(tree))
+            return expect(result).to.eventually.deep.eq(preparedJsonTree);
         })
     })
 

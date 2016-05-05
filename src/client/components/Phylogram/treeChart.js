@@ -28,10 +28,15 @@ chart.render = function(el, props) {
     
     const leafNodes = [];
     let numNodes = 0;
+
+    let maxRootDist = 0;
     treeUtils.visitTreeDepthFirst(phyloTree, (node, depth) => {
         ++numNodes;
         if (node.isLeaf) {
             leafNodes.push(node);
+        }
+        if (node.rootDist > maxRootDist) {
+            maxRootDist = node.rootDist;
         }
     });
     const numLeafNodes = leafNodes.length;
@@ -89,14 +94,6 @@ chart.render = function(el, props) {
         // .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth );
     
     const nodes = cluster.nodes(phyloTree);
-
-    let maxRootDist = 0;
-    nodes.forEach(node => {
-        node.rootDist = (node.parent ? node.parent.rootDist : 0) + (node.length || 0);
-        if (node.isLeaf && node.rootDist > maxRootDist) {
-            maxRootDist = node.rootDist;
-        }
-    });
     
     const yscale = d3.scale.pow()
         .exponent(4)

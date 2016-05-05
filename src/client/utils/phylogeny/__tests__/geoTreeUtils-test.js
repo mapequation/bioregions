@@ -8,13 +8,6 @@ import _ from 'lodash'
 
 describe('geoTreeUtils', () => {
     
-    function setParents(node) {
-        (node.children || []).forEach(child => {
-            child.parent = node;
-            setParents(child);
-        });
-    }
-    
     let newick1, clustersPerSpecies, clustersPerSpeciesLimited,
         testTreeWithClusters, testTreeWithResetClusters;
     
@@ -119,6 +112,8 @@ describe('geoTreeUtils', () => {
                 },
             ]
         };
+        
+        treeUtils.setParents(testTreeWithClusters);
     
         testTreeWithResetClusters = {
             name: 'root',
@@ -159,8 +154,7 @@ describe('geoTreeUtils', () => {
             ]
         };
         
-        setParents(testTreeWithClusters);
-        setParents(testTreeWithResetClusters);
+        treeUtils.setParents(testTreeWithResetClusters);
         
         clustersPerSpeciesLimited = _(clustersPerSpecies)
             .map((originalClusters, nodeName) => {
@@ -338,11 +332,7 @@ describe('geoTreeUtils', () => {
     
     describe('aggregateSpeciesCount', () => {
         it('should aggregate species count', () => {
-            const species = [
-                { name: 'a', count: 5 },
-                { name: 'b', count: 2 },
-                { name: 'd', count: 3 },
-            ]
+            const species = { a: 5, b: 2, d: 3 };
             const result = newick.parse('(((a,b),c),(d));')
                 .then(tree => geoTreeUtils.aggregateSpeciesCount(tree, species))
                 .then(_.partial(newick.write, {
@@ -351,11 +341,7 @@ describe('geoTreeUtils', () => {
             return expect(result).to.eventually.eq('(((a:1,b:1):2,c:0):2,(d:1):1):3;');
         })
         it('should aggregate species occurrence count', () => {
-            const species = [
-                { name: 'a', count: 5 },
-                { name: 'b', count: 2 },
-                { name: 'd', count: 3 },
-            ]
+            const species = { a: 5, b: 2, d: 3 };
             const result = newick.parse('(((a,b),c),(d));')
                 .then(tree => geoTreeUtils.aggregateSpeciesCount(tree, species))
                 .then(_.partial(newick.write, {
