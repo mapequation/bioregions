@@ -2,6 +2,7 @@ import { combineReducers } from 'redux';
 import files from './files';
 import data from './data';
 import worldmap from './worldmap';
+import phylogram from './phylogram';
 import RESET_ERROR_MESSAGE from '../constants/ActionTypes'
 
 
@@ -25,6 +26,7 @@ const rootReducer = combineReducers({
   files,
   data,
   worldmap,
+  phylogram,
   errorMessage,
 });
 

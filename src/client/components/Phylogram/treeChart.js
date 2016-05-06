@@ -66,7 +66,8 @@ chart.render = function(el, props) {
     }
     
     const vis = g;
-    const s = props.minimap ? 200 / outerDiameter : 1;
+    // const s = props.minimap ? 200 / outerDiameter : 1;
+    const s = props.minimap ? 200 / outerDiameter : 1000 / outerDiameter;
 
     svg.attr("width", s * outerDiameter)
         .attr("height", s * outerDiameter);
@@ -85,7 +86,8 @@ chart.render = function(el, props) {
 
     const haveClusters = phyloTree.clusters.clusters.length > 0;
     const haveSpecies = phyloTree.speciesCount > 0;
-
+    const showClusteredNodes = haveClusters && props.showClusteredNodes;
+    
     const cluster = d3.layout.cluster()
         .size([360, 1])
         .sort(null)
@@ -146,7 +148,7 @@ chart.render = function(el, props) {
     
     const nonClusterLinkColor = (d) => circleFillColorScale(Math.log(d[fillField])).hex();
     
-    const linkColor = haveClusters ? clusterLinkColor : nonClusterLinkColor;
+    const linkColor = showClusteredNodes ? clusterLinkColor : nonClusterLinkColor;
     
     const fillColor = (clusterId) => {
         if (clusterId >= 0)
@@ -161,8 +163,8 @@ chart.render = function(el, props) {
     const circleArcStrokeColor = (d) => 'white';
     const circleArcFillColor = (d) => circleFillColor(d.data);
     
-    const nodeStrokeColor = haveClusters ? pieStrokeColor : circleArcStrokeColor;
-    const nodeFillColor = haveClusters ? pieFillColor : circleArcFillColor;
+    const nodeStrokeColor = showClusteredNodes ? pieStrokeColor : circleArcStrokeColor;
+    const nodeFillColor = showClusteredNodes ? pieFillColor : circleArcFillColor;
     
     
     var clusterData = (d) => {
@@ -218,7 +220,7 @@ chart.render = function(el, props) {
     
     const clusterArcData = d => pie(clusterData(d));
     const circleArcData = d => [{ startAngle: 0, endAngle: 2 * Math.PI, data: d }];
-    const arcData = haveClusters ? clusterArcData : circleArcData;
+    const arcData = showClusteredNodes ? clusterArcData : circleArcData;
 
     console.log(`[treeChart]: render nodes...`)
     const pies = node.selectAll(".pie")

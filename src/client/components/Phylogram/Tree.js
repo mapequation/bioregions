@@ -14,6 +14,7 @@ const BY_MAX_BRANCH_LENGTH_ASC = 'by max branch length (ascending)';
 const BY_BRANCH_SIZE_DESC = 'by branch size (descending)';
 const BY_BRANCH_SIZE_ASC = 'by branch size (ascending)';
 const BY_OCCURRENCE_COUNT = 'by occurrence count';
+const BY_BIOREGIONS = 'by bioregions';
 
 class Tree extends Component {
 
@@ -25,6 +26,8 @@ class Tree extends Component {
     clustersPerSpecies: PropTypes.object.isRequired,
     species: PropTypes.array.isRequired,
     phyloTree: PropTypes.object,
+    showClusteredNodes: PropTypes.bool.isRequired,
+    setShowClusteredNodes: PropTypes.func.isRequired,
   }
    
   initialState = {
@@ -87,15 +90,18 @@ class Tree extends Component {
     if (!state.phyloTree)
       return null;
     const comparator = {
-      [BY_ORIGINAL_ORDER]: 'originalIndex',
+      [BY_ORIGINAL_ORDER]: 'originalChildIndex',
       [BY_MAX_BRANCH_LENGTH_ASC]: 'maxLength',
       [BY_MAX_BRANCH_LENGTH_DESC]: '-maxLength',
       [BY_BRANCH_SIZE_ASC]: 'leafCount',
       [BY_BRANCH_SIZE_DESC]: '-leafCount',
       [BY_OCCURRENCE_COUNT]: '-occurrenceCount',
+      [BY_BIOREGIONS]: (a, b) => a.clusters.clusters[0].clusterId - b.clusters.clusters[0].clusterId,
     };
     const comp = comparator[state.currentSortOption];
-    return treeUtils.limitLeafCount(state.phyloTree, state.leafCountLimit, comp);
+    console.log(`[Tree]: sort and limit tree...`);
+    treeUtils.sort(state.phyloTree, comp);
+    return treeUtils.limitLeafCount(state.phyloTree, state.leafCountLimit);
   }
 
   getSvg() {
@@ -152,16 +158,22 @@ class Tree extends Component {
   }
   
   renderControlPanel() {
-    const { phyloTree } = this.props;
+    const { phyloTree, showClusteredNodes } = this.props;
     if (!phyloTree)
       return null;
     const { leafCount } = phyloTree;
     const { currentSortOption } = this.state;
     const sortOptions = [BY_ORIGINAL_ORDER, BY_MAX_BRANCH_LENGTH_DESC, BY_MAX_BRANCH_LENGTH_ASC, BY_BRANCH_SIZE_DESC, BY_BRANCH_SIZE_ASC];
-    if (phyloTree.occurrenceCount > 0) {
+    const haveGeoSpecies = phyloTree.occurrenceCount > 0;
+    if (haveGeoSpecies) {
       sortOptions.push(BY_OCCURRENCE_COUNT);
     }
-    console.log(`!!!!!!! tree.occurrenceCount: ${phyloTree.occurrenceCount}`, phyloTree)
+    const haveClusters = phyloTree.clusters.clusters.length > 0;
+    if (haveClusters) {
+      sortOptions.push(BY_BIOREGIONS);
+    }
+    
+    console.log(`[Tree]: haveGeoSpecies: ${haveGeoSpecies}, haveClusters: ${haveClusters}`);
     
     return (
       <div>
