@@ -96,7 +96,14 @@ class Tree extends Component {
       [BY_BRANCH_SIZE_ASC]: 'leafCount',
       [BY_BRANCH_SIZE_DESC]: '-leafCount',
       [BY_OCCURRENCE_COUNT]: '-occurrenceCount',
-      [BY_BIOREGIONS]: (a, b) => a.clusters.clusters[0].clusterId - b.clusters.clusters[0].clusterId,
+      // [BY_BIOREGIONS]: (a, b) => a.clusters.clusters[0].clusterId - b.clusters.clusters[0].clusterId,
+      [BY_BIOREGIONS]: (a, b) => {
+        const aclu = a.clusters.clusters;
+        const bclu = b.clusters.clusters;
+        if (aclu.length === 0 || bclu.length === 0)
+          return 0;
+        return aclu[0].clusterId - bclu[0].clusterId;
+      },
     };
     const comp = comparator[state.currentSortOption];
     console.log(`[Tree]: sort and limit tree...`);
@@ -201,6 +208,7 @@ class Tree extends Component {
   render() {
     const { phyloTree } = this.props;
     console.log("Tree::render()");
+    console.log('Colors:', this.props.clusterColors.map(c => c.hex()));
 
     return (
       <Div className="ui two column stackable grid" display={phyloTree ? 'block' : 'none'}>
