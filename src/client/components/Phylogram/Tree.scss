@@ -1,3 +1,20 @@
 .node {
   cursor: pointer;
 }
+
+.overlay {
+  // fill: rgba(255, 0, 0, 0.3);
+  fill: white;  
+  pointer-events: all;
+}
+
+.main-tree-container {
+  position: relative;
+  overflow: auto;
+  max-height: 600px;
+  
+  svg {
+    // zoom: 0.2;
+    // transform: scale(0.7);
+  }
+}

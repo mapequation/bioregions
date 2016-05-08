@@ -48,8 +48,6 @@ chart.render = function(el, props) {
         svg.attr("height", 10);
         return;
     }
-    svg.selectAll('*').remove();
-
 
     const innerDiameter = Math.max(16 * numLeafNodes / Math.PI, 200);
     const labelWidth = 250;
@@ -59,30 +57,54 @@ chart.render = function(el, props) {
     //   const calculatedWidth = maxDepth * 20;
     //   const calculatedHeight = numNodes * 20;
     //   const calculatedHeight = numLeafNodes * 20;
-
-    let g = svg.select('g');
-    if (g.empty()) {
-        g = svg.append('g');
-    }
     
-    const vis = g;
+    const allowZoom = true;
+
     // const s = props.minimap ? 200 / outerDiameter : 1;
-    const s = props.minimap ? 200 / outerDiameter : 1000 / outerDiameter;
+    const s = props.minimap ? 200 / outerDiameter : allowZoom ? 1 : 1000 / outerDiameter;
+    const width = s * outerDiameter;
+    const height = s * outerDiameter;
 
-    svg.attr("width", s * outerDiameter)
-        .attr("height", s * outerDiameter);
+    const zoom = d3.behavior.zoom()
+        .scaleExtent([200 / outerDiameter, 3])
+        // .center([s * R, s * R])
+        .on("zoom", onZoom);
 
-    vis.attr("transform", `translate(${s * R}, ${s * R})scale(${s})`);
+    svg.selectAll('*').remove();
     
-    function onZoom() {
-        vis.attr("transform", `translate(${d3.event.translate})scale(${d3.event.scale})`);
+    const g = svg
+        .attr("width", width)
+        .attr("height", height)
+        .append('g');
+    
+    if (!props.minimap && allowZoom) {
+        g.call(zoom);
     }
+    
+    const vis = g.append('g'); 
+    
+    // Take zoom events
+    vis.append("rect")
+        .attr("class", "overlay")
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "#ffffff")
+        .style("opacity", "0");
+    
+    const gTree = vis.append("g")
+        .attr("transform", `translate(${s * R}, ${s * R})scale(${s})`);
+    
 
-    if (!props.minimap) {
-        // const zoomListener = d3.behavior.zoom()
-        // .scaleExtent([0.1, 3]).on("zoom", onZoom);
-        // vis.call(zoomListener);
+    function onZoom() {
+        const { translate, scale } = d3.event;
+        // console.log(`!!!!!!!! onZoom(), translate: ${translate}, scale: ${scale}`);
+        // console.log(`         translate(): ${zoom.translate()}, scale: ${zoom.scale()}`);
+        
+        vis.attr("transform", `translate(${zoom.translate()})scale(${zoom.scale()})`);
+        // vis.attr("transform", `translate(${s * R}, ${s * R})scale(${scale})`);
     }
+    // console.log(`!!!! TEST ONCE zoom.* translate(${zoom.translate()})scale(${zoom.scale()})`)
+    
 
     const haveClusters = phyloTree.clusters.clusters.length > 0;
     const haveSpecies = phyloTree.speciesCount > 0;
@@ -175,7 +197,7 @@ chart.render = function(el, props) {
         return d.clusters.clusters;
     };
     
-    var radialAxis = vis.selectAll(".axis")
+    var radialAxis = gTree.selectAll(".axis")
         .data(yscale.ticks(5).slice(2))
     .enter().append("g")
         .attr("class", "axis");
@@ -196,7 +218,7 @@ chart.render = function(el, props) {
         .text(d => d);
 
 
-    var link = vis.selectAll("path.link")
+    var link = gTree.selectAll("path.link")
         .data(cluster.links(nodes))
        .enter().append("path")
         .attr("class", "link")
@@ -205,7 +227,7 @@ chart.render = function(el, props) {
         .attr("stroke-width", "4px")
         .attr("d", step);
 
-    var node = vis.selectAll("g.node")
+    var node = gTree.selectAll("g.node")
         .data(nodes);
     
     node.enter()
@@ -237,7 +259,7 @@ chart.render = function(el, props) {
     
 
 
-    var label = vis.selectAll(".label")
+    var label = gTree.selectAll(".label")
         .data(leafNodes)
       .enter().append("text")
         .attr("class", "label")

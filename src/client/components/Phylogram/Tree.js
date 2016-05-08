@@ -213,7 +213,7 @@ class Tree extends Component {
           </div>
         </div>
         <div className="twelve wide column">
-          <div style={{position: 'relative', overflow: 'auto'}}>
+          <div className="ui segment main-tree-container">
             <svg id="phylogram" ref={(el) => this.svg = el}>
             </svg>
           </div>
