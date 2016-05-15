@@ -346,7 +346,7 @@ class ExportWindow extends Component {
         statistics.forEachLimited('rest', clu.clusters, d => {
           presenceAbsence[d.clusterId] = '1';
         });
-        return `${species} ${presenceAbsence.join('')}`;
+        return `${species}\t${presenceAbsence.join('')}`;
       });
       lines.unshift(`${lines.length} ${clusters.length}`);
       resolve(lines.join('\n'));
@@ -365,7 +365,6 @@ class ExportWindow extends Component {
         stats.lat += (bin.y1 + bin.y2) / 2;
         stats.long += (bin.x1 + bin.x2) / 2;
         stats.count += 1;
-        console.log(`!!! stats[${bin.clusterId}] -> count: ${stats.count}`);
       });
       const centerCoords = geoStats.map(stats => {
         return `${stats.lat / stats.count} ${stats.long / stats.count}`;

@@ -2,6 +2,9 @@ import _ from 'lodash';
 import { parseTree, printTree } from '../client/utils/phylogeny';
 import treeUtils from '../client/utils/treeUtils';
 import { readFile, promiseWriteStream } from './fsUtils';
+import fsp from 'fs-promise';
+import tabularStream from 'tabular-stream';
+import es from 'event-stream';
 import { getSpeciesCounts } from './fsSpeciesGeoUtils';
 import { normalizeSpeciesName } from '../client/utils/naming';
 
@@ -84,6 +87,57 @@ export function printIntersection(treePath, speciesPath, nameColumn, outputPath)
   }));
 }
 
+export function printSpeciesDistributionIntersection(treePath, speciesPath, nameColumn, outputPath) {
+  return Promise.all([
+    readTree(treePath),
+    promiseWriteStream(outputPath),
+  ])
+  .then(([tree, out]) => new Promise((resolve, reject) => {
+      const treeSpecies = {};
+      let numTreeSpecies = 0;
+      treeUtils.visitLeafNodes(tree, node => {
+        treeSpecies[normalizeSpeciesName(node.name)] = true;
+        ++numTreeSpecies;
+      });
+      let numGeoSpecies = 0;
+      let numFilteredGeoSpecies = 0;
+      let isHeaderWritten = false;
+      fsp.createReadStream(speciesPath)
+        .pipe(tabularStream())
+        .pipe(es.map((row, cb) => {
+          const name = normalizeSpeciesName(row[nameColumn]);
+          ++numGeoSpecies;
+          if (!isHeaderWritten) {
+            out.write(_.keys(row).join('\t') + '\n');
+            isHeaderWritten = true;
+          }
+          if (!treeSpecies[name]) {
+            cb(null, null);
+          } else {
+            cb(null, row);
+            ++numFilteredGeoSpecies;
+            out.write(_.values(row).join('\t') + '\n');
+          }
+        }))
+        .on('error', reject)
+        .on('end', () => {
+          console.log('Read end!');
+          out.end();
+        });
+      
+      out
+        .on('finish', () => {
+          // console.log(`Collected ${countUnique} unique species from ${count} records.`);
+          console.log('Out finish!');
+          resolve({
+              numTreeSpecies,
+              numGeoSpecies,
+              numFilteredGeoSpecies,
+          });
+        });
+  }));
+}
+
 export function normalizeNames(treePath, outputPath) {
   return Promise.all([
     readTree(treePath),
@@ -107,5 +161,6 @@ export default {
   printNames,
   countIntersection,
   printIntersection,
+  printSpeciesDistributionIntersection,
   normalizeNames,
 };

@@ -21,6 +21,9 @@ var argv = yargs
   // prune-tree-common-nodes
   .command('prune-tree-common-nodes <input_tree> <input_species> <name_column> <output_tree>', 'Prune <input_tree> to species in <input_species> and write to <output_tree>')
   .example('$0 prune-tree-common-nodes tree.nwk species.tsv name intersection.nwk')
+  // prune-distribution-common-nodes
+  .command('prune-distribution-common-nodes <input_tree> <input_species> <name_column> <output_species>', 'Prune <input_species> to species in <input_tree> and write to <output_species>')
+  .example('$0 prune-distribution-common-nodes tree.nwk species.tsv name intersection.tsv')
   // normalize-tree-species-names
   .command('normalize-tree-species-names <input_tree> <output_tree>', 'Normalize names in <input_tree> and write new tree to <output_tree>. ("Genus_species" -> "Genus species")')
   .example('$0 normalize-tree-species-names tree.nwk tree-normalized-names.nwk')
@@ -59,6 +62,10 @@ switch (argv._[0]) {
     break;
   case 'prune-tree-common-nodes':
     fsTreeUtils.printIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_tree)
+      .then(onEnd).catch(onError);
+    break;
+  case 'prune-distribution-common-nodes':
+    fsTreeUtils.printSpeciesDistributionIntersection(argv.input_tree, argv.input_species, argv.name_column, argv.output_species)
       .then(onEnd).catch(onError);
     break;
   case 'normalize-tree-species-names':
