@@ -5,13 +5,16 @@ import d3 from 'd3';
 import _ from 'lodash';
 import Div from '../helpers/Div';
 import io from '../../utils/io';
+import * as statistics from '../../utils/statistics';
 import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
 
 class Export extends Component {
 
   static propTypes = {
     bins: PropTypes.array.isRequired,
+    species: PropTypes.array.isRequired,
     clusters: PropTypes.array.isRequired,
+    clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
     basename: PropTypes.string.isRequired,
   }
@@ -89,9 +92,23 @@ class ExportWindow extends Component {
           icon: 'file archive outline icon',
           url: null,
         },
-        csv: {
-          filename: `${props.basename}.csv`,
-          group: 'cluster statistics',
+        presenceAbsence: {
+          filename: `${props.basename}_presence-absence.txt`,
+          group: 'bioregions',
+          icon: 'file text outline icon',
+          url: null,
+        },
+        bioregionsCoords: {
+          filename: `${props.basename}_bioregions-coords.txt`,
+          description: 'Center coordinates for each bioregion',
+          group: 'bioregions',
+          icon: 'file text outline icon',
+          url: null,
+        },
+        tables: {
+          filename: `${props.basename}_summary.csv`,
+          description: 'Summary statistics for each bioregion',
+          group: 'tables',
           icon: 'file text outline icon',
           url: null,
         },
@@ -130,8 +147,8 @@ class ExportWindow extends Component {
         files.geojson.isLoading = false;
         files.shapefile.url = shapefileUrl;
         files.shapefile.isLoading = false;
-        files.csv.url = csvUrl;
-        files.csv.isLoading = false;
+        files.tables.url = csvUrl;
+        files.tables.isLoading = false;
         this.setState({ files });
       })
       .catch(error => {
@@ -147,6 +164,17 @@ class ExportWindow extends Component {
       })
       .catch(error => {
         console.log("!!! Error getting tree svg file:", error);
+        this.setState({ error });
+      });
+    
+    this.getPresenceAbsenceUrl()
+      .then(url => {
+        files.presenceAbsence.url = url;
+        files.presenceAbsence.isLoading = false;
+        this.setState({ files });
+      })
+      .catch(error => {
+        console.log("!!! Error getting tree presence-absence file:", error);
         this.setState({ error });
       });
   }
@@ -196,6 +224,20 @@ class ExportWindow extends Component {
       return Promise.resolve(null);
     return this.getClustersCSV()
       .then(_.partial(io.dataToBlobURL, 'text/csv'));
+  }
+  
+  getPresenceAbsenceUrl() {
+    if (this.props.clusters.length === 0)
+      return Promise.resolve(null);
+    return this.getPresenceAbsence()
+      .then(_.partial(io.dataToBlobURL, 'text/plain'));
+  }
+  
+  getBioregionsCoordsUrl() {
+    if (this.props.clusters.length === 0)
+      return Promise.resolve(null);
+    return this.getBioregionsCoords()
+      .then(_.partial(io.dataToBlobURL, 'text/plain'));
   }
 
   getSvg(elementId) {
@@ -280,9 +322,28 @@ class ExportWindow extends Component {
         });
       });
 
-      let csvData = d3.csv.format(rows);
+      const csvData = d3.csv.format(rows);
       resolve(csvData);
     });
+  }
+  
+  getPresenceAbsence() {
+    return new Promise(resolve => {    
+      const { species, clusters, clustersPerSpecies } = this.props;
+      const lines = _.map(clustersPerSpecies, (clu, species) => {
+        const presenceAbsence = new Array(clusters.length).fill('0');
+        statistics.forEachLimited('rest', clu.clusters, d => {
+          presenceAbsence[d.clusterId] = '1';
+        });
+        return `${species} ${presenceAbsence.join('')}`;
+      });
+      lines.unshift(`${lines.length} ${clusters.length}`);
+      resolve(lines.join('\n'));
+    })
+  }
+  
+  getBioregionsCoords() {
+    return 'not implemented';
   }
 
   render() {

@@ -230,5 +230,74 @@ describe('statistics', () => {
             ]);
         })
     })
+    
+    describe('forEachLimited', () => {
+        let limitedItems = [];
+        before(() => {
+            limitedItems = statistics.limitRest(
+                item => item.count > 2,
+                restItems => { return { clusterId: 'rest', rest: restItems } },
+                items
+            );
+        })
+        
+        it('should loop over all items in a limited array', () => {
+            const res = [];
+            statistics.forEachLimited('rest', limitedItems, (item) => {
+                res.push(item);
+            })
+            expect(res).to.deep.eq(items);
+        })
+        
+        it('should loop over all items in an unlimited array', () => {
+            const res = [];
+            statistics.forEachLimited('rest', items, (item) => {
+                res.push(item);
+            })
+            expect(res).to.deep.eq(items);
+        })
+    })
+    
+    describe('mapLimited', () => {
+        let limitedItems = [];
+        before(() => {
+            limitedItems = statistics.limitRest(
+                item => item.count > 2,
+                restItems => { return { clusterId: 'rest', rest: restItems } },
+                items
+            );
+        })
+        
+        it('should map all items in a limited array', () => {
+            const res = statistics.mapLimited('rest', limitedItems, item => item.clusterId);
+            expect(res).to.deep.eq(items.map(item => item.clusterId));
+        })
+        
+        it('should map all items in an unlimited array', () => {
+            const res = statistics.mapLimited('rest', items, item => item.clusterId);
+            expect(res).to.deep.eq(items.map(item => item.clusterId));
+        })
+    })
+    
+    describe('unrollRest', () => {
+        let limitedItems = [];
+        before(() => {
+            limitedItems = statistics.limitRest(
+                item => item.count > 2,
+                restItems => { return { clusterId: 'rest', rest: restItems } },
+                items
+            );
+        })
+        
+        it('should unroll a limited array', () => {
+            const res = statistics.unrollRest('rest', limitedItems);
+            expect(res).to.deep.eq(items);
+        })
+        
+        it('should return the same items if no rest', () => {
+            const res = statistics.unrollRest('rest', items);
+            expect(res).to.eq(items);
+        })
+    })
 
 })

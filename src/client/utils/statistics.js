@@ -87,3 +87,49 @@ export function reduceLimitRest(initial, acc, takeWhile, makeRestItem, items) {
   limitedItems.push(makeRestItem(sum, rest));
   return limitedItems;
 }
+
+/**
+ * Loop over all items, including the rest limited. 
+ */
+export function forEachLimited(restItemsField = 'rest', items, callback) {
+  if (callback === undefined) {
+    [restItemsField, items, callback] = ['rest', restItemsField, items];
+  }
+  _.each(items, (item, i) => {
+    if (i === items.length - 1 && item[restItemsField]) {
+      _.each(item[restItemsField], callback);
+    } else {
+      callback(item, i, items);
+    }
+  });
+}
+
+/**
+ * Map all items, including the rest limited. 
+ */
+export function mapLimited(restItemsField = 'rest', items, callback) {
+  const res = [];
+  forEachLimited(restItemsField, items, item => {
+    res.push(callback(item));
+  })
+  return res;
+}
+
+/**
+ * Unroll possible rest items to flatten items.
+ */
+export function unrollRest(restItemsField = 'rest', items) {
+  if (items === undefined) {
+    [restItemsField, items] = ['rest', restItemsField];
+  }
+  
+  if (items.length === 0 || _.last(items)[restItemsField] === undefined) {
+    return items;
+  }
+  
+  const unlimited = [];
+  forEachLimited(restItemsField, items, item => {
+    unlimited.push(item);
+  });
+  return unlimited;
+}
