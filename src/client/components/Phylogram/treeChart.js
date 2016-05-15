@@ -28,10 +28,15 @@ chart.render = function(el, props) {
     
     const leafNodes = [];
     let numNodes = 0;
+
+    let maxRootDist = 0;
     treeUtils.visitTreeDepthFirst(phyloTree, (node, depth) => {
         ++numNodes;
         if (node.isLeaf) {
             leafNodes.push(node);
+        }
+        if (node.rootDist > maxRootDist) {
+            maxRootDist = node.rootDist;
         }
     });
     const numLeafNodes = leafNodes.length;
@@ -43,8 +48,6 @@ chart.render = function(el, props) {
         svg.attr("height", 10);
         return;
     }
-    svg.selectAll('*').remove();
-
 
     const innerDiameter = Math.max(16 * numLeafNodes / Math.PI, 200);
     const labelWidth = 250;
@@ -54,33 +57,59 @@ chart.render = function(el, props) {
     //   const calculatedWidth = maxDepth * 20;
     //   const calculatedHeight = numNodes * 20;
     //   const calculatedHeight = numLeafNodes * 20;
+    
+    const allowZoom = true;
 
-    let g = svg.select('g');
-    if (g.empty()) {
-        g = svg.append('g');
+    // const s = props.minimap ? 200 / outerDiameter : 1;
+    const s = props.minimap ? 200 / outerDiameter : allowZoom ? 1 : 1000 / outerDiameter;
+    const width = s * outerDiameter;
+    const height = s * outerDiameter;
+
+    const zoom = d3.behavior.zoom()
+        .scaleExtent([200 / outerDiameter, 3])
+        // .center([s * R, s * R])
+        .on("zoom", onZoom);
+
+    svg.selectAll('*').remove();
+    
+    const g = svg
+        .attr("width", width)
+        .attr("height", height)
+        .append('g');
+    
+    if (!props.minimap && allowZoom) {
+        g.call(zoom);
     }
     
-    const vis = g;
-    const s = props.minimap ? 200 / outerDiameter : 1;
-
-    svg.attr("width", s * outerDiameter)
-        .attr("height", s * outerDiameter);
-
-    vis.attr("transform", `translate(${s * R}, ${s * R})scale(${s})`);
+    const vis = g.append('g'); 
     
+    // Take zoom events
+    vis.append("rect")
+        .attr("class", "overlay")
+        .attr("width", width)
+        .attr("height", height)
+        .style("fill", "#ffffff")
+        .style("opacity", "0");
+    
+    const gTree = vis.append("g")
+        .attr("transform", `translate(${s * R}, ${s * R})scale(${s})`);
+    
+
     function onZoom() {
-        vis.attr("transform", `translate(${d3.event.translate})scale(${d3.event.scale})`);
+        const { translate, scale } = d3.event;
+        // console.log(`!!!!!!!! onZoom(), translate: ${translate}, scale: ${scale}`);
+        // console.log(`         translate(): ${zoom.translate()}, scale: ${zoom.scale()}`);
+        
+        vis.attr("transform", `translate(${zoom.translate()})scale(${zoom.scale()})`);
+        // vis.attr("transform", `translate(${s * R}, ${s * R})scale(${scale})`);
     }
-
-    if (!props.minimap) {
-        // const zoomListener = d3.behavior.zoom()
-        // .scaleExtent([0.1, 3]).on("zoom", onZoom);
-        // vis.call(zoomListener);
-    }
+    // console.log(`!!!! TEST ONCE zoom.* translate(${zoom.translate()})scale(${zoom.scale()})`)
+    
 
     const haveClusters = phyloTree.clusters.clusters.length > 0;
     const haveSpecies = phyloTree.speciesCount > 0;
-
+    const showClusteredNodes = haveClusters && props.showClusteredNodes;
+    
     const cluster = d3.layout.cluster()
         .size([360, 1])
         .sort(null)
@@ -89,14 +118,6 @@ chart.render = function(el, props) {
         // .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth );
     
     const nodes = cluster.nodes(phyloTree);
-
-    let maxRootDist = 0;
-    nodes.forEach(node => {
-        node.rootDist = (node.parent ? node.parent.rootDist : 0) + (node.length || 0);
-        if (node.isLeaf && node.rootDist > maxRootDist) {
-            maxRootDist = node.rootDist;
-        }
-    });
     
     const yscale = d3.scale.pow()
         .exponent(4)
@@ -149,7 +170,7 @@ chart.render = function(el, props) {
     
     const nonClusterLinkColor = (d) => circleFillColorScale(Math.log(d[fillField])).hex();
     
-    const linkColor = haveClusters ? clusterLinkColor : nonClusterLinkColor;
+    const linkColor = showClusteredNodes ? clusterLinkColor : nonClusterLinkColor;
     
     const fillColor = (clusterId) => {
         if (clusterId >= 0)
@@ -164,8 +185,8 @@ chart.render = function(el, props) {
     const circleArcStrokeColor = (d) => 'white';
     const circleArcFillColor = (d) => circleFillColor(d.data);
     
-    const nodeStrokeColor = haveClusters ? pieStrokeColor : circleArcStrokeColor;
-    const nodeFillColor = haveClusters ? pieFillColor : circleArcFillColor;
+    const nodeStrokeColor = showClusteredNodes ? pieStrokeColor : circleArcStrokeColor;
+    const nodeFillColor = showClusteredNodes ? pieFillColor : circleArcFillColor;
     
     
     var clusterData = (d) => {
@@ -176,7 +197,7 @@ chart.render = function(el, props) {
         return d.clusters.clusters;
     };
     
-    var radialAxis = vis.selectAll(".axis")
+    var radialAxis = gTree.selectAll(".axis")
         .data(yscale.ticks(5).slice(2))
     .enter().append("g")
         .attr("class", "axis");
@@ -197,7 +218,7 @@ chart.render = function(el, props) {
         .text(d => d);
 
 
-    var link = vis.selectAll("path.link")
+    var link = gTree.selectAll("path.link")
         .data(cluster.links(nodes))
        .enter().append("path")
         .attr("class", "link")
@@ -206,7 +227,7 @@ chart.render = function(el, props) {
         .attr("stroke-width", "4px")
         .attr("d", step);
 
-    var node = vis.selectAll("g.node")
+    var node = gTree.selectAll("g.node")
         .data(nodes);
     
     node.enter()
@@ -221,8 +242,9 @@ chart.render = function(el, props) {
     
     const clusterArcData = d => pie(clusterData(d));
     const circleArcData = d => [{ startAngle: 0, endAngle: 2 * Math.PI, data: d }];
-    const arcData = haveClusters ? clusterArcData : circleArcData;
+    const arcData = showClusteredNodes ? clusterArcData : circleArcData;
 
+    console.log(`[treeChart]: render nodes...`)
     const pies = node.selectAll(".pie")
         .data(arcData);
 
@@ -237,7 +259,7 @@ chart.render = function(el, props) {
     
 
 
-    var label = vis.selectAll(".label")
+    var label = gTree.selectAll(".label")
         .data(leafNodes)
       .enter().append("text")
         .attr("class", "label")
@@ -246,7 +268,8 @@ chart.render = function(el, props) {
         .attr("transform", d => {
             return "rotate(" + (d.x - 90) + ")translate(" + (r) + ")rotate(" + (d.x < 180 ? 0 : 180) + ")";
         })
-        .attr("stroke", linkColor)
+        .attr("fill", linkColor)
+        .attr("stroke", "none")
         .attr("font-family", "'Open Sans', Helvetica, sans-serif")
         .text(d => d.name);
 

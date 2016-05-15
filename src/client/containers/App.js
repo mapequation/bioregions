@@ -8,13 +8,14 @@ import Phylogram from '../components/Phylogram/Phylogram';
 import Tree from '../components/Phylogram/Tree';
 import Statistics from '../components/Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';
-import * as fileLoaderActions from '../actions/FileLoaderActions';
-import * as worldmapActions from '../actions/WorldmapActions';
+import * as FileLoaderActions from '../actions/FileLoaderActions';
+import * as WorldmapActions from '../actions/WorldmapActions';
 import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
 import * as FilterActions from '../actions/FilterActions';
 import * as ErrorActions from '../actions/ErrorActions';
+import * as PhylogramActions from '../actions/PhylogramActions';
 import {CALCULATE_CLUSTERS, DATA_WORKER_INITIATED} from '../constants/ActionTypes';
 import {calculateInfomapClusters} from '../utils/clustering';
 import AppStyles from './App.scss';
@@ -81,7 +82,7 @@ class App extends Component {
 
 
   render() {
-    const {data, files, worldmap, errorMessage, actions} = this.props;
+    const {data, files, worldmap, phylogram, errorMessage, actions} = this.props;
 
     return (
       <div className="app">
@@ -101,7 +102,7 @@ class App extends Component {
             </div>
           </div>
           <p></p>
-          <Tree {...data} {...actions} />
+          <Tree {...data} {...phylogram} {...actions} />
           <Statistics {...data} {...actions} />
         </div>
         <SpeciesInfo species={data.selectedSpecies} onHide={actions.unselectSpecies} />
@@ -114,6 +115,7 @@ App.propTypes = {
   files: PropTypes.object.isRequired,
   data: PropTypes.object.isRequired,
   worldmap: PropTypes.object.isRequired,
+  phylogram: PropTypes.object.isRequired,
   errorMessage: PropTypes.string,
   actions: PropTypes.object.isRequired,
 };
@@ -125,15 +127,16 @@ function mapStateToProps(state) {
 function mapDispatchToProps(dispatch) {
   return {
     actions: bindActionCreators(Object.assign({},
-      fileLoaderActions,
-      worldmapActions,
+      FileLoaderActions,
+      WorldmapActions,
+      PhylogramActions,
       ClusterActions,
       BinningActions,
       DisplayActions,
       FilterActions,
       ErrorActions,
     ), dispatch),
-    dispatch
+    dispatch,
   };
 }
 
