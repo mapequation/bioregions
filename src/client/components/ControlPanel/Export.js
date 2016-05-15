@@ -70,24 +70,24 @@ class ExportWindow extends Component {
       files: {
         svg: {
           group: 'map',
-          filename: `${props.basename}.svg`,
+          filename: `${props.basename}_map.svg`,
           icon: 'file image outline icon',
           url: null,
         },
         png: {
-          filename: `${props.basename}.png`,
+          filename: `${props.basename}_map.png`,
           group: 'map',
           icon: 'file image outline icon',
           url: null,
         },
         geojson: {
-          filename: `${props.basename}.geojson`,
+          filename: `${props.basename}_bioregions.geojson`,
           group: 'bioregions',
           icon: 'world icon',
           url: null,
         },
         shapefile: {
-          filename: `${props.basename}_shapefile.zip`,
+          filename: `${props.basename}_bioregions_shapefile.zip`,
           group: 'bioregions',
           icon: 'file archive outline icon',
           url: null,
@@ -174,7 +174,18 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch(error => {
-        console.log("!!! Error getting tree presence-absence file:", error);
+        console.log("!!! Error getting presence-absence file:", error);
+        this.setState({ error });
+      });
+    
+    this.getBioregionsCoordsUrl()
+      .then(url => {
+        files.bioregionsCoords.url = url;
+        files.bioregionsCoords.isLoading = false;
+        this.setState({ files });
+      })
+      .catch(error => {
+        console.log("!!! Error getting bioregions coords file:", error);
         this.setState({ error });
       });
   }
@@ -343,7 +354,25 @@ class ExportWindow extends Component {
   }
   
   getBioregionsCoords() {
-    return 'not implemented';
+    return new Promise(resolve => {    
+      const { clusters, bins } = this.props;
+      const geoStats = _.range(clusters.length).map(() => {
+        return {lat: 0, long: 0, count: 0};
+      });
+      _.each(bins, bin => {
+        // bin: {x1, x2, y1, y2, isLeaf, area, size, count, speciesCount, clusterId}
+        const stats = geoStats[bin.clusterId];
+        stats.lat += (bin.y1 + bin.y2) / 2;
+        stats.long += (bin.x1 + bin.x2) / 2;
+        stats.count += 1;
+        console.log(`!!! stats[${bin.clusterId}] -> count: ${stats.count}`);
+      });
+      const centerCoords = geoStats.map(stats => {
+        return `${stats.lat / stats.count} ${stats.long / stats.count}`;
+      });
+      centerCoords.unshift(`# 0 0`);
+      resolve(centerCoords.join('\n'));
+    });
   }
 
   render() {
