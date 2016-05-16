@@ -13,18 +13,16 @@ export function readTree(path) {
     .then(parseTree);
 }
 
-export function countNodes(treePath) {
+export function treeStats(treePath) {
   return readTree(treePath)
     .then(tree => {
+      treeUtils.prepareTree(tree);
       let numTreeNodes = 0;
-      let numTreeSpecies = 0;
-      treeUtils.visitTreeDepthFirst(tree, (node) => {
+      treeUtils.visitTreeDepthFirst(tree, () => {
         ++numTreeNodes;
-        if (!node.children)
-          ++numTreeSpecies;
       })
       // console.log(`Num nodes: ${numNodes}\nNum leaf nodes: ${numLeafNodes}`);
-      return { numTreeNodes, numTreeSpecies };
+      return { numTreeNodes, numLeafNodes: tree.leafCount, maxLength: tree.maxLength };
     });
 }
 
@@ -176,7 +174,7 @@ export function simplifyTree(treePath, outputPath) {
 
 export default {
   readTree,
-  countNodes,
+  treeStats,
   printNames,
   countIntersection,
   printIntersection,

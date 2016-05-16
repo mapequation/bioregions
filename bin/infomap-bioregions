@@ -9,9 +9,9 @@ var moment = require('moment');
 var argv = yargs
   .wrap(yargs.terminalWidth())
   .usage('Usage: $0 <command> [options]')
-  // tree-count
-  .command('tree-count <input_tree>', 'Count the number of nodes in the tree')
-  .example('$0 tree-count tree.nwk')
+  // tree-stats
+  .command('tree-stats <input_tree>', 'Calculate some tree statistics, node count, max length etc.')
+  .example('$0 tree-stats tree.nwk')
   // tree-names
   .command('tree-names <input_tree> <output_names>', 'Print the names of leaf nodes in the tree')
   .example('$0 tree-names tree.nwk names.txt')
@@ -53,8 +53,8 @@ function onError(err) {
 }
 
 switch (argv._[0]) {
-  case 'tree-count':
-    fsTreeUtils.countNodes(argv.input_tree).then(onEnd).catch(onError);
+  case 'tree-stats':
+    fsTreeUtils.treeStats(argv.input_tree).then(onEnd).catch(onError);
     break;
   case 'tree-names':
     fsTreeUtils.printNames(argv.input_tree, argv.output_names).then(onEnd).catch(onError);
