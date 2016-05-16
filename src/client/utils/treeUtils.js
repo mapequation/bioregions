@@ -403,7 +403,31 @@ export function prepareTree(tree) {
   return tree;
 }
 
-
+/**
+ * Remove nodes with only one child
+ */
+export function simplifyTree(tree) {
+  visitTreeDepthFirst(tree, (node) => {
+    while (node.children && node.children.length === 1) {
+      const child = node.children[0];
+      if (child.children) {
+        // Replace children
+        node.children = child.children;
+        child.children.forEach(d => { d.length += child.length; });
+      }
+    }
+    _.each(node.children || [], (child, i) => {
+      let d = child;
+      while (d.children && d.children.length === 1) {
+        // Add length from parent and remove parent
+        d.children[0].length += d.length;
+        d = d.children[0];
+      }
+      node.children[i] = d;
+    });
+  });
+  return Object.assign({}, tree);
+}
 
 export default {
   visitTreeDepthFirst,
@@ -426,4 +450,5 @@ export default {
   clone,
   normalizeNames,
   prepareTree,
+  simplifyTree,
 };

@@ -514,5 +514,35 @@ describe('treeUtils', () => {
         })
     })
 
+    describe('simplifyTree', () => {
+        it('should remove nodes with only one child', () => {
+            const result = newick.parse('((00:1,01:1)0:1,1,(20:2)2:3)root;')
+                .then(tree => treeUtils.simplifyTree(tree))
+                .then(newick.write)
+            return expect(result).to.eventually.eq('((00:1,01:1)0:1,1,20:5)root;');
+        })
+        
+        it('should collapse long chain of nodes with only one child', () => {
+            const result = newick.parse('(((((00000:1)0000:1)000:1)00:1)0:1,1,(20:2)2:3)root;')
+                .then(tree => treeUtils.simplifyTree(tree))
+                .then(newick.write)
+            return expect(result).to.eventually.eq('(00000:5,1,20:5)root;');
+        })
+        
+        it('should collapse direct child with children', () => {
+            const result = newick.parse('((00:3,01:4)0:2)root:1;')
+                .then(tree => treeUtils.simplifyTree(tree))
+                .then(newick.write)
+            return expect(result).to.eventually.eq('(00:5,01:6)root:1;');
+        })
+        
+        it('should collapse direct chain with children', () => {
+            const result = newick.parse('(((000:3,001:4)00:5)0:2)root:1;')
+                .then(tree => treeUtils.simplifyTree(tree))
+                .then(newick.write)
+            return expect(result).to.eventually.eq('(000:10,001:11)root:1;');
+        })
+    })
+
 })
 

@@ -155,6 +155,25 @@ export function normalizeNames(treePath, outputPath) {
   }));
 }
 
+/**
+ * Remove nodes with only one child
+ */
+export function simplifyTree(treePath, outputPath) {
+  return Promise.all([
+    readTree(treePath),
+    promiseWriteStream(outputPath),
+  ])
+  .then(([tree, out]) => new Promise((resolve, reject) => {
+      const newickTree = printTree(treeUtils.simplifyTree(tree));
+      out.on('finish', resolve);
+      out.on('error', reject);
+      out.write(newickTree);
+      out.write('\n');
+      out.end();
+      resolve(outputPath);
+  }));
+}
+
 export default {
   readTree,
   countNodes,
@@ -163,4 +182,5 @@ export default {
   printIntersection,
   printSpeciesDistributionIntersection,
   normalizeNames,
+  simplifyTree,
 };
