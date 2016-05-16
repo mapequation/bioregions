@@ -2,6 +2,7 @@
 import { expect } from 'chai'
 import newick, { _parseNewick } from '../newick'
 import treeUtils from '../../treeUtils'
+import nhx from '../nhx'
 
 describe('newick', () => {
     const newickTree = '((00,01)0,1,(20,21)2)root;';
@@ -27,9 +28,34 @@ describe('newick', () => {
             },
         ]
     };
+    const metaNewick = '((00[&area_pp={1,0,1}]:.24,01[&area_pp={0,0,1}&foo=bar&a=10])0[&area_pp={.5,0,1}],1,(20,21)2)root;';
+    const jsonMetaTree = {
+        name: 'root',
+        children: [
+            {
+                name: '0',
+                area_pp: [.5,0,1],
+                children: [
+                    { name: '00', area_pp: [1, 0, 1], length: 0.24 },
+                    { name: '01', area_pp: [0,0,1], foo: 'bar', a: '10' },
+                ]
+            },
+            {
+                name: '1',
+            },
+            {
+                name: '2',
+                children: [
+                    { name: '20' },
+                    { name: '21' },
+                ]
+            },
+        ]
+    };
+    
     
     const newickWithBranchLengths = '(A:1,B:2):0;';
-    const treeWithBranchLengths = { name: '', length: 0, children: [
+    const treeWithBranchLengths = { length: 0, children: [
         { name: 'A', length: 1 },
         { name: 'B', length: 2 },
     ]};
@@ -61,7 +87,7 @@ describe('newick', () => {
         
         it('should write with custom names', () => {
             expect(newick.write({
-                getName: (node) => `*${node.name}`,
+                getName: (node) => `*${node.name || ''}`,
             }, treeWithBranchLengths)).to.eq('(*A:1,*B:2)*:0;');
         })
         
@@ -69,6 +95,10 @@ describe('newick', () => {
             expect(newick.write({
                 getBranchLength: (node) => node.length * 2,
             }, treeWithBranchLengths)).to.eq('(A:2,B:4):0;');
+        })
+        
+        it('should parse newick extended with data', () => {
+            return expect(nhx.parse(metaNewick)).to.eventually.deep.eq(jsonMetaTree);
         })
     })
 })

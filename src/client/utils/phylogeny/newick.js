@@ -63,39 +63,81 @@ import treeUtils from '../treeUtils';
 /**
  * Raw Newick parser, exported for testing
  */
-export function _parseNewick(s) {
+export function _parseNewick(content) {
   let ancestors = [];
   let tree = {};
   let subtree = {};
-  const tokens = s.split(/\s*(;|\(|\)|,|:)\s*/);
-  for (let i=0; i<tokens.length; i++) {
-    let token = tokens[i];
-    switch (token) {
-      case '(': // new children
+  let readData = false;
+  const contentLength = content.length;
+
+  for (let i = 0; i < contentLength; ++i) {
+      const char = content[i];
+      switch (char) {
+        case '(': // new children
         subtree = {};
         tree.children = [subtree];
         ancestors.push(tree);
         tree = subtree;
         break;
       case ',': // another branch
-				subtree = {};
-				ancestors[ancestors.length - 1].children.push(subtree);
+        subtree = {};
+        ancestors[ancestors.length - 1].children.push(subtree);
         tree = subtree;
         break;
       case ')': // optional name next
         tree = ancestors.pop();
         break;
+      case ';': // end of newick string
+        break;
       case ':': // optional length next
         break;
+      case '[': // optional data next
+        readData = true;
+        break;
+      case '&': // optional data next
+      case ']': // end of data
+        break;
       default:
-        const x = tokens[i - 1];
-        if (x === ')' || x === '(' || x === ',') {
-          tree.name = token;
-        } else if (x === ':') {
-          tree.length = parseFloat(token);
+        const lastChar = content[i - 1];
+        
+        let j = i;
+        let token = [];
+        let ch = content[j]
+        while (ch !== '(' &&
+            ch !== ')' &&
+            (ch !== ',' || readData === true) &&
+            ch !== ':' &&
+            ch !== ';' &&
+            ch !== '[' &&
+            ch !== ']') {
+            token.push(ch);
+            ++j;
+            ch = content[j];
         }
-    }
+        i = j - 1;
+        token = token.join('');
+        readData = false;
+        
+        if (lastChar === ')' || lastChar === '(' || lastChar === ',') {
+          tree.name = token;
+        } else if (lastChar === ':') {
+          tree.length = parseFloat(token);
+        } else if (lastChar === '&' || lastChar === '[') {
+          const data = token.split('&');
+          data.forEach(entry => {
+            const [key, val] = entry.split('=');
+            if (key === 'area_pp') { // {0,1,.42,...}
+              tree[key] = val.slice(1, -1)
+                .split(',').map(v => parseFloat(v));
+            }
+            else {
+              tree[key] = val;
+            }
+          })
+        }
+      }
   }
+  
   return tree;
 }
 
@@ -139,7 +181,7 @@ export function writeNewick(opts, root) {
 			});
       subtree = '(' + children.join() + ')';
       const name = opts.getName(nest);
-      if (name) {
+      if (name !== undefined) {
         subtree = subtree + name;
       }
       const branchLength = opts.getBranchLength(nest);
@@ -147,14 +189,14 @@ export function writeNewick(opts, root) {
         subtree = subtree + ':' + branchLength;
       }
 		}
-		else{
+		else {
       let leaf = "";
       const name = opts.getName(nest);
-      if(name) {
+      if (name !== undefined) {
         leaf = name;
       }
       const branchLength = opts.getBranchLength(nest);
-      if(branchLength !== undefined) {
+      if (branchLength !== undefined) {
         leaf = leaf + ':' + branchLength;
       }
       subtree = subtree + leaf;
