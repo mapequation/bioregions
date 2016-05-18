@@ -82,6 +82,41 @@ export function _sortAndLimitClusters({totCount, clusters}, fractionThreshold = 
 }
 
 /**
+ * Handle output from BayArea
+ * @param area_pp {Array} array of probabilities for each bioregion
+ * @return clusters {Object}, same as in aggregateClusters
+ */
+export function _denseAreaProbsToSparseClusters(area_pp, fractionThreshold = 0.1) {
+    if (!area_pp) {
+        return {
+            totCount: 0,
+            clusters: []
+        }
+    }
+    // area_pp = [p1, p2, p3, ..., pm] for m bioregions
+    const totCount = _.sum(area_pp);
+    let clu = _(area_pp)
+        .map((p, i) => { return { clusterId: i, count: p } })
+        .filter(d => d.count > 0.01)
+        .reverse()
+        .sortBy('count')
+        .reverse()
+        .value();
+        
+        
+    const limitedClusters = reduceLimitRest(0,
+        (sum, {count}) => sum + count,
+        (sum, {count}) => count / totCount >= fractionThreshold || sum / totCount < fractionThreshold,
+        (sum, rest) => { return { clusterId: 'rest', count: totCount - sum, rest}; },
+        clu);
+    
+    return {
+        totCount,
+        clusters: limitedClusters,
+    }
+}
+
+/**
  * Aggregate clusters on the tree, sorted and limited by fractionThreshold.
  * @param tree:Object the tree
  * * @param clustersPerSpecies: {}, // name -> {totCount, clusters: limitRest([{clusterId, count}, ...])}
@@ -97,6 +132,20 @@ export function aggregateClusters(tree, clustersPerSpecies = {}, fractionThresho
     treeUtils.visitTreeDepthFirst(tree, (node) => {
         node.clusters = _sortAndLimitClusters(node.clusters, fractionThreshold);
     });
+    return tree;
+}
+
+export function reconstructAncestralAreas(tree, clustersPerSpecies = {}, fractionThreshold = 0.1) {
+    treeUtils.expandAll(tree);
+    // Check if areas already annotated (from BayArea)
+    if (tree.area_pp) {
+        treeUtils.visitTreeDepthFirst(tree, (node) => {
+            node.clusters = _denseAreaProbsToSparseClusters(node.area_pp, fractionThreshold);
+            // Delete redundant source
+            delete node.area_pp;
+        });
+    
+    }
     return tree;
 }
 
@@ -138,6 +187,7 @@ export function aggregateSpeciesCount(tree, speciesCount) {
 
 export default {
     aggregateClusters,
+    reconstructAncestralAreas,
     resetClusters,
     aggregateSpeciesCount,
 }

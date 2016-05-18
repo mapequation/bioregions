@@ -2,7 +2,6 @@
 import { expect } from 'chai'
 import newick, { _parseNewick } from '../newick'
 import treeUtils from '../../treeUtils'
-import nhx from '../nhx'
 
 describe('newick', () => {
     const newickTree = '((00,01)0,1,(20,21)2)root;';
@@ -74,6 +73,10 @@ describe('newick', () => {
         it('should parse a newick formatted string to json', () => {
             return expect(newick.parse(newickTree)).to.eventually.deep.eq(jsonTree);
         })
+        
+        it('should parse newick extended with data', () => {
+            return expect(newick.parse(metaNewick)).to.eventually.deep.eq(jsonMetaTree);
+        })
     })
 
     describe('write', () => {
@@ -95,10 +98,6 @@ describe('newick', () => {
             expect(newick.write({
                 getBranchLength: (node) => node.length * 2,
             }, treeWithBranchLengths)).to.eq('(A:2,B:4):0;');
-        })
-        
-        it('should parse newick extended with data', () => {
-            return expect(nhx.parse(metaNewick)).to.eventually.deep.eq(jsonMetaTree);
         })
     })
 })

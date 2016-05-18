@@ -58,9 +58,19 @@ export function aggregateFromRight(takeWhile, makeRestItem, items) {
   return mainItems;
 }
 
+/**
+ * Limit an array to items fulfilling a condition, put
+ * the other in a 'rest' item. Rest items will only be created if more than one
+ * item doesn't fulfill the condition.
+ * @param takeWhile {Function}, the condition to fulfill to not move to rest items
+ * @param makeRestItem {Function}, called with the rest items, should return a rest item,
+ * e.g. (restItems) => { return { id: 'rest', rest: restItems } }
+ * @param items {Array}, the items to limit.
+ * @return limitedItems {Array}.
+ */
 export function limitRest(takeWhile, makeRestItem, items) {
   const limitedItems = _.takeWhile(items, takeWhile);
-  if (limitedItems.length === items.length)
+  if (limitedItems.length >= items.length - 1) // Don't put a single item in rest
     return items;
   if (limitedItems.length === 0)
     return [makeRestItem(items)];
@@ -79,7 +89,7 @@ export function reduceLimitRest(initial, acc, takeWhile, makeRestItem, items) {
     }
     return false;
   });
-  if (limitedItems.length === items.length)
+  if (limitedItems.length >= items.length - 1)
     return items;
   if (limitedItems.length === 0)
     return [makeRestItem(sum, items)];

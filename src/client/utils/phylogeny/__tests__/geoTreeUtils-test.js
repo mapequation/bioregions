@@ -1,6 +1,10 @@
 /* eslint-disable camelcase */
 import { expect } from 'chai'
-import geoTreeUtils, { _aggregateClusters, _sortAndLimitClusters } from '../geoTreeUtils'
+import geoTreeUtils, {
+    _aggregateClusters,
+    _sortAndLimitClusters,
+    _denseAreaProbsToSparseClusters,
+} from '../geoTreeUtils'
 import treeUtils from '../../treeUtils'
 import newick from '../newick'
 import { reduceLimitRest } from '../../statistics'
@@ -9,7 +13,7 @@ import _ from 'lodash'
 describe('geoTreeUtils', () => {
     
     let newick1, clustersPerSpecies, clustersPerSpeciesLimited,
-        testTreeWithClusters, testTreeWithResetClusters;
+        testTreeWithClusters, testTreeWithResetClusters, newickWithAreaProbs, treeWithAreaProbs;
     
     before(() => {
         newick1 = '((00,01)0,1,(20,21)2)root;';
@@ -196,7 +200,69 @@ describe('geoTreeUtils', () => {
                 {clusterId: 2, count: 2},
                 {clusterId: 3, count: 2},
             ]},
-        });        
+        });
+        
+        newickWithAreaProbs = '((00[&area_pp={1,0,1}],01[&area_pp={0,0,1}])0[&area_pp={.5,0,1}],1[&area_pp={0,1,0.1}],(20[&area_pp={0,0,1}],21[&area_pp={0,0,1}])2[&area_pp={0,0,1}])root[&area_pp={1,.8,1}];';
+        
+        treeWithAreaProbs = {
+            name: 'root',
+            clusters: { totCount: 2.8, clusters: [
+                { clusterId: 0, count: 1},
+                { clusterId: 2, count: 1},
+                { clusterId: 1, count: 0.8},
+            ] },
+            children: [
+                {
+                    name: '0',
+                    clusters: { totCount: 1.5, clusters: [
+                        { clusterId: 2, count: 1},
+                        { clusterId: 0, count: 0.5},
+                    ] },
+                    children: [
+                        {
+                            name: '00',
+                            clusters: { totCount: 2, clusters: [
+                                { clusterId: 0, count: 1},
+                                { clusterId: 2, count: 1},
+                            ] },
+                        },
+                        {
+                            name: '01',
+                            clusters: { totCount: 1, clusters: [
+                                { clusterId: 2, count: 1},
+                            ] },
+                        },
+                    ]
+                },
+                {
+                    name: '1',
+                    clusters: { totCount: 1.1, clusters: [
+                        { clusterId: 1, count: 1},
+                        { clusterId: 2, count: 0.1},
+                    ] },
+                },
+                {
+                    name: '2',
+                    clusters: { totCount: 1, clusters: [
+                        { clusterId: 2, count: 1},
+                    ] },
+                    children: [
+                        {
+                            name: '20',
+                            clusters: { totCount: 1, clusters: [
+                                { clusterId: 2, count: 1},
+                            ] },
+                        },
+                        {
+                            name: '21',
+                            clusters: { totCount: 1, clusters: [
+                                { clusterId: 2, count: 1},
+                            ] },
+                        },
+                    ]
+                },
+            ]
+        };
     })
 
     describe('_aggregateClusters', () => {
@@ -318,6 +384,25 @@ describe('geoTreeUtils', () => {
             const result = newick.parse(newick1)
                 .then(tree => geoTreeUtils.aggregateClusters(tree, clustersPerSpeciesLimited, 0.01));
             return expect(result).to.eventually.deep.eq(testTreeWithClusters);
+        })
+    })
+    
+    describe('_denseAreaProbsToSparseClusters', () => {
+        it('should extract sparse clusters structure', () => {
+            const clusters = _denseAreaProbsToSparseClusters([0, 1, 0.3], 0.1);
+            expect(clusters).to.deep.eq({
+                totCount: 1.3,
+                clusters: [{clusterId: 1, count: 1}, {clusterId: 2, count: 0.3}],
+            });
+        })
+    })
+    
+    describe('reconstructAncestralAreas', () => {
+        it('should transform dense area probabilities to sparse limited clusters', () => {
+            
+            const result = newick.parse(newickWithAreaProbs)
+                .then(tree => geoTreeUtils.reconstructAncestralAreas(tree, 0.01));
+            return expect(result).to.eventually.deep.eq(treeWithAreaProbs);
         })
     })
     

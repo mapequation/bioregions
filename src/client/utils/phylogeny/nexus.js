@@ -524,56 +524,51 @@ export function parseNexus(str)
 
 	if (nx.IsNexusFile())
 	{
-		console.log('Is a NEXUS file');
+		// console.log('Is a NEXUS file');
 	}
 
-	var blockname = nx.GetBlock();
-
-	//console.log("BLOCK="+blockname);
-
-
-	if (blockname == 'taxa')
-	{
-		var command = nx.GetCommand();
-
+	let blockname = nx.GetBlock();
+	
+	while (blockname !== 'trees') {
+		// console.log("BLOCK="+blockname);
+		let command = nx.GetCommand();
+		
 		while (
-			(command != 'end')
-			&& (command != 'endblock')
-			&& (nx.error == NexusError.ok)
-			)
+			(command !== 'end')
+			&& (command !== 'endblock')
+			&& (nx.error === NexusError.ok)
+			){
+			nx.SkipCommand();
+			command = nx.GetCommand();
+		}
+		
+		if (nx.error !== NexusError.ok) {
+			// console.log(`!!! Error: ${nx.error}`)
+			break;
+		}
+		
+		// If end command eat the semicolon
+		if ((command == 'end') || (command == 'endblock'))
 		{
-			switch (command)
-			{
-				case 'taxlabels':
-					nx.SkipCommand();
-					command = nx.GetCommand();
-					break;
-
-				default:
-					//echo "Command to skip: $command\n";
-					nx.SkipCommand();
-					command = nx.GetCommand();
-					break;
-			}
-
-			// If end command eat the semicolon
-			if ((command == 'end') || (command == 'endblock'))
-			{
-				nx.GetToken();
-			}
+			nx.GetToken();
 		}
 
 		blockname = nx.GetBlock();
-
 	}
-
-
+	
+	if (nx.error !== NexusError.ok) {
+		// console.log(`No trees block found in nexus file!`);
+		nexus.status = nx.error;
+		nexus.error = getErrorMessage(nx.error);
+		return nexus;
+	}
+	
 	if (blockname == 'trees')
 	{
 		nexus.treesblock = {};
 		nexus.treesblock.trees = [];
 
-		command = nx.GetCommand();
+		let command = nx.GetCommand();
 
 		while (
 			((command != 'end') && (command != 'endblock'))
@@ -698,7 +693,7 @@ export function parseNexus(str)
 	}
 
 	nexus.status = nx.error;
-  nexus.error = getErrorMessage(nx.error);
+  	nexus.error = getErrorMessage(nx.error);
 
 	return nexus;
 }

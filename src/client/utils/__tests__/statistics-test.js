@@ -88,7 +88,7 @@ describe('statistics', () => {
         it('should return all in rest', () => {
             const res = statistics.limitRest(
                 item => item.count > 10,
-                restItems => { return { clusterId: 'rest', rest: restItems } },
+                restItems => { return { clusterId: 'rest', rest: restItems }; },
                 items
             );
             return expect(res).to.deep.eq([
@@ -100,6 +100,15 @@ describe('statistics', () => {
                     { clusterId: 4, count: 1},
                 ]},
             ]);
+        })
+        
+        it('should not create a rest item for a single item', () => {
+            const res = statistics.limitRest(
+                item => item !== 4,
+                restItems => `${restItems.length} rest items`,
+                [0,1,2,3,4]
+            );
+            return expect(res).to.deep.eq([0,1,2,3,4]);
         })
     })
 
@@ -228,6 +237,17 @@ describe('statistics', () => {
                     { clusterId: 5, count: 2},
                 ]},
             ]);
+        })
+        
+        it('should not create a rest item for a single item', () => {
+            const res = statistics.reduceLimitRest(
+                0,
+                (sum, n) => sum + n,
+                (sum, n) => n > 0,
+                (sum, restItems) => `${restItems.length} reduced rest items`,
+                [3,2,1,0]
+            );
+            return expect(res).to.deep.eq([3,2,1,0]);
         })
     })
     
