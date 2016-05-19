@@ -29,13 +29,13 @@ const initialState = {
     {
       name: "Global mammals",
       type: "phylogeny",
-      size: "191Kb",
+      size: "150Kb",
       filename: 'mammals_global.nwk',
     },
     {
       name: "Neotropical mammals",
       type: "phylogeny",
-      size: "54Kb",
+      size: "48Kb",
       filename: 'mammals_neotropics.nwk',
     },
   ],
