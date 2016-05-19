@@ -112,6 +112,9 @@ export function _parseNewick(content) {
             ch !== ']') {
             token.push(ch);
             ++j;
+            if (j === contentLength) {
+              break;
+            }
             ch = content[j];
         }
         i = j - 1;
