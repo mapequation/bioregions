@@ -347,7 +347,8 @@ export function normalizeNames(tree) {
 /**
  * Prepare tree with some default and aggregated properties:
  * parent - null for root
- * name - string for leaf nodes, with '_' -> ' ', may be undefined for parent nodes
+ * name - string for leaf nodes, with Capital first letter and '_' -> ' ',
+ * may be undefined for parent nodes
  * uid - unique id for each node from 1 to first leaf to numNodes for root
  * originalChildIndex - original index in the children array, 0 for root.
  * isLeaf - boolean
@@ -374,7 +375,7 @@ export function prepareTree(tree) {
       node.leafCount = 1;
       node.maxLength = node.length;
       // Ensure leaf nodes has name, and replace underscores with spaces
-      node.name = node.name ? node.name.replace(/_/g, ' ') : '';
+      node.name = node.name ? normalizeSpeciesName(node.name) : '';
     } else { // no leaf
       if (node.name) {
         node.name = node.name.replace(/_/g, ' ');
