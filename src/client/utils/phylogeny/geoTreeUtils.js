@@ -1,6 +1,6 @@
 import treeUtils from '../treeUtils';
 import _ from 'lodash';
-import { reduceLimitRest } from '../statistics';
+import { reduceLimitRest, forEachLimited, unrollRest } from '../statistics';
 
 
 /**
@@ -116,6 +116,92 @@ export function _denseAreaProbsToSparseClusters(area_pp, fractionThreshold = 0.1
     }
 }
 
+export function calcMaximumParsimonyPreliminaryPhase(tree, clustersPerSpecies) {
+    treeUtils.visitTreeDepthFirst({postOrder: true}, tree, (node) => {
+        if (!node.children) {
+            const clusters = clustersPerSpecies[node.name];
+            if (clusters) {
+                node.clusters = {
+                    totCount: clusters.totCount,
+                    clusters: unrollRest(clusters.clusters)
+                };
+            } else {
+                node.clusters = {
+                    totCount: 0,
+                    clusters: [],
+                }
+            }
+        } else {
+            // Ancestor nodes
+            const childClusters = _.map(node.children, child => child.clusters.clusters);
+            // First try with intersection
+            let ancestorClusters = _.intersectionBy(...childClusters, 'clusterId');
+            // If empty, use union
+            const byUnion = ancestorClusters.length === 0; 
+            if (byUnion) {
+                ancestorClusters = _.unionBy(...childClusters, 'clusterId');
+            }
+            node.clusters = {
+                clusters: ancestorClusters,
+                byUnion,
+            }
+        }
+    });
+    return tree;    
+}
+
+/**
+ * 
+I. If the preliminary nodal set contains all of the nucleotides present in the final nodal set of its immediate an- cestor, go to II, otherwise go to III.
+II. Eliminate all nucleotides from the preliminary nodal set that are not present in the final nodal set of its immediate ancestor and go to VI.
+III. If the preliminary nodal set was formed by a union of its descendent sets, go to IV, otherwise go to V.
+IV. Add to the preliminary nodal set any nucleotides in the final set of its im- mediate ancestor that are not present in the preliminary nodal set and go to VI.
+V. Add to the preliminary nodal set any nucleotides not already present pro- vided that they are present in both the final set of the immediate ancestor and in at least one of the two immedi- ately descendent preliminary sets and go to VI.
+VI. The preliminary nodal set being ex- amined is now final. Descend one node as long as any preliminary nodal sets remain and return to I above.
+ */
+export function calcMaximumParsimonyFinalPhase(tree) {
+    treeUtils.visitTreeDepthFirst(tree, (node, depth, childIndex, parent) => {
+        // Preliminary set for root node is already the final set, and leaf nodes too?!
+        if (!parent || !node.children) {
+            return;
+        }
+        const intersection = _.intersectionBy(node.clusters.clusters, parent.clusters.clusters, 'clusterId');
+        // Check if child contains all parent's nodes
+        if (intersection.length === parent.clusters.clusters.length) {
+            // II -> Rule of diminished ambiguity
+            // console.log(`@@ Rule II`)
+            node.clusters = {
+                clusters: intersection,
+            };
+        } else {
+            // III
+            // console.log(`@@ Rule III`)
+            if (node.byUnion) {
+                // IV -> Rule of expanded ambiguity
+                // console.log(`@@ Rule IV`)
+                node.clusters = {
+                    clusters: _.unionBy(node.clusters.clusters, parent.clusters.clusters, 'clusterId'),
+                }
+            } else {
+                // V -> Rule of encompassing ambiguity
+                // console.log(`@@ Rule V`)
+                const diff = _.differenceBy(intersection, parent.clusters.clusters, 'clusterId');
+                const childIntersections = _.map(node.children, child => _.intersectionBy(diff, child.clusters.clusters, 'clusterId'));
+                const atLeastOneInChild = _.unionBy(...childIntersections, 'clusterId');
+                node.clusters = {
+                    clusters: node.clusters.clusters.concat(atLeastOneInChild),
+                }
+            }
+        }
+    });
+}
+
+export function calcMaximumParsimony(tree, clustersPerSpecies = {}, fractionThreshold = 0.1) {
+    calcMaximumParsimonyPreliminaryPhase(tree, clustersPerSpecies);
+    calcMaximumParsimonyFinalPhase(tree);
+    return tree;
+}
+
 /**
  * Aggregate clusters on the tree, sorted and limited by fractionThreshold.
  * @param tree:Object the tree
@@ -144,8 +230,11 @@ export function reconstructAncestralAreas(tree, clustersPerSpecies = {}, fractio
             // Delete redundant source
             delete node.area_pp;
         });
-    
     }
+    else {
+        calcMaximumParsimony(tree, clustersPerSpecies, fractionThreshold);
+    }
+    
     return tree;
 }
 

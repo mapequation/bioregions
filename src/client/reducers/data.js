@@ -122,7 +122,7 @@ function getSpeciesCount(species) {
 function prepareTree(tree, state) {
   treeUtils.prepareTree(tree);
   geoTreeUtils.aggregateSpeciesCount(tree, state.speciesCount);
-  geoTreeUtils.aggregateClusters(tree, state.clustersPerSpecies, state.clusterFractionLimit);
+  geoTreeUtils.reconstructAncestralAreas(tree, state.clustersPerSpecies, state.clusterFractionLimit);
   return tree;
 }
 

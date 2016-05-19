@@ -4,6 +4,9 @@ import geoTreeUtils, {
     _aggregateClusters,
     _sortAndLimitClusters,
     _denseAreaProbsToSparseClusters,
+    calcMaximumParsimonyPreliminaryPhase,
+    calcMaximumParsimonyFinalPhase,
+    calcMaximumParsimony,
 } from '../geoTreeUtils'
 import treeUtils from '../../treeUtils'
 import newick from '../newick'
@@ -395,6 +398,95 @@ describe('geoTreeUtils', () => {
                 clusters: [{clusterId: 1, count: 1}, {clusterId: 2, count: 0.3}],
             });
         })
+    })
+    
+    describe('calcMaximumParsimonyPreliminaryPhase', () => {
+        it('should reconstruct Fitch fig 2a', () => {            
+            const result = newick.parse('((00,01)0,1)root;')
+                .then(tree => calcMaximumParsimonyPreliminaryPhase(tree, {
+                    '00': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('((00:A,01:C)0:AC,1:A)root:A;');
+        })
+        
+        it('should reconstruct Fitch fig 2c', () => {            
+            const result = newick.parse('((00,01)0,1)root;')
+                .then(tree => calcMaximumParsimonyPreliminaryPhase(tree, {
+                    '00': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'G', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('((00:A,01:C)0:AC,1:G)root:ACG;');
+        })
+        
+        it('should reconstruct Fitch fig 2e', () => {            
+            const result = newick.parse('(((000,001)00,01)0,1)root;')
+                .then(tree => calcMaximumParsimonyPreliminaryPhase(tree, {
+                    '000': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '001': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('(((000:A,001:C)00:AC,01:A)0:A,1:C)root:AC;');
+        })
+    })
+    
+    describe('calcMaximumParsimony', () => {
+        it('should reconstruct Fitch fig 2b', () => {            
+            const result = newick.parse('((00,01)0,1)root;')
+                .then(tree => calcMaximumParsimony(tree, {
+                    '00': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('((00:A,01:C)0:A,1:A)root:A;');
+        })
+        
+        it('should reconstruct Fitch fig 2d', () => {            
+            const result = newick.parse('((00,01)0,1)root;')
+                .then(tree => calcMaximumParsimony(tree, {
+                    '00': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'G', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('((00:A,01:C)0:AC,1:G)root:ACG;');
+        })
+        
+        it('should reconstruct Fitch fig 2f', () => {            
+            const result = newick.parse('(((000,001)00,01)0,1)root;')
+                .then(tree => calcMaximumParsimony(tree, {
+                    '000': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '001': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                    '01': { count: 1, clusters: [{clusterId: 'A', count: 1}] },
+                    '1': { count: 1, clusters: [{clusterId: 'C', count: 1}] },
+                }))
+                .then(_.partial(newick.write, {
+                    getBranchLength: ({clusters}) => clusters.clusters.map(d => d.clusterId).join(''),
+                }));
+            return expect(result).to.eventually.eq('(((000:A,001:C)00:A,01:A)0:A,1:C)root:AC;');
+        })
+    })
+   
+    
+    describe('reconstructAncestralAreas', () => {
+        it('should call maximum parsimony reconstruction by default')
     })
     
     describe('reconstructAncestralAreas', () => {
