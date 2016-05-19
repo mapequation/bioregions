@@ -495,6 +495,8 @@ describe('treeUtils', () => {
                 .then(newick.write);
             return expect(result).to.eventually.eq('((A),C,(D,E));');
         })
+        
+        it('should remove branch nodes that does not branch anymore');
     })
 
     describe('clone', () => {
