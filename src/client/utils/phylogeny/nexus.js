@@ -262,7 +262,7 @@ Scanner.prototype.ParseComment = function()
 	}
 	this.buffer += this.str.charAt(this.pos);
 
-	console.log('[' + this.buffer + ']');
+	// console.log('[' + this.buffer + ']');
 }
 
 //----------------------------------------------------------------------------------------------
