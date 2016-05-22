@@ -121,9 +121,11 @@ export function calcMaximumParsimonyPreliminaryPhase(tree, clustersPerSpecies) {
         if (!node.children) {
             const clusters = clustersPerSpecies[node.name];
             if (clusters) {
+                const presenceCountedClusters = unrollRest(clusters.clusters)
+                    .map(({clusterId}) => { return { clusterId, count: 1}; });
                 node.clusters = {
-                    totCount: clusters.totCount,
-                    clusters: unrollRest(clusters.clusters)
+                    totCount: presenceCountedClusters.length,
+                    clusters: presenceCountedClusters,
                 };
             } else {
                 node.clusters = {
