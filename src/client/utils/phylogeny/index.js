@@ -1,5 +1,5 @@
-import { parseNexus } from './nexus';
-import { parseNewick, writeNewick } from './newick';
+import nexus from './nexus';
+import newick, { writeNewick } from './newick';
 import { visitTreeDepthFirst } from '../treeUtils';
 
 export { writeNewick as printTree };
@@ -15,33 +15,13 @@ export function parseTree(str) {
 
     if (str.charAt(0) === '(') { // If newick format
       // console.log("Parse Newick...");
-      const tree = parseNewick(str);
+      const tree = newick.parse(str);
       return resolve(tree);
     }
 
     // console.log("Parse Nexus...");
     if (str.substr(0, 6).toLowerCase() === '#nexus') { // If nexus format
-      let nexus = parseNexus(str);
-      if (nexus.error) {
-        return reject(`Can't parse nexus tree: ${nexus.error}`);
-      }
-
-      if (nexus.treesblock.trees.length == 0)
-        return reject("No trees in nexus file.");
-
-      // console.log("Nexus tree parsed successfully:", nexus);
-      const {label, newick} = nexus.treesblock.trees[0];
-      const {translate} = nexus.treesblock;
-      console.log('Nexus:', nexus);
-
-      let tree = parseNewick(newick);
-
-      if (translate) {
-        visitTreeDepthFirst(tree, node => {
-          node.name = translate[node.name] || node.name;
-        });
-      }
-
+      const tree = nexus.parse(str);
       return resolve(tree);
     }
 

@@ -1,6 +1,7 @@
 /* eslint-disable camelcase */
 import { expect } from 'chai'
-import { parseNexus, parseNexus2 } from '../nexus'
+import nexus, { _parseNexus } from '../nexus'
+import newick from '../newick'
 import treeUtils from '../../treeUtils'
 
 describe('nexus', () => {
@@ -11,19 +12,21 @@ describe('nexus', () => {
 Begin taxa;
 	Dimensions ntax=5;
 	Taxlabels
-		'Tachydromus sexlineatus KU311512'
-		'Brachymeles samarensis KU310851'
-		'Brachymeles samarensis KU311226'
-		'Brachymeles samarensis KU311227'
+		'Sp A'
+		'Sp B'
+		'Sp C'
+		'Sp D'
+		'Sp E'
 		;
 End;
     
 BEGIN TREES;
 	TRANSLATE
-		Tl468527 'Tachydromus sexlineatus KU311512',
-		Tl468507 'Brachymeles samarensis KU310851',
-		Tl468443 'Brachymeles samarensis KU311226',
-		Tl468468 'Brachymeles samarensis KU311227'		;
+		00 'Sp A',
+		01 'Sp B',
+		1 Sp C,
+		20 'Sp D',
+		21 'Sp E'		;
 	TREE 'ML' = ${newickString}
 END;
     `;
@@ -88,45 +91,21 @@ Begin trees;
 tree TREE1 = ${newickString};
 End;
     `;
-       
     
-
-    describe('parseNexus', () => {
-        it('should parse a simple nexus string', () => {
-            const nex = parseNexus(demoNexusString);
-            expect(nex.status).to.eq(0);
-            expect(nex.error).to.eq(undefined);
-            expect(nex.treesblock).to.be.an('object');
-            expect(nex.treesblock.trees).to.have.length.above(0);
-            const tree = nex.treesblock.trees[0];
-            expect(tree).to.include.keys('newick');
-            expect(tree.newick).to.eq(newickString);
-        })
-        
-        it('should parse a BayArea formatted nexus string')
-        
-        // it('should parse a BayArea formatted nexus string', () => {
-        //     const nex = parseNexus(bayAreaNewickString);
-        //     expect(nex.status).to.eq(0);
-        //     expect(nex.error).to.eq(undefined);
-        //     expect(nex.treesblock).to.be.an('object');
-        //     expect(nex.treesblock.trees).to.have.length.above(0);
-        //     const tree = nex.treesblock.trees[0];
-        //     expect(tree).to.eq(newickTree);
-        // })
-
-    })
 	
-	 describe('parseNexus2', () => {
-        it('should parse a simple nexus string', () => {
-            const nex = parseNexus2(demoNexusString);
-            expect(nex.status).to.eq(0);
-            expect(nex.error).to.eq(undefined);
-            expect(nex.treesblock).to.be.an('object');
-            expect(nex.treesblock.trees).to.have.length.above(0);
-            const tree = nex.treesblock.trees[0];
-            expect(tree).to.include.keys('newick');
-            expect(tree.newick).to.eq(newickString);
+	describe('_parseNexus', () => {
+        it('should parse a simple nexus string with translations', () => {
+            const tree = _parseNexus(demoNexusString);
+			expect(tree).to.be.ok;
+			expect(newick.write(tree)).to.eq('((Sp A,Sp B)0,Sp C,(Sp D,Sp E)2)root;')
         })
-	 })
+	})
+
+	describe('parseNexus', () => {
+        it('should parse a simple nexus string and eventually return a tree', () => {
+            const result = nexus.parse(demoNexusString)
+				.then(newick.write);
+			return expect(result).to.eventually.eq('((Sp A,Sp B)0,Sp C,(Sp D,Sp E)2)root;')
+        })
+	})
 })
