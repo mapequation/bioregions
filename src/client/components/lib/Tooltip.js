@@ -5,7 +5,8 @@ import classNames from 'classnames';
 class Tooltip extends Component {
 
   static propTypes = {
-    children: PropTypes.array.isRequired
+    children: PropTypes.array.isRequired,
+    style: PropTypes.object,
   }
 
   state = {
@@ -21,12 +22,14 @@ class Tooltip extends Component {
   }
 
   render() {
-    const node = this.props.children[0];
-    const tooltipNodes = this.state.showTooltip? Children.toArray(this.props.children.slice(1)) : "";
+    const {children, style} = this.props;
+    const node = children[0];
+    const {showTooltip} = this.state;
+    const tooltipNodes = showTooltip ? Children.toArray(children.slice(1)) : null;
     return (
       <span className="tooltip-parent" onMouseOver={this.handleMouseOver} onMouseOut={this.handleMouseOut}>
         {node}
-          <span className="tooltip">
+          <span className="tooltip" style={style}>
             {tooltipNodes}
           </span>
       </span>

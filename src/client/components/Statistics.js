@@ -192,14 +192,17 @@ class Statistics extends Component {
       );
     }
     const {count, clusters} = speciesClusters; // clusters: [{clusterId, count}, ...]
+    const getClusterColor = (clusterId) => clusterId === 'rest' ? '#eee' : clusterColors[clusterId];
+    const getTextColor = (clusterId) => clusterId === 'rest' ? 'black' : clusterColors[clusterId].luminance() < 0.6 ? 'white' : 'black';
 
     return (
-      <Tooltip>
-        <PieChart size={30} data={clusters} colors={clusterColors} />
+      <Tooltip style={{left: -150}}>
+        <div>
+          <PieChart size={30} data={clusters} colors={clusterColors} />
+        </div>
         <div className="ui floating segment">
-          <table className="ui very basic celled table" style={{
+          <table className="ui very basic collapsing table" style={{
             backgroundColor: "white",
-            width: "400px",
             fontWeight: 300,
           }}>
             <thead>
@@ -210,8 +213,14 @@ class Statistics extends Component {
             </thead>
             <tbody>
               { clusters.map(({clusterId, count}) => (
-                <tr key={clusterId} style={{ backgroundColor: clusterColors[clusterId]}}>
-                  <td>{ clusterId === 'rest' ? '...rest' : `Bioregion ${clusterId}`}</td>
+                <tr key={clusterId} style={{
+                  backgroundColor: getClusterColor(clusterId),
+                  outline: '1px solid white',
+                  color: getTextColor(clusterId),
+                }}>
+                  <td style={{
+                    paddingLeft: 10,
+                  }}>{ clusterId === 'rest' ? '...rest' : `Bioregion ${clusterId+1}`}</td>
                   <td>{count}</td>
                 </tr>
               ))}
@@ -238,7 +247,7 @@ class Statistics extends Component {
     let btnBorderColor = clusterColor.darker(0.5).css();
     let style = {
       backgroundColor: clusterColor.css(),
-      color: clusterColor.luminance() < 0.5 ? 'white' : 'black',
+      color: clusterColor.luminance() < 0.6 ? 'white' : 'black',
       border: clusterId === selectedCluster? `2px inset ${btnBorderColor}` : `2px solid ${btnBorderColor}`,
       WebkitPrintColorAdjust: 'exact',
     };
