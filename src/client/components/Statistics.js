@@ -1,6 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import PieChart from './PieChart';
 import Div from './helpers/Div';
+import Tooltip from './lib/Tooltip';
 import R from 'ramda';
 import _ from 'lodash';
 import {BY_NAME, BY_CLUSTER} from '../constants/Display';
@@ -193,7 +194,31 @@ class Statistics extends Component {
     const {count, clusters} = speciesClusters; // clusters: [{clusterId, count}, ...]
 
     return (
-      <PieChart size={30} data={clusters} colors={clusterColors} />
+      <Tooltip>
+        <PieChart size={30} data={clusters} colors={clusterColors} />
+        <div className="ui floating segment">
+          <table className="ui very basic celled table" style={{
+            backgroundColor: "white",
+            width: "400px",
+            fontWeight: 300,
+          }}>
+            <thead>
+              <tr>
+                <th>Presence</th>
+                <th>Occurrences</th>
+              </tr>
+            </thead>
+            <tbody>
+              { clusters.map(({clusterId, count}) => (
+                <tr key={clusterId} style={{ backgroundColor: clusterColors[clusterId]}}>
+                  <td>{ clusterId === 'rest' ? '...rest' : `Bioregion ${clusterId}`}</td>
+                  <td>{count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Tooltip>
     );
   }
 
