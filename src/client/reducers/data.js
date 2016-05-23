@@ -186,7 +186,7 @@ export default function data(state = getInitialState(), action) {
       const { clusters, clustersPerSpecies } = action.clusterStatistics;
       let geoPhyloTree = state.phyloTree;
       if (geoPhyloTree) {
-        geoPhyloTree = geoTreeUtils.aggregateClusters(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
+        geoPhyloTree = geoTreeUtils.reconstructAncestralAreas(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
         // Create new tree object to get behind shouldComponentUpdate
         geoPhyloTree = Object.assign({}, geoPhyloTree);
       } 
