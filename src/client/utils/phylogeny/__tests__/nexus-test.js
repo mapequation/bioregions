@@ -1,6 +1,6 @@
 /* eslint-disable camelcase */
 import { expect } from 'chai'
-import { parseNexus } from '../nexus'
+import { parseNexus, parseNexus2 } from '../nexus'
 import treeUtils from '../../treeUtils'
 
 describe('nexus', () => {
@@ -116,4 +116,17 @@ End;
         // })
 
     })
+	
+	 describe('parseNexus2', () => {
+        it('should parse a simple nexus string', () => {
+            const nex = parseNexus2(demoNexusString);
+            expect(nex.status).to.eq(0);
+            expect(nex.error).to.eq(undefined);
+            expect(nex.treesblock).to.be.an('object');
+            expect(nex.treesblock.trees).to.have.length.above(0);
+            const tree = nex.treesblock.trees[0];
+            expect(tree).to.include.keys('newick');
+            expect(tree.newick).to.eq(newickString);
+        })
+	 })
 })

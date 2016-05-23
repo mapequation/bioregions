@@ -1,3 +1,6 @@
+import { _parseNewick } from './newick';
+import treeUtils from '../treeUtils';
+
 /**
  * Very basic NEXUS parser
  *
@@ -530,20 +533,19 @@ export function parseNexus(str)
 	let blockname = nx.GetBlock();
 	
 	while (blockname !== 'trees') {
-		// console.log("BLOCK="+blockname);
+		console.log("BLOCK="+blockname);
 		let command = nx.GetCommand();
+		console.log(`@command: ${command}`)
 		
-		while (
-			(command !== 'end')
-			&& (command !== 'endblock')
-			&& (nx.error === NexusError.ok)
-			){
-			nx.SkipCommand();
-			command = nx.GetCommand();
+		while ((command !== 'end') &&
+			(command !== 'endblock') &&
+			(nx.error === NexusError.ok)) {
+				nx.SkipCommand();
+				command = nx.GetCommand();
 		}
 		
 		if (nx.error !== NexusError.ok) {
-			// console.log(`!!! Error: ${nx.error}`)
+			console.log(`!!! Error: ${nx.error}`)
 			break;
 		}
 		
@@ -557,7 +559,7 @@ export function parseNexus(str)
 	}
 	
 	if (nx.error !== NexusError.ok) {
-		// console.log(`No trees block found in nexus file!`);
+		console.log(`No trees block found in nexus file!`);
 		nexus.status = nx.error;
 		nexus.error = getErrorMessage(nx.error);
 		return nexus;
@@ -565,6 +567,7 @@ export function parseNexus(str)
 	
 	if (blockname == 'trees')
 	{
+		console.log('!!!! In trees block')
 		nexus.treesblock = {};
 		nexus.treesblock.trees = [];
 
@@ -696,4 +699,49 @@ export function parseNexus(str)
   	nexus.error = getErrorMessage(nx.error);
 
 	return nexus;
+}
+
+export function parseNexus2(str) {
+	// Extract only trees block!
+	const blocks = str.split(/^begin\s+/mi);
+	const testTreesBlock = new RegExp('^trees', 'i');
+	const treesBlock = blocks.filter(block => testTreesBlock.test(block));
+	if (treesBlock.length === 0) {
+		throw new Error("Couldn't find trees block");
+	}
+	
+	const treesStr = treesBlock[0];
+	
+	const translateBlock = treesStr.match(/^\s*translate\s+([^;]+;)/im);
+	
+	const translate = {};
+	let numTranslated = 0;
+	if (translateBlock.length === 2) {
+		const translateStr = translateBlock[1];
+		// console.log(`!!! translate: ${translateStr}`);
+		const entries = translateStr.split(/\s*,[\r\n]/);
+		const reEntry = new RegExp('^\s*(\S+)\s(.+)', 'g')
+		entries.forEach(entry => {
+			console.log(entry.match(/^s*Tl4685/));
+			const match = entry.match(reEntry);
+			console.log(` match(${entry}) -> ${match}`);
+		});
+	}
+	
+	const newick = treesStr.match(/^\s*tree\s+[^=]+=[^(]*(.+)/im);
+	
+	if (newick.length < 2) {
+		throw new Error("Couldn't extract 'tree [name] = [newick]' from NEXUS file.")
+	}
+	
+	const tree = _parseNewick(newick[1]);
+	
+	
+	// if (translate) {
+	// 	treeUtils.visitTreeDepthFirst(tree, node => {
+	// 		node.name = translate[node.name] || node.name;
+	// 	});
+	// }
+	
+	return tree;
 }

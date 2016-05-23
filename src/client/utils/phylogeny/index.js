@@ -32,6 +32,7 @@ export function parseTree(str) {
       // console.log("Nexus tree parsed successfully:", nexus);
       const {label, newick} = nexus.treesblock.trees[0];
       const {translate} = nexus.treesblock;
+      console.log('Nexus:', nexus);
 
       let tree = parseNewick(newick);
 
