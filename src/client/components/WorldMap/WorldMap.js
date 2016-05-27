@@ -115,7 +115,7 @@ class WorldMap extends Component {
           <div>
             <h4 class="ui inverted header">
               <span class="value total-records-count">${d.count}</span> records of
-              <span class="value total-species-count">${d.speciesCount}</span> unique species.
+              <span class="value total-species-count">${d.speciesCount}</span> species.
               <div class="sub header">Cell size: ${d.size}˚. ${clusterInfo}</div>
             </h4>
             </p>

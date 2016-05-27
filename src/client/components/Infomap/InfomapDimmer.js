@@ -144,7 +144,7 @@ class InfomapDimmer extends Component {
 
           <div className="ui left aligned yellow segment">
             <h4 className="ui header">Input</h4>
-            A bipartite network of <span className="ui basic yellow label">{species.length}</span> unique species mapped to <span className="ui basic yellow label">{bins.length}</span> grid cells.
+            A bipartite network of <span className="ui basic yellow label">{species.length}</span> species mapped to <span className="ui basic yellow label">{bins.length}</span> grid cells.
           </div>
 
           <div className="ui left aligned orange segment">
