@@ -258,7 +258,7 @@ class Statistics extends Component {
             {`Bioregion ${clusterId + 1}`}
           </div>
           <div className="description">
-            <strong>{numRecords}</strong> records of <strong>{numSpecies}</strong> unique species in <strong>{numBins}</strong> cells
+            <strong>{numRecords}</strong> records of <strong>{numSpecies}</strong> species in <strong>{numBins}</strong> cells
           </div>
           <table className="ui very basic compact celled table">
             <thead>
