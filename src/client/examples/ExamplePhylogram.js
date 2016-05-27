@@ -43,7 +43,7 @@ class ExamplePhylogram extends React.Component {
 
   componentDidMount() {
     parseTree(this.state.treeString)
-      .then(tree => geoTreeUtils.aggregateClusters(tree, this.state.clustersPerSpecies, 0.1))
+      .then(tree => geoTreeUtils.reconstructAncestralAreas(tree, this.state.clustersPerSpecies, 0.1))
       .then(phyloTree => this.setState({ phyloTree }));
   }
 
