@@ -6,6 +6,7 @@ import _ from 'lodash';
 import Div from '../helpers/Div';
 import io from '../../utils/io';
 import * as statistics from '../../utils/statistics';
+import { getPajekNetwork } from '../../utils/clustering';
 import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
 
 class Export extends Component {
@@ -17,6 +18,7 @@ class Export extends Component {
     clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
     basename: PropTypes.string.isRequired,
+    network: PropTypes.string,
   }
 
   state = {
@@ -56,7 +58,7 @@ DownloadButton.propTypes = {
   onClick: PropTypes.func.isRequired,
   label: PropTypes.string.isRequired,
   type: PropTypes.string.isRequired,
-}
+};
 
 class ExportWindow extends Component {
   static propTypes = {
@@ -78,6 +80,12 @@ class ExportWindow extends Component {
           filename: `${props.basename}_map.png`,
           group: 'map',
           icon: 'file image outline icon',
+          url: null,
+        },
+        network: {
+          filename: `${props.basename}_network.net`,
+          group: 'network',
+          icon: 'file text outline icon',
           url: null,
         },
         geojson: {
@@ -141,14 +149,21 @@ class ExportWindow extends Component {
         this.setState({ error });
       });
 
-    Promise.all([this.getGeoJSONUrl(), this.getShapefileUrl(), this.getClustersCSVUrl()])
-      .then(([geojsonUrl, shapefileUrl, csvUrl]) => {
+    Promise.all([
+      this.getGeoJSONUrl(),
+      this.getShapefileUrl(),
+      this.getClustersCSVUrl(),
+      this.getNetworkUrl(),
+    ])
+      .then(([geojsonUrl, shapefileUrl, csvUrl, networkUrl]) => {
         files.geojson.url = geojsonUrl;
         files.geojson.isLoading = false;
         files.shapefile.url = shapefileUrl;
         files.shapefile.isLoading = false;
         files.tables.url = csvUrl;
         files.tables.isLoading = false;
+        files.network.url = networkUrl;
+        files.network.isLoading = false;
         this.setState({ files });
       })
       .catch(error => {
@@ -235,6 +250,11 @@ class ExportWindow extends Component {
       return Promise.resolve(null);
     return this.getClustersCSV()
       .then(_.partial(io.dataToBlobURL, 'text/csv'));
+  }
+  
+  getNetworkUrl() {
+    return this.getPajekNetwork()
+      .then(_.partial(io.dataToBlobURL, 'text/plain'));
   }
   
   getPresenceAbsenceUrl() {
@@ -335,6 +355,13 @@ class ExportWindow extends Component {
 
       const csvData = d3.csv.format(rows);
       resolve(csvData);
+    });
+  }
+
+  getPajekNetwork() {
+    return new Promise(resolve => {
+      const network = this.props.network || '';
+      resolve(network);
     });
   }
   

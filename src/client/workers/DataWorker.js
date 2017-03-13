@@ -12,7 +12,13 @@ import io from '../utils/io';
 import shp from 'shpjs';
 import * as S from '../utils/statistics';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
-import {calculateInfomapClusters, getClusterStatistics, getBipartiteNetwork, mergeClustersToBins} from '../utils/clustering';
+import {
+  calculateInfomapClusters,
+  getClusterStatistics,
+  getBipartiteNetwork,
+  mergeClustersToBins,
+  getPajekNetwork,
+} from '../utils/clustering';
 import turfPolygon from 'turf-polygon';
 import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
@@ -160,13 +166,12 @@ function parseGeoJSON(nameField) {
   binData();
 
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
-
+  dispatchAddSpeciesAndBins();
 }
 
 function shapeToPoints() {
   state.features = [];
-  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2);
+  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2); 
   const halfMinNodeSize = minNodeSize / 2;
   const resolution = minNodeSize * 0.1;
   const totCount = state.shapeFeatures.length;
@@ -371,13 +376,13 @@ function parseDSV(fieldsToColumns) {
   binData();
 
   dispatch(setFileProgress("Transferring result...", INDETERMINATE));
-  dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
+  dispatchAddSpeciesAndBins();
 }
 
 function groupByName() {
   state.species = S.sortedCountBy(feature => feature.properties.name, state.features);
   // state.speciesCountMap = d3.map(state.species, d => d.name);
-  state.speciesCountMap = new Map(state.species.map(({name, count}) => [name, count]));
+  state.speciesCountMap = new Map(state.species.map(({name, count}) =>  [name, count]));
 }
 
 function getSummaryBins() {
@@ -398,7 +403,7 @@ function getSummaryBins() {
        speciesCount: countedSpecies.length,
        topCommonSpecies,
        topIndicatorSpecies,
-       clusterId: -1
+       clusterId: -1,
      };
    });
 }
@@ -415,8 +420,14 @@ function binData(dispatchResult = false) {
   state.bins = binner.bins(state.features);
 
   if (dispatchResult) {
-    dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
+    dispatchAddSpeciesAndBins();
   }
+}
+
+function dispatchAddSpeciesAndBins() {
+    // dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
+    dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins), 
+      getPajekNetwork(state.species, state.features, state.bins)));
 }
 
 function calculateClusterStatistics(clusterIds) {
@@ -448,6 +459,15 @@ function getClusters(infomapArgs) {
   }
 }
 
+function getPajek() {
+  const networkData = getPajekNetwork(state.species, state.features, state.bins);
+
+  dispatch({
+    type: 'GET_PAJEK_SUCCESSFUL',
+    payload: networkData,
+  });
+}
+
 onmessage = function(event) {
   const {type} = event.data;
   console.log("[DataWorker]: got message of type:", type);
@@ -471,6 +491,9 @@ onmessage = function(event) {
       break;
     case ADD_CLUSTERS:
       calculateClusterStatistics(event.data.clusterIds);
+      break;
+    case 'GET_PAJEK':
+      getPajek();
       break;
     case BINNING_MIN_NODE_SIZE:
       let oldMinNodeSizeLog2 = event.data.minNodeSizeLog2;

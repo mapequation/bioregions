@@ -73,6 +73,7 @@ const getInitialState = () => {
     binning: getInitialBinningState(),
     binningLoading: false,
     bins: [], // bins = binner.bins(features)
+    network: null, // Pajek string
     clusterIds: [], // array<int> of cluster id:s, matching bins array in index
     isClustering: false,
     clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
@@ -161,6 +162,8 @@ export default function data(state = getInitialState(), action) {
         speciesCount,
         bins: action.bins,
         binningLoading: false,
+        // Save network
+        network: action.network,
         // Keep some state
         binning: state.binning,
         // Reset possibly stored clusters on the tree

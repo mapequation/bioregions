@@ -139,6 +139,8 @@ export function getBipartiteNetwork(species, features, bins) {
       ++speciesCounter;
       speciesNameToIndex.set(name, speciesCounter);
   });
+  // console.log('==================\nSpecies name to index:');
+  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
 
   // Create network with links from species to bins
   var network = [];
@@ -151,6 +153,48 @@ export function getBipartiteNetwork(species, features, bins) {
     })
   });
   console.log("First 10 links:", network.slice(0,10));
+  // console.log('========== WHOLE NETWORK =========');
+  // console.log(network);
+  return network.join('\n');
+}
+
+export function getPajekNetwork(species, features, bins) {
+  console.log(`Generate bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")...`);
+  const network = [];
+  network.push(`# Bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")`);
+  network.push(`*Vertices ${species.length + bins.length}`);
+  // Map names to index
+  const speciesNameToIndex = new Map();
+  let speciesCounter = 0;
+  species.forEach(({name}) => {
+      ++speciesCounter;
+      speciesNameToIndex.set(name, speciesCounter);
+      network.push(`${speciesCounter} "${name}"`);
+  });
+  console.log('First 10 species nodes:', network.slice(0, 12));
+  // console.log('==================\nSpecies name to index:');
+  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
+
+  let binCounter = 0;
+  let numEdges = 0;
+  bins.forEach((bin) => {
+    ++binCounter;
+    numEdges += bin.features.length;
+    network.push(`${binCounter + speciesCounter} "${bin.size()} ${bin.x1} ${bin.y1}"`);
+  });
+  console.log('Last 10 grid cell nodes:', network.slice(-10));
+  // Add links from species to bins
+  network.push(`*Edges ${numEdges}`);
+  binCounter = 0;
+  bins.forEach((bin) => {
+    ++binCounter;
+    bin.features.forEach((feature) => {
+      network.push(`${speciesNameToIndex.get(feature.properties.name)} ${binCounter}`);
+    });
+  });
+  console.log(`Last 10 of ${numEdges} links:`, network.slice(-10));
+  // console.log('========== WHOLE NETWORK =========');
+  // console.log(network);
   return network.join('\n');
 }
 
