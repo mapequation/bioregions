@@ -292,8 +292,6 @@ export default class QuadtreeGeoBinner {
 
   /**
   * Get all bins less than maxNodeSizeLog2
-  * If the bin have partially filled children (1-3 children non-empty)
-  * the features array of that bin is an aggregation of the features below
   * @param features The features to bin, else assume added by addFeatures
   * @return an Array of quadtree nodes
   */
@@ -302,8 +300,7 @@ export default class QuadtreeGeoBinner {
       this.clear();
       this.addFeatures(features);
     }
-    // this._root.patchPartiallyEmptyNodes(this._maxNodeSizeLog2);
-    this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
+    // this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
     var nodes = [];
     this.visitNonEmpty((node) => {
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
