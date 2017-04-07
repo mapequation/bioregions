@@ -1,13 +1,14 @@
 import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
-  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD,
+  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
 CANCEL_FILE_ACTIONS, REMOVE_SPECIES} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
   addSpeciesAndBins, addPhyloTree} from '../actions/FileLoaderActions';
 import {addClustersAndStatistics, calculateClusters} from '../actions/ClusterActions';
+import {setError} from '../actions/ErrorActions';
 import io from '../utils/io';
 import shp from 'shpjs';
 import * as S from '../utils/statistics';
@@ -45,8 +46,9 @@ const getInitialState = () => {
       maxNodeSizeLog2: 2,
       nodeCapacity: 100,
       lowerThreshold: 10,
-    }
-  }
+      patchSparseNodes: true,
+    },
+  };
 };
 
 var state = getInitialState();
@@ -56,6 +58,10 @@ function dispatch(action) {
 }
 
 // progress signature: (activity, mode, amount, total)
+
+function dispatchError(message) {
+  dispatch(setError(message));
+}
 
 function loadShapefiles(files) {
   console.log("Load shapefiles...");
@@ -417,7 +423,7 @@ function binData(dispatchResult = false) {
    .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
    .nodeCapacity(state.binning.nodeCapacity)
    .lowerThreshold(state.binning.lowerThreshold);
-  state.bins = binner.bins(state.features);
+  state.bins = binner.bins(state.features, state.binning.patchSparseNodes);
 
   if (dispatchResult) {
     dispatchAddSpeciesAndBins();
@@ -471,57 +477,66 @@ function getPajek() {
 onmessage = function(event) {
   const {type} = event.data;
   console.log("[DataWorker]: got message of type:", type);
-  switch (type) {
-    case LOAD_FILES:
-      console.log("Reset data worker state");
-      state = getInitialState();
-      loadFiles(event.data.files);
-      break;
-    case LOAD_TREE:
-      loadNexus(event.data.file);
-      break;
-    case SET_FIELDS_TO_COLUMNS_MAPPING:
-      parseDSV(event.data.fieldsToColumns);
-      break;
-    case SET_FEATURE_NAME_FIELD:
-      parseGeoJSON(event.data.featureNameField);
-      break;
-    case GET_CLUSTERS:
-      getClusters(event.data.infomapArgs);
-      break;
-    case ADD_CLUSTERS:
-      calculateClusterStatistics(event.data.clusterIds);
-      break;
-    case 'GET_PAJEK':
-      getPajek();
-      break;
-    case BINNING_MIN_NODE_SIZE:
-      let oldMinNodeSizeLog2 = event.data.minNodeSizeLog2;
-      state.binning.minNodeSizeLog2 = event.data.minNodeSizeLog2;
-      if (state.binning.minNodeSizeLog2 < oldMinNodeSizeLog2) {
-        shapeToPoints();
-      }
-      binData(true);
-      break;
-    case BINNING_MAX_NODE_SIZE:
-      state.binning.maxNodeSizeLog2 = event.data.maxNodeSizeLog2;
-      binData(true);
-      break;
-    case BINNING_NODE_CAPACITY:
-      state.binning.nodeCapacity = event.data.nodeCapacity;
-      binData(true);
-      break;
-    case BINNING_LOWER_THRESHOLD:
-      state.binning.lowerThreshold = event.data.lowerThreshold;
-      binData(true);
-      break;
-    case REMOVE_SPECIES:
-      state = getInitialState();
-      break;
-    case CANCEL_FILE_ACTIONS:
-      state = getInitialState();
-      break;
-    default:
-      console.log("[DataWorker]: Unrecognised message type:", type);
+  try {
+    switch (type) {
+      case LOAD_FILES:
+        console.log("Reset data worker state");
+        state = getInitialState();
+        loadFiles(event.data.files);
+        break;
+      case LOAD_TREE:
+        loadNexus(event.data.file);
+        break;
+      case SET_FIELDS_TO_COLUMNS_MAPPING:
+        parseDSV(event.data.fieldsToColumns);
+        break;
+      case SET_FEATURE_NAME_FIELD:
+        parseGeoJSON(event.data.featureNameField);
+        break;
+      case GET_CLUSTERS:
+        getClusters(event.data.infomapArgs);
+        break;
+      case ADD_CLUSTERS:
+        calculateClusterStatistics(event.data.clusterIds);
+        break;
+      case 'GET_PAJEK':
+        getPajek();
+        break;
+      case BINNING_MIN_NODE_SIZE:
+        let oldMinNodeSizeLog2 = event.data.minNodeSizeLog2;
+        state.binning.minNodeSizeLog2 = event.data.minNodeSizeLog2;
+        if (state.binning.minNodeSizeLog2 < oldMinNodeSizeLog2) {
+          shapeToPoints();
+        }
+        binData(true);
+        break;
+      case BINNING_MAX_NODE_SIZE:
+        state.binning.maxNodeSizeLog2 = event.data.maxNodeSizeLog2;
+        binData(true);
+        break;
+      case BINNING_NODE_CAPACITY:
+        state.binning.nodeCapacity = event.data.nodeCapacity;
+        binData(true);
+        break;
+      case BINNING_LOWER_THRESHOLD:
+        state.binning.lowerThreshold = event.data.lowerThreshold;
+        binData(true);
+        break;
+      case BINNING_PATCH_SPARSE_NODES:
+        state.binning.patchSparseNodes = event.data.patchSparseNodes;
+        binData(true);
+        break;
+      case REMOVE_SPECIES:
+        state = getInitialState();
+        break;
+      case CANCEL_FILE_ACTIONS:
+        state = getInitialState();
+        break;
+      default:
+        console.log("[DataWorker]: Unrecognised message type:", type);
+    }
+  } catch (err) {
+    console.log('[DataWorker]: Error:', err);
+    dispatchError(err.message);
   }
 };

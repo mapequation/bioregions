@@ -3,6 +3,7 @@ import classNames from 'classnames';
 import {BINNING_PROGRESS} from '../../constants/ActionTypes';
 import TangleInput from '../lib/TangleInput';
 import Tooltip from '../lib/Tooltip';
+import Checkbox from '../helpers/Checkbox';
 
 class Binning extends Component {
 
@@ -13,11 +14,13 @@ class Binning extends Component {
     maxNodeSizeLog2: PropTypes.number,
     nodeCapacity: PropTypes.number,
     lowerThreshold: PropTypes.number,
+    patchSparseNodes: PropTypes.bool,
     changeBinnerType: PropTypes.func.isRequired,
     changeMinBinSize: PropTypes.func.isRequired,
     changeMaxBinSize: PropTypes.func.isRequired,
     changeNodeCapacity: PropTypes.func.isRequired,
     changeLowerThreshold: PropTypes.func.isRequired,
+    changePatchSparseNodes: PropTypes.func.isRequired,
     binningLoading: PropTypes.bool.isRequired,
     progressEmitter: PropTypes.object.isRequired,
   }
@@ -112,6 +115,10 @@ class Binning extends Component {
                         <td><strong>Min cell capacity</strong></td>
                         <td>The minimum number of records in a grid cell to include it in the map and analysis. If less, the records will be included in a parent grid cell if available, else ignored.</td>
                       </tr>
+                      <tr>
+                        <td><strong>Patch sparse grid cells</strong></td>
+                        <td>Keep parent cell behind sub-cells if some but not all four sub-cells get the minimum number of records to be included.</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -176,6 +183,13 @@ class Binning extends Component {
                   logStep={1}
                   speed={0.2}
                   onChange={(value) => this.props.changeLowerThreshold(value)} />
+              </td>
+            </tr>
+
+            <tr>
+              <td>Patch sparse grid cells</td>
+              <td className="">
+                <Checkbox label="" checked={this.props.patchSparseNodes} onChange={this.props.changePatchSparseNodes}/>
               </td>
             </tr>
           </tbody>

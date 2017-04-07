@@ -19,6 +19,7 @@ const getInitialBinningState = () => {
     lowerThreshold: 10,
     renderer: QuadtreeGeoBinner.renderer,
     binningLoading: false,
+    patchSparseNodes: true,
   };
 };
 
@@ -27,28 +28,33 @@ function binning(state = getInitialBinningState(), action) {
     case ActionTypes.BINNING_CHANGE_TYPE:
       return {
         ...state,
-        binnerType: action.binnerType
-      }
+        binnerType: action.binnerType,
+      };
     case ActionTypes.BINNING_MIN_NODE_SIZE:
       return {
         ...state,
-        minNodeSizeLog2: action.minNodeSizeLog2
-      }
+        minNodeSizeLog2: action.minNodeSizeLog2,
+      };
     case ActionTypes.BINNING_MAX_NODE_SIZE:
       return {
         ...state,
-        maxNodeSizeLog2: action.maxNodeSizeLog2
-      }
+        maxNodeSizeLog2: action.maxNodeSizeLog2,
+      };
     case ActionTypes.BINNING_NODE_CAPACITY:
       return {
         ...state,
-        nodeCapacity: action.nodeCapacity
-      }
+        nodeCapacity: action.nodeCapacity,
+      };
     case ActionTypes.BINNING_LOWER_THRESHOLD:
       return {
         ...state,
-        lowerThreshold: action.lowerThreshold
-      }
+        lowerThreshold: action.lowerThreshold,
+      };
+    case ActionTypes.BINNING_PATCH_SPARSE_NODES:
+      return {
+        ...state,
+        patchSparseNodes: action.patchSparseNodes,
+      };
     default:
       return state;
   }
@@ -211,7 +217,8 @@ export default function data(state = getInitialState(), action) {
     case ActionTypes.BINNING_MAX_NODE_SIZE:
     case ActionTypes.BINNING_NODE_CAPACITY:
     case ActionTypes.BINNING_LOWER_THRESHOLD:
-      let nextBinning = binning(state.binning, action)
+    case ActionTypes.BINNING_PATCH_SPARSE_NODES:
+      let nextBinning = binning(state.binning, action);
       dataWorker.postMessage(action);
       return {
         ...state,

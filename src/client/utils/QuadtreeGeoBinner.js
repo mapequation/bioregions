@@ -293,8 +293,9 @@ export default class QuadtreeGeoBinner {
   /**
   * Get all bins less than maxNodeSizeLog2
   * @param features The features to bin, else assume added by addFeatures
-  * @param patchSparseNodes {Boolean} If the bin have partially filled children (1-3 children non-empty)
-  * the features array of that bin is an aggregation of the features below. Default false.
+  * @param patchSparseNodes {Boolean} Keep parent cell behind sub-cells if
+  * some but not all four sub-cells get the minimum number of records to be
+  * included. Default false.
   * @return an Array of quadtree nodes
   */
   bins(features = null, patchSparseNodes = false) {

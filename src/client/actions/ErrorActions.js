@@ -1,13 +1,18 @@
-import {ERROR_MESSAGE} from '../constants/ActionTypes';
+import { ERROR_MESSAGE, RESET_ERROR_MESSAGE } from '../constants/ActionTypes';
 
 /**
 * Create error action
-* @param error {Error|string}
+* @param message {String}
 */
-export function setError(error, subMessage = "") {
+export function setError(message) {
   return {
     type: ERROR_MESSAGE,
-    message: error.toString(),
-    subMessage
-  }
+    message,
+  };
+}
+
+export function resetError() {
+  return {
+    type: RESET_ERROR_MESSAGE,
+  };
 }

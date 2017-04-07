@@ -3,7 +3,7 @@ import React, { PropTypes } from 'react';
 export default function Div({children, className, ...style}) {
   return (
     <div className={className} style={style}>{children}</div>
-  )
+  );
 }
 
 Div.propTypes = {
@@ -20,4 +20,4 @@ Div.propTypes = {
   marginBottom: PropTypes.string,
   marginLeft: PropTypes.string,
   marginRight: PropTypes.string,
-}
+};

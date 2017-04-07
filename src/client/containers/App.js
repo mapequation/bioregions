@@ -1,6 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
+import cn from 'classnames';
 import ControlPanel from '../components/ControlPanel/ControlPanel';
 import WorldMap from '../components/WorldMap/WorldMap';
 import WorldMapDimmer from '../components/WorldMap/WorldMapDimmer';
@@ -87,6 +88,14 @@ class App extends Component {
     return (
       <div className="app">
         <div className="ui container">
+          <div className={cn("ui negative message transition", { hidden: !errorMessage })}>
+            <i className="close icon" onClick={actions.resetError}></i>
+            <div className="header">
+              Internal error:
+            </div>
+            <p>{errorMessage}</p>
+            <p>Please contact us with the message above.</p>
+          </div>
           <div className="ui two column stackable grid">
             <div className="four wide column">
               <ControlPanel {...{files, data, worldmap, actions}} />

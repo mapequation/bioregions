@@ -3,19 +3,21 @@ import files from './files';
 import data from './data';
 import worldmap from './worldmap';
 import phylogram from './phylogram';
-import RESET_ERROR_MESSAGE from '../constants/ActionTypes'
+import { ERROR_MESSAGE, RESET_ERROR_MESSAGE } from '../constants/ActionTypes';
 
 
 // Updates error message to notify about the failed fetches.
 function errorMessage(state = null, action) {
-  const { type, error } = action;
+  const { type, message } = action;
 
+  if (type === ERROR_MESSAGE) {
+    console.log("Got error:", message);
+    // window.alert(`Internal error:\n  ${message}\n\nPlease contact us with the message above.`);
+    return message;
+  }
   if (type === RESET_ERROR_MESSAGE) {
     console.log("Reset errors");
     return null;
-  } else if (error) {
-    console.log("Got error:", error);
-    return error;
   }
 
   return state;
