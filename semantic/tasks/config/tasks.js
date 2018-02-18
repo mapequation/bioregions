@@ -69,6 +69,10 @@ module.exports = {
       silent : true
     },
 
+    concatCSS: {
+      rebaseUrls: false
+    },
+
     /* Comment Banners */
     header: {
       title      : release.title,
@@ -134,26 +138,32 @@ module.exports = {
     minify: {
       processImport       : false,
       restructuring       : false,
-      keepSpecialComments : 1
+      keepSpecialComments : 1,
+      roundingPrecision   : -1,
     },
 
     /* Minified JS Settings */
     uglify: {
-      mangle           : true,
-      preserveComments : 'some'
+      mangle   : true,
+      output: {
+        comments: 'some'
+      }
     },
 
     /* Minified Concat CSS Settings */
     concatMinify: {
       processImport       : false,
       restructuring       : false,
-      keepSpecialComments : false
+      keepSpecialComments : false,
+      roundingPrecision   : -1,
     },
 
     /* Minified Concat JS */
     concatUglify: {
-      mangle           : true,
-      preserveComments : false
+      mangle   : true,
+      output: {
+        comments: 'some'
+      }
     }
 
   }
