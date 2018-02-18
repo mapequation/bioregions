@@ -1,6 +1,6 @@
 import $ from 'jquery'
 import d3 from 'd3'
-import topojson from 'topojson'
+import * as topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
 import chroma from 'chroma-js';
 import {DATA_SUCCEEDED} from '../../constants/DataFetching'
