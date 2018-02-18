@@ -1,6 +1,6 @@
 import $ from 'jquery'
 import d3 from 'd3'
-import topojson from 'topojson'
+import * as topojson from 'topojson'
 import colorbrewer from 'colorbrewer'
 import chroma from 'chroma-js';
 import {DATA_SUCCEEDED} from '../../constants/DataFetching'
@@ -54,7 +54,7 @@ world.create = function(el, props) {
 }
 
 world.update = function(el, props) {
-  console.log("!!!! world.update()");
+  console.log("!!!! world.update()", props);
   props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element

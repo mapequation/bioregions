@@ -48,6 +48,7 @@ const getInitialState = () => {
       lowerThreshold: 10,
       patchSparseNodes: true,
     },
+    simplifyGeometry: true, // Simplify during load to reduce memory usage
   };
 };
 
@@ -68,42 +69,226 @@ function loadShapefiles(files) {
   dispatch(setFileProgress("Load shapefiles...", INDETERMINATE));
   const numFiles = files.length;
   // Keep buffers here
-  let shapefiles = new Map();
+  const shapefiles = new Map();
 
   for (let i = 0; i < numFiles; ++i) {
-    let file = files[i];
+    const file = files[i];
     // Only keep .shp, .prj and .dbf files
-    if (/shp$|prj$|dbf$/.test(file.name))
+    if (/shp$|prj$|dbf$/.test(file.name)) {
       shapefiles.set(file.name.slice(-3), file);
+    }
   }
-  if (!shapefiles.has('dbf'))
-    return dispatch(setFileError(`Can't use a .shp file without a .dbf file.`));
+  if (!shapefiles.has('dbf')) {
+    dispatch(setFileError(`Can't use a .shp file without a .dbf file.`));
+    return;
+  }
 
-  let filePromises = [];
+  const filePromises = [];
   shapefiles.forEach(file => {
     console.log(`Add promise for file ${file.name}...`);
     filePromises.push(io.readFile(file, /prj$/.test(file.name) ? 'text' : 'buffer'));
   });
+  
+  let numTooSimplifiedPolygons = 0;
+
+  function parseGeometry(geometry, i) {
+    // console.log(`Parsing geometry ${i}...`);
+    if (i % 1000 === 0) {
+      console.log(`Parsing geometry ${i}...`);
+    }
+    return geometry;
+  }
+
+  function parseSimplifiedGeometry(geometry, i) {
+    // console.log(`Parsing geometry ${i}...`);
+    if (i % 1000 === 0) {
+      console.log(`Parsing geometry ${i}...`);
+    }
+
+    // const tolerance = 0.5 / 8;
+    const tolerance = Math.pow(2, state.binning.minNodeSizeLog2 - 4);
+
+    // if (geometry.type === 'Polygon') {
+    //   return {
+    //     type: 'Point',
+    //     coordinates: geometry.coordinates[0][0],
+    //   };
+    // }
+    // if (geometry.type === 'MultiPolygon') {
+    //   return {
+    //     type: 'Point',
+    //     coordinates: geometry.coordinates[0][0][0],
+    //   };
+    // }
+    // return {
+    //   type: 'Point',
+    //   coordinates: [0, 0],
+    // };
+
+    if (geometry.type === 'Polygon') {
+      if (geometry.coordinates[0].length < 4) {
+        return {
+          type: 'Point',
+          coordinates: geom.coordinates[0][0],
+        };
+      }
+      const simplified = turfSimplify({ type: 'Feature', geometry }, tolerance);
+      if (simplified) {
+        simplified.geometry.coordinates = [simplified.geometry.coordinates[0]];
+        if (simplified.geometry.coordinates[0].length < 4) {
+          ++numTooSimplifiedPolygons;
+          return geometry;
+        }
+        return simplified.geometry;
+      }
+      return geometry;
+    }
+    if (geometry.type === 'MultiPolygon') {
+      const simplifiedCoordinates = [];
+      geometry.coordinates.forEach(polygonCoords => {
+        // simplify each set of polygonCoords in the MultiPolygon
+        const simplifiedPolygon = turfSimplify({ type: 'Feature', geometry: {
+          type: 'Polygon',
+          coordinates: polygonCoords,
+        }}, tolerance);
+        if (simplifiedPolygon) {
+          simplifiedPolygon.geometry.coordinates = [simplifiedPolygon.geometry.coordinates[0]];
+          if (simplifiedPolygon.geometry.coordinates[0].length < 4) {
+            ++numTooSimplifiedPolygons;
+            if (polygonCoords[0].length < 4) {
+              console.log('!!!! Original multi->polygon < 4 points!', polygonCoords);
+            } else {
+              simplifiedCoordinates.push(polygonCoords);
+            }
+          } else {
+            // console.log('simplified multi->poly coords:', simplifiedPolygon.geometry.coordinates);
+            simplifiedCoordinates.push(simplifiedPolygon.geometry.coordinates);
+          }
+        } else {
+          if (polygonCoords[0].length < 4) {
+            console.log('!!!! Original multi->polygon not simplified!', polygonCoords);
+          } else {
+            simplifiedCoordinates.push(polygonCoords);
+          }
+        }
+      });
+      if (simplifiedCoordinates.length === 0) {
+        console.log('!! Empty multipolygon!!!');
+        return {
+          type: 'Point',
+          coordinates: geometry.coordinates[0][0][0],
+        };
+      }
+      return {
+        type: 'MultiPolygon',
+        coordinates: simplifiedCoordinates,
+      };
+    }
+    console.log('Unhandled geometry:', geometry);
+    return geometry;
+  }
+
+  const simplifyGeometry = state.simplifyGeometry;
 
   Promise.all(filePromises)
     .then(result => {
+      console.log('Loaded shapefile buffer, parse shapes...');
       result.forEach(file => { shapefiles.set(file.name.slice(-3), file.data); });
-      let shpBuffer = shapefiles.get('shp');
-      let prjString = shapefiles.get('prj');
-      let dbfBuffer = shapefiles.get('dbf');
+      const shpBuffer = shapefiles.get('shp');
+      const prjString = shapefiles.get('prj');
+      const dbfBuffer = shapefiles.get('dbf');
       dispatch(setFileProgress("Parsing shapes...", INDETERMINATE));
-      let parsedShape = shp.parseShp(shpBuffer, prjString);
+      console.log('Parsing shapes with simplification...');
+      const parseGeometryCallback = simplifyGeometry ? parseSimplifiedGeometry : parseGeometry;
+      const parsedShape = shp.parseShp(shpBuffer, prjString, parseGeometryCallback);
       dispatch(setFileProgress("Parsing attributes...", INDETERMINATE));
-      let parsedDbf = shp.parseDbf(dbfBuffer);
+      const parsedDbf = shp.parseDbf(dbfBuffer);
       dispatch(setFileProgress("Combining to GeoJSON...", INDETERMINATE));
       state.geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded state.geoJSON:", state.geoJSON);
       const {properties} = state.geoJSON.features[0];
+      console.log(`Number of too simplified polygons: ${numTooSimplifiedPolygons}`);
       dispatch(requestGeoJSONNameField(properties));
     })
     .catch(err => {
       return dispatch(setFileError(`Error loading shapefiles: ${err}`));
     });
+ 
+  // Promise.all(filePromises)
+  //   .then(filesData => {
+  //     console.log('Loaded shapefile buffer, parse shapes...');
+  //     filesData.forEach(file => { shapefiles.set(file.name.slice(-3), file.data); });
+  //     let shpBuffer = shapefiles.get('shp');
+  //     let prjString = shapefiles.get('prj');
+  //     let dbfBuffer = shapefiles.get('dbf');
+  //     dispatch(setFileProgress("Parsing shapes...", INDETERMINATE));
+
+  //     console.log('Streaming shapefile...');
+  //     shapefile.open(shpBuffer, dbfBuffer).then(function(source) {
+  //       const features = [];
+  //       let numFeatures = 0;
+  //       let numPolygons = 0;
+  //       let numMultiPolygons = 0;
+  //       let numPolygonsFromMultiPolygons = 0;
+  //       const collection = {type: "FeatureCollection", features: features, bbox: source.bbox};
+  //       console.log('Streaming shapefile to collection:', collection);
+  //       return source.read().then(function read(result) {
+  //         if (result.done) return collection;
+  //         ++numFeatures;
+  //         const feature = result.value;
+  //         const { type } = feature.geometry;
+          
+  //         if (type === "Polygon") {
+  //           ++numPolygons;
+  //           const simplifiedFeature = turfSimplify(feature, 0.5 / 8);
+  //           if (simplifiedFeature) {
+  //             features.push(simplifiedFeature);
+  //           } else {
+  //             console.log(`Couldn't simplify feature ${numFeatures}:`, feature);
+  //             features.push(feature);
+  //           }
+  //         }
+  //         else if (type === "MultiPolygon") {
+  //           ++numMultiPolygons;
+  //           feature.geometry.coordinates.forEach(polygonCoords => {
+  //             ++numPolygonsFromMultiPolygons;
+  //             const polygonFeature = turfPolygon(polygonCoords, feature.properties);
+  //             if (!polygonFeature.geometry.bbox) {
+  //               polygonFeature.geometry.bbox = turfExtent(feature);
+  //             }
+  //             const simplifiedFeature = turfSimplify(polygonFeature, 0.5 / 8);
+  //             if (simplifiedFeature) {
+  //               features.push(simplifiedFeature);
+  //             } else {
+  //               console.log(`Couldn't simplify polygon in feature ${numFeatures}:`, polygonFeature);
+  //               features.push(polygonFeature);
+  //             }
+  //           });
+  //         }
+  //         else {
+  //           console.log(`Adding non-polygon feature of type ${type}`)
+  //           features.push(feature);
+  //         }
+
+  //         if (numFeatures % 1000 === 0) {
+  //           console.log(`Parsed ${numFeatures} features, ${numPolygons} polygons, expanded ${numMultiPolygons} multipolygons into ${numPolygonsFromMultiPolygons}.`);
+  //         }
+  //         return source.read().then(read);
+  //       });
+  //     })
+  //     .then(collection => {
+  //       console.log('Parsed collection!', collection);
+  //       state.geoJSON = collection;
+  //       const { properties } = state.geoJSON.features[0];
+  //       dispatch(requestGeoJSONNameField(properties));
+  //     })
+  //     .catch(err => {
+  //       console.log('Error parsing shp:', err);
+  //     });
+  //   })
+  //   .catch(err => {
+  //     return dispatch(setFileError(`Error loading shapefiles: ${err}`));
+  //   });
 }
 
 
@@ -115,10 +300,11 @@ function parseGeoJSON(nameField) {
   let numMultiPolygonsExpanded = 0;
   let numBadFeatures = 0;
   const numOriginalFeatures = state.geoJSON.features.length;
-  let lastPercent = 0;
+  let lastPercent = -1;
+  console.log('parseGeoJSON:', state.geoJSON);
 
   state.geoJSON.features.forEach((feature, i) => {
-    let percent = Math.round((i+1) * 100 / numOriginalFeatures);
+    const percent = Math.round((i+1) * 100 / numOriginalFeatures);
     if (percent !== lastPercent) {
       dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i+1, {total: numOriginalFeatures}));
       lastPercent = percent;
@@ -131,6 +317,9 @@ function parseGeoJSON(nameField) {
     //   ++numBadFeatures;
     // }
     // else {
+    
+    // console.log(i, 'feature:', feature);
+    // console.log(' -> properties:', feature.properties);
 
     feature.properties.name = feature.properties[nameField];
     // Split MultiPolygon features to multiple Polygon features
@@ -153,6 +342,8 @@ function parseGeoJSON(nameField) {
     }
     else if (type === "Point") {
       ++numPoints;
+      if (!feature.geometry.bbox)
+        feature.geometry.bbox = turfExtent(feature);
       state.shapeFeatures.push(feature);
     }
     else {
