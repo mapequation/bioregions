@@ -54,7 +54,7 @@ world.create = function(el, props) {
 }
 
 world.update = function(el, props) {
-  console.log("!!!! world.update()");
+  console.log("!!!! world.update()", props);
   props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
