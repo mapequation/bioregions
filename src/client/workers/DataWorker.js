@@ -587,7 +587,7 @@ function getSummaryBins() {
    return state.bins.map((bin) => {
      const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
      const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
-     const topIndicatorSpecies = S.topIndicatorItems("name", state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, topCommonSpecies)
+     const topIndicatorSpecies = S.topIndicatorItems('name', state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, countedSpecies);
      return {
        x1: bin.x1,
        x2: bin.x2,

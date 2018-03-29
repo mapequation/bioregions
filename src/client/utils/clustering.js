@@ -95,7 +95,7 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
       // const topCommonSpecies = topSortedBy(feature => feature.properties.name, 10, features);
       const species = countBy(feature => feature.properties.name, features);
       const topCommonSpecies = topSortedBy(d => d.count, 10, species);
-      const topIndicatorSpecies = topIndicatorItems("name", speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, topCommonSpecies);
+      const topIndicatorSpecies = topIndicatorItems('name', speciesCountMap, maxGlobalCount, topCommonSpecies[0].count, 10, species);
       const numRecords = features.length;
       const numSpecies = species.length;
       return {

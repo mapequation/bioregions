@@ -36,24 +36,28 @@ export function topSortedCountBy(key, limit, items) {
 export function indicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLocalCount, localItems) {
   return localItems.map(item => {
     // tfidf-like score
-    let score = (item.count / maxLocalCount) / (keyToGlobalCountMap.get(item[key]) / maxGlobalCount);
-    return {[key]: item[key], score};
+    const score = (item.count / maxLocalCount) / (keyToGlobalCountMap.get(item[key]) / maxGlobalCount);
+    return { [key]: item[key], score, count: item.count };
   });
 }
 
 export function topIndicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLocalCount, limit, localItems) {
-  const heapselectByScore = crossfilter.heapselect.by(d => d.score);
+  // const heapselectByScore = crossfilter.heapselect.by(d => d.score);
 
-  let indicators = indicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLocalCount, localItems)
-  return heapselectByScore(indicators, 0, indicators.length, limit)
-    .sort((a, b) => b.score - a.score);
+  // const indicators = indicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLocalCount, localItems);
+  // return heapselectByScore(indicators, 0, indicators.length, limit)
+  //   .sort((a, b) => b.score - a.score);
+  const indicators = indicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLocalCount, localItems);
+  const sortedIndicators = _.sortBy(indicators, ['score', 'count']);
+  return sortedIndicators.slice(-10).reverse();
 }
 
 export function aggregateFromRight(takeWhile, makeRestItem, items) {
   const rest = _.takeRightWhile(items, takeWhile);
-  if (rest.length === 0)
+  if (rest.length === 0) {
     return items;
-  let mainItems = _.take(items, items.length - rest.length);
+  }
+  const mainItems = _.take(items, items.length - rest.length);
   mainItems.push(makeRestItem(rest));
   return mainItems;
 }
