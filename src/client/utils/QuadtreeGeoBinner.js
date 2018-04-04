@@ -80,65 +80,154 @@ class Node {
       child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
     }
     else {
-      // Polygon feature, check intersection with quadtree children, indexed as order below
-      // const topLeft = turfPolygon([[
-      //   [x1, ym],
-      //   [x1, y2],
-      //   [xm, y2],
-      //   [xm, ym],
-      //   [x1, ym]
-      // ]]);
-      // const topRight = turfPolygon([[
-      //   [xm, ym],
-      //   [xm, y2]
-      //   [x2, y2],
-      //   [x2, ym],
-      //   [xm, ym],
-      // ]]);
-      // const lowerLeft = turfPolygon([[
-      //   [x1, y1],
-      //   [x1, ym],
-      //   [xm, ym],
-      //   [xm, y1],
-      //   [x1, y1]
-      // ]]);
-      // const lowerRight = turfPolygon([[
-      //   [xm, y1],
-      //   [xm, ym]
-      //   [x2, ym],
-      //   [x2, y1],
-      //   [xm, y1],
-      // ]]);
-
-      // var [xLow, yLow, xHigh, yHigh] = turfExtent(feature);
-      //
-      // const topLeftIntersect = bboxIntersect(feature, [x1, ym, xm, y2]);
-      // const topRightIntersect = bboxIntersect(feature, [xm, ym, x2, y2]);
-      // const lowerLeftIntersect = bboxIntersect(feature, [x1, y1, xm, ym]);
-      // const lowerRightIntersect = bboxIntersect(feature, [xm, y1, x2, ym]);
-      // // const topLeftIntersect = turfIntersect(topLeft, feature);
-      // // const topRightIntersect = turfIntersect(topRight, feature);
-      // // const lowerLeftIntersect = turfIntersect(lowerLeft, feature);
-      // // const lowerRightIntersect = turfIntersect(lowerRight, feature);
-      // // console.log(topLeftIntersect, topRightIntersect, lowerLeftIntersect, lowerRightIntersect);
-      //
-      // if (topLeftIntersect) {
-      //   let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
-      // }
-      // if (topRightIntersect) {
-      //   let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
-      // }
-      // if (lowerLeftIntersect) {
-      //   let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
-      // }
-      // if (lowerRightIntersect) {
-      //   let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
-      //   child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
-      // }
+      console.log(`Warning: Binning geometry of type ${geom.type} not implemented`);
     }
+    // else if (geom.type === "Polygon") {
+    //   // console.log(">> Add POLYGON");
+    //   let addWithPointSampling = false; // TODO: Intersection test better for small node sizes?
+    //   if (addWithPointSampling) {
+    //     const minNodeSize = Math.pow(2, minNodeSizeLog2);
+    //     const halfMinNodeSize = minNodeSize / 2;
+    //     const subStep = minNodeSize / 10;
+    //     const bbox = getBBox(feature);
+    //     const bboxWidth = bbox[2] - bbox[0];
+    //     const bboxHeight = bbox[3] - bbox[1];
+    //     const [bboxSizeMin, bboxSizeMax] = bboxWidth < bboxHeight ? [bboxWidth, bboxHeight] : [bboxHeight, bboxWidth];
+    //     if (bboxSizeMax < minNodeSize) {
+    //       // If feature less than minimum cell size, add points at centre
+    //       const pointFeature = turfPoint([bbox[0] + bboxWidth/2, bbox[1] + bboxHeight/2], feature.properties);
+    //       this.addChild(pointFeature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //       // const long = bbox[0] + halfMinNodeSize;
+    //       // const lat = bbox[1] + halfMinNodeSize;
+    //       // for (let x = long - halfMinNodeSize; x < long + halfMinNodeSize; x += subStep) {
+    //       //   for (let y = lat - halfMinNodeSize; y < lat + halfMinNodeSize; y += subStep) {
+    //       //     const pointFeature = turfPoint([x, y], feature.properties);
+    //       //     this.addChild(pointFeature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //       //   }
+    //       // }
+    //     }
+    //     else {
+    //       for (let long = bbox[0] + halfMinNodeSize; long < bbox[2]; long += minNodeSize) {
+    //         for (let lat = bbox[1] + halfMinNodeSize; lat < bbox[3]; lat += minNodeSize) {
+    //           const pointFeature = turfPoint([long, lat], feature.properties);
+    //           if (turfInside(pointFeature, feature)) {
+    //             this.addChild(pointFeature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //             // for (let x = long - halfMinNodeSize; x < long + halfMinNodeSize; x += subStep) {
+    //             //   for (let y = lat - halfMinNodeSize; y < lat + halfMinNodeSize; y += subStep) {
+    //             //     const subPointFeature = turfPoint([x, y], feature.properties);
+    //             //     this.addChild(subPointFeature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //             //   }
+    //             // }
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+    //   else {
+    //     // Polygon feature, check intersection with quadtree children, indexed as order below
+    //     const featureCoordinates = feature.geometry.coordinates;
+    //     const topLeft = Polygon([[
+    //       [x1, ym],
+    //       [xm, ym],
+    //       [xm, y2],
+    //       [x1, y2],
+    //       [x1, ym],
+    //     ]]);
+    //     const topRight = Polygon([[
+    //       [xm, ym],
+    //       [x2, ym],
+    //       [x2, y2],
+    //       [xm, y2],
+    //       [xm, ym],
+    //     ]]);
+    //     const lowerLeft = Polygon([[
+    //       [x1, y1],
+    //       [xm, y1],
+    //       [xm, ym],
+    //       [x1, ym],
+    //       [x1, y1],
+    //     ]]);
+    //     const lowerRight = Polygon([[
+    //       [xm, y1],
+    //       [x2, y1],
+    //       [x2, ym],
+    //       [xm, ym],
+    //       [xm, y1],
+    //     ]]);
+    //     // const topLeft = Polygon([[
+    //     //   [x1, ym],
+    //     //   [x1, y2],
+    //     //   [xm, y2],
+    //     //   [xm, ym],
+    //     //   [x1, ym],
+    //     // ]]);
+    //     // const topRight = Polygon([[
+    //     //   [xm, ym],
+    //     //   [xm, y2],
+    //     //   [x2, y2],
+    //     //   [x2, ym],
+    //     //   [xm, ym],
+    //     // ]]);
+    //     // const lowerLeft = Polygon([[
+    //     //   [x1, y1],
+    //     //   [x1, ym],
+    //     //   [xm, ym],
+    //     //   [xm, y1],
+    //     //   [x1, y1],
+    //     // ]]);
+    //     // const lowerRight = Polygon([[
+    //     //   [xm, y1],
+    //     //   [xm, ym],
+    //     //   [x2, ym],
+    //     //   [x2, y1],
+    //     //   [xm, y1],
+    //     // ]]);
+
+    //     // const [xLow, yLow, xHigh, yHigh] = turfExtent(feature);
+    //     // const envelope = turfEnvelope(feature);
+    //     // const bboxPoly = envelope.geometry.coordinates[0];
+
+    //     // const topLeftIntersection = turfIntersect(topLeft, feature);
+    //     // const topRightIntersection = turfIntersect(topRight, feature);
+    //     // const lowerLeftIntersection = turfIntersect(lowerLeft, feature);
+    //     // const lowerRightIntersection = turfIntersect(lowerRight, feature);
+    //     const topLeftIntersection = intersection(feature, topLeft);
+    //     const topRightIntersection = intersection(feature, topRight);
+    //     const lowerLeftIntersection = intersection(feature, lowerLeft);
+    //     const lowerRightIntersection = intersection(feature, lowerRight);
+    //     // const topLeftIntersection = intersection(feature, topLeft, this.size()/8);
+    //     // const topRightIntersection = intersection(feature, topRight, this.size()/8);
+    //     // const lowerLeftIntersection = intersection(feature, lowerLeft, this.size()/8);
+    //     // const lowerRightIntersection = intersection(feature, lowerRight, this.size()/8);
+    //     // if (topLeftIntersection || topRightIntersection || lowerLeftIntersection || lowerRightIntersection) {
+    //     //   console.log("INTERSECTION:", topLeftIntersection, topRightIntersection, lowerLeftIntersection, lowerRightIntersection);
+    //     // }
+
+
+    //     if (topLeftIntersection) {
+    //       let child = this.children[0] || (this.children[0] = new Node(x1, ym, xm, y2));
+    //       child.add(topLeftIntersection, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //     }
+    //     if (topRightIntersection) {
+    //       let child = this.children[1] || (this.children[1] = new Node(xm, ym, x2, y2));
+    //       child.add(topRightIntersection, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //     }
+    //     if (lowerLeftIntersection) {
+    //       let child = this.children[2] || (this.children[2] = new Node(x1, y1, xm, ym));
+    //       child.add(lowerLeftIntersection, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //     }
+    //     if (lowerRightIntersection) {
+    //       let child = this.children[3] || (this.children[3] = new Node(xm, y1, x2, ym));
+    //       child.add(lowerRightIntersection, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //     }
+    //   }
+    // }
+    // else if (geom.type === "MultiPolygon") {
+    //   // console.log(">> Add MULTI_POLYGON");
+    //   geom.coordinates.forEach(polygonCoords => {
+    //     this.addChild(Polygon(polygonCoords, feature.properties), maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+    //   });
+    // }
   }
 
   visitNonEmpty(callback) {

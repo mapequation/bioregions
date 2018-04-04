@@ -20,6 +20,7 @@ import {
   mergeClustersToBins,
   getPajekNetwork,
 } from '../utils/clustering';
+import { polygonExtent } from '../utils/polygons';
 import turfPolygon from 'turf-polygon';
 import turfSimplify from 'turf-simplify';
 import turfExtent from 'turf-extent';
@@ -106,6 +107,7 @@ function loadShapefiles(files) {
     }
 
     // const tolerance = 0.5 / 8;
+    //TODO: Limit the minNodeSize to current - 3 after loading to limit simplification noise!!
     const tolerance = Math.pow(2, state.binning.minNodeSizeLog2 - 4);
 
     // if (geometry.type === 'Polygon') {
@@ -145,7 +147,9 @@ function loadShapefiles(files) {
     }
     if (geometry.type === 'MultiPolygon') {
       const simplifiedCoordinates = [];
-      geometry.coordinates.forEach(polygonCoords => {
+      const numPolygonsInMultiPolygon = geometry.coordinates.length;
+      geometry.coordinates.forEach((polygonCoords, i) => {
+        dispatch(setFileProgress("Simplify multipolygon... ", COUNT_WITH_TOTAL, i + 1, {total: numPolygonsInMultiPolygon}));
         // simplify each set of polygonCoords in the MultiPolygon
         const simplifiedPolygon = turfSimplify({ type: 'Feature', geometry: {
           type: 'Polygon',
@@ -332,11 +336,15 @@ function parseGeoJSON(nameField) {
     }
     else if (type === "MultiPolygon") {
       ++numMultiPolygons;
-      feature.geometry.coordinates.forEach(polygonCoords => {
-        ++numMultiPolygonsExpanded;
-        let polygonFeature = turfPolygon(polygonCoords, feature.properties);
-        if (!polygonFeature.geometry.bbox)
-          polygonFeature.geometry.bbox = turfExtent(feature);
+      const numPolygonsInMultiPolygon = feature.geometry.coordinates.length;
+      numMultiPolygonsExpanded += numPolygonsInMultiPolygon;
+      feature.geometry.coordinates.forEach((polygonCoords, i) => {
+        dispatch(setFileProgress("Parsing multipolygon... ", COUNT_WITH_TOTAL, i + 1, {total: numPolygonsInMultiPolygon}));
+        const polygonFeature = turfPolygon(polygonCoords, feature.properties);
+        if (!polygonFeature.geometry.bbox) {
+          // polygonFeature.geometry.bbox = turfExtent(feature);
+          polygonFeature.geometry.bbox = polygonExtent(polygonCoords);
+        }
         state.shapeFeatures.push(polygonFeature);
       });
     }
@@ -350,7 +358,7 @@ function parseGeoJSON(nameField) {
       console.log("Unsupported geometry type:", type);
     }
   });
-  dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, numOriginalFeatures, {total: numOriginalFeatures}));
+  dispatch(setFileProgress("Parsing features... done!", COUNT_WITH_TOTAL, numOriginalFeatures, {total: numOriginalFeatures}));
 
   console.log(`numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`);
 

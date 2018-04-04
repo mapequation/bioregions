@@ -14,6 +14,19 @@ export function bboxIntersect(a, b) {
   //        (abs(a.y - b.y) * 2 < (a.height + b.height));
 }
 
+export function polygonExtent(coords) {
+  const extent = [Infinity, Infinity, -Infinity, -Infinity];
+  coords.forEach(ring => {
+    ring.forEach(point => {
+      if (extent[0] > point[0]) extent[0] = point[0];
+      if (extent[1] > point[1]) extent[1] = point[1];
+      if (extent[2] < point[0]) extent[2] = point[0];
+      if (extent[3] < point[1]) extent[3] = point[1];
+    });
+  });
+  return extent;
+}
+
 export function clusteredBinsToCollectionOfMultiPolygons(bins) {
   let clusterFeatureMap = new Map();
   bins.forEach(bin => {
