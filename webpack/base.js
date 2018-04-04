@@ -1,7 +1,7 @@
 const path = require('path')
 const webpack = require('webpack')
 const ExtractTextPlugin = require('extract-text-webpack-plugin')
-const SassLintPlugin = require('sasslint-webpack-plugin')
+// const SassLintPlugin = require('sasslint-webpack-plugin')
 
 const extractCSS = new ExtractTextPlugin('vendor.css', {
   allChunks: true
@@ -44,10 +44,10 @@ module.exports = {
     new webpack.ProvidePlugin({
       fetch: 'imports?this=>global!exports?global.fetch!whatwg-fetch'
     }),
-    new SassLintPlugin({
-      configFile: path.resolve(__dirname, '../.sass-lint.yml'),
-      glob: 'client/**/*.scss'
-    })
+    // new SassLintPlugin({
+    //   configFile: path.resolve(__dirname, '../.sass-lint.yml'),
+    //   glob: 'client/**/*.scss'
+    // })
   ],
   resolve: {
     root: path.resolve(__dirname, '../client'),

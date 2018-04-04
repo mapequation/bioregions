@@ -19,7 +19,7 @@ import * as ErrorActions from '../actions/ErrorActions';
 import * as PhylogramActions from '../actions/PhylogramActions';
 import {CALCULATE_CLUSTERS, DATA_WORKER_INITIATED} from '../constants/ActionTypes';
 import {calculateInfomapClusters} from '../utils/clustering';
-import AppStyles from './App.scss';
+import AppStyles from './App.css';
 
 class App extends Component {
   constructor(props) {

@@ -6,7 +6,7 @@ import TangleInput from '../lib/TangleInput';
 import Div from '../helpers/Div';
 import geoTreeUtils from '../../utils/phylogeny/geoTreeUtils';
 
-import TreeStyles from './Tree.scss';
+import TreeStyles from './Tree.css';
 
 const BY_ORIGINAL_ORDER = 'by original order';
 const BY_MAX_BRANCH_LENGTH_DESC = 'by max branch length (descending)';

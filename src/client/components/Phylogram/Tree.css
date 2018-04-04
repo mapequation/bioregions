@@ -13,8 +13,4 @@
   overflow: auto;
   max-height: 600px;
   
-  svg {
-    // zoom: 0.2;
-    // transform: scale(0.7);
-  }
 }
