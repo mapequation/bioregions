@@ -130,8 +130,76 @@ export function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
-export function getProjectedCellNetwork(species, features, bins) {
+export function getAllJaccardIndex(species, features, bins, minSimilarity = 0.1) {
+  const nameToBins = {};
+  species.forEach(({name}) => {
+    nameToBins[name] = {};
+  });
+  bins.forEach((bin) => {
+    bin.features.forEach((feature) => {
+      nameToBins[feature.properties.name][bin.binId] = 1;
+    });
+  });
+  const links = {};
+  bins.forEach((bin) => {
+    const binLinks = {};
+    bin.features.forEach((feature) => {
+      const linkedBins = nameToBins[feature.properties.name];
+      _.each(linkedBins, (value, binId) => {
+        if (binLinks[binId]) {
+          binLinks[binId] += 1;
+        } else {
+          binLinks[binId] = 1;
+        }
+      });
+      links[bin.binId] = binLinks;
+    });
+  });
+  const binSizes = {};
+  bins.forEach((bin) => {
+    binSizes[bin.binId] = bin.features.length;
+  });
+  _.each(links, (binLinks, binId1) => {
+    _.each(binLinks, (intersection, binId2) => {
+      const jaccard = intersection / (binSizes[binId1] + binSizes[binId2] - intersection);
+      if (jaccard < minSimilarity) {
+        delete binLinks[binId2];
+      } else {
+        binLinks[binId2] = jaccard;
+      }
+    });
+    // links[binId1] = _.chain(binLinks)
+    // .map((jaccard, binId) => ({
+    //   binId, jaccard,
+    // }))
+    // .sortBy('jaccard')
+    // .reverse()
+    // .value();
+  });
+  return links;
+}
 
+export function getJaccardIndex(bin, nameToBins, binSizes, minSimilarity = 0.1) {
+  const binLinks = {};
+  bin.features.forEach((feature) => {
+    const linkedBins = nameToBins[feature.properties.name];
+    _.each(linkedBins, (value, binId) => {
+      if (binLinks[binId]) {
+        binLinks[binId] += 1;
+      } else {
+        binLinks[binId] = 1;
+      }
+    });
+  });
+  const jaccardIndex = {};
+  const binId1 = bin.binId;
+  _.each(binLinks, (intersection, binId2) => {
+    const jaccard = intersection / (binSizes[binId1] + binSizes[binId2] - intersection);
+    if (jaccard >= minSimilarity) {
+      jaccardIndex[binId2] = jaccard;
+    }
+  });
+  return jaccardIndex;
 }
 
 export function getBipartiteNetwork(species, features, bins) {

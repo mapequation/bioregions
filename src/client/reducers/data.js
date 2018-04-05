@@ -88,6 +88,7 @@ const getInitialState = () => {
     mapBy: Display.BY_NAME, // name or cluster when clusters ready
     clusterColors: [], // array of chroma colors for each cluster
     selectedCluster: -1, // clusterId if selected
+    selectedCell: null, // one of bins
     selectedSpecies: "",
     phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
     clusterFractionLimit: 0.1, // For cluster pie charts //TODO: Not used in DataWorker
@@ -135,168 +136,173 @@ function prepareTree(tree, state) {
 
 export default function data(state = getInitialState(), action) {
   switch (action.type) {
-    case ActionTypes.LOAD_FILES:
-      // Forward to data worker
-      state.dataWorker.postMessage(action);
-      return {
-        ...getInitialState(),
-        phyloTree: state.phyloTree,
-      };
-    case ActionTypes.LOAD_TREE:
-      state.dataWorker.postMessage(action);
-      return state;
-    case ActionTypes.SET_FIELDS_TO_COLUMNS_MAPPING:
-    case ActionTypes.SET_FEATURE_NAME_FIELD:
-      // Forward to data worker
-      state.dataWorker.postMessage(action);
-      return state;
-    case ActionTypes.ADD_PHYLO_TREE:
-      return {
-        ...state,
-        phyloTree: prepareTree(action.phyloTree, state),
-      };
-    case ActionTypes.REMOVE_PHYLO_TREE:
-      return {
-        ...state,
-        phyloTree: null,
-      };
-    case ActionTypes.ADD_SPECIES_AND_BINS:
-      const speciesCount = getSpeciesCount(action.species);
-      return {
-        ...getInitialState(),
-        species: action.species,
-        speciesCount,
-        bins: action.bins,
-        binningLoading: false,
-        // Save network
-        network: action.network,
-        // Keep some state
-        binning: state.binning,
-        // Reset possibly stored clusters on the tree
-        phyloTree: state.phyloTree ? Object.assign({}, geoTreeUtils.aggregateSpeciesCount(
-          geoTreeUtils.resetClusters(state.phyloTree), speciesCount)) : state.phyloTree,        
-      };
-    case ActionTypes.GET_CLUSTERS:
-      // Forward to data worker
-      state.dataWorker.postMessage(action);
-      return {
-        ...state,
-        isClustering: true
-      };
-    case ActionTypes.CALCULATE_CLUSTERS: // From worker as it couldn't spawn sub worker if not Firefox
-      console.log("Got CALCULATE_CLUSTERS in main thread reducer...");
-      return state;
-    case ActionTypes.ADD_CLUSTERS:
-      // Forward to data worker
-      state.dataWorker.postMessage(action);
-      return state;
-    case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
-      const bins = mergeClustersToBins(action.clusterIds, state.bins);
-      const { clusters, clustersPerSpecies } = action.clusterStatistics;
-      let geoPhyloTree = state.phyloTree;
-      if (geoPhyloTree) {
-        geoPhyloTree = geoTreeUtils.reconstructAncestralAreas(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
-        // Create new tree object to get behind shouldComponentUpdate
-        geoPhyloTree = Object.assign({}, geoPhyloTree);
-      } 
-      return {
-        ...state,
-        isClustering: false,
-        bins,
-        clusterIds: action.clusterIds,
-        clusters,
-        clustersPerSpecies,
-        statisticsBy: Display.BY_CLUSTER,
-        mapBy: Display.BY_CLUSTER,
-        clusterColors: colors.categoryColors(clusters.length),
-        isShowingInfomapUI: false,
-        phyloTree: geoPhyloTree,
-      };
-    case ActionTypes.BINNING_CHANGE_TYPE:
-    case ActionTypes.BINNING_MIN_NODE_SIZE:
-    case ActionTypes.BINNING_MAX_NODE_SIZE:
-    case ActionTypes.BINNING_NODE_CAPACITY:
-    case ActionTypes.BINNING_LOWER_THRESHOLD:
-    case ActionTypes.BINNING_PATCH_SPARSE_NODES:
-      let nextBinning = binning(state.binning, action);
-      dataWorker.postMessage(action);
-      return {
-        ...state,
-        clusterIds: [],
-        clusters: [],
-        binning: nextBinning,
-        binningLoading: state.species.length > 0,
-        statisticsBy: Display.BY_NAME,
-        mapBy: Display.BY_NAME,
+  case ActionTypes.LOAD_FILES:
+    // Forward to data worker
+    state.dataWorker.postMessage(action);
+    return {
+      ...getInitialState(),
+      phyloTree: state.phyloTree,
+    };
+  case ActionTypes.LOAD_TREE:
+    state.dataWorker.postMessage(action);
+    return state;
+  case ActionTypes.SET_FIELDS_TO_COLUMNS_MAPPING:
+  case ActionTypes.SET_FEATURE_NAME_FIELD:
+    // Forward to data worker
+    state.dataWorker.postMessage(action);
+    return state;
+  case ActionTypes.ADD_PHYLO_TREE:
+    return {
+      ...state,
+      phyloTree: prepareTree(action.phyloTree, state),
+    };
+  case ActionTypes.REMOVE_PHYLO_TREE:
+    return {
+      ...state,
+      phyloTree: null,
+    };
+  case ActionTypes.ADD_SPECIES_AND_BINS:
+    const speciesCount = getSpeciesCount(action.species);
+    return {
+      ...getInitialState(),
+      species: action.species,
+      speciesCount,
+      bins: action.bins,
+      binningLoading: false,
+      // Save network
+      network: action.network,
+      // Keep some state
+      binning: state.binning,
+      // Reset possibly stored clusters on the tree
+      phyloTree: state.phyloTree ? Object.assign({}, geoTreeUtils.aggregateSpeciesCount(
+        geoTreeUtils.resetClusters(state.phyloTree), speciesCount)) : state.phyloTree,        
+    };
+  case ActionTypes.GET_CLUSTERS:
+    // Forward to data worker
+    state.dataWorker.postMessage(action);
+    return {
+      ...state,
+      isClustering: true,
+    };
+  case ActionTypes.CALCULATE_CLUSTERS: // From worker as it couldn't spawn sub worker if not Firefox
+    console.log("Got CALCULATE_CLUSTERS in main thread reducer...");
+    return state;
+  case ActionTypes.ADD_CLUSTERS:
+    // Forward to data worker
+    state.dataWorker.postMessage(action);
+    return state;
+  case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
+    const bins = mergeClustersToBins(action.clusterIds, state.bins);
+    const { clusters, clustersPerSpecies } = action.clusterStatistics;
+    let geoPhyloTree = state.phyloTree;
+    if (geoPhyloTree) {
+      geoPhyloTree = geoTreeUtils.reconstructAncestralAreas(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
+      // Create new tree object to get behind shouldComponentUpdate
+      geoPhyloTree = Object.assign({}, geoPhyloTree);
+    } 
+    return {
+      ...state,
+      isClustering: false,
+      bins,
+      clusterIds: action.clusterIds,
+      clusters,
+      clustersPerSpecies,
+      statisticsBy: Display.BY_CLUSTER,
+      mapBy: Display.BY_CLUSTER,
+      clusterColors: colors.categoryColors(clusters.length),
+      isShowingInfomapUI: false,
+      phyloTree: geoPhyloTree,
+    };
+  case ActionTypes.BINNING_CHANGE_TYPE:
+  case ActionTypes.BINNING_MIN_NODE_SIZE:
+  case ActionTypes.BINNING_MAX_NODE_SIZE:
+  case ActionTypes.BINNING_NODE_CAPACITY:
+  case ActionTypes.BINNING_LOWER_THRESHOLD:
+  case ActionTypes.BINNING_PATCH_SPARSE_NODES:
+    const nextBinning = binning(state.binning, action);
+    dataWorker.postMessage(action);
+    return {
+      ...state,
+      clusterIds: [],
+      clusters: [],
+      binning: nextBinning,
+      binningLoading: state.species.length > 0,
+      statisticsBy: Display.BY_NAME,
+      mapBy: Display.BY_NAME,
+    }
+  case ActionTypes.CHANGE_MAP_BY:
+    return {
+      ...state,
+      mapBy: action.mapBy,
+    }
+  case ActionTypes.CHANGE_STATISTICS_BY:
+    return {
+      ...state,
+      statisticsBy: action.statisticsBy,
+    }
+  case ActionTypes.SET_CLUSTER_COLORS:
+    return {
+      ...state,
+      clusterColors: action.clusterColors,
+    };
+  case ActionTypes.SELECT_CLUSTER:
+    return {
+      ...state,
+      selectedCluster: action.clusterId,
+    };
+  case ActionTypes.SELECT_CELL:
+    return {
+      ...state,
+      selectedCell: action.cell,
+    };
+  case ActionTypes.SELECT_SPECIES:
+    return {
+      ...state,
+      selectedSpecies: action.species,
+    };
+  case ActionTypes.SHOW_INFOMAP_UI:
+    return {
+      ...state,
+      isShowingInfomapUI: action.isShowingInfomapUI,
+    };
+  case ActionTypes.INFOMAP_NUM_TRIALS:
+    return {
+      ...state,
+      infomap: {
+        ...state.infomap,
+        numTrials: action.numTrials,
       }
-    case ActionTypes.CHANGE_MAP_BY:
-      return {
-        ...state,
-        mapBy: action.mapBy
+    };
+  case ActionTypes.INFOMAP_MARKOV_TIME:
+    return {
+      ...state,
+      infomap: {
+        ...state.infomap,
+        markovTime: action.markovTime,
       }
-    case ActionTypes.CHANGE_STATISTICS_BY:
-      return {
-        ...state,
-        statisticsBy: action.statisticsBy
-      }
-    case ActionTypes.SET_CLUSTER_COLORS:
-      return {
-        ...state,
-        clusterColors: action.clusterColors
-      };
-    case ActionTypes.SELECT_CLUSTER:
-      return {
-        ...state,
-        selectedCluster: action.clusterId
-      };
-    case ActionTypes.SELECT_SPECIES:
-      return {
-        ...state,
-        selectedSpecies: action.species
-      };
-    case ActionTypes.SHOW_INFOMAP_UI:
-      return {
-        ...state,
-        isShowingInfomapUI: action.isShowingInfomapUI
-      };
-    case ActionTypes.INFOMAP_NUM_TRIALS:
-      return {
-        ...state,
-        infomap: {
-          ...state.infomap,
-          numTrials: action.numTrials
-        }
-      };
-    case ActionTypes.INFOMAP_MARKOV_TIME:
-      return {
-        ...state,
-        infomap: {
-          ...state.infomap,
-          markovTime: action.markovTime
-        }
-      };
-    case ActionTypes.REMOVE_SPECIES:
-      state.dataWorker.postMessage(action);
-      return {
-        ...getInitialState(),
-        phyloTree: state.phyloTree,
-      };
-    case ActionTypes.DATA_WORKER_INITIATED:
-      dataWorkerInitiated = true;
-      return {
-        ...state,
-        dataWorkerInitiated: true,
-      };
-    case ActionTypes.CANCEL_FILE_ACTIONS:
-      // state.dataWorker.postMessage(action);
-      console.log("\n\nTERMINATE WORKER -> NEW WORKER");
-      state.dataWorker.terminate();
-      dataWorker = new DataWorker();
-      dataWorkerInitiated = false;
-      return {
-        ...getInitialState(),
-      };
-    default:
-      return state;
+    };
+  case ActionTypes.REMOVE_SPECIES:
+    state.dataWorker.postMessage(action);
+    return {
+      ...getInitialState(),
+      phyloTree: state.phyloTree,
+    };
+  case ActionTypes.DATA_WORKER_INITIATED:
+    dataWorkerInitiated = true;
+    return {
+      ...state,
+      dataWorkerInitiated: true,
+    };
+  case ActionTypes.CANCEL_FILE_ACTIONS:
+    // state.dataWorker.postMessage(action);
+    console.log("\n\nTERMINATE WORKER -> NEW WORKER");
+    state.dataWorker.terminate();
+    dataWorker = new DataWorker();
+    dataWorkerInitiated = false;
+    return {
+      ...getInitialState(),
+    };
+  default:
+    return state;
   }
 }

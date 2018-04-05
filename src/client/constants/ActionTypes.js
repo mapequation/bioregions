@@ -65,4 +65,5 @@ export const CHANGE_MAP_BY = 'CHANGE_MAP_BY';
 
 //Filter
 export const SELECT_CLUSTER = 'SELECT_CLUSTER';
+export const SELECT_CELL = 'SELECT_CELL';
 export const SELECT_SPECIES = 'SELECT_SPECIES';

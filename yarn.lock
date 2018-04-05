@@ -2725,7 +2725,7 @@ eventsource@0.1.6:
   dependencies:
     original ">=0.0.5"
 
-"excel-stream@github:vweevers/excel-stream":
+excel-stream@vweevers/excel-stream:
   version "1.0.9"
   resolved "https://codeload.github.com/vweevers/excel-stream/tar.gz/e43e31476142640c86b1776452e0983a47722099"
   dependencies:

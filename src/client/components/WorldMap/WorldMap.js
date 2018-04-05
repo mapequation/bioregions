@@ -23,6 +23,10 @@ class WorldMap extends Component {
     bins: PropTypes.array.isRequired,
     mapBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
+    selectedCluster: PropTypes.number.isRequired,
+    selectedCell: PropTypes.object.isRequired,
+    selectCluster: PropTypes.func.isRequired,
+    selectCell: PropTypes.func.isRequired,
   }
 
   getSvg() {
@@ -48,21 +52,23 @@ class WorldMap extends Component {
     if (!this.svgParent) {
       throw new Error('Cannot find WorldMap container div')
     }
-    let { clientWidth, clientHeight } = this.svgParent;
-    let nextState = {
+    const { clientWidth, clientHeight } = this.svgParent;
+    const nextState = {
       width: clientWidth,
       containerWidth: clientWidth,
-      containerHeight: clientHeight
+      containerHeight: clientHeight,
     };
     this.setState(nextState);
   }
 
   onResize = () => {
-    if (this.rqf) return
+    if (this.rqf) {
+      return;
+    }
     this.rqf = window.requestAnimationFrame(() => {
-      this.rqf = null
-      this.updateDimensions()
-    })
+      this.rqf = null;
+      this.updateDimensions();
+    });
   }
 
 
@@ -70,14 +76,14 @@ class WorldMap extends Component {
     this.updateDimensions();
     window.addEventListener('resize', this.onResize, false);
     this.loadWorldIfNotFetched();
-    let props = Object.assign({}, this.props, this.state);
+    const props = Object.assign({}, this.props, this.state);
     worldMapChart.create(this.svgParent, props);
 
     this.initTooltip();
   }
 
   componentDidUpdate() {
-    let props = Object.assign({}, this.props, this.state);
+    const props = Object.assign({}, this.props, this.state);
     worldMapChart.update(this.svgParent, props);
   }
 
@@ -145,15 +151,43 @@ class WorldMap extends Component {
   }
 
   handleMouseOverGridCell(d) {
-    this.tip.show(d);
+    if (this.tip) {
+      this.tip.show(d);
+    }
   }
 
   handleMouseOutGridCell(d) {
-    this.tip.hide(d);
+    if (this.tip) {
+      this.tip.hide(d);
+    }
   }
 
   handleMouseClickGridCell(d) {
-    console.log("Mouse click:", d);
+    console.log("Mouse click on cell:", d);
+    const { mapBy } = this.props;
+    if (mapBy === BY_CLUSTER) {
+      this.toggleSelectCluster(d);
+    } else {
+      this.toggleSelectCell(d);
+    }
+  }
+
+  toggleSelectCell(d) {
+    const { selectedCell, selectCell } = this.props;
+    if (!d || d === selectedCell) {
+      selectCell(null);
+    } else {
+      selectCell(d);
+    }
+  }
+  
+  toggleSelectCluster(d) {
+    const { selectedCluster, selectCluster } = this.props;
+    if (!d || d.clusterId === selectedCluster) {
+      selectCluster(-1);
+    } else {
+      selectCluster(d.clusterId);
+    }
   }
 
   render() {

@@ -3,7 +3,6 @@
 }
 
 .overlay {
-  // fill: rgba(255, 0, 0, 0.3);
   fill: white;  
   pointer-events: all;
 }

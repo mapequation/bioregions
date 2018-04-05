@@ -19,6 +19,8 @@ import {
   getBipartiteNetwork,
   mergeClustersToBins,
   getPajekNetwork,
+  getJaccardIndex,
+  getAllJaccardIndex,
 } from '../utils/clustering';
 import { polygonExtent } from '../utils/polygons';
 import turfPolygon from 'turf-polygon';
@@ -591,38 +593,72 @@ function groupByName() {
 }
 
 function getSummaryBins() {
-   // Bin and map to summary bins, all individual features not needed
-   return state.bins.map((bin) => {
-     const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
-     const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
-     const topIndicatorSpecies = S.topIndicatorItems('name', state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, countedSpecies);
-     return {
-       x1: bin.x1,
-       x2: bin.x2,
-       y1: bin.y1,
-       y2: bin.y2,
-       isLeaf: bin.isLeaf,
-       area: bin.area(),
-       size: bin.size(),
-       count: bin.features.length,
-       speciesCount: countedSpecies.length,
-       topCommonSpecies,
-       topIndicatorSpecies,
-       clusterId: -1,
-     };
-   });
+  // Bin and map to summary bins, all individual features not needed
+  dispatch(setBinningProgress("Calculating summary statistics per cell...", INDETERMINATE));
+  const nameToBins = {};
+  state.species.forEach(({name}) => {
+    nameToBins[name] = {};
+  });
+  state.bins.forEach((bin) => {
+    bin.features.forEach((feature) => {
+      nameToBins[feature.properties.name][bin.binId] = 1;
+    });
+  });
+  const binSizes = {};
+  state.bins.forEach((bin) => {
+    binSizes[bin.binId] = bin.features.length;
+  });
+  const minJaccardIndex = 0.1;
+  const numBins = state.bins.length;
+
+  // const jaccardIndexes = getAllJaccardIndex(state.species, state.features, state.bins, minJaccardIndex);
+
+  return state.bins.map((bin, i) => {
+    if (i % 10 === 0) {
+      dispatch(setFileProgress(`Calculating cell summary statistics...`, COUNT_WITH_TOTAL, i + 1, { total: numBins }));
+      // console.log(`Calculating summary statistics per cell (${i + 1} / ${numBins})...`);
+    }
+    const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
+    const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
+    const topIndicatorSpecies = S.topIndicatorItems('name', state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, countedSpecies);
+    const jaccardIndex = getJaccardIndex(bin, nameToBins, binSizes, minJaccardIndex);
+    // const jaccardIndex = {};
+    // const jaccardIndex = jaccardIndexes[bin.binId];
+    return {
+      binId: bin.binId,
+      x1: bin.x1,
+      x2: bin.x2,
+      y1: bin.y1,
+      y2: bin.y2,
+      isLeaf: bin.isLeaf,
+      area: bin.area(),
+      size: bin.size(),
+      count: bin.features.length,
+      speciesCount: countedSpecies.length,
+      topCommonSpecies,
+      topIndicatorSpecies,
+      jaccardIndex,
+      clusterId: -1,
+    };
+  });
 }
 
 function binData(dispatchResult = false) {
-  if (state.features.length === 0)
+  if (state.features.length === 0) {
     return;
+  }
   dispatch(setBinningProgress("Binning species...", INDETERMINATE));
-  let binner = new QuadtreeGeoBinner()
+  const binner = new QuadtreeGeoBinner()
    .minNodeSizeLog2(state.binning.minNodeSizeLog2)
    .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
    .nodeCapacity(state.binning.nodeCapacity)
    .lowerThreshold(state.binning.lowerThreshold);
   state.bins = binner.bins(state.features, state.binning.patchSparseNodes);
+  state.bins.forEach((bin, i) => {
+    bin.binId = i;
+  });
+
+  state.summaryBins = getSummaryBins(state.bins);
 
   if (dispatchResult) {
     dispatchAddSpeciesAndBins();
@@ -630,9 +666,10 @@ function binData(dispatchResult = false) {
 }
 
 function dispatchAddSpeciesAndBins() {
-    // dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
-    dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins), 
-      getPajekNetwork(state.species, state.features, state.bins)));
+  // dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
+  
+  dispatch(addSpeciesAndBins(state.species, state.summaryBins, 
+    getPajekNetwork(state.species, state.features, state.bins)));
 }
 
 function calculateClusterStatistics(clusterIds) {

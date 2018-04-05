@@ -162,40 +162,56 @@ world.update = function(el, props) {
 
 
   function getClusterColor(clusterId) {
-    let clusterColor = props.clusterColors[clusterId];
-    if (props.selectedCluster >= 0)
-      return clusterId === props.selectedCluster? clusterColor : chroma(clusterColor.hex()).alpha(0.2);
+    const clusterColor = props.clusterColors[clusterId];
+    if (props.selectedCluster >= 0) {
+      return clusterId === props.selectedCluster ? clusterColor : chroma(clusterColor.hex()).alpha(0.2);
+    }
     return clusterColor;
   }
 
   if (props.bins.length > 0) {
-    var colorDomainValue;
-    var color;
-    if (props.mapBy == BY_CLUSTER) {
-      colorDomainValue = (d) => d.clusterId;
-      color = (clusterId) => getClusterColor(clusterId).css();
+    let color;
+    if (props.mapBy === BY_CLUSTER) {
+      color = (d) => getClusterColor(d.clusterId).css();
     }
     else {
       const bins = props.bins;
-      let maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
-      let domainMax = + maxCount + (8 - maxCount % 8);
-      let domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
+      const maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
+      const domainMax = + maxCount + (8 - maxCount % 8);
+      const domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
       domain.push(domainMax);
       domain[0] = 1; // Make a threshold between non-empty and empty bins
       domain.unshift(0.5);
       console.log("Color domain:", domain.length, domain);
+      const colorDomainValue = d => d.count / d.area;
 
-      let colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
+      const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       colorRange.unshift("#eeeeee");
-      color = d3.scale.threshold()
+      const heatmapColor = d3.scale.threshold()
         .domain(domain)
         .range(colorRange);
+      
+      const alphaScale = d3.scale.log().domain([0.1, 1]).range([0.2, 1]);
+      const selectedCellColor = (d) => {
+        const similarity = props.selectedCell.jaccardIndex[d.binId];
+        if (!similarity) {
+          return "#eeeeee";
+        }
+        const alpha = similarity ? alphaScale(similarity) : 0.2;
+        // if (similarity)
+          // console.log(`${props.selectedCell.binId} -> ${d.binId}: similarity: ${similarity} -> alpha: ${alpha}`);
+        return chroma(heatmapColor(colorDomainValue(d))).alpha(alpha).css();
+      };
+      // const ordinaryCellColor = (d) => heatmapColor(d.count / d.area);
+      const ordinaryCellColor = (d) => {
+        return heatmapColor(colorDomainValue(d));
+      };
 
-      colorDomainValue = (d) => d.count / d.area;
+      color = props.selectedCell ? selectedCellColor : ordinaryCellColor;
     }
 
-    let binPaths = g.select(".overlay")
-      .attr("clip-path", props.clipToLand? "url(#clip)" : null)
+    const binPaths = g.select(".overlay")
+      .attr("clip-path", props.clipToLand ? "url(#clip)" : null)
       .selectAll(".bin")
         .data(props.bins);
 
@@ -205,12 +221,12 @@ world.update = function(el, props) {
       .attr("class", "bin")
       .on('mouseover', props.onMouseOver)
       .on('mouseout', props.onMouseOut)
-      .on('click', props.onMouseClick);
+      .on('click', onClickGridCell);
 
     //Update
     binPaths.attr("d", props.binning.renderer(props.projection))
-      .style("fill", (d, i) => color(colorDomainValue(d)))
-      .style("stroke", props.showCellBorders? "#ccc" : "none")
+      .style("fill", (d) => color(d))
+      .style("stroke", props.showCellBorders ? "#ccc" : "none")
       // .style("stroke", (d, i) => color(colorDomainValue(d)))
       .style("stroke-opacity", 0.5)
       .style("stroke-width", 0.1)
@@ -263,10 +279,17 @@ world.update = function(el, props) {
     // g.selectAll(".bins").style("stroke-width", 0.5 / scale);
   }
 
+  function onClickGridCell(d) {
+    d3.event.stopPropagation();
+    d3.event.preventDefault();
+    props.onMouseClick(d);
+  }
+
   //geo translation on mouse click in map
   function onClick() {
     var lonlat = props.projection.invert(d3.mouse(this));
     console.log("Long, Lat:", lonlat);
+    props.onMouseClick(null);
   }
 
   function getSize(selection) {
