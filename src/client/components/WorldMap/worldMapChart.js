@@ -11,6 +11,9 @@ export default world;
 
 world.create = function(el, props) {
   console.log("!!!! world.create()");
+  world._zoomTranslation = [0, 0];
+  world._zoomScale = 1;
+
   var anchorElement = d3.select(el);
   anchorElement.selectAll("*").remove();
   var svg = anchorElement.append('svg')
@@ -91,17 +94,14 @@ world.update = function(el, props) {
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
   console.log("Creating worldmap zoom behavior...");
-  let zoom = d3.behavior.zoom()
+  const zoom = d3.behavior.zoom()
     .scaleExtent([1, 12])
     .on("zoom", onZoom);
 
   svg.call(zoom)
     .on("click", onClick);
-
-  world._zoomTranslation = [0, 0];
-  world._zoomScale = 1;
-
-  doZoom(world._zoomTranslation, world._zoomScale);
+  
+  doZoom(world._zoomTranslation || [0, 0], world._zoomScale || 1);
 
   props.projection
     .translate([width/2, height/2])
@@ -227,15 +227,17 @@ world.update = function(el, props) {
   }
 
   function onZoom() {
-    if (!props.world)
+    if (!props.world) {
       return;
+    }
 
-    var t = d3.event.translate;
-    var s = d3.event.scale;
-    var h = height/4;
+    const t = d3.event.translate;
+    const s = d3.event.scale;
+    const h = height / 4;
+    // console.log('d3.event t:', t, 's:', s);
 
     t[0] = Math.min(
-      (width/height)  * (s - 1),
+      (width / height)  * (s - 1),
       Math.max(width * (1 - s), t[0])
     );
 
@@ -245,6 +247,7 @@ world.update = function(el, props) {
     );
 
     doZoom(t, s);
+    // props.onZoom({ translation: t, scale: s });
   }
 
   function doZoom(translation, scale) {
@@ -254,6 +257,7 @@ world.update = function(el, props) {
     // console.log(`doZoom: t: ${translation}, s: ${scale}`);
 
     zoom.translate(translation);
+    zoom.scale(scale);
     g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
 
     //adjust the country hover stroke width based on zoom level
