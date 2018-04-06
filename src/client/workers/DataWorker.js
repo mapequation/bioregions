@@ -42,6 +42,7 @@ const getInitialState = () => {
     features: [], // Only point features here, possibly regenerate from shapeFeatures on binning change
     bins: [],
     species: [], // array of [{name, count}], sorted on count
+    speciesToBins: {}, // { name:String -> { index: Int, bins: { binId:Int -> true }}}
     speciesCountMap: new Map(),
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
     binning: { // TODO: Sync with main data state
@@ -595,15 +596,6 @@ function groupByName() {
 function getSummaryBins() {
   // Bin and map to summary bins, all individual features not needed
   dispatch(setBinningProgress("Calculating summary statistics per cell...", INDETERMINATE));
-  const nameToBins = {};
-  state.species.forEach(({name}) => {
-    nameToBins[name] = {};
-  });
-  state.bins.forEach((bin) => {
-    bin.features.forEach((feature) => {
-      nameToBins[feature.properties.name][bin.binId] = 1;
-    });
-  });
   const binSizes = {};
   state.bins.forEach((bin) => {
     binSizes[bin.binId] = bin.features.length;
@@ -621,7 +613,7 @@ function getSummaryBins() {
     const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
     const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
     const topIndicatorSpecies = S.topIndicatorItems('name', state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, countedSpecies);
-    const jaccardIndex = getJaccardIndex(bin, nameToBins, binSizes, minJaccardIndex);
+    // const jaccardIndex = getJaccardIndex(bin, state.speciesToBins, binSizes, minJaccardIndex);
     // const jaccardIndex = {};
     // const jaccardIndex = jaccardIndexes[bin.binId];
     return {
@@ -635,9 +627,10 @@ function getSummaryBins() {
       size: bin.size(),
       count: bin.features.length,
       speciesCount: countedSpecies.length,
+      species: bin.features.map(f => state.speciesToBins[f.properties.name].index),
       topCommonSpecies,
       topIndicatorSpecies,
-      jaccardIndex,
+      // jaccardIndex,
       clusterId: -1,
     };
   });
@@ -658,6 +651,18 @@ function binData(dispatchResult = false) {
     bin.binId = i;
   });
 
+
+  const speciesToBins = {};
+  state.species.forEach(({ name }, index) => {
+    speciesToBins[name] = { index, bins: {} };
+  });
+  state.bins.forEach((bin) => {
+    bin.features.forEach((feature) => {
+      speciesToBins[feature.properties.name].bins[bin.binId] = true;
+    });
+  });
+  state.speciesToBins = speciesToBins;
+
   state.summaryBins = getSummaryBins(state.bins);
 
   if (dispatchResult) {
@@ -667,9 +672,10 @@ function binData(dispatchResult = false) {
 
 function dispatchAddSpeciesAndBins() {
   // dispatch(addSpeciesAndBins(state.species, getSummaryBins(state.bins)));
-  
-  dispatch(addSpeciesAndBins(state.species, state.summaryBins, 
-    getPajekNetwork(state.species, state.features, state.bins)));
+
+  // dispatch(addSpeciesAndBins(state.species, state.summaryBins,
+  //   getPajekNetwork(state.species, state.features, state.bins)));
+  dispatch(addSpeciesAndBins(state.species, state.summaryBins, state.speciesToBins));
 }
 
 function calculateClusterStatistics(clusterIds) {

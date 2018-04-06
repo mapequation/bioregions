@@ -187,12 +187,12 @@ export function setFeatureNameField(featureNameField) {
   }
 }
 
-export function addSpeciesAndBins(species, bins, network) {
+export function addSpeciesAndBins(species, bins, speciesToBins) {
   return {
     type: ADD_SPECIES_AND_BINS,
     species,
     bins,
-    network,
+    speciesToBins,
   };
 }
 

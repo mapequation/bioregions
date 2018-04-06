@@ -8,6 +8,7 @@ import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
 import geoTreeUtils from '../utils/phylogeny/geoTreeUtils';
 import treeUtils from '../utils/treeUtils';
+import { getSimilarCells } from '../utils/clustering';
 
 const getInitialBinningState = () => {
   return {
@@ -79,6 +80,7 @@ const getInitialState = () => {
     binning: getInitialBinningState(),
     binningLoading: false,
     bins: [], // bins = binner.bins(features)
+    speciesToBins: {}, // { name:String -> { index: Int, bins: { binId:Int -> true }}} speciesToBins['speciesA'].bins[binId1] = true
     network: null, // Pajek string
     clusterIds: [], // array<int> of cluster id:s, matching bins array in index
     isClustering: false,
@@ -169,8 +171,9 @@ export default function data(state = getInitialState(), action) {
       speciesCount,
       bins: action.bins,
       binningLoading: false,
+      speciesToBins: action.speciesToBins,
       // Save network
-      network: action.network,
+      // network: action.network,
       // Keep some state
       binning: state.binning,
       // Reset possibly stored clusters on the tree
@@ -251,6 +254,12 @@ export default function data(state = getInitialState(), action) {
       selectedCluster: action.clusterId,
     };
   case ActionTypes.SELECT_CELL:
+    if (state.selectedCell) {
+      delete state.selectedCell.links;
+    }
+    if (action.cell && !action.cell.links) {
+      action.cell.links = getSimilarCells(action.cell, state.species, state.speciesToBins);
+    }
     return {
       ...state,
       selectedCell: action.cell,

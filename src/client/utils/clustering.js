@@ -130,6 +130,37 @@ export function mergeClustersToBins(clusterIds, bins) {
   return bins;
 }
 
+/**
+ * Get similar cells by spreading out weight 1.0 two steps 
+ * on the bipartite network
+ * @param {Object} cell The selected cell
+ * @param {Array<Object>} species Array of {name, count}, sorted on count
+ * @param {Object} speciesToBins { name:String -> { index: Int, bins: { binId:Int -> true }}}
+ */
+export function getSimilarCells(cell, species, speciesToBins) {
+  const links = {};
+  // const cellId = cell.binId;
+  const speciesIndices = cell.species;
+  const numSpecies = speciesIndices.length;
+  const weight1 = 1.0 / numSpecies;
+  speciesIndices.forEach(index => {
+    const name = species[index].name;
+    const connectedCells = Object.keys(speciesToBins[name].bins);
+    const weight2 = 1.0 / connectedCells.length;
+    const weight = weight1 * weight2;
+    // console.log(`  weight2: 1.0 / ${connectedCells.length} =`, weight2, '-> w1*w2:', weight);
+    connectedCells.forEach(binId2 => {
+      if (!links[binId2]) {
+        links[binId2] = 0.0;
+      }
+      links[binId2] += weight;
+    });
+  });
+  // console.log('links:', _.map(links, (w) => w).sort((a, b) => b - a));
+  // console.log(`cell ${cellId}, selfWeight: ${links[cellId]}, 136: ${links[136]}, 141: ${links[141]}`);
+  return links;
+}
+
 export function getAllJaccardIndex(species, features, bins, minSimilarity = 0.1) {
   const nameToBins = {};
   species.forEach(({name}) => {

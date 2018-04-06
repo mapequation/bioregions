@@ -14,6 +14,7 @@ class Export extends Component {
   static propTypes = {
     bins: PropTypes.array.isRequired,
     species: PropTypes.array.isRequired,
+    speciesToBins: PropTypes.object.isRequired,
     clusters: PropTypes.array.isRequired,
     clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,

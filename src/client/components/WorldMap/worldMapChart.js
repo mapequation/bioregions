@@ -185,19 +185,22 @@ world.update = function(el, props) {
       console.log("Color domain:", domain.length, domain);
       const colorDomainValue = d => d.count / d.area;
 
+      const selectedCellMax = props.selectedCell ?
+      props.selectedCell.links[props.selectedCell.binId] : 1.0;
+
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       colorRange.unshift("#eeeeee");
       const heatmapColor = d3.scale.threshold()
         .domain(domain)
         .range(colorRange);
       
-      const alphaScale = d3.scale.log().domain([0.1, 1]).range([0.2, 1]);
+      const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
       const selectedCellColor = (d) => {
-        const similarity = props.selectedCell.jaccardIndex[d.binId];
+        const similarity = props.selectedCell.links[d.binId];
         if (!similarity) {
           return "#eeeeee";
         }
-        const alpha = similarity ? alphaScale(similarity) : 0.2;
+        const alpha = alphaScale(similarity);
         // if (similarity)
           // console.log(`${props.selectedCell.binId} -> ${d.binId}: similarity: ${similarity} -> alpha: ${alpha}`);
         return chroma(heatmapColor(colorDomainValue(d))).alpha(alpha).css();
