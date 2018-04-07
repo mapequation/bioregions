@@ -17,11 +17,11 @@ class Node {
     this.clusterId = -1;
   }
 
-  size() {
+  get size() {
     return this.x2 - this.x1;
   }
 
-  area() {
+  get area() {
     const dx = this.x2 - this.x1;
     return dx * dx;
   }

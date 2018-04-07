@@ -135,25 +135,22 @@ export function mergeClustersToBins(clusterIds, bins) {
  * on the bipartite network
  * @param {Object} cell The selected cell
  * @param {Array<Object>} species Array of {name, count}, sorted on count
- * @param {Object} speciesToBins { name:String -> { index: Int, bins: { binId:Int -> true }}}
+ * @param {Object} speciesToBins { name:String -> { speciesId: Int, bins: Set<binId:Int> }}
  */
 export function getSimilarCells(cell, species, speciesToBins) {
-  const links = {};
+  const links = new Map();
   // const cellId = cell.binId;
   const speciesIndices = cell.species;
   const numSpecies = speciesIndices.length;
   const weight1 = 1.0 / numSpecies;
   speciesIndices.forEach(index => {
     const name = species[index].name;
-    const connectedCells = Object.keys(speciesToBins[name].bins);
-    const weight2 = 1.0 / connectedCells.length;
+    const connectedCells = speciesToBins[name].bins;
+    const weight2 = 1.0 / connectedCells.size;
     const weight = weight1 * weight2;
     // console.log(`  weight2: 1.0 / ${connectedCells.length} =`, weight2, '-> w1*w2:', weight);
     connectedCells.forEach(binId2 => {
-      if (!links[binId2]) {
-        links[binId2] = 0.0;
-      }
-      links[binId2] += weight;
+      links.set(binId2, (links.get(binId2) || 0.0) + weight);
     });
   });
   // console.log('links:', _.map(links, (w) => w).sort((a, b) => b - a));
@@ -261,46 +258,31 @@ export function getBipartiteNetwork(species, features, bins) {
   return network.join('\n');
 }
 
-export function getPajekNetwork(species, features, bins) {
+export function getPajekNetwork(species, speciesToBins, bins) {
   console.log(`Generate bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")...`);
   const network = [];
   network.push(`# Bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")`);
   network.push(`*Vertices ${species.length + bins.length}`);
   // Map names to index
-  const speciesNameToIndex = new Map();
-  let speciesCounter = 0;
-  species.forEach(({name}) => {
-      ++speciesCounter;
-      speciesNameToIndex.set(name, speciesCounter);
-      network.push(`${speciesCounter} "${name}"`);
+  species.forEach(({ name }, index) => {
+    network.push(`${index + 1} "${name}"`);
   });
   console.log('First 10 species nodes:', network.slice(0, 12));
   // console.log('==================\nSpecies name to index:');
   // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
 
-  let binCounter = 0;
-  bins.forEach((bin) => {
-    ++binCounter;
-    network.push(`${binCounter + speciesCounter} "${bin.size()} ${bin.x1} ${bin.y1}"`);
+  bins.forEach((bin, i) => {
+    network.push(`${i + 1 + species.length} "${bin.size} ${bin.x1} ${bin.y1}"`);
   });
   console.log('Last 10 grid cell nodes:', network.slice(-10));
   // Add links from species to bins
-  binCounter = 0;
-  const links = new Set();
-  bins.forEach((bin) => {
-    ++binCounter;
-    bin.features.forEach((feature) => {
-      links.add(`${speciesNameToIndex.get(feature.properties.name)} ${binCounter + speciesCounter}`);
-      // network.push(`${speciesNameToIndex.get(feature.properties.name)} ${binCounter + speciesCounter}`);
+  network.push('*Edges');
+  _.each(speciesToBins, ({ speciesId, bins: linkedBins }) => {
+    linkedBins.forEach(binId => {
+      network.push(`${speciesId + 1} ${binId + 1 + species.length}`);
     });
   });
-  network.push(`*Edges ${links.size}`);
-  links.forEach(link => {
-    network.push(link);
-  });
-  // console.log(`Last 10 of ${numEdges} links:`, network.slice(-10));
-  // console.log('========== WHOLE NETWORK =========');
-  // console.log(network);
+
   return network.join('\n');
 }
 

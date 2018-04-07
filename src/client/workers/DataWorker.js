@@ -42,7 +42,7 @@ const getInitialState = () => {
     features: [], // Only point features here, possibly regenerate from shapeFeatures on binning change
     bins: [],
     species: [], // array of [{name, count}], sorted on count
-    speciesToBins: {}, // { name:String -> { index: Int, bins: { binId:Int -> true }}}
+    speciesToBins: {}, // { name:String -> { speciesId: Int, bins: Set<binId:Int> }}
     speciesCountMap: new Map(),
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
     binning: { // TODO: Sync with main data state
@@ -623,11 +623,11 @@ function getSummaryBins() {
       y1: bin.y1,
       y2: bin.y2,
       isLeaf: bin.isLeaf,
-      area: bin.area(),
-      size: bin.size(),
+      area: bin.area,
+      size: bin.size,
       count: bin.features.length,
       speciesCount: countedSpecies.length,
-      species: bin.features.map(f => state.speciesToBins[f.properties.name].index),
+      species: bin.features.map(f => state.speciesToBins[f.properties.name].speciesId),
       topCommonSpecies,
       topIndicatorSpecies,
       // jaccardIndex,
@@ -653,12 +653,12 @@ function binData(dispatchResult = false) {
 
 
   const speciesToBins = {};
-  state.species.forEach(({ name }, index) => {
-    speciesToBins[name] = { index, bins: {} };
+  state.species.forEach(({ name }, speciesId) => {
+    speciesToBins[name] = { speciesId, bins: new Set() };
   });
   state.bins.forEach((bin) => {
     bin.features.forEach((feature) => {
-      speciesToBins[feature.properties.name].bins[bin.binId] = true;
+      speciesToBins[feature.properties.name].bins.add(bin.binId);
     });
   });
   state.speciesToBins = speciesToBins;
@@ -708,7 +708,7 @@ function getClusters(infomapArgs) {
 }
 
 function getPajek() {
-  const networkData = getPajekNetwork(state.species, state.features, state.bins);
+  const networkData = getPajekNetwork(state.species, state.speciesToBins, state.bins);
 
   dispatch({
     type: 'GET_PAJEK_SUCCESSFUL',

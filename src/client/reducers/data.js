@@ -80,7 +80,7 @@ const getInitialState = () => {
     binning: getInitialBinningState(),
     binningLoading: false,
     bins: [], // bins = binner.bins(features)
-    speciesToBins: {}, // { name:String -> { index: Int, bins: { binId:Int -> true }}} speciesToBins['speciesA'].bins[binId1] = true
+    speciesToBins: {}, // { name:String -> { speciesId: Int, bins: Set<binId:Int> }}
     network: null, // Pajek string
     clusterIds: [], // array<int> of cluster id:s, matching bins array in index
     isClustering: false,

@@ -361,7 +361,8 @@ class ExportWindow extends Component {
 
   getPajekNetwork() {
     return new Promise(resolve => {
-      const network = this.props.network || '';
+      const { species, speciesToBins, bins } = this.props;
+      const network = getPajekNetwork(species, speciesToBins, bins);
       resolve(network);
     });
   }

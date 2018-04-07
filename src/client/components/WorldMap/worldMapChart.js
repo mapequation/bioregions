@@ -186,7 +186,7 @@ world.update = function(el, props) {
       const colorDomainValue = d => d.count / d.area;
 
       const selectedCellMax = props.selectedCell ?
-      props.selectedCell.links[props.selectedCell.binId] : 1.0;
+      props.selectedCell.links.get(props.selectedCell.binId) : 1.0;
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       colorRange.unshift("#eeeeee");
@@ -196,7 +196,7 @@ world.update = function(el, props) {
       
       const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
       const selectedCellColor = (d) => {
-        const similarity = props.selectedCell.links[d.binId];
+        const similarity = props.selectedCell.links.get(d.binId);
         if (!similarity) {
           return "#eeeeee";
         }
