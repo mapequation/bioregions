@@ -169,6 +169,24 @@ world.update = function(el, props) {
     return clusterColor;
   }
 
+
+  const ordinaryStrokeColor = d => {
+    return props.showCellBorders ? "#ccc" : "none";
+  };
+
+  const selectedStrokeColor = (d) => {
+    if (d === props.selectedCell) {
+      return "#c00";
+    }
+    return ordinaryStrokeColor(d);
+  };
+
+  const strokeColor = props.selectedCell ? selectedStrokeColor : ordinaryStrokeColor;
+
+  const strokeOpacity = (d) => (props.selectedCell && props.selectedCell === d) ? 1.0 : 0.5;
+
+  const strokeWidth = (d) => (props.selectedCell && props.selectedCell === d) ? 0.2 : 0.1;
+
   if (props.bins.length > 0) {
     let color;
     if (props.mapBy === BY_CLUSTER) {
@@ -205,16 +223,26 @@ world.update = function(el, props) {
         return colorRange[Math.floor(heatmapColorScale(d))];
       };
       
-      const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
+      const linkColors = colorbrewer.Blues["9"];
+      // const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
+      const selectedCellColorScale = d3.scale.linear()
+        .domain([0, selectedCellMax]).range([0, 8]);
+
+      // if (props.selectedCell) {
+      //   const d = props.selectedCell;
+      //   console.log(`Selectd cell: ${d.binId}, colorDomainValue: ${colorDomainValue(d)} -> rangeValue: ${selectedCellColorScale(colorDomainValue(d))}. selectedCellMax: ${selectedCellMax}`);
+      // }
       const selectedCellColor = (d) => {
         const similarity = props.selectedCell.links.get(d.binId);
         if (!similarity) {
           return "#eeeeee";
         }
-        const alpha = alphaScale(similarity);
+        return linkColors[Math.floor(selectedCellColorScale(similarity))];
+
+        // const alpha = alphaScale(similarity);
         // if (similarity)
           // console.log(`${props.selectedCell.binId} -> ${d.binId}: similarity: ${similarity} -> alpha: ${alpha}`);
-        return chroma(heatmapColor(colorDomainValue(d))).alpha(alpha).css();
+        // return chroma(heatmapColor(colorDomainValue(d))).alpha(alpha).css();
       };
       // const ordinaryCellColor = (d) => heatmapColor(d.count / d.area);
       const ordinaryCellColor = (d) => {
@@ -239,11 +267,11 @@ world.update = function(el, props) {
 
     //Update
     binPaths.attr("d", props.binning.renderer(props.projection))
-      .style("fill", (d) => color(d))
-      .style("stroke", props.showCellBorders ? "#ccc" : "none")
+      .style("fill", color)
+      .style("stroke", strokeColor)
       // .style("stroke", (d, i) => color(colorDomainValue(d)))
-      .style("stroke-opacity", 0.5)
-      .style("stroke-width", 0.1)
+      .style("stroke-opacity", strokeOpacity)
+      .style("stroke-width", strokeWidth)
       .style("shape-rendering", "crispEdges"); // Needed in chrome to not show stroke artefacts
       // .style("stroke", "white")
   }
