@@ -654,11 +654,23 @@ function binData(dispatchResult = false) {
 
   const speciesToBins = {};
   state.species.forEach(({ name }, speciesId) => {
-    speciesToBins[name] = { speciesId, bins: new Set() };
+    speciesToBins[name] = {
+      speciesId,
+      area: 0.0,
+      bbox: [Infinity, Infinity, -Infinity, -Infinity], // [left, bottom, right, top]
+      bins: new Set(),
+    };
   });
   state.bins.forEach((bin) => {
     bin.features.forEach((feature) => {
-      speciesToBins[feature.properties.name].bins.add(bin.binId);
+      const speciesName = feature.properties.name;
+      const species = speciesToBins[speciesName];
+      species.area += bin.area;
+      if (species.bbox[0] > bin.x1) species.bbox[0] = bin.x1;
+      if (species.bbox[1] > bin.y1) species.bbox[1] = bin.y1;
+      if (species.bbox[2] < bin.x2) species.bbox[2] = bin.x2;
+      if (species.bbox[3] < bin.y2) species.bbox[3] = bin.y2;
+      species.bins.add(bin.binId);
     });
   });
   state.speciesToBins = speciesToBins;

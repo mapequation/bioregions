@@ -176,12 +176,16 @@ world.update = function(el, props) {
     }
     else {
       const bins = props.bins;
-      const maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
-      const domainMax = + maxCount + (8 - maxCount % 8);
-      const domain = d3.range(0, domainMax, (domainMax)/8); // Exact doesn't include the end for some reason
+      const domainExtent = d3.extent(bins.map((bin) => bin.count / bin.area));
+      // const maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
+      // const [domainMin, domainMax] = domainExtent;
+      const domainMax = domainExtent[1];
+      // const domainMax = + maxCount + (8 - maxCount % 8);
+      // const domainMax = maxCount;
+      const domain = d3.range(0, domainMax, (domainMax) / 8); // Exact doesn't include the end for some reason
       domain.push(domainMax);
-      domain[0] = 1; // Make a threshold between non-empty and empty bins
-      domain.unshift(0.5);
+      // domain[0] = 1; // Make a threshold between non-empty and empty bins
+      // domain.unshift(0.5);
       console.log("Color domain:", domain.length, domain);
       const colorDomainValue = d => d.count / d.area;
 
@@ -189,10 +193,17 @@ world.update = function(el, props) {
       props.selectedCell.links.get(props.selectedCell.binId) : 1.0;
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
-      colorRange.unshift("#eeeeee");
-      const heatmapColor = d3.scale.threshold()
-        .domain(domain)
-        .range(colorRange);
+      // colorRange.unshift("#eeeeee");
+      // const heatmapColor = d3.scale.threshold()
+      //   .domain(domain)
+      //   .range(colorRange);
+      // asdf
+      const heatmapColorScale = d3.scale.log()
+        .domain(domainExtent)
+        .range([0, 8]);
+      const heatmapColor = (d) => {
+        return colorRange[Math.floor(heatmapColorScale(d))];
+      };
       
       const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
       const selectedCellColor = (d) => {

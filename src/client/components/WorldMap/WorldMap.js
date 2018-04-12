@@ -24,9 +24,14 @@ class WorldMap extends Component {
     mapBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
     selectedCluster: PropTypes.number.isRequired,
-    selectedCell: PropTypes.object.isRequired,
+    selectedCell: PropTypes.object,
     selectCluster: PropTypes.func.isRequired,
     selectCell: PropTypes.func.isRequired,
+  }
+
+  constructor(props) {
+    super(props);
+    this.formatArea = d3.format(',.2g');
   }
 
   getSvg() {
@@ -122,7 +127,7 @@ class WorldMap extends Component {
             <h4 class="ui inverted header">
               <span class="value total-records-count">${d.count}</span> records of
               <span class="value total-species-count">${d.speciesCount}</span> species.
-              <div class="sub header">Cell size: ${d.size}˚. ${clusterInfo}</div>
+              <div class="sub header">Cell size: ${d.size}x${d.size}˚ (${this.formatArea(d.area)} km2). ${clusterInfo}</div>
             </h4>
             </p>
             <table class="ui styled inverted table">

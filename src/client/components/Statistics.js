@@ -10,6 +10,7 @@ class Statistics extends Component {
 
   static propTypes = {
     species: PropTypes.array.isRequired,
+    speciesToBins: PropTypes.object.isRequired,
     clusters: PropTypes.array.isRequired,
     clustersPerSpecies: PropTypes.object.isRequired,
     clusterColors: PropTypes.array.isRequired,
@@ -19,15 +20,18 @@ class Statistics extends Component {
     statisticsBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
     changeStatisticsBy: PropTypes.func.isRequired,
   }
-  
-  initialState = {
-    limitSpecies: 100,
-    limitClusters: 10,
-    filter: "",
-  }
 
-  state = {
-    ...this.initialState,
+  constructor(props) {
+    super(props);
+    this.initialState = {
+      limitSpecies: 100,
+      limitClusters: 10,
+      filter: '',
+    };
+
+    this.state = {
+      ...this.initialState,
+    };
   }
 
   componentDidMount() {
@@ -62,6 +66,8 @@ class Statistics extends Component {
     return thresholds;
   }
 
+  formatArea = d3.format(',.1g');
+
   renderShowMore(numLimited) {
     if (numLimited <= 0)
       return (
@@ -75,22 +81,23 @@ class Statistics extends Component {
   }
 
   renderSpeciesCounts() {
-    let { limitSpecies, filter } = this.state;
+    const { limitSpecies, filter } = this.state;
     if (this.props.clusters.length > 0)
       return this.renderSpeciesCountsWithClusters();
 
-    let { species } = this.props;
-    let regFilter = new RegExp(filter, 'i');
+    const { species, speciesToBins } = this.props;
+    const regFilter = new RegExp(filter, 'i');
     // let selection = R.pipe(
     //   species,
     //   R.filter(({name}) => regFilter.test(name)),
     //   // R.take(limitSpecies)
     // );
     let selection = species.filter(({name}) => regFilter.test(name));
-    let numFilteredSpecies = selection.length;
-    let numLimited = numFilteredSpecies - limitSpecies;
-    if (numLimited > 0)
+    const numFilteredSpecies = selection.length;
+    const numLimited = numFilteredSpecies - limitSpecies;
+    if (numLimited > 0) {
       selection = R.take(limitSpecies, selection);
+    }
     return (
       <div>
         <table className="ui sortable celled table">
@@ -101,18 +108,20 @@ class Statistics extends Component {
                   <input type="text" placeholder="Filter..." value={filter} onChange={this.handleFilterChange} />
                 </div>
               </th>
-              <th>{`${numFilteredSpecies} / ${species.length}`}</th>
+              <th colSpan="2">{`${numFilteredSpecies} / ${species.length}`}</th>
             </tr>
             <tr>
               <th className="">Name</th>
               <th className="sorted descending">Count</th>
+              <th className="">Area (km2)</th>
             </tr>
           </thead>
           <tbody>
             {selection.map(({name, count}) => (
               <tr key={name} name={name} onClick={this.handleClickSpecies}>
                 <td>{name}</td>
-                <td>{count}</td>
+                <td className="collapsing">{count}</td>
+                <td className="collapsing">{this.formatArea(speciesToBins[name].area)}</td>
               </tr>
             ))}
           </tbody>
@@ -130,7 +139,7 @@ class Statistics extends Component {
 
   renderSpeciesCountsWithClusters() {
     let { limitSpecies, filter } = this.state;
-    let { species, clustersPerSpecies } = this.props;
+    let { species, speciesToBins, clustersPerSpecies } = this.props;
     let regFilter = new RegExp(filter, 'i');
     // let selection = R.pipe(
     //   species,
@@ -152,11 +161,12 @@ class Statistics extends Component {
                   <input type="text" placeholder="Filter..." value={filter} onChange={this.handleFilterChange} />
                 </div>
               </th>
-              <th colSpan="2">{`${numFilteredSpecies} / ${species.length}`}</th>
+              <th colSpan="3">{`${numFilteredSpecies} / ${species.length}`}</th>
             </tr>
             <tr>
               <th className="">Name</th>
               <th className="sorted descending">Count</th>
+              <th className="">Area (km2)</th>
               <th className="">Regions</th>
             </tr>
           </thead>
@@ -166,6 +176,7 @@ class Statistics extends Component {
                 <tr key={name} name={name} onClick={this.handleClickSpecies}>
                   <td>{name}</td>
                   <td className="collapsing">{count}</td>
+                  <td className="collapsing">{this.formatArea(speciesToBins[name].area)}</td>
                   <td className="collapsing">{this.renderClusterDistribution(name)}</td>
                 </tr>
               );

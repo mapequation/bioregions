@@ -4,6 +4,7 @@
 // import turfExtent from 'turf-extent';
 // import turfCentroid from 'turf-centroid';
 // import {bboxIntersect} from './polygons';
+import { area } from './geomath';
 
 class Node {
   constructor(x1, y1, x2, y2) {
@@ -13,18 +14,21 @@ class Node {
     this.y2 = y2;
     this.isLeaf = true;
     this.features = [];
+    this.parent = null;
     this.children = []; // at index 0,1,2,3
     this.clusterId = -1;
+    this.area = area([x1, y1, x2, y2]);
+    this.id = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
   }
 
   get size() {
     return this.x2 - this.x1;
   }
 
-  get area() {
-    const dx = this.x2 - this.x1;
-    return dx * dx;
-  }
+  // get area() {
+  //   const dx = this.x2 - this.x1;
+  //   return dx * dx;
+  // }
 
   add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity) {
     if (!this.isLeaf)
@@ -77,6 +81,8 @@ class Node {
       if (below) y1 = ym; else y2 = ym;
 
       let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
+      child.parent = this;
+      child.id = `${this.id}${i}`;
       child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
     }
     else {
@@ -395,11 +401,15 @@ export default class QuadtreeGeoBinner {
     if (patchSparseNodes) {
       this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
     }
-    var nodes = [];
+    const nodes = [];
     this.visitNonEmpty((node) => {
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
       if (node.features.length < this._lowerThreshold) {
         return true;
+      }
+      node.included = true;
+      if (node.parent.included) {
+        node.parentIncluded = true;
       }
       nodes.push(node);
     });
