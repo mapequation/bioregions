@@ -1,25 +1,17 @@
 import React, {Component, PropTypes} from 'react';
-import PieChart from './PieChart';
-import Div from './helpers/Div';
-import Tooltip from './lib/Tooltip';
+import { connect } from 'react-redux';
+import { bindActionCreators } from 'redux';
+import { Button, Form } from 'semantic-ui-react';
+import * as DisplayActions from '../actions/DisplayActions';
+import * as FilterActions from '../actions/FilterActions';
+import PieChart from '../components/PieChart';
+import Div from '../components/helpers/Div';
+import Tooltip from '../components/lib/Tooltip';
 import R from 'ramda';
 import _ from 'lodash';
-import {BY_NAME, BY_CLUSTER} from '../constants/Display';
+import {BY_SPECIES, BY_CLUSTER} from '../constants/Display';
 
 class Statistics extends Component {
-
-  static propTypes = {
-    species: PropTypes.array.isRequired,
-    speciesToBins: PropTypes.object.isRequired,
-    clusters: PropTypes.array.isRequired,
-    clustersPerSpecies: PropTypes.object.isRequired,
-    clusterColors: PropTypes.array.isRequired,
-    selectedCluster: PropTypes.number.isRequired,
-    selectCluster: PropTypes.func.isRequired,
-    selectSpecies: PropTypes.func.isRequired,
-    statisticsBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
-    changeStatisticsBy: PropTypes.func.isRequired,
-  }
 
   constructor(props) {
     super(props);
@@ -341,34 +333,43 @@ class Statistics extends Component {
     )
   }
 
-  renderSelectStatisticsBy() {
-    const {species, statisticsBy, clusters, changeStatisticsBy} = this.props;
-    if (clusters.length == 0)
-      return (<span></span>);
+  onClickStatisticsBy = (event, data) => {
+    // Check for toggle
+    if (data.active) {
+      return;
+    }
+    const { statisticsBy } = this.props;
+    this.props.changeStatisticsBy(statisticsBy === BY_SPECIES ? BY_CLUSTER : BY_SPECIES);
+  }
 
-    const availableGroupings = [BY_NAME, BY_CLUSTER];
+  renderSelectStatisticsBy() {
+    const { statisticsBy, clusters } = this.props;
+    if (clusters.length === 0) {
+      return (<span></span>);
+    }
 
     return (
-      <Div className="ui form" display="inline-block" marginRight="10px">
-        <div className="inline fields">
+      <Form>
+        <Form.Field inline>
           <label>Statistics by</label>
-          <div className="field">
-            <div className="ui compact basic buttons">
-              {availableGroupings.map((grouping) => (
-                <button key={grouping}
-                  className={`ui button ${grouping === statisticsBy? "active" : ""}`}
-                  onClick={() => changeStatisticsBy(grouping)}>{grouping}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Div>
-    );
+          <Button.Group compact basic>
+            <Button active={statisticsBy === BY_SPECIES}
+              onClick={this.onClickStatisticsBy}>
+              Species
+            </Button>
+            <Button active={statisticsBy === BY_CLUSTER}
+              onClick={this.onClickStatisticsBy}>
+              Regions
+            </Button>
+          </Button.Group>
+        </Form.Field>
+      </Form>
+    )
   }
 
   handleChangeLimit = (event) => {
     const limit = event.target.value;
-    if (this.props.statisticsBy == BY_NAME)
+    if (this.props.statisticsBy == BY_SPECIES)
       this.setState({limitSpecies: limit});
     else
       this.setState({limitClusters: limit});
@@ -378,8 +379,8 @@ class Statistics extends Component {
     const {species, statisticsBy, clusters} = this.props;
     const {limitSpecies, limitClusters} = this.state;
 
-    const currentLimit = statisticsBy === BY_NAME ? limitSpecies : limitClusters;
-    const currentMax = statisticsBy === BY_NAME ? species.length : clusters.length;
+    const currentLimit = statisticsBy === BY_SPECIES ? limitSpecies : limitClusters;
+    const currentMax = statisticsBy === BY_SPECIES ? species.length : clusters.length;
     const limitThresholds = this.getLimitThresholds(currentMax);
 
     if (limitThresholds.length <= 1)
@@ -401,7 +402,7 @@ class Statistics extends Component {
             </select>
           </div>
           <div className="field">
-            {`of ${currentMax} ${ statisticsBy === BY_NAME ? "species" : "clusters" }`}
+            {`of ${currentMax} ${ statisticsBy === BY_SPECIES ? "species" : "clusters" }`}
           </div>
         </div>
       </Div>
@@ -409,9 +410,10 @@ class Statistics extends Component {
   }
 
   render() {
-    const {species, statisticsBy, clusters} = this.props;
-    if (species.length === 0)
+    const { species, statisticsBy } = this.props;
+    if (species.length === 0) {
       return (<div></div>);
+    }
 
     return (
       <div>
@@ -426,4 +428,43 @@ class Statistics extends Component {
   }
 }
 
-export default Statistics;
+Statistics.propTypes = {
+  species: PropTypes.array.isRequired,
+  speciesToBins: PropTypes.object.isRequired,
+  clusters: PropTypes.array.isRequired,
+  clustersPerSpecies: PropTypes.object.isRequired,
+  clusterColors: PropTypes.array.isRequired,
+  selectedCluster: PropTypes.number.isRequired,
+  selectCluster: PropTypes.func.isRequired,
+  selectSpecies: PropTypes.func.isRequired,
+  statisticsBy: PropTypes.oneOf([BY_SPECIES, BY_CLUSTER]).isRequired,
+  changeStatisticsBy: PropTypes.func.isRequired,
+};
+
+function mapStateToProps(state) {
+  const { data, display, info } = state;
+  return {
+    species: data.species,
+    speciesToBins: data.speciesToBins,
+    clusters: data.clusters,
+    clustersPerSpecies: data.clustersPerSpecies,
+    clusterColors: data.clusterColors,
+    selectedCluster: info.selectedCluster,
+    statisticsBy: display.statisticsBy,
+  };
+}
+
+function mapDispatchToProps(dispatch) {
+  const actions = bindActionCreators(Object.assign({},
+    DisplayActions,
+    FilterActions,
+  ), dispatch);
+  return {
+    ...actions,
+  };
+}
+
+export default connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(Statistics);

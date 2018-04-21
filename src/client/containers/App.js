@@ -2,15 +2,16 @@ import React, {Component, PropTypes} from 'react';
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import cn from 'classnames';
-import ControlPanel from '../components/ControlPanel/ControlPanel';
 import WorldMap from '../components/WorldMap/WorldMap';
 import WorldMapDimmer from '../components/WorldMap/WorldMapDimmer';
-import Phylogram from '../components/Phylogram/Phylogram';
+// import Phylogram from '../components/Phylogram/Phylogram';
 import Tree from '../components/Phylogram/Tree';
-import Statistics from '../components/Statistics';
+import ControlPanel from './ControlPanel';
+import Statistics from './Statistics';
 import SpeciesInfo from '../components/SpeciesInfo';
 import * as FileLoaderActions from '../actions/FileLoaderActions';
 import * as WorldmapActions from '../actions/WorldmapActions';
+import * as InfoActions from '../actions/InfoActions';
 import * as ClusterActions from '../actions/ClusterActions';
 import * as BinningActions from '../actions/BinningActions';
 import * as DisplayActions from '../actions/DisplayActions';
@@ -83,7 +84,7 @@ class App extends Component {
 
 
   render() {
-    const {data, files, worldmap, phylogram, errorMessage, actions} = this.props;
+    const {files, data, display, info, worldmap, phylogram, errorMessage, actions} = this.props;
 
     return (
       <div className="app">
@@ -97,24 +98,24 @@ class App extends Component {
             <p>Please contact us with the message above.</p>
           </div>
           <div className="ui two column stackable grid">
-            <div className="four wide column">
-              <ControlPanel {...{files, data, worldmap, actions}} />
+            <div className="six wide column">
+              <ControlPanel />
             </div>
-            <div className="twelve wide column">
+            <div className="ten wide column">
               {
-                data.species.length === 0? (
+                data.species.length === 0 ? (
                   <WorldMapDimmer {...files} {...actions} />
                 ) : (
-                  <WorldMap {...worldmap} {...data} {...actions} />
+                  <WorldMap {...worldmap} {...display} {...info} {...data} {...actions} />
                 )
               }
             </div>
           </div>
           <p></p>
           <Tree {...data} {...phylogram} {...actions} />
-          <Statistics {...data} {...actions} />
+          <Statistics />
         </div>
-        <SpeciesInfo species={data.selectedSpecies} onHide={actions.unselectSpecies} />
+        <SpeciesInfo species={info.selectedSpecies} onHide={actions.unselectSpecies} />
       </div>
     );
   }
@@ -123,6 +124,8 @@ class App extends Component {
 App.propTypes = {
   files: PropTypes.object.isRequired,
   data: PropTypes.object.isRequired,
+  display: PropTypes.object.isRequired,
+  info: PropTypes.object.isRequired,
   worldmap: PropTypes.object.isRequired,
   phylogram: PropTypes.object.isRequired,
   errorMessage: PropTypes.string,
@@ -138,6 +141,7 @@ function mapDispatchToProps(dispatch) {
     actions: bindActionCreators(Object.assign({},
       FileLoaderActions,
       WorldmapActions,
+      InfoActions,
       PhylogramActions,
       ClusterActions,
       BinningActions,

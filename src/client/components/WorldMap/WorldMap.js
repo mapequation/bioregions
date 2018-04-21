@@ -1,7 +1,7 @@
 import React, {Component, PropTypes} from 'react';
 import worldMapChart from './worldMapChart.js';
 import * as DataFetching from '../../constants/DataFetching';
-import {BY_NAME, BY_CLUSTER} from '../../constants/Display';
+import {BY_CELL, BY_CLUSTER} from '../../constants/Display';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import d3tipStyles from './d3-tip.css';
@@ -21,10 +21,12 @@ class WorldMap extends Component {
     features: PropTypes.array.isRequired,
     binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
-    mapBy: PropTypes.oneOf([BY_NAME, BY_CLUSTER]).isRequired,
+    mapBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
     selectedCluster: PropTypes.number.isRequired,
     selectedCell: PropTypes.object,
+    highlightedCell: PropTypes.object,
+    highlightCell: PropTypes.func.isRequired,
     selectCluster: PropTypes.func.isRequired,
     selectCell: PropTypes.func.isRequired,
   }
@@ -32,6 +34,12 @@ class WorldMap extends Component {
   constructor(props) {
     super(props);
     this.formatArea = d3.format(',.2g');
+
+    this.state = {
+      onMouseOver: this.handleMouseOverGridCell,
+      onMouseOut: this.handleMouseOutGridCell,
+      onMouseClick: this.handleMouseClickGridCell,
+    };
   }
 
   getSvg() {
@@ -43,12 +51,6 @@ class WorldMap extends Component {
     // .replace(/^<svg/, svgProps)
     // var svgProps = '<svg version="1.1" baseProfile="full" xmlns="http://www.w3.org/2000/svg">';
     // return svgProps + svg.html() + "</svg>";
-  }
-
-  state = {
-    onMouseOver: ::this.handleMouseOverGridCell,
-    onMouseOut: ::this.handleMouseOutGridCell,
-    onMouseClick: ::this.handleMouseClickGridCell,
   }
 
   // Using arrow functions and ES7 Class properties to autobind
@@ -84,7 +86,7 @@ class WorldMap extends Component {
     const props = Object.assign({}, this.props, this.state);
     worldMapChart.create(this.svgParent, props);
 
-    this.initTooltip();
+    // this.initTooltip();
   }
 
   componentDidUpdate() {
@@ -152,22 +154,24 @@ class WorldMap extends Component {
 
       });
     d3.select(this.getSvg()).call(this.tip);
-    console.log("this.tip:", this.tip);
+    // console.log("this.tip:", this.tip);
   }
 
-  handleMouseOverGridCell(d) {
-    if (this.tip) {
-      this.tip.show(d);
-    }
+  handleMouseOverGridCell = (d) => {
+    // if (this.tip) {
+    //   this.tip.show(d);
+    // }
+    this.props.highlightCell(d);
+  }
+  
+  handleMouseOutGridCell = (d) => {
+    // if (this.tip) {
+    //   this.tip.hide(d);
+    // }
+    this.props.highlightCell(null);
   }
 
-  handleMouseOutGridCell(d) {
-    if (this.tip) {
-      this.tip.hide(d);
-    }
-  }
-
-  handleMouseClickGridCell(d) {
+  handleMouseClickGridCell = (d) => {
     console.log("Mouse click on cell:", d);
     const { mapBy } = this.props;
     if (mapBy === BY_CLUSTER) {

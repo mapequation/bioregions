@@ -3,6 +3,8 @@ import files from './files';
 import data from './data';
 import worldmap from './worldmap';
 import phylogram from './phylogram';
+import display from './display';
+import info from './info';
 import { ERROR_MESSAGE, RESET_ERROR_MESSAGE } from '../constants/ActionTypes';
 
 
@@ -27,6 +29,8 @@ function errorMessage(state = null, action) {
 const rootReducer = combineReducers({
   files,
   data,
+  display,
+  info,
   worldmap,
   phylogram,
   errorMessage,

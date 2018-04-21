@@ -1,7 +1,6 @@
 import * as ActionTypes from '../constants/ActionTypes';
 import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
 import * as Binning from '../constants/Binning';
-import * as Display from '../constants/Display';
 import _ from 'lodash';
 import colors from '../utils/colors';
 import DataWorker from 'worker!../workers/DataWorker';
@@ -86,19 +85,14 @@ const getInitialState = () => {
     isClustering: false,
     clusters: [], // array of {clusterId,numBins,numRecords,numSpecies,topCommonSpecies,topIndicatorSpecies}
     clustersPerSpecies: {}, // name -> {count, clusters: limitRest([{clusterId, count}, ...])}
-    statisticsBy: Display.BY_NAME, // name or cluster when clusters ready
-    mapBy: Display.BY_NAME, // name or cluster when clusters ready
     clusterColors: [], // array of chroma colors for each cluster
-    selectedCluster: -1, // clusterId if selected
-    selectedCell: null, // one of bins
-    selectedSpecies: "",
     phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
     clusterFractionLimit: 0.1, // For cluster pie charts //TODO: Not used in DataWorker
-    isShowingInfomapUI: false,
     infomap: {
       numTrials: 1,
-      markovTime: 1.0
+      markovTime: 1.0,
     },
+    selectedCell: null, // one of bins
   };
 };
 
@@ -138,6 +132,17 @@ function prepareTree(tree, state) {
 
 export default function data(state = getInitialState(), action) {
   switch (action.type) {
+  case ActionTypes.SELECT_CELL:
+    if (state.selectedCell) {
+      delete state.selectedCell.links;
+    }
+    if (action.cell && !action.cell.links) {
+      action.cell.links = getSimilarCells(action.cell, state.species, state.speciesToBins);
+    }
+    return {
+      ...state,
+      selectedCell: action.cell,
+    };
   case ActionTypes.LOAD_FILES:
     // Forward to data worker
     state.dataWorker.postMessage(action);
@@ -202,7 +207,7 @@ export default function data(state = getInitialState(), action) {
       geoPhyloTree = geoTreeUtils.reconstructAncestralAreas(state.phyloTree, clustersPerSpecies, state.clusterFractionLimit);
       // Create new tree object to get behind shouldComponentUpdate
       geoPhyloTree = Object.assign({}, geoPhyloTree);
-    } 
+    }
     return {
       ...state,
       isClustering: false,
@@ -210,10 +215,7 @@ export default function data(state = getInitialState(), action) {
       clusterIds: action.clusterIds,
       clusters,
       clustersPerSpecies,
-      statisticsBy: Display.BY_CLUSTER,
-      mapBy: Display.BY_CLUSTER,
       clusterColors: colors.categoryColors(clusters.length),
-      isShowingInfomapUI: false,
       phyloTree: geoPhyloTree,
     };
   case ActionTypes.BINNING_CHANGE_TYPE:
@@ -230,49 +232,11 @@ export default function data(state = getInitialState(), action) {
       clusters: [],
       binning: nextBinning,
       binningLoading: state.species.length > 0,
-      statisticsBy: Display.BY_NAME,
-      mapBy: Display.BY_NAME,
-    }
-  case ActionTypes.CHANGE_MAP_BY:
-    return {
-      ...state,
-      mapBy: action.mapBy,
-    }
-  case ActionTypes.CHANGE_STATISTICS_BY:
-    return {
-      ...state,
-      statisticsBy: action.statisticsBy,
-    }
+    };
   case ActionTypes.SET_CLUSTER_COLORS:
     return {
       ...state,
       clusterColors: action.clusterColors,
-    };
-  case ActionTypes.SELECT_CLUSTER:
-    return {
-      ...state,
-      selectedCluster: action.clusterId,
-    };
-  case ActionTypes.SELECT_CELL:
-    if (state.selectedCell) {
-      delete state.selectedCell.links;
-    }
-    if (action.cell && !action.cell.links) {
-      action.cell.links = getSimilarCells(action.cell, state.species, state.speciesToBins);
-    }
-    return {
-      ...state,
-      selectedCell: action.cell,
-    };
-  case ActionTypes.SELECT_SPECIES:
-    return {
-      ...state,
-      selectedSpecies: action.species,
-    };
-  case ActionTypes.SHOW_INFOMAP_UI:
-    return {
-      ...state,
-      isShowingInfomapUI: action.isShowingInfomapUI,
     };
   case ActionTypes.INFOMAP_NUM_TRIALS:
     return {
@@ -280,7 +244,7 @@ export default function data(state = getInitialState(), action) {
       infomap: {
         ...state.infomap,
         numTrials: action.numTrials,
-      }
+      },
     };
   case ActionTypes.INFOMAP_MARKOV_TIME:
     return {
@@ -288,7 +252,7 @@ export default function data(state = getInitialState(), action) {
       infomap: {
         ...state.infomap,
         markovTime: action.markovTime,
-      }
+      },
     };
   case ActionTypes.REMOVE_SPECIES:
     state.dataWorker.postMessage(action);

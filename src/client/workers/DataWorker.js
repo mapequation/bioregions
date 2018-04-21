@@ -159,6 +159,7 @@ function loadShapefiles(files) {
           coordinates: polygonCoords,
         }}, tolerance);
         if (simplifiedPolygon) {
+          //TODO: Why just outer ring, doesn't turfSimplifiy support holes?
           simplifiedPolygon.geometry.coordinates = [simplifiedPolygon.geometry.coordinates[0]];
           if (simplifiedPolygon.geometry.coordinates[0].length < 4) {
             ++numTooSimplifiedPolygons;
@@ -214,7 +215,7 @@ function loadShapefiles(files) {
       state.geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded state.geoJSON:", state.geoJSON);
       const {properties} = state.geoJSON.features[0];
-      console.log(`Number of too simplified polygons: ${numTooSimplifiedPolygons}`);
+      console.log(`Number of too simplified polygons: ${numTooSimplifiedPolygons} (Keeping unsimplified originals)`);
       dispatch(requestGeoJSONNameField(properties));
     })
     .catch(err => {

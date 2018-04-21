@@ -27,8 +27,8 @@ export function sortedCountBy(key, items) {
 }
 
 export function topSortedCountBy(key, limit, items) {
-  let countedItems = countBy(key, items);
-  var heapselectByCount = crossfilter.heapselect.by(d => d.count);
+  const countedItems = countBy(key, items);
+  const heapselectByCount = crossfilter.heapselect.by(d => d.count);
   return heapselectByCount(countedItems, 0, countedItems.length, limit)
       .sort((a, b) => b.count - a.count);
 }
@@ -37,6 +37,7 @@ export function indicatorItems(key, keyToGlobalCountMap, maxGlobalCount, maxLoca
   return localItems.map(item => {
     // tfidf-like score
     const score = (item.count / maxLocalCount) / (keyToGlobalCountMap.get(item[key]) / maxGlobalCount);
+    item.score = score; //TODO: More transparent mutation and shape
     return { [key]: item[key], score, count: item.count };
   });
 }

@@ -34,10 +34,10 @@ const HCL_LIMITS = {
   chromaMin: 0,
   chromaMax: 140,
   lightMin: 0,
-  lightMax: 100
-}
+  lightMax: 100,
+};
 
-var defaultChromaOptions = {
+const defaultChromaOptions = {
   hueMin: 0,
   hueMax: 360,
   chromaMin: 30,
@@ -45,8 +45,8 @@ var defaultChromaOptions = {
   lightMin: 50,
   lightMax: 60,
   useForceMode: true,
-  quality: 50
-}
+  quality: 50,
+};
 
 const IWantHueLimits = {
   hueMin: 0,
@@ -55,9 +55,9 @@ const IWantHueLimits = {
   chromaMax: 3,
   lightMin: 0,
   lightMax: 1.5,
-}
+};
 
-var defaultIWantHueOptions = {
+const defaultIWantHueOptions = {
   hueMin: 0,
   hueMax: 360,
   chromaMin: 0.2,
@@ -65,8 +65,8 @@ var defaultIWantHueOptions = {
   lightMin: 0.8,
   lightMax: 1.2,
   useForceMode: true,
-  quality: 50
-}
+  quality: 50,
+};
 
 export default {
   categoryColors(count, options) {
@@ -80,18 +80,19 @@ function categoryColorsByD3(count, options) {
 }
 
 function extend(colors, count, options) {
-  if (count > colors.length)
+  if (count > colors.length) {
     return colors.concat(categoryColorsByIWantHue(count - colors.length, options));
+  }
   return colors;
 }
 
 function categoryColorsByIWantHue(count, options) {
-  var o = Object.assign({}, defaultIWantHueOptions, options);
+  const o = Object.assign({}, defaultIWantHueOptions, options);
   // Generate a color palette
-  var colors = iWantHue().generate(
+  const colors = iWantHue().generate(
     count,                   // Number of colors to generate
     function(color) {     // This function filters valid colors...
-      var hcl = color.hcl();
+      const hcl = color.hcl();
       return hcl[0]>=o.hueMin && hcl[0]<=o.hueMax &&
              hcl[1]>=o.chromaMin && hcl[1]<=o.chromaMax &&
              hcl[2]>=o.lightMin && hcl[2]<=o.lightMax;
@@ -101,7 +102,7 @@ function categoryColorsByIWantHue(count, options) {
   );
 
   // Sort colors by differentiation
-  var sortedColors = iWantHue().diffSort(colors);
+  const sortedColors = iWantHue().diffSort(colors);
   // re-create chroma objects as IWantHue depends on earlier version of chroma-js
   return sortedColors.map(color => chroma(color.hex()));
 }
@@ -131,13 +132,13 @@ function categoryColorsByDistinctColors(count, options) {
 * Based on http://tools.medialab.sciences-po.fr/iwanthue/index.php
 */
 function categoryColorsByChromasPaletteGenerator(numCategories, options) {
-  var o = Object.assign({}, defaultChromaOptions, options);
+  const o = Object.assign({}, defaultChromaOptions, options);
   o.useForceMode = true; //TODO: k-means broken in paletteGen.
 
-  var colors = paletteGenerator.generate(
+  const colors = paletteGenerator.generate(
     numCategories, // Colors
     function(color){ // This function filters valid colors
-      var hcl = color.hcl();
+      const hcl = color.hcl();
       return hcl[0]>=o.hueMin && hcl[0]<=o.hueMax
         && hcl[1]>=o.chromaMin && hcl[1]<=o.chromaMax
         && hcl[2]>=o.lightMin && hcl[2]<=o.lightMax;

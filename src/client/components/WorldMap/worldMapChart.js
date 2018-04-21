@@ -1,43 +1,44 @@
-import $ from 'jquery'
-import d3 from 'd3'
-import * as topojson from 'topojson'
-import colorbrewer from 'colorbrewer'
+import $ from 'jquery';
+import d3 from 'd3';
+import * as topojson from 'topojson';
+import colorbrewer from 'colorbrewer';
 import chroma from 'chroma-js';
-import {DATA_SUCCEEDED} from '../../constants/DataFetching'
-import {BY_NAME, BY_CLUSTER} from '../../constants/Display';
-var world = {};
+import {DATA_SUCCEEDED} from '../../constants/DataFetching';
+import { BY_CLUSTER } from '../../constants/Display';
+
+const world = {};
 
 export default world;
 
 world.create = function(el, props) {
-  console.log("!!!! world.create()");
+  console.log("Create world map chart...");
   world._zoomTranslation = [0, 0];
   world._zoomScale = 1;
 
-  var anchorElement = d3.select(el);
+  const anchorElement = d3.select(el);
   anchorElement.selectAll("*").remove();
-  var svg = anchorElement.append('svg')
+  const svg = anchorElement.append('svg')
     .attr('width', props.width)
     .attr('height', props.height)
     .attr('id', "worldmap")
     .attr('class', "worldmap");
 
-  var g = svg.append("g");
+  const g = svg.append("g");
 
   g.append("use")
     .attr("xlink:href", "#land");
 
-  var defs = g.append("defs");
+  const defs = g.append("defs");
 
   g.append("path")
     .attr("id", "land")
     .attr("class", "land");
 
-  var overlayGroup = g.append("g")
+  const overlayGroup = g.append("g")
     .attr("class", "overlay")
     .attr("clip-path", "url(#clip)");
 
-  var graticuleGroup = g.append("g")
+  const graticuleGroup = g.append("g")
     .attr("class", "graticules");
   graticuleGroup.append("path")
     .attr("class", "graticule");
@@ -54,11 +55,11 @@ world.create = function(el, props) {
     .attr("xlink:href", "#land");
 
   return world.update(el, props);
-}
+};
 
-world.update = function(el, props) {
-  console.log("!!!! world.update()", props);
-  props = Object.assign({
+world.update = function(el, properties) {
+  console.log("Update world map chart...", properties);
+  const props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
     top: 0,
@@ -67,24 +68,25 @@ world.update = function(el, props) {
     right: 0,
     height: 500,
     projection: d3.geo.mercator(),
-  }, props);
+  }, properties);
 
-  var anchorElement = d3.select(el);
-  var svg = anchorElement.select("svg");
+  const anchorElement = d3.select(el);
+  const svg = anchorElement.select("svg");
   if (svg.empty()) {
     console.log("Update map without created svg, calling create...");
     world.create(el, props);
     return;
   }
 
-  var g = svg.select("g");
+  const g = svg.select("g");
 
-  var totalWidth = props.width;
-  if (!totalWidth)
+  let totalWidth = props.width;
+  if (!totalWidth) {
     totalWidth = $(anchorElement.node()).innerWidth();
+  }
 
-  var height = props.height - props.top - props.bottom;
-  var width = totalWidth - props.left - props.right;
+  const height = props.height - props.top - props.bottom;
+  const width = totalWidth - props.left - props.right;
 
   console.log(`--> totalWidth: ${totalWidth}, width: ${width}`);
 
@@ -104,14 +106,14 @@ world.update = function(el, props) {
   doZoom(world._zoomTranslation || [0, 0], world._zoomScale || 1);
 
   props.projection
-    .translate([width/2, height/2])
+    .translate([width / 2, height / 2])
     .scale(width / 2 / Math.PI);
 
-  var path = d3.geo.path()
+  const path = d3.geo.path()
     .pointRadius(1)
     .projection(props.projection);
 
-  var landPath = g.select("path.land");
+  const landPath = g.select("path.land");
   if (props.worldStatus === DATA_SUCCEEDED) {
     console.log("Draw world...");
     landPath
@@ -123,14 +125,15 @@ world.update = function(el, props) {
     .style("stroke", "#666");
 
   const {graticuleStep, showGraticules} = props;
-  var graticule = d3.geo.graticule()
+  let graticule = d3.geo.graticule()
     .step([graticuleStep, graticuleStep]);
 
-  let emptyGraticule = () => [];
+  const emptyGraticule = () => [];
   emptyGraticule.outline = () => [];
 
-  if (!showGraticules)
+  if (!showGraticules) {
     graticule = emptyGraticule;
+  }
 
   g.select(".graticules").select("path.graticule")
     .datum(graticule)
@@ -161,38 +164,51 @@ world.update = function(el, props) {
   }
 
 
-  function getClusterColor(clusterId) {
-    const clusterColor = props.clusterColors[clusterId];
-    if (props.selectedCluster >= 0) {
-      return clusterId === props.selectedCluster ? clusterColor : chroma(clusterColor.hex()).alpha(0.2);
-    }
-    return clusterColor;
-  }
-
-
-  const ordinaryStrokeColor = d => {
-    return props.showCellBorders ? "#ccc" : "none";
-  };
-
-  const selectedStrokeColor = (d) => {
-    if (d === props.selectedCell) {
-      return "#c00";
-    }
-    return ordinaryStrokeColor(d);
-  };
-
-  const strokeColor = props.selectedCell ? selectedStrokeColor : ordinaryStrokeColor;
-
-  const strokeOpacity = (d) => (props.selectedCell && props.selectedCell === d) ? 1.0 : 0.5;
-
-  const strokeWidth = (d) => (props.selectedCell && props.selectedCell === d) ? 0.2 : 0.1;
 
   if (props.bins.length > 0) {
     let color;
+
+    const ordinaryStrokeColor = d => {
+      return props.showCellBorders ? "#ccc" : "none";
+    };
+
+    const selectedStrokeColor = (d) => {
+      if (d === props.selectedCell) {
+        return "#c00";
+      }
+      return ordinaryStrokeColor(d);
+    };
+
+    const strokeColor = props.selectedCell ? selectedStrokeColor : ordinaryStrokeColor;
+
+    const strokeOpacity = (d) => (props.selectedCell && props.selectedCell === d) ? 1.0 : 0.5;
+
+    const strokeWidth = (d) => (props.selectedCell && props.selectedCell === d) ? 0.2 : 0.1;
+
+    const selectedCellMax = props.selectedCell ?
+    props.selectedCell.links.get(props.selectedCell.binId) : 1.0;
+    const selectedCellAlphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
+
+
+    const getClusterColor = (d) => {
+      const clusterColor = props.clusterColors[d.clusterId];
+      if (props.selectedCluster >= 0) {
+        return d.clusterId === props.selectedCluster ? clusterColor.css() : chroma(clusterColor.hex()).alpha(0.2).css();
+      }
+      else if (props.selectedCell) {
+        const similarity = props.selectedCell.links.get(d.binId);
+        if (!similarity) {
+          return "#eeeeee";
+        }
+        const alpha = selectedCellAlphaScale(similarity);
+        return chroma(clusterColor.hex()).alpha(alpha).css();
+      }
+      return clusterColor.css();
+    };
+
     if (props.mapBy === BY_CLUSTER) {
-      color = (d) => getClusterColor(d.clusterId).css();
-    }
-    else {
+      color = (d) => getClusterColor(d);
+    } else {
       const bins = props.bins;
       const domainExtent = d3.extent(bins.map((bin) => bin.count / bin.area));
       // const maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
@@ -206,9 +222,6 @@ world.update = function(el, props) {
       // domain.unshift(0.5);
       console.log("Color domain:", domain.length, domain);
       const colorDomainValue = d => d.count / d.area;
-
-      const selectedCellMax = props.selectedCell ?
-      props.selectedCell.links.get(props.selectedCell.binId) : 1.0;
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
       // colorRange.unshift("#eeeeee");
@@ -224,18 +237,13 @@ world.update = function(el, props) {
       };
       
       const linkColors = colorbrewer.Blues["9"];
-      // const alphaScale = d3.scale.linear().domain([0, selectedCellMax]).range([0.2, 1]);
       const selectedCellColorScale = d3.scale.linear()
         .domain([0, selectedCellMax]).range([0, 8]);
 
-      // if (props.selectedCell) {
-      //   const d = props.selectedCell;
-      //   console.log(`Selectd cell: ${d.binId}, colorDomainValue: ${colorDomainValue(d)} -> rangeValue: ${selectedCellColorScale(colorDomainValue(d))}. selectedCellMax: ${selectedCellMax}`);
-      // }
       const selectedCellColor = (d) => {
         const similarity = props.selectedCell.links.get(d.binId);
         if (!similarity) {
-          return "#eeeeee";
+          return '#eeeeee';
         }
         return linkColors[Math.floor(selectedCellColorScale(similarity))];
 
@@ -251,6 +259,13 @@ world.update = function(el, props) {
 
       color = props.selectedCell ? selectedCellColor : ordinaryCellColor;
     }
+    const _color = color;
+
+    color = (d) => {
+      const clr = _color(d);
+      d.color = clr;
+      return clr;
+    };
 
     const binPaths = g.select(".overlay")
       .attr("clip-path", props.clipToLand ? "url(#clip)" : null)
@@ -261,8 +276,8 @@ world.update = function(el, props) {
 
     binPaths.enter().append("path")
       .attr("class", "bin")
-      .on('mouseover', props.onMouseOver)
-      .on('mouseout', props.onMouseOut)
+      .on('mouseover', onMouseOverGridCell)
+      .on('mouseout', onMouseOutGridCell)
       .on('click', onClickGridCell);
 
     //Update
@@ -326,9 +341,25 @@ world.update = function(el, props) {
   }
 
   function onClickGridCell(d) {
+    console.log('####### mouse CLICK', d);
     d3.event.stopPropagation();
     d3.event.preventDefault();
+    console.log('props:', props);
     props.onMouseClick(d);
+  }
+
+  function onMouseOverGridCell(d) {
+    console.log('####### mouse OVER', d);
+    d3.event.stopPropagation();
+    d3.event.preventDefault();
+    props.onMouseOver(d);
+  }
+  
+  function onMouseOutGridCell(d) {
+    console.log('####### mouse OUT', d);
+    d3.event.stopPropagation();
+    d3.event.preventDefault();
+    props.onMouseOut(d);
   }
 
   //geo translation on mouse click in map

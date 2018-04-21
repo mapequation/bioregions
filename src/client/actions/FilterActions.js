@@ -2,6 +2,7 @@ import {
   SELECT_CLUSTER,
   SELECT_SPECIES,
   SELECT_CELL,
+  HIGHLIGHT_CELL,
 } from '../constants/ActionTypes';
 
 export function selectCluster(clusterId) {
@@ -24,6 +25,17 @@ export function selectCell(cell) {
 
 export function unselectCell() {
   return selectCell(undefined);
+}
+
+export function highlightCell(cell) {
+  return {
+    type: HIGHLIGHT_CELL,
+    cell,
+  };
+}
+
+export function unhighlightCell() {
+  return highlightCell(undefined);
 }
 
 export function selectSpecies(species) {
