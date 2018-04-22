@@ -11,6 +11,14 @@ const initialState = {
 
 export default function display(state = initialState, action) {
   switch (action.type) {
+  case ActionTypes.SELECT_CELL:
+    if (!action.cell) {
+      return state;
+    }
+    return {
+      ...state,
+      panelIndex: Display.PANEL_INFO,
+    };
   case ActionTypes.SET_PANEL_INDEX:
     return {
       ...state,
@@ -19,12 +27,15 @@ export default function display(state = initialState, action) {
   case ActionTypes.ADD_SPECIES_AND_BINS:
     return {
       ...state,
+      mapBy: Display.BY_CELL,
+      infoBy: Display.BY_CELL,
     };
   case ActionTypes.ADD_CLUSTERS_AND_STATISTICS:
     return {
       ...state,
       statisticsBy: Display.BY_CLUSTER,
       mapBy: Display.BY_CLUSTER,
+      infoBy: Display.BY_CLUSTER,
       panelIndex: Display.PANEL_INFO,
       isShowingInfomapUI: false,
     };

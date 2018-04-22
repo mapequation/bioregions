@@ -235,8 +235,8 @@ class Statistics extends Component {
   }
 
   handleClickCluster(clusterId) {
-    const {unselectCluster, selectCluster, selectedCluster} = this.props;
-    if (clusterId === selectedCluster)
+    const {unselectCluster, selectCluster, selectedClusterId} = this.props;
+    if (clusterId === selectedClusterId)
       unselectCluster(clusterId);
     else
       selectCluster(clusterId);
@@ -245,13 +245,13 @@ class Statistics extends Component {
 
   renderCluster(cluster) {
     const {clusterId, numBins, numRecords, numSpecies, topCommonSpecies, topIndicatorSpecies} = cluster.values;
-    const {clusterColors, selectedCluster} = this.props;
+    const {clusterColors, selectedClusterId} = this.props;
     let clusterColor = clusterColors[clusterId];
     let btnBorderColor = clusterColor.darker(0.5).css();
     let style = {
       backgroundColor: clusterColor.css(),
       color: clusterColor.luminance() < 0.6 ? 'white' : 'black',
-      border: clusterId === selectedCluster? `2px inset ${btnBorderColor}` : `2px solid ${btnBorderColor}`,
+      border: clusterId === selectedClusterId? `2px inset ${btnBorderColor}` : `2px solid ${btnBorderColor}`,
       WebkitPrintColorAdjust: 'exact',
     };
     return (
@@ -434,7 +434,7 @@ Statistics.propTypes = {
   clusters: PropTypes.array.isRequired,
   clustersPerSpecies: PropTypes.object.isRequired,
   clusterColors: PropTypes.array.isRequired,
-  selectedCluster: PropTypes.number.isRequired,
+  selectedClusterId: PropTypes.number.isRequired,
   selectCluster: PropTypes.func.isRequired,
   selectSpecies: PropTypes.func.isRequired,
   statisticsBy: PropTypes.oneOf([BY_SPECIES, BY_CLUSTER]).isRequired,
@@ -442,14 +442,14 @@ Statistics.propTypes = {
 };
 
 function mapStateToProps(state) {
-  const { data, display, info } = state;
+  const { data, display } = state;
   return {
     species: data.species,
     speciesToBins: data.speciesToBins,
     clusters: data.clusters,
     clustersPerSpecies: data.clustersPerSpecies,
     clusterColors: data.clusterColors,
-    selectedCluster: info.selectedCluster,
+    selectedClusterId: data.selectedClusterId,
     statisticsBy: display.statisticsBy,
   };
 }

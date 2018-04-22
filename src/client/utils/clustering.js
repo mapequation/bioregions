@@ -139,7 +139,6 @@ export function mergeClustersToBins(clusterIds, bins) {
  */
 export function getSimilarCells(cell, species, speciesToBins) {
   const links = new Map();
-  console.log('############ getSimilarCells, cell:', cell, '\nspecies:', species);
   // const cellId = cell.binId;
   const speciesIndices = cell.species;
   const numSpecies = speciesIndices.length;

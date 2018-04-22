@@ -147,6 +147,5 @@ function categoryColorsByChromasPaletteGenerator(numCategories, options) {
     o.quality // Steps (quality)
   );
   // Sort colors by differenciation first
-  colors = paletteGenerator.diffSort(colors);
-  return colors;
+  return paletteGenerator.diffSort(colors);
 }

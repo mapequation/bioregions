@@ -93,6 +93,7 @@ const getInitialState = () => {
       markovTime: 1.0,
     },
     selectedCell: null, // one of bins
+    selectedClusterId: -1, // 0-{numberOfClusters-1} or -1 if not selected
   };
 };
 
@@ -142,6 +143,13 @@ export default function data(state = getInitialState(), action) {
     return {
       ...state,
       selectedCell: action.cell,
+      selectedClusterId: action.cell ? action.cell.clusterId : -1,
+    };
+  case ActionTypes.SELECT_CLUSTER:
+    return {
+      ...state,
+      selectedCell: null,
+      selectedClusterId: action.clusterId,
     };
   case ActionTypes.LOAD_FILES:
     // Forward to data worker

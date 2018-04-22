@@ -22,8 +22,9 @@ class WorldMap extends Component {
     binning: PropTypes.object.isRequired,
     bins: PropTypes.array.isRequired,
     mapBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
+    infoBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
     clusterColors: PropTypes.array.isRequired,
-    selectedCluster: PropTypes.number.isRequired,
+    selectedClusterId: PropTypes.number.isRequired,
     selectedCell: PropTypes.object,
     highlightedCell: PropTypes.object,
     highlightCell: PropTypes.func.isRequired,
@@ -172,9 +173,9 @@ class WorldMap extends Component {
   }
 
   handleMouseClickGridCell = (d) => {
-    console.log("Mouse click on cell:", d);
-    const { mapBy } = this.props;
-    if (mapBy === BY_CLUSTER) {
+    // console.log("Mouse click on cell:", d);
+    const { infoBy } = this.props;
+    if (infoBy === BY_CLUSTER) {
       this.toggleSelectCluster(d);
     } else {
       this.toggleSelectCell(d);
@@ -191,8 +192,8 @@ class WorldMap extends Component {
   }
   
   toggleSelectCluster(d) {
-    const { selectedCluster, selectCluster } = this.props;
-    if (!d || d.clusterId === selectedCluster) {
+    const { selectedClusterId, selectCluster } = this.props;
+    if (!d || d.clusterId === selectedClusterId) {
       selectCluster(-1);
     } else {
       selectCluster(d.clusterId);

@@ -1,30 +1,16 @@
 import React, {Component, PropTypes} from 'react';
+import { Checkbox as SemanticCheckbox } from 'semantic-ui-react';
 
-class Checkbox extends Component {
+export default class Checkbox extends Component {
 
-  componentDidMount() {
-    this.setChecked(this.props.checked);
-  }
-
-  setChecked(checked) {
-    $(this.checkbox).checkbox(checked? 'set checked' : 'set unchecked');
-  }
-
-  componentWillReceiveProps(nextProps) {
-    if (nextProps.checked !== undefined)
-      this.setChecked(nextProps.checked);
-  }
-
-  handleClick = () => {
+  onChange = () => {
     this.props.onChange(!this.props.checked);
   }
 
   render() {
+    const { label, checked } = this.props;
     return (
-      <div className="ui slider checkbox" ref={(el) => {this.checkbox = el}} onClick={this.handleClick}>
-        <input type="checkbox" tabIndex="0" className="hidden"></input>
-        <label>{this.props.label}</label>
-      </div>
+      <SemanticCheckbox slider label={label} checked={checked} onChange={this.onChange}/>
     );
   }
 }
@@ -33,6 +19,4 @@ Checkbox.propTypes = {
   checked: PropTypes.bool.isRequired,
   label: PropTypes.string.isRequired,
   onChange: PropTypes.func.isRequired,
-}
-
-export default Checkbox;
+};

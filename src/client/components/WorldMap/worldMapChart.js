@@ -192,8 +192,8 @@ world.update = function(el, properties) {
 
     const getClusterColor = (d) => {
       const clusterColor = props.clusterColors[d.clusterId];
-      if (props.selectedCluster >= 0) {
-        return d.clusterId === props.selectedCluster ? clusterColor.css() : chroma(clusterColor.hex()).alpha(0.2).css();
+      if (props.selectedClusterId >= 0) {
+        return d.clusterId === props.selectedClusterId ? clusterColor.css() : chroma(clusterColor.hex()).alpha(0.2).css();
       }
       else if (props.selectedCell) {
         const similarity = props.selectedCell.links.get(d.binId);
@@ -254,18 +254,13 @@ world.update = function(el, properties) {
       };
       // const ordinaryCellColor = (d) => heatmapColor(d.count / d.area);
       const ordinaryCellColor = (d) => {
-        return heatmapColor(colorDomainValue(d));
+        const c = heatmapColor(colorDomainValue(d));
+        d.color = c;
+        return c;
       };
 
       color = props.selectedCell ? selectedCellColor : ordinaryCellColor;
     }
-    const _color = color;
-
-    color = (d) => {
-      const clr = _color(d);
-      d.color = clr;
-      return clr;
-    };
 
     const binPaths = g.select(".overlay")
       .attr("clip-path", props.clipToLand ? "url(#clip)" : null)
