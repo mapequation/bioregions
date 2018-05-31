@@ -1,4 +1,5 @@
 import React, { PropTypes } from 'react';
+import { observer } from "mobx-react";
 import { Checkbox, Button, Form, Divider, Label, Table, Message } from 'semantic-ui-react';
 import ShowInfomapButton from '../Infomap/ShowInfomapButton';
 import Tooltip from '../lib/Tooltip';
@@ -8,6 +9,7 @@ import chroma from 'chroma-js';
 import { BY_CELL, BY_CLUSTER } from '../../constants/Display';
 import './InfoControl.css';
 
+// @observer
 class InfoControl extends React.Component {
   static propTypes = {
     clusters: PropTypes.array.isRequired,
@@ -21,9 +23,10 @@ class InfoControl extends React.Component {
     isClustering: PropTypes.bool.isRequired,
     showInfomapUI: PropTypes.func.isRequired,
     isShowingInfomapUI: PropTypes.bool.isRequired,
-    highlightedCell: PropTypes.object,
+    // highlightedCell: PropTypes.object,
     selectedCell: PropTypes.object,
     selectedClusterId: PropTypes.number.isRequired,
+    highlightStore: PropTypes.object.isRequired,
   }
 
   constructor(props) {
@@ -201,7 +204,7 @@ class InfoControl extends React.Component {
 
     const CellLabelDivider = (
       <span>
-        { isSelected ? 'Selected' : 'Highlighted' }
+        { isSelected ? 'Selected' : 'Mouse over' }
       </span>
     );
     
@@ -253,7 +256,7 @@ class InfoControl extends React.Component {
 
     const CellLabelDivider = (
       <span>
-        { isSelected ? 'Selected' : 'Highlighted' }
+        { isSelected ? 'Selected' : 'Mouse over' }
         {/* { CellLabel } */}
       </span>
     );
@@ -275,8 +278,8 @@ class InfoControl extends React.Component {
     );
   }
 
-  renderHighlightedAndSelected() {
-    const { highlightedCell, selectedCell, infoBy, selectedClusterId, clusters } = this.props;
+  renderHighlightedAndSelected(highlightedCell) {
+    const { selectedCell, infoBy, selectedClusterId, clusters } = this.props;
     const selectedCluster = selectedClusterId === -1 ? null : clusters[selectedClusterId].values;
     const target = infoBy === BY_CLUSTER ? 'bioregions' : 'grid cells';
     const haveContent = highlightedCell || selectedCell || selectedCluster;
@@ -309,16 +312,17 @@ class InfoControl extends React.Component {
   }
 
   render() {
-    const { bins } = this.props;
+    const { bins, highlightStore } = this.props;
     if (bins.length === 0) {
       return (
         <div>Please load your data...</div>
       );
     }
+    const { highlightedCell } = highlightStore;
     return (
       <div>
         { this.renderLevelControls() }
-        { this.renderHighlightedAndSelected() }
+        { this.renderHighlightedAndSelected(highlightedCell) }
       </div>
     );
     // { this.renderSelectMapBy() }
@@ -326,4 +330,4 @@ class InfoControl extends React.Component {
   }
 }
 
-export default InfoControl;
+export default observer(InfoControl);

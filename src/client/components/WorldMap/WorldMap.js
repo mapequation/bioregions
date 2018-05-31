@@ -30,6 +30,7 @@ class WorldMap extends Component {
     highlightCell: PropTypes.func.isRequired,
     selectCluster: PropTypes.func.isRequired,
     selectCell: PropTypes.func.isRequired,
+    highlightStore: PropTypes.object.isRequired,
   }
 
   constructor(props) {
@@ -162,14 +163,16 @@ class WorldMap extends Component {
     // if (this.tip) {
     //   this.tip.show(d);
     // }
-    this.props.highlightCell(d);
+    // this.props.highlightCell(d);
+    this.props.highlightStore.highlightCell(d);
   }
   
   handleMouseOutGridCell = (d) => {
     // if (this.tip) {
     //   this.tip.hide(d);
     // }
-    this.props.highlightCell(null);
+    // this.props.highlightCell(null);
+    this.props.highlightStore.highlightCell(null);
   }
 
   handleMouseClickGridCell = (d) => {

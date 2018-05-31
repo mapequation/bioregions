@@ -1,4 +1,5 @@
 import React, {Component, PropTypes} from 'react';
+import { observer } from 'mobx-react';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import * as FileLoaderActions from '../actions/FileLoaderActions';
@@ -19,6 +20,13 @@ import MapControl from '../components/ControlPanel/MapControl';
 import InfoControl from '../components/ControlPanel/InfoControl';
 import ShowInfomapButton from '../components/Infomap/ShowInfomapButton';
 import InfomapDimmer from '../components/Infomap/InfomapDimmer';
+import InfoTitle from '../components/ControlPanel/InfoTitle';
+
+
+// const InfoTitle = observer(({ active, highlightStore }) =>
+//   !active && highlightStore.highlightedCell ? (
+//   <span>Info <Label color="blue" size="mini" circular>i</Label></span>
+// ) : 'Info');
 
 class ControlPanel extends Component {
   constructor(props) {
@@ -44,11 +52,11 @@ class ControlPanel extends Component {
 
 
   render() {
-    const {files, data, info, display, worldmap, actions } = this.props;
+    const {files, data, info, display, worldmap, actions, highlightStore } = this.props;
     const { panelIndex } = display;
-    const InfoTitle = (display.panelIndex !== 1 && info.highlightedCell) ? (
-      <span>Info <Label color="blue" size="mini" circular>i</Label></span>
-    ) : 'Info';
+    // const InfoTitle = (display.panelIndex !== 1 && highlightStore.highlightedCell) ? (
+    //   <span>Info <Label color="blue" size="mini" circular>i</Label></span>
+    // ) : 'Info';
     const panels = [
       {
         title: {
@@ -69,13 +77,20 @@ class ControlPanel extends Component {
       },
       {
         title: {
-          content: InfoTitle,
+          content: <InfoTitle active={display.panelIndex === 1} highlightStore={highlightStore} />,
           key: 'Info-title',
         },
         content: {
           content: (
             <div>
-              <InfoControl {...data} {...display} {...info} {...worldmap} {...actions} />
+              <InfoControl
+                highlightStore={this.props.highlightStore}
+                {...data}
+                {...display}
+                {...info}
+                {...worldmap}
+                {...actions}
+              />
             </div>
           ),
           key: 'Info-content',
@@ -116,6 +131,7 @@ ControlPanel.propTypes = {
   info: PropTypes.object.isRequired,
   worldmap: PropTypes.object.isRequired,
   actions: PropTypes.object.isRequired,
+  highlightStore: PropTypes.object.isRequired,
 };
 
 function mapStateToProps(state) {

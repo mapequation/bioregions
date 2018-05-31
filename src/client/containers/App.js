@@ -99,14 +99,21 @@ class App extends Component {
           </div>
           <div className="ui two column stackable grid">
             <div className="six wide column">
-              <ControlPanel />
+              <ControlPanel highlightStore={this.props.highlightStore} />
             </div>
             <div className="ten wide column">
               {
                 data.species.length === 0 ? (
                   <WorldMapDimmer {...files} {...actions} />
                 ) : (
-                  <WorldMap {...worldmap} {...display} {...info} {...data} {...actions} />
+                  <WorldMap
+                    {...worldmap}
+                    {...display}
+                    {...info}
+                    {...data}
+                    {...actions}
+                    highlightStore={this.props.highlightStore}
+                  />
                 )
               }
             </div>
@@ -130,6 +137,7 @@ App.propTypes = {
   phylogram: PropTypes.object.isRequired,
   errorMessage: PropTypes.string,
   actions: PropTypes.object.isRequired,
+  highlightStore: PropTypes.object.isRequired,
 };
 
 function mapStateToProps(state) {
