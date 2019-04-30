@@ -161,7 +161,7 @@ class InfoControl extends React.Component {
         { key: 'score', content: this.formatIndicativeScore(score),  className: 'infoTableCell', textAlign: 'right' },
       ],
     });
-    
+
     return (
       <div>
         <Table unstackable celled striped compact="very" size="small"
@@ -194,7 +194,7 @@ class InfoControl extends React.Component {
     const d = cluster;
     const isSelected = d.clusterId === selectedClusterId;
     const clusterColor = clusterColors[d.clusterId];
-    
+
     const ClusterLabel = d.clusterId < 0 ? null : (
       <Label size="mini" style={{
         backgroundColor: clusterColor.hex(),
@@ -210,7 +210,7 @@ class InfoControl extends React.Component {
         { isSelected ? 'Selected' : 'Mouse over' }
       </span>
     );
-    
+
     return (
       <div>
         <div style={{ fontSize: '0.85em' }}>
@@ -232,11 +232,12 @@ class InfoControl extends React.Component {
     if (!cell) {
       return null;
     }
+    console.log(cell);
     const { selectedCell } = this.props;
     const isSelected = cell === selectedCell;
     const d = cell;
     const clusterColor = d.clusterId < 0 ? null : this.props.clusterColors[d.clusterId];
-    
+
     const ClusterLabel = d.clusterId < 0 ? null : (
       <Label size="mini" style={{
         backgroundColor: clusterColor,

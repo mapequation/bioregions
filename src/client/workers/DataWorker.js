@@ -368,6 +368,20 @@ function parseGeoJSON(nameField) {
     }
     else if (type === "Point") {
       ++numPoints;
+      //TODO: Check valid coordinates
+      //   const c = feature.geometry.coordinates;
+      // if (c[0] >= 180) {
+      //     c[0] = (c[0] + 180) % 360 - 180;
+      // }
+      // if (c[0] < -180) {
+      //     c[0] = (c[0] - 180) % 360 + 180;
+      // }
+      // if (c[1] >= 90) {
+      //     c[1] = (c[1] + 90) % 180 - 90;
+      // }
+      // if (c[1] < -90) {
+      //     c[1] = (c[1] - 90) % 180 + 90;
+      // }
       if (!feature.geometry.bbox)
         feature.geometry.bbox = turfExtent(feature);
       state.shapeFeatures.push(feature);
@@ -406,6 +420,10 @@ function shapeToPoints() {
     if (percent !== lastPercent) {
       dispatch(setFileProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
       lastPercent = percent;
+    }
+    if (feature.geometry.type === 'Point') {
+      state.features.push(feature);
+      return;
     }
     const {bbox} = feature.geometry;
     const bboxWidth = bbox[2] - bbox[0];
@@ -563,11 +581,14 @@ function parseDSV(fieldsToColumns) {
     ++count;
     const name = row[Name].replace(/_/g, ' ');
     const lat = +row[Latitude];
-    const long = +row[Longitude];
+    let long = +row[Longitude];
     if (name && lat >= lat && long >= long) { // not undefined/NaN etc
       if (count % 1000 === 0) {
         dispatch(setFileProgress("Parsing rows...", COUNT, count, {numSkipped}));
         // postMessage({type: "progress", payload: { count, numSkipped, activity: "Parsing rows..." }});
+      }
+      if (row[Longitude] === '180') {
+        long = -180;
       }
       return {
         type: 'Feature',
