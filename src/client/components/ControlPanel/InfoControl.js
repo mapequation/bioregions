@@ -7,6 +7,7 @@ import Div from '../helpers/Div';
 import Colors from './Colors';
 import chroma from 'chroma-js';
 import { BY_CELL, BY_CLUSTER } from '../../constants/Display';
+import * as Binning from '../../constants/Binning';
 import './InfoControl.css';
 
 // @observer
@@ -16,6 +17,7 @@ class InfoControl extends React.Component {
     bins: PropTypes.array.isRequired,
     clusterColors: PropTypes.array.isRequired,
     setClusterColors: PropTypes.func.isRequired,
+    binning: PropTypes.object.isRequired,
     mapBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
     infoBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
     changeMapBy: PropTypes.func.isRequired,
@@ -33,6 +35,7 @@ class InfoControl extends React.Component {
     super(props);
 
     this.formatArea = d3.format(',.2g');
+    this.formatSize = d3.format(',.3r');
     this.formatIndicativeScore = d3.format(',.3g');
   }
 
@@ -260,6 +263,11 @@ class InfoControl extends React.Component {
         {/* { CellLabel } */}
       </span>
     );
+
+    const { unit } = this.props.binning;
+    const size = this.formatSize(unit === Binning.MINUTE ? 60 * d.size : d.size);
+    const unitSymbol = unit === Binning.MINUTE ? Binning.MINUTE_SYMBOL : Binning.DEGREE_SYMBOL;
+    const sizeText = `${size}x${size}${unitSymbol}`;
     //TODO: Rename count and speciesCount to numRecords and numSpecies for consistensy with cluster
     return (
       <div>
@@ -267,7 +275,7 @@ class InfoControl extends React.Component {
           <Divider horizontal>{CellLabelDivider}</Divider>
           <div style={{ marginTop: -10 }}>
             { CellLabel }
-            Size: <b>{d.size}x{d.size}˚</b> ({this.formatArea(d.area)} km2). { ClusterLabel }
+            Size: <b>{sizeText}</b> ({this.formatArea(d.area)} km2). { ClusterLabel }
           </div>
         </div>
         <div>

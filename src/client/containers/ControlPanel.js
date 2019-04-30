@@ -105,7 +105,7 @@ class ControlPanel extends Component {
           content: (
             <div>
               <MapControl {...data} {...display} {...worldmap} {...actions}/>
-              <GridControl {...worldmap} {...display} {...actions}/>
+              <GridControl {...data} {...worldmap} {...display} {...actions}/>
             </div>
           ),
           key: 'Map-content',

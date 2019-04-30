@@ -5,6 +5,9 @@ import colorbrewer from 'colorbrewer';
 import chroma from 'chroma-js';
 import {DATA_SUCCEEDED} from '../../constants/DataFetching';
 import { BY_CLUSTER } from '../../constants/Display';
+import * as Binning from '../../constants/Binning';
+
+const MAX_SCALE_EXTENT = 1000;
 
 const world = {};
 
@@ -44,6 +47,9 @@ world.create = function(el, props) {
     .attr("class", "graticule");
   graticuleGroup.append("path")
     .attr("class", "graticule-outline");
+
+  const scaleGroup = g.append("g")
+    .attr("class", "scale")
 
   // var defsPath = defs.append("path")
   //   .attr("id", "land")
@@ -97,36 +103,40 @@ world.update = function(el, properties) {
 
   console.log("Creating worldmap zoom behavior...");
   const zoom = d3.behavior.zoom()
-    .scaleExtent([1, 12])
+    .scaleExtent([1, MAX_SCALE_EXTENT])
     .on("zoom", onZoom);
 
   svg.call(zoom)
     .on("click", onClick);
-  
-  doZoom(world._zoomTranslation || [0, 0], world._zoomScale || 1);
 
   props.projection
     .translate([width / 2, height / 2])
     .scale(width / 2 / Math.PI);
 
-  const path = d3.geo.path()
+  const geoPath = d3.geo.path()
     .pointRadius(1)
     .projection(props.projection);
+  window.geo = geoPath;
+  window.proj = props.projection;
+
+  doZoom(world._zoomTranslation || [0, 0], world._zoomScale || 1);
 
   const landPath = g.select("path.land");
   if (props.worldStatus === DATA_SUCCEEDED) {
     console.log("Draw world...");
     landPath
       .datum(topojson.feature(props.world, props.world.objects.land))
-      .attr("d", path);
+      .attr("d", geoPath);
   }
   landPath
     .style("fill", "white")
     .style("stroke", "#666");
 
   const {graticuleStep, showGraticules} = props;
+  // const stepScale = props.binning.unit === Binning.MINUTE ? 1.0 / 60 : 1;
   let graticule = d3.geo.graticule()
     .step([graticuleStep, graticuleStep]);
+  window.graticule = graticule;
 
   const emptyGraticule = () => [];
   emptyGraticule.outline = () => [];
@@ -135,16 +145,17 @@ world.update = function(el, properties) {
     graticule = emptyGraticule;
   }
 
-  g.select(".graticules").select("path.graticule")
+  window.grat = g.select(".graticules").select("path.graticule")
     .datum(graticule)
-      .attr("d", path)
+      .attr("d", geoPath)
       .attr("fill", "none")
       .attr("stroke", "#ccc")
       .attr("stroke-opacity", 0.3)
       .attr("stroke-width", ".5px");
+  // The border around all meridians and parallels
   g.select(".graticules").select("path.graticule-outline")
     .datum(graticule.outline)
-      .attr("d", path)
+      .attr("d", geoPath)
       .attr("fill", "none")
       .attr("stroke", "#ccc")
       .attr("stroke-opacity", 0.3)
@@ -158,7 +169,7 @@ world.update = function(el, properties) {
     let svgFeature = g.select(".overlay").selectAll("path").data(testFeatures);
     svgFeature.exit().remove();
     svgFeature.enter().append("path").attr("class", "feature");
-    svgFeature.attr("d", path)
+    svgFeature.attr("d", geoPath)
       .style("fill", "none")
       .style("stroke", "red");
   }
@@ -183,7 +194,11 @@ world.update = function(el, properties) {
 
     const strokeOpacity = (d) => (props.selectedCell && props.selectedCell === d) ? 1.0 : 0.5;
 
-    const strokeWidth = (d) => (props.selectedCell && props.selectedCell === d) ? 0.2 : 0.1;
+    const strokeWidth = (d) => {
+      const unitFactor = props.binning.unit === Binning.MINUTE ? 0.02 : 0.1;
+      const highlightFactor = (props.selectedCell && props.selectedCell === d) ? 2 : 1;
+      return highlightFactor * unitFactor;
+    }
 
     const selectedCellMax = props.selectedCell ?
     props.selectedCell.links.get(props.selectedCell.binId) : 1.0;
@@ -220,7 +235,7 @@ world.update = function(el, properties) {
       domain.push(domainMax);
       // domain[0] = 1; // Make a threshold between non-empty and empty bins
       // domain.unshift(0.5);
-      console.log("Color domain:", domain.length, domain);
+      // console.log("Color domain:", domain.length, domain);
       const colorDomainValue = d => d.count / d.area;
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
@@ -235,7 +250,7 @@ world.update = function(el, properties) {
       const heatmapColor = (d) => {
         return colorRange[Math.floor(heatmapColorScale(d))];
       };
-      
+
       const linkColors = colorbrewer.Blues["9"];
       const selectedCellColorScale = d3.scale.linear()
         .domain([0, selectedCellMax]).range([0, 8]);
@@ -294,6 +309,60 @@ world.update = function(el, properties) {
     binPaths.exit().remove();
   }
 
+  function doZoom(translation, scale) {
+    // Cache current zoom
+    world._zoomTranslation = translation;
+    world._zoomScale = scale;
+    // console.log(`doZoom: t: ${translation}, s: ${scale}`);
+
+    zoom.translate(translation);
+    zoom.scale(scale);
+    g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
+
+    //adjust the country hover stroke width based on zoom level
+    g.select("#land").style("stroke-width", 1.5 / scale);
+    // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
+    // g.selectAll(".bins").style("stroke-width", 0.5 / scale);
+
+    g.selectAll(".graticules").select("path").style("stroke-width", 0.5 / scale);
+
+    // let step = props.graticuleStep;
+    // let [x0, y0] = [20, 20];
+    // let [long0, lat0] = props.projection.invert([x0, y0]);
+    // if (lat0 > 80) {
+    //   lat0 = 80;
+    //   y0 = props.projection([long0, lat0])[1];
+    // }
+    // let [long1, lat1] = [long0 + step * scale, lat0];
+    // let [x1, y1] = props.projection([long1, lat1]);
+    // if (!world._zoomStep) {
+    //   world._zoomStep = 0;
+    // }
+    // let zoomStep = 0;
+    // // console.log(`Zoom step: ${world._zoomStep}, g0: ${[long0, lat0]}, g1: ${[long1, lat1]}, p1: ${[x1, y1]}, x0: ${x0}, x1: ${x1}, delta: ${x1 - x0}`);
+    // while (x1 - x0 > 100) {
+    //   ++zoomStep;
+    //   step /= 2;
+    //   long1 = long0 + step * scale;
+    //   [x1, y1] = props.projection([long1, lat1]);
+    // }
+    // console.log(`-> step ${step}`);
+    // if (zoomStep !== world._zoomStep) {
+    //   world._zoomStep = zoomStep;
+    //   graticule.step([step, step]);
+    //   console.log(' ===> UPDATE GRATICULE STEP', step,
+    //   g.select(".graticules").select("path.graticule"), '\n', graticule());
+    //   g.select(".graticules").select("path.graticule")
+    //   .datum(graticule)
+    //     .attr("d", geoPath)
+    //     // .attr("d", geoPath(graticule()))
+    //     // .attr("fill", "none")
+    //     // .attr("stroke", "#ccc")
+    //     // .attr("stroke-opacity", 0.3)
+    //     .attr("stroke-width", ".5px");
+    // }
+  }
+
   function onZoom() {
     if (!props.world) {
       return;
@@ -318,23 +387,6 @@ world.update = function(el, properties) {
     // props.onZoom({ translation: t, scale: s });
   }
 
-  function doZoom(translation, scale) {
-    // Cache current zoom
-    world._zoomTranslation = translation;
-    world._zoomScale = scale;
-    // console.log(`doZoom: t: ${translation}, s: ${scale}`);
-
-    zoom.translate(translation);
-    zoom.scale(scale);
-    g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
-
-    //adjust the country hover stroke width based on zoom level
-    g.select("#land").style("stroke-width", 1.5 / scale);
-    // g.selectAll(".quadnode").style("stroke-width", 1.0 / s);
-    g.selectAll(".graticules").select("path").style("stroke-width", 0.5 / scale);
-    // g.selectAll(".bins").style("stroke-width", 0.5 / scale);
-  }
-
   function onClickGridCell(d) {
     console.log('####### mouse CLICK', d);
     d3.event.stopPropagation();
@@ -349,7 +401,7 @@ world.update = function(el, properties) {
     d3.event.preventDefault();
     props.onMouseOver(d);
   }
-  
+
   function onMouseOutGridCell(d) {
     console.log('####### mouse OUT', d);
     d3.event.stopPropagation();

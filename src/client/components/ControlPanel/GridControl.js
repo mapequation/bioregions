@@ -4,6 +4,7 @@ import Tooltip from '../lib/Tooltip';
 import TangleInput from '../lib/TangleInput';
 import InlineForm from '../helpers/InlineForm';
 import Div from '../helpers/Div';
+import * as Binning from '../../constants/Binning';
 
 export default function GridControl(props) {
   return (
@@ -45,7 +46,7 @@ export default function GridControl(props) {
 
 
       <InlineForm label="Grid resolution">
-        <TangleInput className="ui label" suffix="˚"
+        <TangleInput className="ui label" suffix={props.binning === Binning.MINUTE ? Binning.MINUTE_SYMBOL : Binning.DEGREE_SYMBOL}
           value={props.graticuleStep}
           min={1}
           max={180}
@@ -74,4 +75,5 @@ GridControl.propTypes = {
   changeShowGraticules: PropTypes.func.isRequired,
   changeClipToLand: PropTypes.func.isRequired,
   changeShowCellBorders: PropTypes.func.isRequired,
-}
+  binning: PropTypes.object.isRequired,
+};

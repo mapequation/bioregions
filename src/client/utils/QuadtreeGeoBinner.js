@@ -314,11 +314,34 @@ export default class QuadtreeGeoBinner {
     this._nodeCapacity = 10;
     this._lowerThreshold = 0; //
     this._root = null;
+    this._scale = 1; // Set to 60 to have sizes subdivided to eventually one minute
+    this.initExtent();
     this.initRoot();
+  }
+
+  initExtent() {
+    // power of 2 from unscaled unit
+    let size = Math.pow(2, this._maxNodeSizeLog2) / this._scale;
+    while (size <= 180) {
+      size *= 2;
+    }
+    this._extent = [[-size, -size], [size, size]];
   }
 
   initRoot() {
     this._root = new Node(this._extent[0][0], this._extent[0][1], this._extent[1][0], this._extent[1][1]);
+  }
+
+  /**
+   * Set to 60 to have sizes subdivided to eventually one minute.
+   */
+  scale(_) {
+    if (!arguments.length)
+      return this._scale;
+    this._scale = _;
+    this.initExtent();
+    this.initRoot();
+    return this;
   }
 
   extent(_) {
@@ -363,8 +386,10 @@ export default class QuadtreeGeoBinner {
   }
 
   addFeatures(features) {
+    const maxSizeLog2 = this._maxNodeSizeLog2 - Math.log2(this._scale);
+    const minSizeLog2 = this._minNodeSizeLog2 - Math.log2(this._scale);
     features.forEach((feature) => {
-      this._root.add(feature, this._maxNodeSizeLog2, this._minNodeSizeLog2, this._nodeCapacity);
+      this._root.add(feature, maxSizeLog2, minSizeLog2, this._nodeCapacity);
     });
     return this;
   }
@@ -399,7 +424,8 @@ export default class QuadtreeGeoBinner {
       this.addFeatures(features);
     }
     if (patchSparseNodes) {
-      this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
+      const maxSizeLog2 = this._maxNodeSizeLog2 - Math.log2(this._scale);
+      this._root.patchSparseNodes(maxSizeLog2, this._lowerThreshold);
     }
     const nodes = [];
     this.visitNonEmpty((node) => {
