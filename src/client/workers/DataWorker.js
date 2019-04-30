@@ -106,7 +106,7 @@ function loadShapefiles(files) {
     console.log(`Add promise for file ${file.name}...`);
     filePromises.push(io.readFile(file, /prj$/.test(file.name) ? 'text' : 'buffer'));
   });
-  
+
   let numTooSimplifiedPolygons = 0;
 
   function parseGeometry(geometry, i) {
@@ -235,7 +235,7 @@ function loadShapefiles(files) {
     .catch(err => {
       return dispatch(setFileError(`Error loading shapefiles: ${err}`));
     });
- 
+
   // Promise.all(filePromises)
   //   .then(filesData => {
   //     console.log('Loaded shapefile buffer, parse shapes...');
@@ -259,7 +259,7 @@ function loadShapefiles(files) {
   //         ++numFeatures;
   //         const feature = result.value;
   //         const { type } = feature.geometry;
-          
+
   //         if (type === "Polygon") {
   //           ++numPolygons;
   //           const simplifiedFeature = turfSimplify(feature, 0.5 / 8);
@@ -339,7 +339,7 @@ function parseGeoJSON(nameField) {
     //   ++numBadFeatures;
     // }
     // else {
-    
+
     // console.log(i, 'feature:', feature);
     // console.log(' -> properties:', feature.properties);
 
@@ -561,7 +561,7 @@ function parseDSV(fieldsToColumns) {
     if (index === 0)
       return null;
     ++count;
-    const name = row[Name];
+    const name = row[Name].replace(/_/g, ' ');
     const lat = +row[Latitude];
     const long = +row[Longitude];
     if (name && lat >= lat && long >= long) { // not undefined/NaN etc
