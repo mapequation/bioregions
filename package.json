@@ -1,11 +1,12 @@
 {
   "name": "infomap-bioregions",
   "version": "0.1.0",
+  "homepage": "https://www.mapequation.org/bioregions.test",
   "scripts": {
     "start": "pm2 start ecosystem.json",
     "logs": "pm2 logs --merge-logs --lines 0 --timestamp \"YYYY-MM-DD HH:mm Z\"",
-    "dev": "NODE_ENV=development DEBUG=true node server.js",
-    "build": "NODE_ENV=production webpack -p --config webpack/production.js --stack_size=100000",
+    "dev": "NODE_ENV=development DEBUG=true node6 server.js",
+    "build": "NODE_ENV=production node=node6 webpack -p --config webpack/production.js --stack_size=100000",
     "build-dev": "NODE_ENV=development webpack --config webpack/development.js --stack_size=100000",
     "test": "NODE_ENV=test ./node_modules/.bin/mocha-webpack",
     "test-watch": "npm run test -- --watch",

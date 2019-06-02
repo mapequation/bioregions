@@ -12,7 +12,7 @@ module.exports = {
   ],
   output: {
     path: path.join(__dirname, '../static'),
-    publicPath: '/static/',
+    publicPath: '/bioregions.test/static/',
     filename: 'bundle.js',
   },
   plugins: [

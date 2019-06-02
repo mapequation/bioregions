@@ -25,7 +25,7 @@ class WorldMapDimmer extends Component {
     };
     return (
       <div className="ui raised dimmable dimmed segment">
-        <img className="ui image" src="http://www.mapequation.org/assets/img/bioregions-amphibians.png" alt="Bioregions example output map" />
+        <img className="ui image" src="https://www.mapequation.org/assets/img/bioregions-amphibians.png" alt="Bioregions example output map" />
         <div className="ui simple inverted dimmer" style={dimmerStyle}>
           <div className="content">
             <div className="center">
