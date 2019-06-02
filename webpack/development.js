@@ -6,7 +6,8 @@ var devFlagPlugin = new webpack.DefinePlugin({
   __DEV__: JSON.stringify(JSON.parse(process.env.DEBUG || 'false')),
   'process.env': {
     'NODE_ENV': JSON.stringify(process.env.NODE_ENV)
-  }
+  },
+  PUBLIC: JSON.stringify('')
 });
 
 module.exports = {
