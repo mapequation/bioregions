@@ -1,5 +1,6 @@
 import {
   BINNING_CHANGE_TYPE,
+  BINNING_CHANGE_UNIT,
   BINNING_MIN_NODE_SIZE,
   BINNING_MAX_NODE_SIZE,
   BINNING_NODE_CAPACITY,
@@ -11,6 +12,13 @@ export function changeBinnerType(binnerType) {
   return {
     type: BINNING_CHANGE_TYPE,
     binnerType,
+  };
+}
+
+export function changeBinnerUnit(unit) {
+  return {
+    type: BINNING_CHANGE_UNIT,
+    unit,
   };
 }
 

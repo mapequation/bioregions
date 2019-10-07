@@ -13,6 +13,8 @@ const getInitialBinningState = () => {
   return {
     binnerType: Binning.QUAD_TREE,
     binnerTypes: [Binning.QUAD_TREE], //TODO: Support Binning.TRIANGLE_TREE, Binning.HEXAGON
+    unit: Binning.DEGREE,
+    binnerUnits: [Binning.DEGREE, Binning.MINUTE],
     minNodeSizeLog2: 0, // TODO: Sync these values with main data worker state
     maxNodeSizeLog2: 2,
     nodeCapacity: 100,
@@ -29,6 +31,11 @@ function binning(state = getInitialBinningState(), action) {
       return {
         ...state,
         binnerType: action.binnerType,
+      };
+    case ActionTypes.BINNING_CHANGE_UNIT:
+      return {
+        ...state,
+        unit: action.unit,
       };
     case ActionTypes.BINNING_MIN_NODE_SIZE:
       return {
@@ -161,6 +168,8 @@ export default function data(state = getInitialState(), action) {
     state.dataWorker.postMessage(action);
     return {
       ...getInitialState(),
+      // Keep some state
+      binning: state.binning,
       phyloTree: state.phyloTree,
     };
   case ActionTypes.LOAD_TREE:
@@ -247,6 +256,7 @@ export default function data(state = getInitialState(), action) {
       phyloTree: geoPhyloTree,
     };
   case ActionTypes.BINNING_CHANGE_TYPE:
+  case ActionTypes.BINNING_CHANGE_UNIT:
   case ActionTypes.BINNING_MIN_NODE_SIZE:
   case ActionTypes.BINNING_MAX_NODE_SIZE:
   case ActionTypes.BINNING_NODE_CAPACITY:

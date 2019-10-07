@@ -28,6 +28,7 @@ class FileLoaderDimmer extends Component {
     isLoading: PropTypes.bool.isRequired,
     files: PropTypes.array.isRequired,
     sampleFiles: PropTypes.array.isRequired,
+    sampleTreeFiles: PropTypes.array.isRequired,
     parsedHead: PropTypes.array.isRequired,
     parsedFeatureProperty: PropTypes.object,
     showFileUI: PropTypes.func.isRequired,

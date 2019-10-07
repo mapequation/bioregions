@@ -1,8 +1,9 @@
 import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
-  BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
-CANCEL_FILE_ACTIONS, REMOVE_SPECIES, CHANGE_TREE_WEIGHT_MODEL} from '../constants/ActionTypes';
+  BINNING_CHANGE_UNIT, BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
+CANCEL_FILE_ACTIONS, REMOVE_SPECIES} from '../constants/ActionTypes';
+import * as Binning from '../constants/Binning';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
@@ -49,6 +50,7 @@ const getInitialState = () => {
     speciesCountMap: new Map(),
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
     binning: { // TODO: Sync with main data state
+      unit: Binning.DEGREE,
       minNodeSizeLog2: 0,
       maxNodeSizeLog2: 2,
       nodeCapacity: 100,
@@ -71,6 +73,18 @@ function dispatch(action) {
 
 function dispatchError(message) {
   dispatch(setError(message));
+}
+
+function getNodeSize(exponent) {
+  const size = Math.pow(2, exponent);
+  switch (state.binning.unit) {
+    case Binning.DEGREE:
+      return size;
+    case Binning.MINUTE:
+      return size / 60;
+    default:
+      return size;
+  }
 }
 
 function loadShapefiles(files) {
@@ -116,7 +130,7 @@ function loadShapefiles(files) {
 
     // const tolerance = 0.5 / 8;
     //TODO: Limit the minNodeSize to current - 3 after loading to limit simplification noise!!
-    const tolerance = Math.pow(2, state.binning.minNodeSizeLog2 - 4);
+    const tolerance = getNodeSize(state.binning.minNodeSizeLog2 - 4);
 
     // if (geometry.type === 'Polygon') {
     //   return {
@@ -359,6 +373,20 @@ function parseGeoJSON(nameField) {
     }
     else if (type === "Point") {
       ++numPoints;
+      //TODO: Check valid coordinates
+      //   const c = feature.geometry.coordinates;
+      // if (c[0] >= 180) {
+      //     c[0] = (c[0] + 180) % 360 - 180;
+      // }
+      // if (c[0] < -180) {
+      //     c[0] = (c[0] - 180) % 360 + 180;
+      // }
+      // if (c[1] >= 90) {
+      //     c[1] = (c[1] + 90) % 180 - 90;
+      // }
+      // if (c[1] < -90) {
+      //     c[1] = (c[1] - 90) % 180 + 90;
+      // }
       if (!feature.geometry.bbox)
         feature.geometry.bbox = turfExtent(feature);
       state.shapeFeatures.push(feature);
@@ -385,9 +413,10 @@ function parseGeoJSON(nameField) {
 
 function shapeToPoints() {
   state.features = [];
-  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2);
+  const minNodeSize = getNodeSize(state.binning.minNodeSizeLog2);
   const halfMinNodeSize = minNodeSize / 2;
-  const resolution = minNodeSize * 0.1;
+  // const resolution = minNodeSize / 8;
+  const tolerance = minNodeSize / 8;
   const totCount = state.shapeFeatures.length;
   let lastPercent = 0;
 
@@ -396,6 +425,10 @@ function shapeToPoints() {
     if (percent !== lastPercent) {
       dispatch(setFileProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
       lastPercent = percent;
+    }
+    if (feature.geometry.type === 'Point') {
+      state.features.push(feature);
+      return;
     }
     const {bbox} = feature.geometry;
     const bboxWidth = bbox[2] - bbox[0];
@@ -414,7 +447,7 @@ function shapeToPoints() {
       // }
     }
     else {
-      let simplifiedFeature = turfSimplify(feature, minNodeSize / 8);
+      let simplifiedFeature = turfSimplify(feature, tolerance);
       for (let long = bbox[0] + halfMinNodeSize; long < bbox[2]; long += minNodeSize) {
         for (let lat = bbox[1] + halfMinNodeSize; lat < bbox[3]; lat += minNodeSize) {
           const pointFeature = turfPoint([long, lat], feature.properties);
@@ -553,13 +586,16 @@ function parseDSV(fieldsToColumns) {
     if (index === 0)
       return null;
     ++count;
-    const name = row[Name];
+    const name = row[Name].replace(/_/g, ' ');
     const lat = +row[Latitude];
-    const long = +row[Longitude];
+    let long = +row[Longitude];
     if (name && lat >= lat && long >= long) { // not undefined/NaN etc
       if (count % 1000 === 0) {
         dispatch(setFileProgress("Parsing rows...", COUNT, count, {numSkipped}));
         // postMessage({type: "progress", payload: { count, numSkipped, activity: "Parsing rows..." }});
+      }
+      if (row[Longitude] === '180') {
+        long = -180;
       }
       return {
         type: 'Feature',
@@ -648,12 +684,18 @@ function binData(dispatchResult = false) {
   if (state.features.length === 0) {
     return;
   }
-  dispatch(setBinningProgress("Binning species...", INDETERMINATE));
+  const unitText = state.binning.unit === Binning.DEGREE ? '˚' : '′';
+  const minText = `${Math.pow(2, state.binning.minNodeSizeLog2)}${unitText}`;
+  const maxText = `${Math.pow(2, state.binning.maxNodeSizeLog2)}${unitText}`;
+  const statusText = `Binning species.with adaptive resolution from ${minText} to ${maxText}..`;
+  console.log(statusText);
+  dispatch(setBinningProgress(statusText, INDETERMINATE));
   const binner = new QuadtreeGeoBinner()
-   .minNodeSizeLog2(state.binning.minNodeSizeLog2)
-   .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
-   .nodeCapacity(state.binning.nodeCapacity)
-   .lowerThreshold(state.binning.lowerThreshold);
+  .scale(state.binning.unit === Binning.DEGREE ? 1 : 60)
+  .minNodeSizeLog2(state.binning.minNodeSizeLog2)
+  .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
+  .nodeCapacity(state.binning.nodeCapacity)
+  .lowerThreshold(state.binning.lowerThreshold);
   state.bins = binner.bins(state.features, state.binning.patchSparseNodes);
   state.bins.forEach((bin, i) => {
     bin.binId = i;
@@ -748,8 +790,11 @@ onmessage = function(event) {
   try {
     switch (type) {
       case LOAD_FILES:
-        console.log("Reset data worker state");
-        state = getInitialState();
+        console.log("Reset data worker state (except binning) and load files...");
+        state = {
+          ...getInitialState(),
+          binning: state.binning,
+        };
         loadFiles(event.data.files);
         break;
       case LOAD_TREE:
@@ -769,6 +814,10 @@ onmessage = function(event) {
         break;
       case 'GET_PAJEK':
         getPajek();
+        break;
+      case BINNING_CHANGE_UNIT:
+        state.binning.unit = event.data.unit;
+        binData(true);
         break;
       case BINNING_MIN_NODE_SIZE:
         let oldMinNodeSizeLog2 = event.data.minNodeSizeLog2;

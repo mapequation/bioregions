@@ -7,11 +7,25 @@
 import { area } from './geomath';
 
 class Node {
-  constructor(x1, y1, x2, y2) {
+  constructor(x1, y1, x2, y2, maxNodeSizeLog2) {
     this.x1 = x1;
     this.y1 = y1;
     this.x2 = x2;
     this.y2 = y2;
+    const sizeLog2 = Math.log2(this.x2 - this.x1);
+    this.visible = sizeLog2 <= maxNodeSizeLog2;
+    if (this.visible) {
+      if (x1 < -180) {
+        this.x1 = -180;
+      } else if (x2 > 180) {
+        this.x2 = 180;
+      }
+      if (y1 < -90) {
+        this.y1 = -90;
+      } else if (y2 > 90) {
+        this.y2 = 90;
+      }
+    }
     this.isLeaf = true;
     this.features = [];
     this.parent = null;
@@ -63,24 +77,24 @@ class Node {
   addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity) {
     // Compute the split point, and the quadrant in which to insert the point.
     let {x1, x2, y1, y2} = this;
-    var xm = (x1 + x2) * .5,
-        ym = (y1 + y2) * .5;
+    const xm = (x1 + x2) * 0.5;
+    const ym = (y1 + y2) * 0.5;
 
     // Recursively insert into the child node.
     this.isLeaf = false;
     const geom = feature.geometry;
 
-    if (geom.type === "Point") {
-      var [x, y] = geom.coordinates;
-      var right = x >= xm,
-          below = y >= ym,
-          i = below << 1 | right;
+    if (geom.type === 'Point') {
+      const [x, y] = geom.coordinates;
+      const right = x >= xm;
+      const below = y >= ym;
+      const i = below << 1 | right;
 
       // Update the bounds as we recurse.
       if (right) x1 = xm; else x2 = xm;
       if (below) y1 = ym; else y2 = ym;
 
-      let child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2));
+      const child = this.children[i] || (this.children[i] = new Node(x1, y1, x2, y2, maxNodeSizeLog2));
       child.parent = this;
       child.id = `${this.id}${i}`;
       child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
@@ -314,11 +328,34 @@ export default class QuadtreeGeoBinner {
     this._nodeCapacity = 10;
     this._lowerThreshold = 0; //
     this._root = null;
+    this._scale = 1; // Set to 60 to have sizes subdivided to eventually one minute
+    this.initExtent();
     this.initRoot();
   }
 
+  initExtent() {
+    // power of 2 from unscaled unit
+    let size = Math.pow(2, this._maxNodeSizeLog2) / this._scale;
+    while (size <= 180) {
+      size *= 2;
+    }
+    this._extent = [[-size, -size], [size, size]];
+  }
+
   initRoot() {
-    this._root = new Node(this._extent[0][0], this._extent[0][1], this._extent[1][0], this._extent[1][1]);
+    this._root = new Node(this._extent[0][0], this._extent[0][1], this._extent[1][0], this._extent[1][1], this._maxNodeSizeLog2);
+  }
+
+  /**
+   * Set to 60 to have sizes subdivided to eventually one minute.
+   */
+  scale(_) {
+    if (!arguments.length)
+      return this._scale;
+    this._scale = _;
+    this.initExtent();
+    this.initRoot();
+    return this;
   }
 
   extent(_) {
@@ -363,8 +400,10 @@ export default class QuadtreeGeoBinner {
   }
 
   addFeatures(features) {
+    const maxSizeLog2 = this._maxNodeSizeLog2 - Math.log2(this._scale);
+    const minSizeLog2 = this._minNodeSizeLog2 - Math.log2(this._scale);
     features.forEach((feature) => {
-      this._root.add(feature, this._maxNodeSizeLog2, this._minNodeSizeLog2, this._nodeCapacity);
+      this._root.add(feature, maxSizeLog2, minSizeLog2, this._nodeCapacity);
     });
     return this;
   }
@@ -399,7 +438,8 @@ export default class QuadtreeGeoBinner {
       this.addFeatures(features);
     }
     if (patchSparseNodes) {
-      this._root.patchSparseNodes(this._maxNodeSizeLog2, this._lowerThreshold);
+      const maxSizeLog2 = this._maxNodeSizeLog2 - Math.log2(this._scale);
+      this._root.patchSparseNodes(maxSizeLog2, this._lowerThreshold);
     }
     const nodes = [];
     this.visitNonEmpty((node) => {

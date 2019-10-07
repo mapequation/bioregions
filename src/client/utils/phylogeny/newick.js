@@ -99,7 +99,7 @@ export function _parseNewick(content) {
         break;
       default:
         const lastChar = content[i - 1];
-        
+
         let j = i;
         let token = [];
         let ch = content[j]
@@ -120,9 +120,14 @@ export function _parseNewick(content) {
         i = j - 1;
         token = token.join('');
         readData = false;
-        
+
         if (lastChar === ')' || lastChar === '(' || lastChar === ',') {
-          tree.name = token;
+          // Strip possible string characters wrapping the name
+          if (token.length > 1 && (token[0] === '\'' || token[0] === '"') && (token[token.length - 1] === '\'' || token[token.length - 1] === '"')) {
+            tree.name = token.substring(1, token.length - 1);
+          } else {
+            tree.name = token;
+          }
         } else if (lastChar === ':') {
           tree.length = parseFloat(token);
         } else if (lastChar === '&' || lastChar === '[') {
@@ -140,7 +145,7 @@ export function _parseNewick(content) {
         }
       }
   }
-  
+
   return tree;
 }
 

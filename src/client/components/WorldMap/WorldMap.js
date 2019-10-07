@@ -2,6 +2,7 @@ import React, {Component, PropTypes} from 'react';
 import worldMapChart from './worldMapChart.js';
 import * as DataFetching from '../../constants/DataFetching';
 import {BY_CELL, BY_CLUSTER} from '../../constants/Display';
+import * as Binning from '../../constants/Binning';
 import d3 from 'd3';
 import d3tip from 'd3-tip';
 import d3tipStyles from './d3-tip.css';
@@ -126,12 +127,17 @@ class WorldMap extends Component {
           </tr>`
         ).join("");
 
+        const { unit } = this.props.binning;
+        const size = unit === Binning.MINUTE ? 60 * d.size : d.size;
+        const unitSymbol = unit === Binning.MINUTE ? Binning.MINUTE_SYMBOL : Binning.DEGREE_SYMBOL;
+        const sizeText = `${size}x${size}${unitSymbol}`;
+
         return `
           <div>
             <h4 class="ui inverted header">
               <span class="value total-records-count">${d.count}</span> records of
               <span class="value total-species-count">${d.speciesCount}</span> species.
-              <div class="sub header">Cell size: ${d.size}x${d.size}˚ (${this.formatArea(d.area)} km2). ${clusterInfo}</div>
+              <div class="sub header">Cell size: ${sizeText} (${this.formatArea(d.area)} km2). ${clusterInfo}</div>
             </h4>
             </p>
             <table class="ui styled inverted table">

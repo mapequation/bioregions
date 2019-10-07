@@ -1,21 +1,25 @@
 import React, {Component, PropTypes} from 'react';
 import classNames from 'classnames';
 import {BINNING_PROGRESS} from '../../constants/ActionTypes';
+import * as Binning from '../../constants/Binning';
 import TangleInput from '../lib/TangleInput';
 import Tooltip from '../lib/Tooltip';
 import Checkbox from '../helpers/Checkbox';
 
-class Binning extends Component {
+class BinningComponent extends Component {
 
   static propTypes = {
     binnerType: PropTypes.string.isRequired,
     binnerTypes: PropTypes.array.isRequired,
+    binnerUnits: PropTypes.array.isRequired,
     minNodeSizeLog2: PropTypes.number,
     maxNodeSizeLog2: PropTypes.number,
+    unit: PropTypes.oneOf([Binning.DEGREE, Binning.MINUTE]),
     nodeCapacity: PropTypes.number,
     lowerThreshold: PropTypes.number,
     patchSparseNodes: PropTypes.bool,
     changeBinnerType: PropTypes.func.isRequired,
+    changeBinnerUnit: PropTypes.func.isRequired,
     changeMinBinSize: PropTypes.func.isRequired,
     changeMaxBinSize: PropTypes.func.isRequired,
     changeNodeCapacity: PropTypes.func.isRequired,
@@ -68,6 +72,23 @@ class Binning extends Component {
     );
   }
 
+  renderUnitSelection() {
+    return (
+      <tr>
+        <td>Unit</td>
+        <td>
+          <select className="ui compact dropdown" onChange={(event) => {
+            this.props.changeBinnerUnit(event.target.value);
+          }}>
+            {this.props.binnerUnits.map(unit => (
+              <option key={unit} value={unit}>{unit}</option>
+            ))}
+          </select>
+        </td>
+      </tr>
+    );
+  }
+
   formatBinSize(sizeLog2) {
     return sizeLog2 < 0? `1/${Math.pow(2, -sizeLog2)}` : `${Math.pow(2, sizeLog2)}`;
   }
@@ -99,6 +120,10 @@ class Binning extends Component {
                       fontWeight: 300,
                     }}>
                     <tbody>
+                      <tr>
+                        <td><strong>Unit</strong></td>
+                        <td>Choose degree or minute resolution</td>
+                      </tr>
                       <tr>
                         <td><strong>Max cell size</strong></td>
                         <td>Maximum grid cell size to accumulate records.</td>
@@ -134,10 +159,12 @@ class Binning extends Component {
         <table className="ui basic table">
           <tbody>
             {this.renderTypesSelection()}
+            {this.renderUnitSelection()}
             <tr>
               <td>Max cell size</td>
               <td className="">
-                <TangleInput className="ui label" suffix="˚"
+                <TangleInput className="ui label"
+                  suffix={this.props.unit === Binning.DEGREE ? '˚' : '′'}
                   value={this.props.maxNodeSizeLog2}
                   min={this.props.minNodeSizeLog2}
                   max={6}
@@ -150,7 +177,8 @@ class Binning extends Component {
             <tr>
               <td>Min cell size</td>
               <td className="">
-                <TangleInput className="ui label" suffix="˚"
+                <TangleInput className="ui label"
+                  suffix={this.props.unit === Binning.DEGREE ? '˚' : '′'}
                   value={this.props.minNodeSizeLog2}
                   min={-3}
                   max={this.props.maxNodeSizeLog2}
@@ -199,4 +227,4 @@ class Binning extends Component {
   }
 }
 
-export default Binning;
+export default BinningComponent;
