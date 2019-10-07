@@ -7,7 +7,21 @@ import {
   topIndicatorItems,
   reduceLimitRest,
 } from '../utils/statistics';
+import treeUtils from './treeUtils';
 import _ from 'lodash';
+
+// Degree weighted: 0 (none), 1 (all), 2 (only ancestral nodes).
+export const TREE_WEIGHT_MODELS = [
+  { name: 'linear unweighted', time: 'linear', degreeWeighted: 0 },
+  { name: 'linear degree-weighted', time: 'linear', degreeWeighted: 1 },
+  { name: 'linear ancestral-degree-weighted', time: 'linear', degreeWeighted: 2 },
+  { name: 'exponential unweighted', time: 'exponential', degreeWeighted: 0 },
+  { name: 'exponential degree-weighted', time: 'exponential', degreeWeighted: 1 },
+  { name: 'exponential ancestral-degree-weighted', time: 'exponential', degreeWeighted: 2 },
+];
+
+const useNewBipartiteFormat = true;
+let lastBipartiteOffset = 0;
 
 /**
  * Aggregate clusters below a count fraction threshold in a rest cluster.
@@ -113,7 +127,7 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
   _.forEach(clustersPerSpecies, cluPerSpecies => {
     const sortedClusters = _(cluPerSpecies.clusters).sortBy('count').reverse().value();
     const { totCount } = cluPerSpecies;
-    
+
     cluPerSpecies.clusters = aggregateSmallClusters(clustersFractionThreshold, totCount, sortedClusters);
   });
 
@@ -131,7 +145,7 @@ export function mergeClustersToBins(clusterIds, bins) {
 }
 
 /**
- * Get similar cells by spreading out weight 1.0 two steps 
+ * Get similar cells by spreading out weight 1.0 two steps
  * on the bipartite network
  * @param {Object} cell The selected cell
  * @param {Array<Object>} species Array of {name, count}, sorted on count
@@ -230,14 +244,16 @@ export function getJaccardIndex(bin, nameToBins, binSizes, minSimilarity = 0.1) 
   return jaccardIndex;
 }
 
-export function getBipartiteNetwork(species, features, bins) {
-
+export function getBipartiteNetwork({ species, bins }) {
+  console.log('Generating bipartite network...');
+  const numBins = bins.length;
+  const bipartiteOffset = lastBipartiteOffset = numBins;
   // Map names to index
   var speciesNameToIndex = new Map();
   var speciesCounter = 0;
   species.forEach(({name}) => {
-      ++speciesCounter;
-      speciesNameToIndex.set(name, speciesCounter);
+    speciesNameToIndex.set(name, speciesCounter);
+    ++speciesCounter;
   });
   // console.log('==================\nSpecies name to index:');
   // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
@@ -245,14 +261,169 @@ export function getBipartiteNetwork(species, features, bins) {
   // Create network with links from species to bins
   var network = [];
   network.push("# speciesId binId [speciesCount]");
-  var binCounter = 0;
+  if (useNewBipartiteFormat) {
+    network.push(`*Bipartite ${bipartiteOffset}`);
+  }
+  let binCounter = 0;
   bins.forEach((bin) => {
-    ++binCounter;
     bin.features.forEach((feature) => {
-      network.push(`f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`);
-    })
+      if (useNewBipartiteFormat) {
+        network.push(`${speciesNameToIndex.get(feature.properties.name) + bipartiteOffset} ${binCounter}`);
+      } else {
+        network.push(`f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`);
+      }
+    });
+    ++binCounter;
   });
   console.log("First 10 links:", network.slice(0,10));
+  // console.log('========== WHOLE NETWORK =========');
+  // console.log(network);
+  return network.join('\n');
+}
+
+export function getBipartitePhyloNetwork({ species, bins, speciesToBins, tree, treeWeightModelIndex }) {
+  console.log('Generating bipartite network using phylogenetic tree...');
+  // console.log('\n\n!! getBipartitePhyloNetwork, tree:', tree, '\nbins:', bins, 'speciesToBins:', speciesToBins);
+
+
+  const weightModel = TREE_WEIGHT_MODELS[treeWeightModelIndex];
+  console.log('Weight model:', weightModel);
+
+  const numBins = bins.length;
+  const bipartiteOffset = lastBipartiteOffset = numBins;
+  // Map names to index
+  const speciesNameToIndex = new Map();
+  let speciesCounter = 0;
+  species.forEach(({name}) => {
+    speciesNameToIndex.set(name, speciesCounter);
+    ++speciesCounter;
+  });
+
+
+  // treeUtils.expandAll(tree);
+  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, node => {
+    if (node.children) {
+      speciesNameToIndex.set(node.uid, speciesCounter);
+      ++speciesCounter;
+    }
+  });
+
+
+  // console.log('==================\nSpecies name to index:');
+  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
+
+  // Create network with links from species to bins
+  const network = [];
+  network.push("# speciesId binId weight");
+  if (useNewBipartiteFormat) {
+    network.push(`*Bipartite ${bipartiteOffset}`);
+  }
+  // bins.forEach((bin) => {
+  //   bin.features.forEach((feature) => {
+  //     const { name } = feature.properties;
+  //     console.log(`!!! add bipartite link from ${speciesNameToIndex.get(name)} (${name}) to bin ${bin.binId}. Feature:`, feature);
+  //     const weight = 1.0;// / speciesToBins[name].bins.size;
+  //     if (useNewBipartiteFormat) {
+  //       network.push(`${speciesNameToIndex.get(name) + bipartiteOffset} ${bin.binId} ${weight}`);
+  //     } else {
+  //       network.push(`f${speciesNameToIndex.get(name)} n${bin.binId + 1} ${weight}`);
+  //     }
+  //   });
+  // });
+  species.forEach(({name}) => {
+    const { bins } = speciesToBins[name];
+    bins.forEach(binId => {
+      // console.log(`!!! add bipartite link from ${speciesNameToIndex.get(name)} (${name}) to bin ${binId}`);
+      const weight = weightModel.degreeWeighted === 1 ? 1.0 / bins.size : 1.0;
+      if (useNewBipartiteFormat) {
+        network.push(`${speciesNameToIndex.get(name) + bipartiteOffset} ${binId} ${weight}`);
+      } else {
+        network.push(`f${speciesNameToIndex.get(name)} n${binId + 1} ${weight}`);
+      }
+    });
+  });
+
+  const T = tree.maxLength;
+  const p = 3; // -> break weight at 10^(-p)
+  const k = p / T * Math.LN10;
+  const minWeight = Math.pow(10, -p);
+  console.log(`T: ${T}, k: ${k}, minWeight: ${minWeight}`);
+
+  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, node => {
+    if (!node.children) {
+      // leaf nodes
+      node.links = new Map();
+      const spToBins = speciesToBins[node.name];
+      node.linkWeight = 1.0;
+      node.binIds = new Set();
+      if (spToBins) {
+        node.linkWeight = weightModel.degreeWeighted ? 1.0 / spToBins.bins.size : 1.0;
+        node.binIds = spToBins.bins;
+        // const weight = 1.0;
+        // spToBins.bins.forEach(binId => {
+        //   node.links.set(binId, (node.links.get(binId) || 0.0) + weight);
+        // });
+      }
+      // console.log(`Leaf node ${speciesNameToIndex.get(node.name)}, weight: ${node.linkWeight}, binSize: ${node.binIds.size}, node:`, node);
+    } else if (node.parent) {
+      // ancestor nodes except root
+      // node.links = new Map();
+      node.linkWeight = 0.0;
+      node.binIds = new Set();
+      const l = tree.maxLength - node.rootDist;
+      let weight = 1.0;
+      switch (weightModel.time) {
+      case 'linear':
+        weight = node.rootDist / tree.maxLength;
+        // console.log(`weight = ${node.rootDist} / ${tree.maxLength} = ${weight}`);
+        break;
+      case 'exponential':
+        weight = Math.exp(-1 * k * l);
+        break;
+      default:
+        weight = 1.0;
+      }
+      if (weight > minWeight) {
+        node.linkWeight = weight;
+        _.forEach(node.children, (child) => {
+          // Aggregate links from children but with different weight
+          // child.links.forEach((childWeight, binId) => {
+          //   // node.links.set(binId, (node.links.get(binId) || 0.0) + weight);
+          //   node.links.set(binId, weight);
+          // });
+          child.binIds.forEach(binId => {
+            node.binIds.add(binId);
+          });
+        });
+        if (weightModel.degreeWeighted) {
+          node.linkWeight /= node.binIds.size;
+        }
+      }
+      // console.log(`Node ${speciesNameToIndex.get(node.uid)}, weight: ${node.linkWeight}, binSize: ${node.binIds? node.binIds.size : -1}, node:`, node);
+    }
+  });
+  // Add ancestor nodes...
+  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, node => {
+    if (node.children && node.parent) {
+      // node.links.forEach((weight, binId) => {
+      //   if (useNewBipartiteFormat) {
+      //     console.log(`Link ${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId}, weight: ${weight} / ${node.links.size} = ${weight / node.links.size}`)
+      //     network.push(`${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId} ${weightModel.degreeWeighted ? weight / node.links.size : weight}`);
+      //   } else {
+      //     network.push(`f${speciesNameToIndex.get(node.uid)} n${binId + 1} ${weightModel.degreeWeighted ? weight / node.links.size : weight}`);
+      //   }
+      // });
+      node.binIds.forEach(binId => {
+        if (useNewBipartiteFormat) {
+          network.push(`${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId} ${node.linkWeight}`);
+        } else {
+          network.push(`f${speciesNameToIndex.get(node.uid)} n${binId + 1} ${node.linkWeight}`);
+        }
+      });
+    }
+  });
+
+  console.log("First 20 links:", network.slice(0, 20));
   // console.log('========== WHOLE NETWORK =========');
   // console.log(network);
   return network.join('\n');
@@ -290,16 +461,17 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
 
   // Only Firefox allow spawning workers from other workers
   // var haveWorker = typeof Worker === 'function'; // object in Safari
-  var haveWorker = !!Worker;
+  const haveWorker = !!Worker;
 
   if (!haveWorker) {
     return callback(`Worker not available, typeof Worker: ${typeof Worker}. (Only Firefox support spawning workers from other workers)`);
   }
-
-  console.log("Creating Infomap Worker...");
+  const workerFilename = useNewBipartiteFormat ? 'Infomap-worker.js' : 'Infomap-worker.old.js';
+  const workerUrl = `${PUBLIC}/${workerFilename}`;
+  console.log(`Creating Infomap Worker from '${workerUrl}'...`);
   dispatch(setClusteringProgress("Loading Infomap clustering algorithm...", INDETERMINATE));
 
-  var worker = new Worker('/Infomap-worker.js');
+  const worker = new Worker(workerUrl);
 
   infomapArgs += " -i bipartite --clu --skip-adjust-bipartite-flow -2";
 
@@ -334,6 +506,7 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
         finally {
           dispatch(setClusteringProgress("Clustering done!", INDETERMINATE));
 
+          console.log('ClusterIds:', clusterIds);
           callback(error, clusterIds);
 
           console.log("Terminating Infomap Worker...");
@@ -346,7 +519,7 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
   };
 
   worker.onerror = function worker_onerror(event) {
-    console.log("Worker error:", typeof event, event.type);
+    console.log("Worker error:", typeof(event), event.type, event.message, event);
     dispatch(setClusteringProgress("Error loading Infomap, please report the issue.", PERCENT, 0));
     callback("Error loading Infomap worker. Please report the issue.");
   }
@@ -364,19 +537,27 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
 
 
 function parseInfomapOutput(output) {
-  console.log("Parse Infomap output...");
+  console.log("Parse Infomap output...", 'new format?', useNewBipartiteFormat);
   let parser = d3.dsv(" ", "text/plain");
   let commentCharCode = "#".charCodeAt(0);
   let clu = parser.parseRows(output.clu, function accessor(row, index) {
     // Row is # nodeId clusterId flow
-    // nodeId is prepended by 'n' for bipartite networks
+    // console.log(row);
     if (row[0].charCodeAt(0) === commentCharCode)
       return null; // Strip commented rows
-    return [+row[0].substring(1), +row[1]]; // [nodeId, clusterId] // zero-based
+    if (useNewBipartiteFormat) {
+      const nodeId = +row[0];
+      if (nodeId >= lastBipartiteOffset) {
+        return null; // Skip feature (species) nodes
+      }
+      return [nodeId, +row[1]]; // [nodeId, clusterId]
+    }
+    // nodeId is prepended by 'n' for bipartite networks in old format
+    return [+row[0].substring(1), +row[1] - 1]; // [nodeId, clusterId] // zero-based
   });
   let clusterIds = new Array(clu.length);
   clu.forEach((row) => {
-    clusterIds[row[0] - 1] = row[1] - 1;
+    clusterIds[row[0]] = row[1];
   });
   return clusterIds;
 }

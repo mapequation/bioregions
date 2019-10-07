@@ -74,7 +74,7 @@ class Phylogram extends Component {
   }
 
   render() {
-    console.log("Phylogram::render()");
+    // console.log("Phylogram::render()");
 
     return (
       <div>

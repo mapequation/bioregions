@@ -18,6 +18,7 @@ import {
   calculateInfomapClusters,
   getClusterStatistics,
   getBipartiteNetwork,
+  getBipartitePhyloNetwork,
   mergeClustersToBins,
   getPajekNetwork,
   getJaccardIndex,
@@ -30,10 +31,12 @@ import turfExtent from 'turf-extent';
 import turfPoint from 'turf-point';
 import turfInside from 'turf-inside';
 import { parseTree } from '../utils/phylogeny';
+import treeUtils from '../utils/treeUtils';
 
 console.log(`[DataWorker] ok`);
 
 // Worker state
+// TODO: Set inital value on a single place between worker and main!
 const getInitialState = () => {
   return {
     isInitial: true,
@@ -55,6 +58,8 @@ const getInitialState = () => {
       patchSparseNodes: true,
     },
     simplifyGeometry: true, // Simplify during load to reduce memory usage
+    tree: {}, // Parsed newick tree
+    treeWeightModelIndex: 0,
   };
 };
 
@@ -516,6 +521,8 @@ function parseNexus(content) {
 
   parseTree(content)
     .then(tree => {
+      console.log("Parsed tree:", tree);
+      state.tree = treeUtils.prepareTree(tree);
       dispatch(setFileProgress("Transferring result...", INDETERMINATE));
       dispatch(addPhyloTree(tree));
     })
@@ -750,8 +757,14 @@ function onInfomapFinished(error, clusterIds) {
     calculateClusterStatistics(clusterIds);
 }
 
-function getClusters(infomapArgs) {
-  const networkData = getBipartiteNetwork(state.species, state.features, state.bins);
+function getClusters(infomapArgs, options = {}) {
+  let networkData = undefined;
+  console.log('state.tree:', state.tree, 'maxLength:', state.tree.maxLength, 'options:', options);
+  if (state.tree && state.tree.maxLength && options.useTree) {
+    networkData = getBipartitePhyloNetwork(state);
+  } else {
+    networkData = getBipartiteNetwork(state);
+  }
 
   var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
   if (haveWorker) {
@@ -794,7 +807,7 @@ onmessage = function(event) {
         parseGeoJSON(event.data.featureNameField);
         break;
       case GET_CLUSTERS:
-        getClusters(event.data.infomapArgs);
+        getClusters(event.data.infomapArgs, { ...event.data });
         break;
       case ADD_CLUSTERS:
         calculateClusterStatistics(event.data.clusterIds);
@@ -835,6 +848,9 @@ onmessage = function(event) {
         break;
       case CANCEL_FILE_ACTIONS:
         state = getInitialState();
+        break;
+      case CHANGE_TREE_WEIGHT_MODEL:
+        state.treeWeightModelIndex = event.data.treeWeightModelIndex;
         break;
       default:
         console.log("[DataWorker]: Unrecognised message type:", type);

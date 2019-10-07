@@ -19,7 +19,7 @@ const initialState = {
 export default function worldmap(state = initialState, action) {
   switch (action.type) {
     case ActionTypes.LOAD_WORLD:
-      console.log("worldmap reducer, got LOAD_WORLD");
+      // console.log("worldmap reducer, got LOAD_WORLD");
       return {
         ...state,
         worldStatus: DataFetching.DATA_FETCHING

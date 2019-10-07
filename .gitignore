@@ -6,7 +6,9 @@ npm-debug.log
 semantic/dist
 data
 Infomap-worker.js*
+Infomap-worker.old.js
 maps/physical
+semantic.min.css
 esdoc
 .vscode
 .tmp

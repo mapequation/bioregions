@@ -7,7 +7,7 @@ import DataWorker from 'worker!../workers/DataWorker';
 import EventEmitter2 from 'eventemitter2';
 import geoTreeUtils from '../utils/phylogeny/geoTreeUtils';
 import treeUtils from '../utils/treeUtils';
-import { getSimilarCells } from '../utils/clustering';
+import { getSimilarCells, TREE_WEIGHT_MODELS } from '../utils/clustering';
 
 const getInitialBinningState = () => {
   return {
@@ -94,6 +94,11 @@ const getInitialState = () => {
     clustersPerSpecies: {}, // name -> {count, clusters: limitRest([{clusterId, count}, ...])}
     clusterColors: [], // array of chroma colors for each cluster
     phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
+    phyloregions: {
+      useTree: true,
+    },
+    treeWeightModels: TREE_WEIGHT_MODELS,
+    treeWeightModelIndex: 0,
     clusterFractionLimit: 0.1, // For cluster pie charts //TODO: Not used in DataWorker
     infomap: {
       numTrials: 1,
@@ -200,11 +205,26 @@ export default function data(state = getInitialState(), action) {
       binning: state.binning,
       // Reset possibly stored clusters on the tree
       phyloTree: state.phyloTree ? Object.assign({}, geoTreeUtils.aggregateSpeciesCount(
-        geoTreeUtils.resetClusters(state.phyloTree), speciesCount)) : state.phyloTree,        
+        geoTreeUtils.resetClusters(state.phyloTree), speciesCount)) : state.phyloTree,
+    };
+  case ActionTypes.PHYLOREGIONS_USE:
+    return {
+      ...state,
+      phyloregions: {
+        ...state.phyloregions,
+        useTree: action.checked,
+      },
+    };
+  case ActionTypes.CHANGE_TREE_WEIGHT_MODEL:
+    state.dataWorker.postMessage(action);
+    return {
+      ...state,
+      treeWeightModelIndex: action.treeWeightModelIndex,
     };
   case ActionTypes.GET_CLUSTERS:
     // Forward to data worker
-    state.dataWorker.postMessage(action);
+    console.log('\n\n!!!!!! GET_CLUSTERS:', { ...action, ...state.phyloregions });
+    state.dataWorker.postMessage({ ...action, ...state.phyloregions });
     return {
       ...state,
       isClustering: true,
