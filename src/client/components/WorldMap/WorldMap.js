@@ -166,7 +166,7 @@ class WorldMap extends Component {
     // this.props.highlightCell(d);
     this.props.highlightStore.highlightCell(d);
   }
-  
+
   handleMouseOutGridCell = (d) => {
     // if (this.tip) {
     //   this.tip.hide(d);
@@ -193,7 +193,7 @@ class WorldMap extends Component {
       selectCell(d);
     }
   }
-  
+
   toggleSelectCluster(d) {
     const { selectedClusterId, selectCluster } = this.props;
     if (!d || d.clusterId === selectedClusterId) {
@@ -204,7 +204,7 @@ class WorldMap extends Component {
   }
 
   render() {
-    console.log("WorldMap::render()");
+    // console.log("WorldMap::render()");
     let statusClassName = "";
     switch (this.props.worldStatus) {
       case DataFetching.DATA_NOT_FETCHED:

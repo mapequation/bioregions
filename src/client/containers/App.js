@@ -29,7 +29,7 @@ class App extends Component {
   }
 
   componentDidMount() {
-    console.log("App::componentDidMount()");
+    // console.log("App::componentDidMount()");
     this.checkDataWorkerInitiated(this.props.data);
   }
 

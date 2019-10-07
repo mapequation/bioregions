@@ -6,7 +6,7 @@ var phylogram = {};
 export default phylogram;
 
 phylogram.create = function(el, props) {
-  console.log("phylogram.create()");
+  // console.log("phylogram.create()");
   var anchorElement = d3.select(el);
   anchorElement.selectAll("*").remove();
   var svg = anchorElement.append('svg')
@@ -19,7 +19,7 @@ phylogram.create = function(el, props) {
 }
 
 phylogram.update = function(el, props) {
-  console.log("phylogram.update()");
+  // console.log("phylogram.update()");
 
   const {phyloTree, clustersPerSpecies, clusterColors} = props;
 
@@ -231,9 +231,9 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr("height", h + 30)
     .append("svg:g")
       .attr("transform", "translate(20, 20)");
-  console.log("==== Before tree layout =====");
+  // console.log("==== Before tree layout =====");
   var nodes = tree(phyloTree);
-  console.log("==== After tree layout =====");
+  // console.log("==== After tree layout =====");
 
   if (options.skipBranchLengthScaling) {
     var yscale = d3.scale.linear()
@@ -242,8 +242,8 @@ phylogram.build = function(selector, phyloTree, options) {
   } else {
     var yscale = scaleBranchLengths(nodes, w)
   }
-  
-  
+
+
   // Define the zoom function for the zoomable tree
   function zoom() {
       vis.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
@@ -254,7 +254,7 @@ phylogram.build = function(selector, phyloTree, options) {
   //   .scaleExtent([0.1, 3]).on("zoom", zoom);
 
   // vis.call(zoomListener);
-  
+
 
   if (!options.skipTicks) {
     vis.selectAll('line')
@@ -278,9 +278,9 @@ phylogram.build = function(selector, phyloTree, options) {
         .attr('fill', '#ccc')
         .text(function(d) { return Math.round(d*100) / 100; });
   }
-  
+
   const {clustersPerSpecies, clusterColors} = options;
-  
+
   function diagonalColor(d) {
     const { clusters } = d.target;
     if (!clusters || clusters.clusters.length === 0)
@@ -317,8 +317,8 @@ phylogram.build = function(selector, phyloTree, options) {
   var pie = d3.layout.pie()
       .sort(null)
       .value(function(d) { return d.count; });
-  
-  const fillColor = (clusterId) => clusterId === 'rest' ? '#eee' : clusterColors[clusterId];  
+
+  const fillColor = (clusterId) => clusterId === 'rest' ? '#eee' : clusterColors[clusterId];
 
   var clusterData = (d) => {
     if (!d.clusters || d.clusters.totCount === 0)
@@ -356,7 +356,7 @@ phylogram.build = function(selector, phyloTree, options) {
       .attr('fill', 'black')
       .text((d) => d.name);
   }
-  console.log("==== Phylogram rendered! =====");
+  // console.log("==== Phylogram rendered! =====");
 
   return {tree: tree, vis: vis}
 }

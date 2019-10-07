@@ -29,7 +29,7 @@ class Tree extends Component {
     showClusteredNodes: PropTypes.bool.isRequired,
     setShowClusteredNodes: PropTypes.func.isRequired,
   }
-   
+
   initialState = {
     leafCountLimit: 200,
     filter: "",
@@ -37,7 +37,7 @@ class Tree extends Component {
     currentSpeciesCount: 0,
     currentOccurrenceCount: 0,
   }
-  
+
   state = {
     ...this.initialState,
   }
@@ -45,7 +45,7 @@ class Tree extends Component {
   componentDidMount() {
     this.updateTree();
   }
-  
+
   componentWillReceiveProps(nextProps) {
     const {clusterColors, phyloTree} = this.props;
     const shouldUpdate = clusterColors !== nextProps.clusterColors ||
@@ -58,7 +58,7 @@ class Tree extends Component {
   componentWillUnmount() {
     treeChart.destroy(this.svg);
   }
-  
+
   calculateCurrentAggregate(tree) {
     if (!tree)
       return;
@@ -74,11 +74,11 @@ class Tree extends Component {
     });
     this.setState({ currentSpeciesCount, currentOccurrenceCount });
   }
-  
+
   updateTree(newPropsOrState) {
     const state = Object.assign({}, this.props, this.state, newPropsOrState);
     state.phyloTree = this.getFilteredTree(state);
-    console.log('RENDER TREE... have tree?', !!state.phyloTree);
+    // console.log('RENDER TREE... have tree?', !!state.phyloTree);
     treeChart.render(this.svg, state);
     treeChart.render(this.minimap, Object.assign({}, state, {
       minimap: true,
@@ -118,19 +118,19 @@ class Tree extends Component {
   getSvgString() {
     return this.svg.outerHTML;
   }
-  
+
   onChangeLeafCountLimit = (leafCountLimit) => {
     this.updateTree({ leafCountLimit });
     this.setState({ leafCountLimit });
   }
-  
+
   handleChangeSort = (event) => {
     event.preventDefault();
     const currentSortOption = event.target.value;
     this.updateTree({ currentSortOption });
     this.setState({ currentSortOption });
   }
-  
+
   renderMapTreeTable() {
     const { species } = this.props;
     // Only render if there are any species distribution
@@ -163,7 +163,7 @@ class Tree extends Component {
       </table>
     )
   }
-  
+
   renderControlPanel() {
     const { phyloTree, showClusteredNodes } = this.props;
     if (!phyloTree)
@@ -179,12 +179,12 @@ class Tree extends Component {
     if (haveClusters) {
       sortOptions.push(BY_BIOREGIONS);
     }
-    
+
     console.log(`[Tree]: haveGeoSpecies: ${haveGeoSpecies}, haveClusters: ${haveClusters}`);
-    
+
     return (
       <div>
-        <p>Show max  
+        <p>Show max
           <TangleInput className="ui label"
               value={this.state.leafCountLimit}
               min={1}
@@ -204,11 +204,11 @@ class Tree extends Component {
       </div>
     );
   }
-  
+
   render() {
     const { phyloTree } = this.props;
-    console.log("Tree::render()");
-    console.log('Colors:', this.props.clusterColors.map(c => c.hex()));
+    // console.log("Tree::render()");
+    // console.log('Colors:', this.props.clusterColors.map(c => c.hex()));
 
     return (
       <Div className="ui two column stackable grid" display={phyloTree ? 'block' : 'none'}>

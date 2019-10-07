@@ -11,7 +11,7 @@ const world = {};
 export default world;
 
 world.create = function(el, props) {
-  console.log("Create world map chart...");
+  // console.log("Create world map chart...");
   world._zoomTranslation = [0, 0];
   world._zoomScale = 1;
 
@@ -58,7 +58,7 @@ world.create = function(el, props) {
 };
 
 world.update = function(el, properties) {
-  console.log("Update world map chart...", properties);
+  // console.log("Update world map chart...", properties);
   const props = Object.assign({
     autoResize: true,
     width: null, // null to set it to the width of the anchor element
@@ -88,21 +88,21 @@ world.update = function(el, properties) {
   const height = props.height - props.top - props.bottom;
   const width = totalWidth - props.left - props.right;
 
-  console.log(`--> totalWidth: ${totalWidth}, width: ${width}`);
+  // console.log(`--> totalWidth: ${totalWidth}, width: ${width}`);
 
   svg.attr("width", totalWidth)
     .attr("height", props.height);
 
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
-  console.log("Creating worldmap zoom behavior...");
+  // console.log("Creating worldmap zoom behavior...");
   const zoom = d3.behavior.zoom()
     .scaleExtent([1, 12])
     .on("zoom", onZoom);
 
   svg.call(zoom)
     .on("click", onClick);
-  
+
   doZoom(world._zoomTranslation || [0, 0], world._zoomScale || 1);
 
   props.projection
@@ -115,7 +115,7 @@ world.update = function(el, properties) {
 
   const landPath = g.select("path.land");
   if (props.worldStatus === DATA_SUCCEEDED) {
-    console.log("Draw world...");
+    // console.log("Draw world...");
     landPath
       .datum(topojson.feature(props.world, props.world.objects.land))
       .attr("d", path);
@@ -220,7 +220,7 @@ world.update = function(el, properties) {
       domain.push(domainMax);
       // domain[0] = 1; // Make a threshold between non-empty and empty bins
       // domain.unshift(0.5);
-      console.log("Color domain:", domain.length, domain);
+      // console.log("Color domain:", domain.length, domain);
       const colorDomainValue = d => d.count / d.area;
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
@@ -235,7 +235,7 @@ world.update = function(el, properties) {
       const heatmapColor = (d) => {
         return colorRange[Math.floor(heatmapColorScale(d))];
       };
-      
+
       const linkColors = colorbrewer.Blues["9"];
       const selectedCellColorScale = d3.scale.linear()
         .domain([0, selectedCellMax]).range([0, 8]);
@@ -344,14 +344,14 @@ world.update = function(el, properties) {
   }
 
   function onMouseOverGridCell(d) {
-    console.log('####### mouse OVER', d);
+    // console.log('####### mouse OVER', d);
     d3.event.stopPropagation();
     d3.event.preventDefault();
     props.onMouseOver(d);
   }
-  
+
   function onMouseOutGridCell(d) {
-    console.log('####### mouse OUT', d);
+    // console.log('####### mouse OUT', d);
     d3.event.stopPropagation();
     d3.event.preventDefault();
     props.onMouseOut(d);

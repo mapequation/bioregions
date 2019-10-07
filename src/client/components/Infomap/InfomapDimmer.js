@@ -1,5 +1,6 @@
 import React, {Component, PropTypes} from 'react';
 import classNames from 'classnames';
+import { Form, Radio } from 'semantic-ui-react';
 import TangleInput from '../lib/TangleInput';
 import Tooltip from '../lib/Tooltip';
 import {CLUSTERING_PROGRESS} from '../../constants/ActionTypes';
@@ -109,8 +110,8 @@ class InfomapDimmer extends Component {
   };
 
   render() {
-    const {isShowingInfomapUI, clusters, isClustering, showInfomapUI, infomap} = this.props;
-    const {bins, features, species} = this.props;
+    const {isShowingInfomapUI, clusters, isClustering, showInfomapUI, infomap, phyloTree} = this.props;
+    const {bins, features, species, phyloregions, treeWeightModels, treeWeightModelIndex } = this.props;
     const {stdout, activity, infomapArgs} = this.state;
 
     if (!isShowingInfomapUI)
@@ -131,6 +132,40 @@ class InfomapDimmer extends Component {
       <span>Partitioned grid cells into <span className="ui basic red label">{clusters.length}</span> clusters, or <em>bioregions</em>.</span>
     );
 
+    const onTogglePhyloregions = (e, { checked }) => {
+      this.props.useTreeForClustering(checked);
+    };
+
+    const handleChangeTreeWeightModel = (e, { value }) => {
+      this.props.setTreeWeightModel(value);
+    };
+
+    const TreeClusterOptions = phyloTree && phyloTree.maxLength ? (
+      <div style={{ marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ marginRight: 5 }}>Use phylogenetic data</span>
+          <Radio toggle checked={phyloregions.useTree} onChange={onTogglePhyloregions}/>
+        </div>
+        { !phyloregions.useTree ? null : (
+          <Form style={{ marginTop: 10 }}>
+          <h4>Weight model:</h4>
+          { treeWeightModels.map((model, index) => (
+              <Form.Field key={index}>
+                <Radio
+                  label={model.name}
+                  name="treeWeightRadioGroup"
+                  value={index}
+                  checked={treeWeightModelIndex === index}
+                  onChange={handleChangeTreeWeightModel}
+                />
+              </Form.Field>
+            ))
+          }
+          </Form>
+        ) }
+      </div>
+    ) : null;
+
 
     return (
       <div className="ui inverted active page dimmer" style={{overflow: 'auto'}}>
@@ -145,6 +180,7 @@ class InfomapDimmer extends Component {
           <div className="ui left aligned yellow segment">
             <h4 className="ui header">Input</h4>
             A bipartite network of <span className="ui basic yellow label">{species.length}</span> species mapped to <span className="ui basic yellow label">{bins.length}</span> grid cells.
+            { TreeClusterOptions }
           </div>
 
           <div className="ui left aligned orange segment">

@@ -6,6 +6,8 @@ import {
   SHOW_INFOMAP_UI,
   INFOMAP_NUM_TRIALS,
   INFOMAP_MARKOV_TIME,
+  PHYLOREGIONS_USE,
+  CHANGE_TREE_WEIGHT_MODEL,
 } from '../constants/ActionTypes';
 
 /**
@@ -67,5 +69,19 @@ export function setInfomapMarkovTime(markovTime) {
   return {
     type: INFOMAP_MARKOV_TIME,
     markovTime
+  };
+}
+
+export function useTreeForClustering(checked) {
+  return {
+    type: PHYLOREGIONS_USE,
+    checked,
+  };
+}
+
+export function setTreeWeightModel(treeWeightModelIndex) {
+  return {
+    type: CHANGE_TREE_WEIGHT_MODEL,
+    treeWeightModelIndex,
   };
 }

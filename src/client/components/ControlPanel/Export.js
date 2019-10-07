@@ -6,7 +6,7 @@ import _ from 'lodash';
 import Div from '../helpers/Div';
 import io from '../../utils/io';
 import * as statistics from '../../utils/statistics';
-import { getPajekNetwork } from '../../utils/clustering';
+import { getPajekNetwork, getBipartitePhyloNetwork } from '../../utils/clustering';
 import {clusteredBinsToCollectionOfMultiPolygons, clusteredBinsToCollectionOfPolygons} from '../../utils/polygons';
 
 class Export extends Component {
@@ -20,6 +20,7 @@ class Export extends Component {
     clusterColors: PropTypes.array.isRequired,
     basename: PropTypes.string.isRequired,
     network: PropTypes.string,
+    tree: PropTypes.object,
   }
 
   state = {
@@ -171,7 +172,7 @@ class ExportWindow extends Component {
         console.log("!!! Error getting cluster files:", error);
         this.setState({ error });
       });
-    
+
     this.getTreeSvgUrl()
       .then(svgUrl => {
         files.treeSvg.url = svgUrl;
@@ -182,7 +183,7 @@ class ExportWindow extends Component {
         console.log("!!! Error getting tree svg file:", error);
         this.setState({ error });
       });
-    
+
     this.getPresenceAbsenceUrl()
       .then(url => {
         files.presenceAbsence.url = url;
@@ -193,7 +194,7 @@ class ExportWindow extends Component {
         console.log("!!! Error getting presence-absence file:", error);
         this.setState({ error });
       });
-    
+
     this.getBioregionsCoordsUrl()
       .then(url => {
         files.bioregionsCoords.url = url;
@@ -252,19 +253,19 @@ class ExportWindow extends Component {
     return this.getClustersCSV()
       .then(_.partial(io.dataToBlobURL, 'text/csv'));
   }
-  
+
   getNetworkUrl() {
     return this.getPajekNetwork()
       .then(_.partial(io.dataToBlobURL, 'text/plain'));
   }
-  
+
   getPresenceAbsenceUrl() {
     if (this.props.clusters.length === 0)
       return Promise.resolve(null);
     return this.getPresenceAbsence()
       .then(_.partial(io.dataToBlobURL, 'text/plain'));
   }
-  
+
   getBioregionsCoordsUrl() {
     if (this.props.clusters.length === 0)
       return Promise.resolve(null);
@@ -361,14 +362,18 @@ class ExportWindow extends Component {
 
   getPajekNetwork() {
     return new Promise(resolve => {
-      const { species, speciesToBins, bins } = this.props;
-      const network = getPajekNetwork(species, speciesToBins, bins);
-      resolve(network);
+      const { species, speciesToBins, bins, phyloTree } = this.props;
+      resolve(getPajekNetwork(species, speciesToBins, bins));
+      // if (!phyloTree) {
+      //   resolve(getPajekNetwork(species, speciesToBins, bins));
+      // } else {
+      //   resolve(getBipartitePhyloNetwork(species, null, bins, speciesToBins, phyloTree));
+      // }
     });
   }
-  
+
   getPresenceAbsence() {
-    return new Promise(resolve => {    
+    return new Promise(resolve => {
       const { species, clusters, clustersPerSpecies } = this.props;
       const lines = _.map(clustersPerSpecies, (clu, species) => {
         const presenceAbsence = new Array(clusters.length).fill('0');
@@ -381,9 +386,9 @@ class ExportWindow extends Component {
       resolve(lines.join('\n'));
     })
   }
-  
+
   getBioregionsCoords() {
-    return new Promise(resolve => {    
+    return new Promise(resolve => {
       const { clusters, bins } = this.props;
       const geoStats = _.range(clusters.length).map(() => {
         return {lat: 0, long: 0, count: 0};

@@ -2,7 +2,7 @@ import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
   BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
-CANCEL_FILE_ACTIONS, REMOVE_SPECIES} from '../constants/ActionTypes';
+CANCEL_FILE_ACTIONS, REMOVE_SPECIES, CHANGE_TREE_WEIGHT_MODEL} from '../constants/ActionTypes';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
@@ -17,6 +17,7 @@ import {
   calculateInfomapClusters,
   getClusterStatistics,
   getBipartiteNetwork,
+  getBipartitePhyloNetwork,
   mergeClustersToBins,
   getPajekNetwork,
   getJaccardIndex,
@@ -29,10 +30,12 @@ import turfExtent from 'turf-extent';
 import turfPoint from 'turf-point';
 import turfInside from 'turf-inside';
 import { parseTree } from '../utils/phylogeny';
+import treeUtils from '../utils/treeUtils';
 
 console.log(`[DataWorker] ok`);
 
 // Worker state
+// TODO: Set inital value on a single place between worker and main!
 const getInitialState = () => {
   return {
     isInitial: true,
@@ -53,6 +56,8 @@ const getInitialState = () => {
       patchSparseNodes: true,
     },
     simplifyGeometry: true, // Simplify during load to reduce memory usage
+    tree: {}, // Parsed newick tree
+    treeWeightModelIndex: 0,
   };
 };
 
@@ -92,7 +97,7 @@ function loadShapefiles(files) {
     console.log(`Add promise for file ${file.name}...`);
     filePromises.push(io.readFile(file, /prj$/.test(file.name) ? 'text' : 'buffer'));
   });
-  
+
   let numTooSimplifiedPolygons = 0;
 
   function parseGeometry(geometry, i) {
@@ -221,7 +226,7 @@ function loadShapefiles(files) {
     .catch(err => {
       return dispatch(setFileError(`Error loading shapefiles: ${err}`));
     });
- 
+
   // Promise.all(filePromises)
   //   .then(filesData => {
   //     console.log('Loaded shapefile buffer, parse shapes...');
@@ -245,7 +250,7 @@ function loadShapefiles(files) {
   //         ++numFeatures;
   //         const feature = result.value;
   //         const { type } = feature.geometry;
-          
+
   //         if (type === "Polygon") {
   //           ++numPolygons;
   //           const simplifiedFeature = turfSimplify(feature, 0.5 / 8);
@@ -325,7 +330,7 @@ function parseGeoJSON(nameField) {
     //   ++numBadFeatures;
     // }
     // else {
-    
+
     // console.log(i, 'feature:', feature);
     // console.log(' -> properties:', feature.properties);
 
@@ -380,7 +385,7 @@ function parseGeoJSON(nameField) {
 
 function shapeToPoints() {
   state.features = [];
-  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2); 
+  const minNodeSize = Math.pow(2, state.binning.minNodeSizeLog2);
   const halfMinNodeSize = minNodeSize / 2;
   const resolution = minNodeSize * 0.1;
   const totCount = state.shapeFeatures.length;
@@ -483,6 +488,8 @@ function parseNexus(content) {
 
   parseTree(content)
     .then(tree => {
+      console.log("Parsed tree:", tree);
+      state.tree = treeUtils.prepareTree(tree);
       dispatch(setFileProgress("Transferring result...", INDETERMINATE));
       dispatch(addPhyloTree(tree));
     })
@@ -708,8 +715,14 @@ function onInfomapFinished(error, clusterIds) {
     calculateClusterStatistics(clusterIds);
 }
 
-function getClusters(infomapArgs) {
-  const networkData = getBipartiteNetwork(state.species, state.features, state.bins);
+function getClusters(infomapArgs, options = {}) {
+  let networkData = undefined;
+  console.log('state.tree:', state.tree, 'maxLength:', state.tree.maxLength, 'options:', options);
+  if (state.tree && state.tree.maxLength && options.useTree) {
+    networkData = getBipartitePhyloNetwork(state);
+  } else {
+    networkData = getBipartiteNetwork(state);
+  }
 
   var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
   if (haveWorker) {
@@ -749,7 +762,7 @@ onmessage = function(event) {
         parseGeoJSON(event.data.featureNameField);
         break;
       case GET_CLUSTERS:
-        getClusters(event.data.infomapArgs);
+        getClusters(event.data.infomapArgs, { ...event.data });
         break;
       case ADD_CLUSTERS:
         calculateClusterStatistics(event.data.clusterIds);
@@ -786,6 +799,9 @@ onmessage = function(event) {
         break;
       case CANCEL_FILE_ACTIONS:
         state = getInitialState();
+        break;
+      case CHANGE_TREE_WEIGHT_MODEL:
+        state.treeWeightModelIndex = event.data.treeWeightModelIndex;
         break;
       default:
         console.log("[DataWorker]: Unrecognised message type:", type);

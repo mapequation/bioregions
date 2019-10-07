@@ -8,14 +8,14 @@ let createStoreWithMiddleware;
 if (__DEV__) {
   createStoreWithMiddleware = compose(
     applyMiddleware(thunkMiddleware),
-    window.devToolsExtension ? window.devToolsExtension() : f => f,
+    // window.devToolsExtension ? window.devToolsExtension() : f => f,
     // persistState(window.location.href.match(/[?&]debug_session=([^&]+)\b/))
   )(createStore);
 } else {
   // createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore);
   createStoreWithMiddleware = compose(
     applyMiddleware(thunkMiddleware),
-    window.devToolsExtension ? window.devToolsExtension() : f => f,
+    // window.devToolsExtension ? window.devToolsExtension() : f => f,
   )(createStore);
 }
 
