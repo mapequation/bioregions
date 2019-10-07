@@ -3,7 +3,11 @@ var ExtractTextPlugin = require('extract-text-webpack-plugin');
 var path = require('path');
 
 var devFlagPlugin = new webpack.DefinePlugin({
-  __DEV__: JSON.stringify(JSON.parse(process.env.DEBUG || 'false'))
+  __DEV__: JSON.stringify(JSON.parse(process.env.DEBUG || 'false')),
+  'process.env': {
+    'NODE_ENV': JSON.stringify(process.env.NODE_ENV)
+  },
+  PUBLIC: JSON.stringify('/bioregions.test')
 });
 
 module.exports = {
@@ -12,7 +16,7 @@ module.exports = {
   ],
   output: {
     path: path.join(__dirname, '../static'),
-    publicPath: '/static/',
+    publicPath: '/bioregions.test/static/',
     filename: 'bundle.js',
   },
   plugins: [

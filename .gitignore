@@ -5,7 +5,7 @@ node_modules/
 npm-debug.log
 semantic/dist
 data
-Infomap-worker.js
+Infomap-worker.js*
 maps/physical
 esdoc
 .vscode
