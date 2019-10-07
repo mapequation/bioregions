@@ -7,7 +7,7 @@ var devFlagPlugin = new webpack.DefinePlugin({
   'process.env': {
     'NODE_ENV': JSON.stringify(process.env.NODE_ENV)
   },
-  PUBLIC: JSON.stringify('/bioregions.test')
+  PUBLIC: JSON.stringify('/bioregions.minute')
 });
 
 module.exports = {
@@ -16,7 +16,7 @@ module.exports = {
   ],
   output: {
     path: path.join(__dirname, '../static'),
-    publicPath: '/bioregions.test/static/',
+    publicPath: '/bioregions.minute/static/',
     filename: 'bundle.js',
   },
   plugins: [
