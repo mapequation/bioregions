@@ -1,7 +1,7 @@
 {
   "name": "infomap-bioregions",
   "version": "0.1.0",
-  "homepage": "https://www.mapequation.org/bioregions.minute",
+  "homepage": "https://www.mapequation.org/bioregions.test",
   "scripts": {
     "start": "pm2 start ecosystem.json",
     "logs": "pm2 logs --merge-logs --lines 0 --timestamp \"YYYY-MM-DD HH:mm Z\"",
