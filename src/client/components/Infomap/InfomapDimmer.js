@@ -98,7 +98,7 @@ class InfomapDimmer extends Component {
   }
 
   handleChangeMarkovTime = (value) => {
-    this.props.setInfomapMarkovTime(Math.round(value*10)/10);
+    this.props.setInfomapMarkovTime(Math.round(value * 100) / 100);
   }
 
   handleClickCluster = () => {
@@ -236,7 +236,7 @@ class InfomapDimmer extends Component {
                       value={infomap.markovTime}
                       min={0.1}
                       max={10}
-                      step={0.1}
+                      step={0.01}
                       speed={0.5}
                       onChange={this.handleChangeMarkovTime} />
                   </td>
