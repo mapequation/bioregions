@@ -2,10 +2,10 @@ import d3 from 'd3';
 import _ from 'lodash';
 import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
   BINNING_CHANGE_UNIT, BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
-CANCEL_FILE_ACTIONS, REMOVE_SPECIES} from '../constants/ActionTypes';
+CANCEL_FILE_ACTIONS, CHANGE_TREE_WEIGHT_MODEL, REMOVE_SPECIES} from '../constants/ActionTypes';
 import * as Binning from '../constants/Binning';
 import {setFileProgress, setBinningProgress, setClusteringProgress,
-  INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
+  INDETERMINATE, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
   addSpeciesAndBins, addPhyloTree} from '../actions/FileLoaderActions';
 import {addClustersAndStatistics, calculateClusters} from '../actions/ClusterActions';
