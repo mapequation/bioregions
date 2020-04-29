@@ -27,7 +27,7 @@
     "eventemitter2": "^0.4.14",
     "fs-promise": "^0.5.0",
     "iwanthue-api": "^0.1.0",
-    "jquery": "^2.2.3",
+    "jquery": "^3.5.0",
     "jquery-tablesort": "0.0.6",
     "lodash": "^4.11.1",
     "ramda": "^0.18.0",
