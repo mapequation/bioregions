@@ -142,10 +142,10 @@ class InfomapDimmer extends Component {
 
     const TreeClusterOptions = phyloTree && phyloTree.maxLength ? (
       <div style={{ marginTop: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        { phyloregions.useTree ? (<div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ marginRight: 5 }}>Use phylogenetic data</span>
           <Radio toggle checked={phyloregions.useTree} onChange={onTogglePhyloregions}/>
-        </div>
+        </div>) : null}
         { !phyloregions.useTree ? null : (
           <Form style={{ marginTop: 10 }}>
           <h4>Weight model:</h4>

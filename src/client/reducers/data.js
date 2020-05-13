@@ -95,7 +95,7 @@ const getInitialState = () => {
     clusterColors: [], // array of chroma colors for each cluster
     phyloTree: null, // { name: "root", children: [{name, length}, {name, length, children}, ...] }
     phyloregions: {
-      useTree: true,
+      useTree: false,
     },
     treeWeightModels: TREE_WEIGHT_MODELS,
     treeWeightModelIndex: 0,

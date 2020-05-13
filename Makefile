@@ -11,10 +11,10 @@ build:
 	npm run build
 
 update-remote:
-	rsync -hav index.html index.css static mapequation:/var/www/bioregions/
+	rsync -hav index.html index.css static data maps Infomap-worker.js* mapequation:/var/www/bioregions/
 
 update-test-remote:
-	rsync -hav index.html index.css static mapequation:/var/www/test.bioregions/
+	rsync -hav index.html index.css static data maps Infomap-worker.js* mapequation:/var/www/test.bioregions/
 
 Infomap-worker.js:
 	curl -LO http://www.mapequation.org/downloads/$@
