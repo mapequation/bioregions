@@ -30,7 +30,7 @@ class Statistics extends Component {
     // TODO: tablesort undefined here
     // $('.sortable.table').tablesort();
   }
-  
+
   componentWillReceiveProps(nextProps) {
     if (nextProps.species.length !== this.props.species.length) {
       this.setState({ limitSpecies: Math.min(this.initialState.limitSpecies, nextProps.species.length)});

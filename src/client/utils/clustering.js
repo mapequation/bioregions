@@ -1,6 +1,7 @@
 import {setFileProgress, setBinningProgress, setClusteringProgress,
   INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
 import d3 from 'd3';
+// import Infomap from '@mapequation/infomap';
 import {
   countBy,
   topSortedBy,
@@ -136,7 +137,7 @@ export function getClusterStatistics(clusterIds, bins, maxGlobalCount, speciesCo
 
 export function mergeClustersToBins(clusterIds, bins) {
   // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
-  if (clusterIds.length === bins.length) {
+  if (clusterIds.length >= bins.length) {
     bins.forEach((bin, i) => {
       bin.clusterId = clusterIds[i];
     });
@@ -245,9 +246,10 @@ export function getJaccardIndex(bin, nameToBins, binSizes, minSimilarity = 0.1) 
 }
 
 export function getBipartiteNetwork({ species, bins }) {
-  console.log('Generating bipartite network...');
+  console.log(`'Generating bipartite network with ${species.length} species and ${bins.length} grid cells...`);
   const numBins = bins.length;
-  const bipartiteOffset = lastBipartiteOffset = numBins;
+  const bipartiteOffset = numBins;
+  lastBipartiteOffset = numBins;
   // Map names to index
   var speciesNameToIndex = new Map();
   var speciesCounter = 0;
@@ -457,7 +459,7 @@ export function getPajekNetwork(species, speciesToBins, bins) {
   return network.join('\n');
 }
 
-export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback) {
+export function calculateInfomapClusters(dispatch, infomapArgs, networkData, callback, { bins }) {
 
   // Only Firefox allow spawning workers from other workers
   // var haveWorker = typeof Worker === 'function'; // object in Safari
@@ -474,6 +476,40 @@ export function calculateInfomapClusters(dispatch, infomapArgs, networkData, cal
   const worker = new Worker(workerUrl);
 
   infomapArgs += " -i bipartite --clu --skip-adjust-bipartite-flow -2";
+
+
+  // const onData = content =>
+  //   this.setState({
+  //     infomapOutput: [...this.state.infomapOutput, content],
+  //   });
+
+  // const onError = content =>
+  //   this.setState({
+  //     infomapError: content.replace(/^Error:\s+/i, ""),
+  //     infomapOutput: [...this.state.infomapOutput, content],
+  //     running: false,
+  //     completed: false,
+  //   });
+
+  // const onFinished = content => {
+  //   store.output.setContent(content);
+  //   localforage
+  //     .setItem("ftree", store.output.ftree)
+  //     .then(() => this.setState({ hasLocalforageError: false }))
+  //     .catch(() => this.setState({ hasLocalforageError: true }));
+  //   this.setState({
+  //     running: false,
+  //     completed: true,
+  //   });
+  // };
+
+  // this.infomap = new Infomap()
+  //   .on("data", onData)
+  //   .on("error", onError)
+  //   .on("finished", onFinished);
+
+
+
 
   worker.onmessage = function worker_onmessage(event) {
     // console.log('\nclient got ' + JSON.stringify(event.data).substr(0, 150) + '\n');
@@ -540,24 +576,39 @@ function parseInfomapOutput(output) {
   console.log("Parse Infomap output...", 'new format?', useNewBipartiteFormat);
   let parser = d3.dsv(" ", "text/plain");
   let commentCharCode = "#".charCodeAt(0);
+  let tmpCount = 0;
   let clu = parser.parseRows(output.clu, function accessor(row, index) {
     // Row is # nodeId clusterId flow
-    // console.log(row);
-    if (row[0].charCodeAt(0) === commentCharCode)
+    ++tmpCount;
+    if (tmpCount < 10) {
+      console.log(row);
+    }
+    if (row[0].charCodeAt(0) === commentCharCode) {
       return null; // Strip commented rows
+    }
     if (useNewBipartiteFormat) {
       const nodeId = +row[0];
-      if (nodeId >= lastBipartiteOffset) {
-        return null; // Skip feature (species) nodes
-      }
+      // if (tmpCount < 10) {
+      //   console.log('  nodeId:', nodeId, '>=', lastBipartiteOffset, '?', nodeId >= lastBipartiteOffset);
+      // }
+      // if (nodeId >= lastBipartiteOffset) {
+      //   return null; // Skip feature (species) nodes
+      // }
+      // console.log('  clusterId:', row[1]);
       return [nodeId, +row[1]]; // [nodeId, clusterId]
     }
+    console.log(' old!');
     // nodeId is prepended by 'n' for bipartite networks in old format
     return [+row[0].substring(1), +row[1] - 1]; // [nodeId, clusterId] // zero-based
   });
+  console.log('!!!!! clu:', clu);
   let clusterIds = new Array(clu.length);
   clu.forEach((row) => {
     clusterIds[row[0]] = row[1];
   });
+  // let clusterIds = new Map();
+  // clu.forEach((row) => {
+  //   clusterIds[row[0]] = row[1];
+  // });
   return clusterIds;
 }

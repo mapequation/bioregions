@@ -71,8 +71,8 @@ class App extends Component {
         progressEmitter.emit(progressAction.type, progressAction);
       }
       if (action.type === CALCULATE_CLUSTERS) {
-        console.log("[App]: Spawn Infomap worker from main thread...");
-        calculateInfomapClusters(progressDispatch, action.infomapArgs, action.payload.networkData, onInfomapFinished);
+        console.log("[App]: Spawn Infomap worker from main thread...", data);
+        calculateInfomapClusters(progressDispatch, action.infomapArgs, action.payload.networkData, onInfomapFinished, data);
       }
     }, false);
 

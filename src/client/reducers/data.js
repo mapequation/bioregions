@@ -119,7 +119,7 @@ function getBins(binning, features) {
 
 function mergeClustersToBins(clusterIds, bins) {
   // return bins.map((bin, i) => Object.assign(bin, {clusterId: clusterIds[i]}));
-  if (clusterIds.length === bins.length) {
+  if (clusterIds.length >= bins.length) {
     bins.forEach((bin, i) => {
       bin.clusterId = clusterIds[i];
     });

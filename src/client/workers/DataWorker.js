@@ -768,7 +768,7 @@ function getClusters(infomapArgs, options = {}) {
 
   var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
   if (haveWorker) {
-    calculateInfomapClusters(dispatch, infomapArgs, networkData, onInfomapFinished);
+    calculateInfomapClusters(dispatch, infomapArgs, networkData, onInfomapFinished, state);
   }
   else {
     dispatch(calculateClusters(networkData, infomapArgs));
