@@ -79,7 +79,7 @@
     "mocha": "^2.4.5",
     "mocha-loader": "^0.7.1",
     "mocha-webpack": "^0.3.0",
-    "node-sass": "^3.4.1",
+    "node-sass": "^4.14.1",
     "sass-loader": "^3.1.1",
     "sinon": "^1.17.3",
     "sinon-chai": "^2.8.0",
