@@ -1,4 +1,8 @@
-import Papa from 'papaparse';
+import Papa from "papaparse";
+
+const ctx: Worker = self as any;
+// Post data to parent thread
+ctx.postMessage({ foo: "foo" });
 
 function loadFile(url: string, papaArgs = {}) {
   Papa.parse(url, {
@@ -7,7 +11,7 @@ function loadFile(url: string, papaArgs = {}) {
     header: true,
     chunkSize: 100,
     //worker: true,
-    ...papaArgs
+    ...papaArgs,
   });
 }
 
@@ -15,28 +19,29 @@ function preview(url: string, papaArgs = {}) {
   loadFile(url, {
     preview: 10,
     ...papaArgs,
-  })
+  });
 }
 
 function loadSample() {
   // preview('https://www.mapequation.org/bioregions/data/mammals_neotropics.csv', {
-  preview('/data/mammals_neotropics.csv', {
+  preview("/data/mammals_neotropics.csv", {
     complete() {
-      console.log('Complete!');
+      console.log("Complete!");
     },
     chunk(lines: string[]) {
-      console.log('chunk:', lines);
+      console.log("chunk:", lines);
     },
-  })
+  });
 }
 
-addEventListener('message', event => {
-  console.log('message:', event.data, "date3");
+// Respond to message from parent thread
+ctx.addEventListener("message", (event) => {
+  console.log("message:", event.data, "date3");
   // postMessage(["date", "now2"], "origin");
 
   const { data } = event;
   const { type } = data;
-  if (type == 'load_sample') {
+  if (type == "load_sample") {
     loadSample();
   }
 });

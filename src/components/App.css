@@ -1,16 +1,12 @@
-.App {
-  text-align: center;
-}
-.App code {
-  background: #FFF3;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-.App p {
-  margin: 0.4rem;
+#deckgl-wrapper {
+  box-sizing: border-box;
+  position: relative !important;
+  top: unset !important;
+  left: unset !important;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+main.ui.container {
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  min-height: 20rem;
 }
