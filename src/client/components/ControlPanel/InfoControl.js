@@ -14,7 +14,12 @@ import Checkbox from "../helpers/Checkbox";
 import Div from "../helpers/Div";
 import Colors from "./Colors";
 import chroma from "chroma-js";
-import { BY_CELL, BY_CLUSTER } from "../../constants/Display";
+import {
+  BY_CELL,
+  BY_CLUSTER,
+  BY_RECORDS,
+  BY_SPECIES_RICHNESS,
+} from "../../constants/Display";
 import * as Binning from "../../constants/Binning";
 import "./InfoControl.css";
 
@@ -27,9 +32,11 @@ class InfoControl extends React.Component {
     setClusterColors: PropTypes.func.isRequired,
     binning: PropTypes.object.isRequired,
     mapBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
+    colorBy: PropTypes.oneOf([BY_RECORDS, BY_SPECIES_RICHNESS]).isRequired,
     infoBy: PropTypes.oneOf([BY_CELL, BY_CLUSTER]).isRequired,
     opacityByRecords: PropTypes.bool.isRequired,
     changeMapBy: PropTypes.func.isRequired,
+    changeColorBy: PropTypes.func.isRequired,
     changeInfoBy: PropTypes.func.isRequired,
     changeOpacityByRecords: PropTypes.func.isRequired,
     isClustering: PropTypes.bool.isRequired,
@@ -68,6 +75,17 @@ class InfoControl extends React.Component {
     this.props.changeMapBy(mapBy === BY_CELL ? BY_CLUSTER : BY_CELL);
   };
 
+  onClickSelectColorBy = (event, data) => {
+    // Check for toggle
+    if (data.active) {
+      return;
+    }
+    const { colorBy } = this.props;
+    this.props.changeColorBy(
+      colorBy === BY_RECORDS ? BY_SPECIES_RICHNESS : BY_RECORDS
+    );
+  };
+
   onClickSelectInfoLevel = (event, data) => {
     // Check for toggle
     if (data.active) {
@@ -78,75 +96,105 @@ class InfoControl extends React.Component {
   };
 
   renderLevelControls() {
-    const { clusters, isClustering, mapBy, infoBy } = this.props;
-    if (clusters.length === 0) {
-      return (
-        <Button
-          onClick={this.toggleShowInfomapUI}
-          disabled={isClustering}
-          loading={isClustering}
-        >
-          Cluster...
-        </Button>
-      );
-    }
+    const {
+      clusters,
+      isClustering,
+      mapBy,
+      colorBy,
+      infoBy,
+      opacityByRecords,
+      changeOpacityByRecords,
+    } = this.props;
+    const hasClusters = clusters.length !== 0;
     return (
-      <Table basic="very" compact="very" collapsing unstackable>
-        <Table.Body>
-          <Table.Row>
-            <Table.Cell>Colors by</Table.Cell>
-            <Table.Cell>
-              <Button.Group compact basic size="mini">
-                <Button
-                  active={mapBy === BY_CELL}
-                  onClick={this.onClickSelectMapLevel}
-                >
-                  Cells
-                </Button>
-                <Button
-                  active={mapBy === BY_CLUSTER}
-                  onClick={this.onClickSelectMapLevel}
-                >
-                  Regions
-                </Button>
-              </Button.Group>
-            </Table.Cell>
-          </Table.Row>
-          {mapBy === BY_CELL ? null : (
-            <Table.Row>
-              <Table.Cell>Opacity by records</Table.Cell>
+      <div>
+        <Table basic="very" compact="very" collapsing unstackable>
+          <Table.Body>
+            <Table.Row disabled={!hasClusters}>
+              <Table.Cell>Color on</Table.Cell>
               <Table.Cell>
-                <Div marginBottom="-10px">
-                  <Checkbox
-                    label=""
-                    checked={this.props.opacityByRecords}
-                    onChange={this.props.changeOpacityByRecords}
-                  />
-                </Div>
+                <Button.Group compact basic size="mini">
+                  <Button
+                    active={mapBy === BY_CELL}
+                    onClick={this.onClickSelectMapLevel}
+                  >
+                    Cells
+                  </Button>
+                  <Button
+                    active={mapBy === BY_CLUSTER}
+                    onClick={this.onClickSelectMapLevel}
+                  >
+                    Regions
+                  </Button>
+                </Button.Group>
               </Table.Cell>
             </Table.Row>
-          )}
-          <Table.Row>
-            <Table.Cell>Statistics by</Table.Cell>
-            <Table.Cell>
-              <Button.Group compact basic size="mini">
-                <Button
-                  active={infoBy === BY_CELL}
-                  onClick={this.onClickSelectInfoLevel}
-                >
-                  Cells
-                </Button>
-                <Button
-                  active={infoBy === BY_CLUSTER}
-                  onClick={this.onClickSelectInfoLevel}
-                >
-                  Regions
-                </Button>
-              </Button.Group>
-            </Table.Cell>
-          </Table.Row>
-        </Table.Body>
-      </Table>
+            <Table.Row disabled={mapBy !== BY_CELL && !opacityByRecords}>
+              <Table.Cell>
+                {mapBy === BY_CELL ? "Color" : "Opacity"} by
+              </Table.Cell>
+              <Table.Cell>
+                <Button.Group compact basic size="mini">
+                  <Button
+                    active={colorBy === BY_RECORDS}
+                    onClick={this.onClickSelectColorBy}
+                  >
+                    Records
+                  </Button>
+                  <Button
+                    active={colorBy === BY_SPECIES_RICHNESS}
+                    onClick={this.onClickSelectColorBy}
+                  >
+                    Sp. richness
+                  </Button>
+                </Button.Group>
+              </Table.Cell>
+            </Table.Row>
+            {mapBy === BY_CELL ? null : (
+              <Table.Row>
+                <Table.Cell>Opacity</Table.Cell>
+                <Table.Cell>
+                  <Div marginBottom="-10px">
+                    <Checkbox
+                      label=""
+                      checked={opacityByRecords}
+                      onChange={changeOpacityByRecords}
+                    />
+                  </Div>
+                </Table.Cell>
+              </Table.Row>
+            )}
+            <Table.Row disabled={!hasClusters}>
+              <Table.Cell>Statistics on</Table.Cell>
+              <Table.Cell>
+                <Button.Group compact basic size="mini">
+                  <Button
+                    active={infoBy === BY_CELL}
+                    onClick={this.onClickSelectInfoLevel}
+                  >
+                    Cells
+                  </Button>
+                  <Button
+                    active={infoBy === BY_CLUSTER}
+                    onClick={this.onClickSelectInfoLevel}
+                  >
+                    Regions
+                  </Button>
+                </Button.Group>
+              </Table.Cell>
+            </Table.Row>
+          </Table.Body>
+        </Table>
+        {hasClusters ? null : (
+          <Button
+            onClick={this.toggleShowInfomapUI}
+            disabled={isClustering}
+            loading={isClustering}
+          >
+            Cluster...
+          </Button>
+        )}
+      </div>
     );
   }
 
@@ -356,7 +404,7 @@ class InfoControl extends React.Component {
     if (!cell) {
       return null;
     }
-    console.log(cell);
+    // console.log(cell);
     const { selectedCell } = this.props;
     const isSelected = cell === selectedCell;
     const d = cell;

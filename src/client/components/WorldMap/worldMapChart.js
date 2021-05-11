@@ -4,7 +4,11 @@ import * as topojson from "topojson";
 import colorbrewer from "colorbrewer";
 import chroma from "chroma-js";
 import { DATA_SUCCEEDED } from "../../constants/DataFetching";
-import { BY_CLUSTER } from "../../constants/Display";
+import {
+  BY_CLUSTER,
+  BY_RECORDS,
+  BY_SPECIES_RICHNESS,
+} from "../../constants/Display";
 import * as Binning from "../../constants/Binning";
 
 const MAX_SCALE_EXTENT = 1000;
@@ -227,46 +231,37 @@ world.update = function (el, properties) {
       return clusterColor.css();
     };
 
+    const getCountPerAreaAccessor = () => {
+      if (props.colorBy === BY_RECORDS) {
+        return (bin) => bin.count / bin.area;
+      }
+      if (props.colorBy === BY_SPECIES_RICHNESS) {
+        return (bin) => bin.speciesCount / bin.area;
+      }
+    };
+
+    const getIntensityScale = (range = [0, 1]) => {
+      const countPerArea = getCountPerAreaAccessor();
+      const domainExtent = d3.extent(props.bins.map(countPerArea));
+      const domainMax = domainExtent[1];
+      const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
+      domain.push(domainMax);
+      const heatmapOpacityScale = d3.scale
+        .log()
+        .domain(domainExtent)
+        .range(range);
+      return (d) => heatmapOpacityScale(countPerArea(d));
+    };
+
     if (props.mapBy === BY_CLUSTER) {
       color = (d) => getClusterColor(d);
       if (props.opacityByRecords) {
-        const bins = props.bins;
-        const domainExtent = d3.extent(bins.map((bin) => bin.count / bin.area));
-        const domainMax = domainExtent[1];
-        const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-        domain.push(domainMax);
-        const colorDomainValue = (d) => d.count / d.area;
-        const heatmapOpacityScale = d3.scale
-          .log()
-          .domain(domainExtent)
-          .range([0.1, 1]);
-        opacity = (d) => heatmapOpacityScale(colorDomainValue(d));
+        opacity = getIntensityScale([0.1, 1]);
       }
     } else {
-      const bins = props.bins;
-      const domainExtent = d3.extent(bins.map((bin) => bin.count / bin.area));
-      // const maxCount = d3.max(bins.map((bin) => bin.count / bin.area));
-      // const [domainMin, domainMax] = domainExtent;
-      const domainMax = domainExtent[1];
-      // const domainMax = + maxCount + (8 - maxCount % 8);
-      // const domainMax = maxCount;
-      const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-      domain.push(domainMax);
-      // domain[0] = 1; // Make a threshold between non-empty and empty bins
-      // domain.unshift(0.5);
-      // console.log("Color domain:", domain.length, domain);
-      const colorDomainValue = (d) => d.count / d.area;
+      const heatmapColorScale = getIntensityScale([0, 8]);
 
       const colorRange = colorbrewer.YlOrRd[9].slice(0, 9); // don't change original
-      // colorRange.unshift("#eeeeee");
-      // const heatmapColor = d3.scale.threshold()
-      //   .domain(domain)
-      //   .range(colorRange);
-      // asdf
-      const heatmapColorScale = d3.scale
-        .log()
-        .domain(domainExtent)
-        .range([0, 8]);
       const heatmapColor = (d) => {
         return colorRange[Math.floor(heatmapColorScale(d))];
       };
@@ -291,7 +286,7 @@ world.update = function (el, properties) {
       };
       // const ordinaryCellColor = (d) => heatmapColor(d.count / d.area);
       const ordinaryCellColor = (d) => {
-        const c = heatmapColor(colorDomainValue(d));
+        const c = heatmapColor(d);
         d.color = c;
         return c;
       };

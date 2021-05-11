@@ -5,6 +5,7 @@ const initialState = {
   panelIndex: 0, // control panel
   statisticsBy: Display.BY_SPECIES,
   mapBy: Display.BY_CELL,
+  colorBy: Display.BY_RECORDS,
   infoBy: Display.BY_CELL,
   opacityByRecords: false,
   isShowingInfomapUI: false,
@@ -55,6 +56,11 @@ export default function display(state = initialState, action) {
       return {
         ...state,
         mapBy: action.mapBy,
+      };
+    case ActionTypes.CHANGE_COLOR_BY:
+      return {
+        ...state,
+        colorBy: action.colorBy,
       };
     case ActionTypes.CHANGE_INFO_BY:
       return {
