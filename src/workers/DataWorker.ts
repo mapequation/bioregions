@@ -9,7 +9,9 @@ function loadFile(url: string, papaArgs: ParseConfig = {}) {
     download: true,
     dynamicTyping: true,
     header: true,
+    chunkSize: 1024 * 1024, // 1 MB
     worker: false,
+    skipEmptyLines: true,
     ...papaArgs,
   });
 }
@@ -47,12 +49,19 @@ function loadSample() {
   console.log('loadSample...');
 
   loadFile('/data/mammals_neotropics.csv', {
+    //loadFile('/data/head.csv', {
     //preview: 500,
     complete() {
       dataStream.complete();
       dataStream = new Subject();
     },
     chunk(chunk: ParseResult<any>) {
+      // for (let d of chunk.data) {
+      //   // @ts-ignore
+      //   if (d.longitude === undefined) {
+      //     console.log('!! undefined data point:', d, 'from chunk:', chunk);
+      //   }
+      // }
       dataStream.next(chunk.data);
     },
   });

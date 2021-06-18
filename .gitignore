@@ -1,5 +1,6 @@
 node_modules
-.snowpack
 /build
-/public/data
 /public/maps
+/public/data
+.vscode
+temp
