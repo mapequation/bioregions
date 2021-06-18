@@ -1,43 +1,49 @@
-import * as topojson from "topojson-client";
-import { GeoJsonLayer } from "@deck.gl/layers";
-import { makeObservable, observable } from "mobx";
-import { spawn, Thread, Worker } from "threads";
+import * as topojson from 'topojson-client';
+import { GeoJsonLayer, PointCloudLayer } from '@deck.gl/layers';
+import { makeObservable, observable } from 'mobx';
+import { spawn, Thread, Worker } from 'threads';
+import { COORDINATE_SYSTEM } from '@deck.gl/core';
 
-type Layers = GeoJsonLayer<any, any>[];
+// type Layers = GeoJsonLayer<any, any>[];
+
+type Point = {
+  position: number[];
+  // normal: number[],
+  // color: string,
+};
 
 class Store {
   result: number;
   landLoaded: boolean = false;
+  dataLoaded: boolean = false;
 
-  layers: Layers = [];
+  layers: any[] = [];
 
   constructor() {
     makeObservable(this, {
       layers: observable,
       landLoaded: observable,
+      dataLoaded: observable,
     });
 
     this.result = 10;
 
-    window.setTimeout(() => {
-      this.loadLandLayer();
-      this.initWorker().catch(console.error);
-    }, 500);
-    // this.loadLandLayer();
+    this.loadLandLayer().catch(console.error);
+    this.initWorker().catch(console.error);
   }
 
   async loadLandLayer() {
-    console.log("Loading land.topojson...");
-    const res = await fetch("maps/physical/land.topojson");
+    console.log('Loading land.topojson...');
+    const res = await fetch('maps/physical/land.topojson');
     if (!res.ok) {
       console.error(`Failed to load land: ${res.statusText}`);
       return;
     }
     const land = await res.json();
     const geojson = topojson.feature(land, land.objects.land);
-    console.log("geojson:", geojson);
+    console.log('geojson:', geojson);
     const layer = new GeoJsonLayer({
-      id: "geojson-layer",
+      id: 'geojson-layer',
       // @ts-ignore
       data: geojson,
       pickable: true,
@@ -53,19 +59,54 @@ class Store {
       getLineWidth: 1,
       getElevation: 30,
     });
-    console.log("Add geojson layer...");
+    console.log('Add geojson layer...');
     this.landLoaded = true;
     this.layers.push(layer);
-    console.log("Done!");
+    console.log('Done!');
   }
 
   async initWorker() {
-    const worker = new Worker("../workers/BinningWorker.ts");
+    const worker = new Worker('../workers/DataWorker.ts');
 
-    const binningWorker = await spawn(worker);
-    console.log(await binningWorker.bin());
+    const dataWorker = await spawn(worker);
 
-    await Thread.terminate(binningWorker);
+    const data: Point[] = [];
+
+    // for (let i = 0; i < 360; i++) {
+    //   data.push({
+    //     position: [-180 + i, 0, 10],
+    //   });
+    // }
+
+    //console.log(await binningWorker.loadSample());
+    dataWorker.stream().subscribe((value: any[]) => {
+      for (let item of value) {
+        //console.log(item);
+        // @ts-ignore
+        data.push({
+          position: [item.longitude, item.latitude, 0],
+        });
+      }
+    });
+
+    console.log(await dataWorker.loadSample());
+
+    const layer = new PointCloudLayer({
+      id: 'point-cloud-layer',
+      // @ts-ignore
+      data,
+      pickable: false,
+      coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
+      //coordinateOrigin: [-122.4, 37.74],
+      pointSize: 2,
+      //getPosition: (d) => d.position,
+      // getNormal: (d: unknown): number[] => d.normal,
+      getColor: [255, 0, 0, 50],
+    });
+    this.layers.push(layer);
+    this.dataLoaded = true;
+
+    await Thread.terminate(dataWorker);
   }
 }
 
