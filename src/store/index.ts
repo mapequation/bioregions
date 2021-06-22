@@ -5,8 +5,32 @@ import { makeObservable, observable } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { COORDINATE_SYSTEM, RGBAColor } from '@deck.gl/core';
 import { QuadtreeGeoBinner, Node } from '../utils/QuadTreeGeoBinner';
-
+// @ts-ignore
+import Infomap from '@mapequation/infomap';
 // type Layers = GeoJsonLayer<any, any>[];
+
+let infomap = new Infomap()
+  .on('data', (data) => console.log(data))
+  .on('error', (err) => console.error(err))
+  .on('finished', ({ json }) => console.log(json));
+
+let network = `#source target [weight]
+0 1
+0 2
+0 3
+1 0
+1 2
+2 1
+2 0
+3 0
+3 4
+3 5
+4 3
+4 5
+5 4
+5 3`;
+
+infomap.run({ network, args: '--silent -o json -N10' });
 
 type Point = {
   position: number[];
@@ -76,28 +100,36 @@ class Store {
     const binner = new QuadtreeGeoBinner();
 
     console.log('Stream...');
-    dataWorker.stream().subscribe((value: any[]) => {
-      for (let item of value) {
-        // @ts-ignore
-        points.push({
-          position: [item.longitude, item.latitude, 0],
-        });
-        binner.addFeature({
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [item.longitude, item.latitude, 0],
-          },
-          properties: {},
-        });
-      }
-    });
+    dataWorker
+      .stream()
+      .subscribe(
+        (items: { longitude: number; latitude: number; species: string }[]) => {
+          for (let item of items) {
+            // @ts-ignore
+            points.push({
+              position: [item.longitude, item.latitude, 0],
+            });
+            binner.addFeature({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [item.longitude, item.latitude, 0],
+              },
+              properties: { species: item.species },
+            });
+          }
+        },
+      );
 
     console.log(await dataWorker.loadSample());
-    const bins = binner.bins();
-    console.log('Done binning!', bins);
+    const cells = binner.cells();
+    console.log('Done binning!', cells);
     console.log('binner:', binner);
     console.log('points:', points);
+    console.log(
+      'speciesTopList:',
+      cells.map((cell) => cell.speciesTopList),
+    );
 
     const pointLayer = new PointCloudLayer({
       id: 'point-cloud-layer',
@@ -116,7 +148,7 @@ class Store {
 
     const colorToRGBArray = (hex: string) =>
       hex.match(/[0-9a-f]{2}/g)?.map((x) => parseInt(x, 16)) as RGBAColor;
-    const domainExtent = d3.extent(bins, (n: Node) => n.recordsPerArea) as [
+    const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
       number,
       number,
     ];
@@ -145,8 +177,7 @@ class Store {
 
     const cellLayer = new GeoJsonLayer({
       id: 'cell-layer',
-      // @ts-ignore
-      data: bins,
+      data: cells,
       pickable: true,
       stroked: false,
       filled: true,
@@ -155,10 +186,9 @@ class Store {
       lineWidthMinPixels: 2,
       //getFillColor: [160, 160, 180, 200],
       getFillColor: heatmapColor,
-      //getLineColor: d => colorToRGBArray(d.properties.color),
       getLineColor: [200, 200, 200],
       getRadius: 100,
-      getLineWidth: 1,
+      getLineWidth: 2,
       getElevation: 30,
     });
     this.layers.push(cellLayer);

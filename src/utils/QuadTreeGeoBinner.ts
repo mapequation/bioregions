@@ -1,28 +1,37 @@
 import { GeoProjection } from 'd3';
-import { BBox, Feature, GeoJsonProperties, Polygon } from 'geojson';
+import { BBox, Feature, GeoJsonProperties, Polygon, Point } from 'geojson';
 import { area } from './geomath';
 
 type VisitCallback = (node: Node) => true | void;
 
-export class Node implements Feature {
+export interface SpeciesProperties {
+  species: string;
+  [key: string]: any;
+}
+
+type SpeciesFeature = Feature<Point, SpeciesProperties>;
+
+export class Node implements Feature<Polygon> {
   x1: number; // west
   y1: number; // south
   x2: number; // east
   y2: number; // north
   visible: boolean;
   isLeaf: boolean = true;
-  features: Feature[] = [];
+  features: SpeciesFeature[] = [];
   parent: Node | null = null;
-  children: [
+  private children: [
     Node | undefined,
     Node | undefined,
     Node | undefined,
     Node | undefined,
   ] = [undefined, undefined, undefined, undefined];
   clusterId: number = -1;
+  path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
-
+  private _recalcStats: boolean = true;
+  private _speciesTopList: { count: number; species: string }[] = [];
   // @ts-ignore
   type = 'Feature';
 
@@ -35,32 +44,26 @@ export class Node implements Feature {
     this.visible = this.sizeLog2 <= maxNodeSizeLog2;
 
     if (this.visible) {
-      // this.x1 = Math.max(this.x1, -180);
-      // this.x2 = Math.min(this.x2, 180);
-      // this.y1 = Math.max(this.y1, -90);
-      // this.y2 = Math.min(this.y2, 90);
-      if (this.x1 < -180) {
-        this.x1 = -180;
-      } else if (this.x2 > 180) {
-        this.x2 = 180;
-      }
-
-      if (this.y1 < -90) {
-        this.y1 = -90;
-      } else if (this.y2 > 90) {
-        this.y2 = 90;
-      }
-
-      if (this.x2 < -180) {
-        console.log('!!!!Bad point:', this);
-      }
+      this.x1 = Math.max(this.x1, -180);
+      this.x2 = Math.min(this.x2, 180);
+      this.y1 = Math.max(this.y1, -90);
+      this.y2 = Math.min(this.y2, 90);
     }
 
     this.area = area(this.extent);
   }
 
+  getModule(level: number): string {
+    const min = Math.min(level, this.path.length - 1);
+    return this.path.slice(0, min).join(':');
+  }
+
   get recordsPerArea() {
     return this.features.length / this.area;
+  }
+
+  get numFeatures() {
+    return this.features.length;
   }
 
   get properties(): GeoJsonProperties {
@@ -105,12 +108,21 @@ export class Node implements Feature {
     return Math.log2(this.size);
   }
 
+  get speciesTopList() {
+    if (this._recalcStats) {
+      this.calcStats();
+    }
+    return this._speciesTopList;
+  }
+
   add(
-    feature: Feature,
+    feature: SpeciesFeature,
     maxNodeSizeLog2: number,
     minNodeSizeLog2: number,
     nodeCapacity: number,
   ) {
+    this._recalcStats = true;
+
     if (!this.isLeaf) {
       return this.addChild(
         feature,
@@ -148,8 +160,8 @@ export class Node implements Feature {
 
   // Recursively inserts the specified point or polygon into descendants of
   // this node.
-  addChild(
-    feature: Feature,
+  private addChild(
+    feature: SpeciesFeature,
     maxNodeSizeLog2: number,
     minNodeSizeLog2: number,
     nodeCapacity: number,
@@ -210,25 +222,28 @@ export class Node implements Feature {
       return this.features;
     }
 
-    const nonEmptyChildren = this.children.filter(
+    const nonEmptyChildren: Node[] = this.children.filter(
       (child) => child !== undefined,
-    );
+    ) as Node[];
 
     const doPatch =
       this.sizeLog2 <= maxNodeSizeLog2 &&
       this.features.length === 0 &&
       nonEmptyChildren.length < 4;
 
-    const aggregatedFeatures: Feature[] = [];
-    nonEmptyChildren.forEach((child) =>
+    const aggregatedFeatures: SpeciesFeature[] = [];
+    nonEmptyChildren.forEach((child: Node) =>
       child
         ?.patchPartiallyEmptyNodes(maxNodeSizeLog2)
         ?.forEach((feature) => aggregatedFeatures.push(feature)),
     );
 
     if (doPatch) {
-      this.features = aggregatedFeatures;
+      // @ts-ignore
+      this.features = aggregatedFeatures; // FIXME
     }
+
+    return aggregatedFeatures;
   }
 
   patchSparseNodes(maxNodeSizeLog2: number, lowerThreshold: number) {
@@ -250,7 +265,7 @@ export class Node implements Feature {
       this.sizeLog2 <= maxNodeSizeLog2 &&
       (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
 
-    const aggregatedFeatures: Feature[] = [];
+    const aggregatedFeatures: SpeciesFeature[] = [];
     nonEmptyChildren.forEach((child) =>
       child
         ?.patchSparseNodes(maxNodeSizeLog2, lowerThreshold)
@@ -260,10 +275,22 @@ export class Node implements Feature {
     if (doPatch) {
       this.features = aggregatedFeatures;
     }
+
+    return aggregatedFeatures;
   }
 
-  get numFeatures() {
-    return this.features.length;
+  calcStats() {
+    const speciesMap: Map<string, number> = new Map();
+    for (let feature of this.features) {
+      const { species } = feature.properties;
+      speciesMap.set(species, (speciesMap.get(species) ?? 0) + 1);
+    }
+
+    this._speciesTopList = Array.from(speciesMap.entries())
+      .map(([species, count]) => ({ count, species }))
+      .sort((a, b) => (a.count > b.count ? -1 : 1));
+
+    this._recalcStats = false;
   }
 }
 
@@ -272,20 +299,20 @@ export class Node implements Feature {
  * @TODO: Support polygon types (assume point types now)
  */
 export class QuadtreeGeoBinner {
-  _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
+  private _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
   maxNodeSizeLog2: number = 4;
   minNodeSizeLog2: number = -3;
   nodeCapacity: number = 10;
   lowerThreshold: number = 0;
   root: Node | null = null;
-  _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
+  private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
 
   constructor() {
     this.initExtent();
     this.initRoot();
   }
 
-  initExtent() {
+  private initExtent() {
     // power of 2 from unscaled unit
     let size = Math.pow(2, this.maxNodeSizeLog2) / this.scale;
     while (size <= 180) {
@@ -294,7 +321,7 @@ export class QuadtreeGeoBinner {
     this.extent = [-size, -size, size, size];
   }
 
-  initRoot() {
+  private initRoot() {
     this.root = new Node(this.extent, this.maxNodeSizeLog2);
   }
 
@@ -377,7 +404,7 @@ export class QuadtreeGeoBinner {
     return this.maxNodeSizeLog2 - Math.log2(this.scale);
   }
 
-  addFeature(feature: Feature) {
+  addFeature(feature: SpeciesFeature) {
     this.root?.add(
       feature,
       this.maxSizeLog2,
@@ -386,19 +413,19 @@ export class QuadtreeGeoBinner {
     );
   }
 
-  addFeatures(features: Feature[]) {
-    features.forEach((feature: Feature) => this.addFeature(feature));
+  addFeatures(features: SpeciesFeature[]) {
+    features.forEach((feature) => this.addFeature(feature));
     return this;
   }
 
-  clear() {
+  private clear() {
     this.initRoot();
   }
 
   /**
    * Get all non-empty grid cells
    */
-  binsNonEmpty(): Node[] {
+  cellsNonEmpty(): Node[] {
     const nodes: Node[] = [];
     this.visitNonEmpty((node) => {
       nodes.push(node);
@@ -413,7 +440,7 @@ export class QuadtreeGeoBinner {
    * included. Default false.
    * @return an Array of quadtree nodes
    */
-  bins(patchSparseNodes = false): Node[] {
+  cells(patchSparseNodes = false): Node[] {
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
     }
