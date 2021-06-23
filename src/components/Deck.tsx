@@ -1,37 +1,62 @@
 import DeckGL from '@deck.gl/react';
 import { observer } from 'mobx-react';
 import store from '../store';
-//@ts-ignore
-import { _GlobeViewport as GlobeViewport } from '@deck.gl/core';
+import {
+  WebMercatorViewport,
+  MapView,
+  //@ts-ignore
+  _GlobeViewport as GlobeViewport,
+} from '@deck.gl/core';
 //@ts-ignore
 import { _GlobeView as GlobeView } from 'deck.gl';
 
-const viewport = new GlobeViewport({
-  width: 600,
-  height: 400,
+const viewportGlobe = new GlobeViewport({
+  width: 800,
+  height: 800,
   longitude: -50,
   latitude: 10,
   zoom: 0,
 });
 
-// const INITIAL_VIEW_STATE = {
-//   longitude: 0,
-//   latitude: 37.7853,
-//   zoom: 1,
-//   pitch: 0,
-//   bearing: 0,
-// };
+const viewportMercator = new WebMercatorViewport({
+  width: 800,
+  height: 800,
+  longitude: -50,
+  latitude: 10,
+  zoom: 1,
+});
 
-const view = new GlobeView();
+const globeView = new GlobeView({
+  id: 'base-map-globe',
+  controller: true,
+});
+
+const mapView = new MapView({
+  id: 'base-map',
+  controller: true,
+});
 
 interface Props {
   width?: number;
   height?: number;
-  layers?: any[];
+  useGlobe?: boolean;
 }
 
-export default observer(function Deck(props: Props) {
+const defaultProps: Required<Props> = {
+  width: 800,
+  height: 800,
+  useGlobe: true,
+};
+
+export default observer(function Deck(
+  props: Props & React.ComponentProps<typeof DeckGL> = defaultProps,
+) {
   const hasLayers = store.layers.length > 0;
+
+  const { width, height, useGlobe, ...deckGlProps } = props;
+
+  const viewport = useGlobe ? viewportGlobe : viewportMercator;
+  const view = useGlobe ? globeView : mapView;
 
   return (
     <>
@@ -41,15 +66,15 @@ export default observer(function Deck(props: Props) {
       </div>
       {hasLayers && store.dataLoaded && (
         <DeckGL
-          // initialViewState={INITIAL_VIEW_STATE}
           initialViewState={viewport}
           views={[view]}
           controller={true}
-          width={props.width ?? 800}
-          height={props.height ?? 800}
+          width={width}
+          height={height}
           onLoad={() => console.log('Deck GL loaded.')}
           onError={(err) => console.log('Error: ', err)}
           layers={store.layers}
+          {...deckGlProps}
         />
       )}
     </>
