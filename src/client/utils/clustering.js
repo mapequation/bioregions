@@ -568,11 +568,6 @@ export function calculateInfomapClusters(
     );
   }
 
-  // const worker = new Worker(workerUrl);
-  //infomapArgs += " -i bipartite --clu --skip-adjust-bipartite-flow -2";
-
-  console.log(infomapArgs);
-
   const onData = (content) => {
     dispatch(
       setClusteringProgress("Clustering...", INDETERMINATE, 0, {
@@ -615,10 +610,11 @@ export function calculateInfomapClusters(
   infomap.run({
     network: networkData,
     args: {
-      output: ["json"],
+      output: "json",
       twoLevel: true,
       skipAdjustBipartiteFlow: true,
       hideBipartiteNodes: true,
+      ...infomapArgs,
     },
   });
 
