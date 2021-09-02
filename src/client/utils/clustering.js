@@ -677,7 +677,7 @@ export function calculateInfomapClusters(
   //   });
   // }, 0); // delay til next frame, to make sure html is ready
 }
-
+/*
 function parseInfomapOutput(output) {
   console.log("Parse Infomap output...", "new format?", useNewBipartiteFormat);
   let parser = d3.dsv(" ", "text/plain");
@@ -718,3 +718,4 @@ function parseInfomapOutput(output) {
   // });
   return clusterIds;
 }
+*/

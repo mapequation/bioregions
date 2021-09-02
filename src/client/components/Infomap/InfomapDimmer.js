@@ -24,16 +24,12 @@ class InfomapDimmer extends Component {
     }).isRequired,
   };
 
-  constructor(props) {
-    super(props);
-    this.stdoutLines = [];
-    this.shouldScrollBottom = true;
-  }
+  stdoutLines = [];
+  shouldScrollBottom = true;
 
   state = {
     stdout: "",
     activity: "",
-    //infomapArgs: {},
   };
 
   componentDidMount() {
@@ -163,16 +159,14 @@ class InfomapDimmer extends Component {
     const TreeClusterOptions =
       phyloTree && phyloTree.maxLength ? (
         <div style={{ marginTop: 10 }}>
-          {phyloregions.useTree ? (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ marginRight: 5 }}>Use phylogenetic data</span>
-              <Radio
-                toggle
-                checked={phyloregions.useTree}
-                onChange={onTogglePhyloregions}
-              />
-            </div>
-          ) : null}
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <span style={{ marginRight: 5 }}>Use phylogenetic data</span>
+            <Radio
+              toggle
+              checked={phyloregions.useTree}
+              onChange={onTogglePhyloregions}
+            />
+          </div>
           {!phyloregions.useTree ? null : (
             <Form style={{ marginTop: 10 }}>
               <h4>Weight model:</h4>
@@ -248,12 +242,12 @@ class InfomapDimmer extends Component {
                         </tr>
                         <tr>
                           <td>
-                            <strong>Number of cluster cost</strong>
+                            <strong>Markov time</strong>
                           </td>
                           <td>
                             Tune the clustering algorithm to search for less
-                            (increase cost) or more (decrease cost) number of
-                            clusters. (Default 1.0)
+                            (increase Markov time) or more (decrease Markov
+                            time) number of clusters. (Default 1.0)
                           </td>
                         </tr>
                       </tbody>
@@ -279,7 +273,7 @@ class InfomapDimmer extends Component {
                 </tr>
 
                 <tr>
-                  <td className="">Number of cluster cost</td>
+                  <td className="">Markov time</td>
                   <td className="" className="">
                     <TangleInput
                       className="ui orange label"
