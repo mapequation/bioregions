@@ -1,13 +1,9 @@
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
-import { GeoJsonLayer, PointCloudLayer } from '@deck.gl/layers';
 import { makeObservable, observable } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
-import { COORDINATE_SYSTEM, RGBAColor } from '@deck.gl/core';
 import { QuadtreeGeoBinner, Node } from '../utils/QuadTreeGeoBinner';
-// @ts-ignore
 import Infomap from '@mapequation/infomap';
-// type Layers = GeoJsonLayer<any, any>[];
 
 let infomap = new Infomap()
   .on('data', (data) => console.log(data))
@@ -30,7 +26,7 @@ let network = `#source target [weight]
 5 4
 5 3`;
 
-infomap.run({ network, args: '--silent -o json -N10' });
+infomap.run({ network, args: { silent: true, output: ['json'] } });
 
 type Point = {
   position: number[];
@@ -40,8 +36,8 @@ type Point = {
 
 class Store {
   result: number;
-  landLoaded: boolean = false;
-  dataLoaded: boolean = false;
+  landLoaded = false;
+  dataLoaded = false;
 
   layers: any[] = [];
 
@@ -55,7 +51,7 @@ class Store {
     this.result = 10;
 
     this.loadLandLayer().catch(console.error);
-    this.initWorker().catch(console.error);
+    this.loadDataLayer().catch(console.error);
   }
 
   async loadLandLayer() {
@@ -68,62 +64,71 @@ class Store {
     const land = await res.json();
     const geojson = topojson.feature(land, land.objects.land);
     console.log('geojson:', geojson);
-    const layer = new GeoJsonLayer({
-      id: 'geojson-layer',
-      // @ts-ignore
-      data: geojson,
-      pickable: true,
-      stroked: false,
-      filled: true,
-      extruded: true,
-      lineWidthScale: 20,
-      lineWidthMinPixels: 2,
-      getFillColor: [160, 160, 180, 200],
-      //getLineColor: d => colorToRGBArray(d.properties.color),
-      getLineColor: [200, 200, 200],
-      getRadius: 100,
-      getLineWidth: 1,
-      getElevation: 30,
-    });
+    // const layer = new GeoJsonLayer({
+    //   id: 'geojson-layer',
+    //   // @ts-ignore
+    //   data: geojson,
+    //   pickable: true,
+    //   stroked: false,
+    //   filled: true,
+    //   extruded: true,
+    //   lineWidthScale: 20,
+    //   lineWidthMinPixels: 2,
+    //   getFillColor: [160, 160, 180, 200],
+    //   //getLineColor: d => colorToRGBArray(d.properties.color),
+    //   getLineColor: [200, 200, 200],
+    //   getRadius: 100,
+    //   getLineWidth: 1,
+    //   getElevation: 30,
+    // });
     console.log('Add geojson layer...');
     this.landLoaded = true;
-    this.layers.push(layer);
+    // this.layers.push(layer);
     console.log('Done!');
   }
 
-  async initWorker() {
-    const worker = new Worker('../workers/DataWorker.ts');
+  private async *loadData(
+    getItems: (
+      items: { longitude: number; latitude: number; species: string }[],
+    ) => void,
+  ) {
+    const dataWorker = await spawn(new Worker('../workers/DataWorker.ts'));
 
-    const dataWorker = await spawn(worker);
+    dataWorker.stream().subscribe(getItems);
 
+    yield dataWorker.loadSample();
+
+    return await Thread.terminate(dataWorker);
+  }
+
+  async loadDataLayer() {
     const points: Point[] = [];
     const binner = new QuadtreeGeoBinner();
 
     console.log('Stream...');
-    dataWorker
-      .stream()
-      .subscribe(
-        (items: { longitude: number; latitude: number; species: string }[]) => {
-          for (let item of items) {
-            // @ts-ignore
-            points.push({
-              position: [item.longitude, item.latitude, 0],
-            });
-            binner.addFeature({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [item.longitude, item.latitude, 0],
-              },
-              properties: { species: item.species },
-            });
-          }
-        },
-      );
+    const loader = this.loadData((items) => {
+      for (let item of items) {
+        points.push({
+          position: [item.longitude, item.latitude, 0],
+        });
+        binner.addFeature({
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [item.longitude, item.latitude, 0],
+          },
+          properties: { species: item.species },
+        });
+      }
+    });
+    await loader.next();
 
-    console.log(await dataWorker.loadSample());
-    const cells = binner.cells();
+    const cells = binner.cellsNonEmpty();
     console.log('Done binning!', cells);
+    console.log(
+      'Leaf cells:',
+      cells.filter((cell) => cell.isLeaf),
+    );
     console.log('binner:', binner);
     console.log('points:', points);
     console.log(
@@ -131,23 +136,78 @@ class Store {
       cells.map((cell) => cell.speciesTopList),
     );
 
-    const pointLayer = new PointCloudLayer({
-      id: 'point-cloud-layer',
-      // @ts-ignore
-      data: points,
-      pickable: false,
-      coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
-      //coordinateOrigin: [-122.4, 37.74],
-      pointSize: 2,
-      //getPosition: (d) => d.position,
-      // getNormal: (d: unknown): number[] => d.normal,
-      getColor: [255, 0, 0, 50],
+    const m = new Map<string, Set<string>>();
+
+    cells.forEach((cell) => {
+      cell.speciesTopList.forEach(({ species }) => {
+        if (!m.has(species)) {
+          m.set(species, new Set());
+        }
+
+        const ids = m.get(species);
+        ids?.add(cell.id);
+      });
     });
+
+    let nodeId = 0;
+    let network = '*Vertices\n';
+
+    let nodeMap = new Map<string, number>();
+
+    for (let species of m.keys()) {
+      let id = nodeId++;
+      nodeMap.set(species, id);
+      network += `${id} "${species}"\n`;
+    }
+
+    let bipartiteStartId = nodeId;
+
+    for (let cell of cells) {
+      let id = nodeId++;
+      nodeMap.set(cell.id, id);
+      network += `${id} "${cell.id}"\n`;
+    }
+
+    network += `*Bipartite ${bipartiteStartId}\n`;
+
+    for (let each of m.entries()) {
+      for (let cell of each[1].values()) {
+        network += `${nodeMap.get(each[0])} ${nodeMap.get(cell)}\n`;
+      }
+    }
+
+    //console.log(network);
+
+    try {
+      const { json } = await new Infomap()
+        .on('data', (output) => console.log(output))
+        .runAsync({
+          network,
+          args: '-o json',
+        });
+
+      console.log(json);
+    } catch (err) {
+      console.log(err);
+    }
+
+    // const pointLayer = new PointCloudLayer({
+    //   id: 'point-cloud-layer',
+    //   // @ts-ignore
+    //   data: points,
+    //   pickable: false,
+    //   coordinateSystem: COORDINATE_SYSTEM.LNGLAT,
+    //   //coordinateOrigin: [-122.4, 37.74],
+    //   pointSize: 2,
+    //   //getPosition: (d) => d.position,
+    //   // getNormal: (d: unknown): number[] => d.normal,
+    //   getColor: [255, 0, 0, 50],
+    // });
 
     //this.layers.push(pointLayer);
 
     const colorToRGBArray = (hex: string) =>
-      hex.match(/[0-9a-f]{2}/g)?.map((x) => parseInt(x, 16)) as RGBAColor;
+      hex.match(/[0-9a-f]{2}/g)?.map((x) => parseInt(x, 16));
     const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
       number,
       number,
@@ -175,30 +235,26 @@ class Store {
         colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))],
       );
 
-    const cellLayer = new GeoJsonLayer({
-      id: 'cell-layer',
-      data: cells,
-      pickable: true,
-      stroked: false,
-      filled: true,
-      extruded: true,
-      lineWidthScale: 20,
-      lineWidthMinPixels: 2,
-      //getFillColor: [160, 160, 180, 200],
-      getFillColor: heatmapColor,
-      getLineColor: [200, 200, 200],
-      getRadius: 100,
-      getLineWidth: 2,
-      getElevation: 30,
-    });
-    this.layers.push(cellLayer);
+    // const cellLayer = new GeoJsonLayer({
+    //   id: 'cell-layer',
+    //   data: cells,
+    //   pickable: true,
+    //   stroked: false,
+    //   filled: true,
+    //   extruded: true,
+    //   lineWidthScale: 20,
+    //   lineWidthMinPixels: 2,
+    //   //getFillColor: [160, 160, 180, 200],
+    //   getFillColor: (d: unknown) => heatmapColor(d as Node),
+    //   getLineColor: [200, 200, 200],
+    //   getRadius: 100,
+    //   getLineWidth: 2,
+    //   getElevation: 30,
+    // });
+    // this.layers.push(cellLayer);
 
     this.dataLoaded = true;
-
-    await Thread.terminate(dataWorker);
   }
 }
 
-const store = new Store();
-
-export default store;
+export default new Store();

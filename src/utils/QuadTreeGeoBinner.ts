@@ -301,7 +301,7 @@ export class Node implements Feature<Polygon> {
 export class QuadtreeGeoBinner {
   private _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
   maxNodeSizeLog2: number = 4;
-  minNodeSizeLog2: number = -3;
+  minNodeSizeLog2: number = 0;
   nodeCapacity: number = 10;
   lowerThreshold: number = 0;
   root: Node | null = null;

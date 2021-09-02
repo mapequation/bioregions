@@ -1,6 +1,5 @@
-import { Container, Grid, Step } from "semantic-ui-react";
-import Deck from "./Deck";
-import "./App.css";
+import { Container, Grid, Step } from 'semantic-ui-react';
+import './App.css';
 
 export default function App() {
   return (
@@ -36,11 +35,12 @@ export default function App() {
         <Grid.Column
           width={4}
           as="aside"
-          style={{ border: "solid 1px blue" }}
+          style={{ border: 'solid 1px blue' }}
         ></Grid.Column>
-        <Grid.Column width={12} style={{ border: "solid 1px green" }}>
-          <Deck />
-        </Grid.Column>
+        <Grid.Column
+          width={12}
+          style={{ border: 'solid 1px green' }}
+        ></Grid.Column>
       </Grid>
 
       <Container as="footer">mapequation.org</Container>
