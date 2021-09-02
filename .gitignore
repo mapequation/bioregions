@@ -12,3 +12,4 @@ semantic.min.css
 esdoc
 .vscode
 .tmp
+/public/maps/physical
