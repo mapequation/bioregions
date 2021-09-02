@@ -1,19 +1,47 @@
-import d3 from 'd3';
-import _ from 'lodash';
-import {LOAD_FILES, LOAD_TREE, SET_FIELDS_TO_COLUMNS_MAPPING, SET_FEATURE_NAME_FIELD, GET_CLUSTERS, ADD_CLUSTERS,
-  BINNING_CHANGE_UNIT, BINNING_MIN_NODE_SIZE, BINNING_MAX_NODE_SIZE, BINNING_NODE_CAPACITY, BINNING_LOWER_THRESHOLD, BINNING_PATCH_SPARSE_NODES,
-CANCEL_FILE_ACTIONS, CHANGE_TREE_WEIGHT_MODEL, REMOVE_SPECIES} from '../constants/ActionTypes';
-import * as Binning from '../constants/Binning';
-import {setFileProgress, setBinningProgress, setClusteringProgress,
-  INDETERMINATE, COUNT, COUNT_WITH_TOTAL} from '../actions/ProgressActions';
-import {setFileError, requestDSVColumnMapping, requestGeoJSONNameField,
-  addSpeciesAndBins, addPhyloTree} from '../actions/FileLoaderActions';
-import {addClustersAndStatistics, calculateClusters} from '../actions/ClusterActions';
-import {setError} from '../actions/ErrorActions';
-import io from '../utils/io';
-import shp from 'shpjs';
-import * as S from '../utils/statistics';
-import QuadtreeGeoBinner from '../utils/QuadtreeGeoBinner';
+import d3 from "d3";
+import _ from "lodash";
+import {
+  LOAD_FILES,
+  LOAD_TREE,
+  SET_FIELDS_TO_COLUMNS_MAPPING,
+  SET_FEATURE_NAME_FIELD,
+  GET_CLUSTERS,
+  ADD_CLUSTERS,
+  BINNING_CHANGE_UNIT,
+  BINNING_MIN_NODE_SIZE,
+  BINNING_MAX_NODE_SIZE,
+  BINNING_NODE_CAPACITY,
+  BINNING_LOWER_THRESHOLD,
+  BINNING_PATCH_SPARSE_NODES,
+  CANCEL_FILE_ACTIONS,
+  CHANGE_TREE_WEIGHT_MODEL,
+  REMOVE_SPECIES,
+} from "../constants/ActionTypes";
+import * as Binning from "../constants/Binning";
+import {
+  setFileProgress,
+  setBinningProgress,
+  setClusteringProgress,
+  INDETERMINATE,
+  COUNT,
+  COUNT_WITH_TOTAL,
+} from "../actions/ProgressActions";
+import {
+  setFileError,
+  requestDSVColumnMapping,
+  requestGeoJSONNameField,
+  addSpeciesAndBins,
+  addPhyloTree,
+} from "../actions/FileLoaderActions";
+import {
+  addClustersAndStatistics,
+  calculateClusters,
+} from "../actions/ClusterActions";
+import { setError } from "../actions/ErrorActions";
+import io from "../utils/io";
+import shp from "shpjs";
+import * as S from "../utils/statistics";
+import QuadtreeGeoBinner from "../utils/QuadtreeGeoBinner";
 import {
   calculateInfomapClusters,
   getClusterStatistics,
@@ -23,15 +51,15 @@ import {
   getPajekNetwork,
   getJaccardIndex,
   getAllJaccardIndex,
-} from '../utils/clustering';
-import { polygonExtent } from '../utils/polygons';
-import turfPolygon from 'turf-polygon';
-import turfSimplify from 'turf-simplify';
-import turfExtent from 'turf-extent';
-import turfPoint from 'turf-point';
-import turfInside from 'turf-inside';
-import { parseTree } from '../utils/phylogeny';
-import treeUtils from '../utils/treeUtils';
+} from "../utils/clustering";
+import { polygonExtent } from "../utils/polygons";
+import turfPolygon from "turf-polygon";
+import turfSimplify from "turf-simplify";
+import turfExtent from "turf-extent";
+import turfPoint from "turf-point";
+import turfInside from "turf-inside";
+import { parseTree } from "../utils/phylogeny";
+import treeUtils from "../utils/treeUtils";
 
 console.log(`[DataWorker] ok`);
 
@@ -49,7 +77,8 @@ const getInitialState = () => {
     speciesToBins: {}, // { name:String -> { speciesId: Int, bins: Set<binId:Int> }}
     speciesCountMap: new Map(),
     shapeFeatures: null, // Store shapefile/GeoJSON features here to generate point features
-    binning: { // TODO: Sync with main data state
+    binning: {
+      // TODO: Sync with main data state
       unit: Binning.DEGREE,
       minNodeSizeLog2: 0,
       maxNodeSizeLog2: 2,
@@ -101,15 +130,17 @@ function loadShapefiles(files) {
       shapefiles.set(file.name.slice(-3), file);
     }
   }
-  if (!shapefiles.has('dbf')) {
+  if (!shapefiles.has("dbf")) {
     dispatch(setFileError(`Can't use a .shp file without a .dbf file.`));
     return;
   }
 
   const filePromises = [];
-  shapefiles.forEach(file => {
+  shapefiles.forEach((file) => {
     console.log(`Add promise for file ${file.name}...`);
-    filePromises.push(io.readFile(file, /prj$/.test(file.name) ? 'text' : 'buffer'));
+    filePromises.push(
+      io.readFile(file, /prj$/.test(file.name) ? "text" : "buffer")
+    );
   });
 
   let numTooSimplifiedPolygons = 0;
@@ -149,14 +180,14 @@ function loadShapefiles(files) {
     //   coordinates: [0, 0],
     // };
 
-    if (geometry.type === 'Polygon') {
+    if (geometry.type === "Polygon") {
       if (geometry.coordinates[0].length < 4) {
         return {
-          type: 'Point',
+          type: "Point",
           coordinates: geom.coordinates[0][0],
         };
       }
-      const simplified = turfSimplify({ type: 'Feature', geometry }, tolerance);
+      const simplified = turfSimplify({ type: "Feature", geometry }, tolerance);
       if (simplified) {
         simplified.geometry.coordinates = [simplified.geometry.coordinates[0]];
         if (simplified.geometry.coordinates[0].length < 4) {
@@ -167,23 +198,41 @@ function loadShapefiles(files) {
       }
       return geometry;
     }
-    if (geometry.type === 'MultiPolygon') {
+    if (geometry.type === "MultiPolygon") {
       const simplifiedCoordinates = [];
       const numPolygonsInMultiPolygon = geometry.coordinates.length;
       geometry.coordinates.forEach((polygonCoords, i) => {
-        dispatch(setFileProgress("Simplify multipolygon... ", COUNT_WITH_TOTAL, i + 1, {total: numPolygonsInMultiPolygon}));
+        dispatch(
+          setFileProgress(
+            "Simplify multipolygon... ",
+            COUNT_WITH_TOTAL,
+            i + 1,
+            { total: numPolygonsInMultiPolygon }
+          )
+        );
         // simplify each set of polygonCoords in the MultiPolygon
-        const simplifiedPolygon = turfSimplify({ type: 'Feature', geometry: {
-          type: 'Polygon',
-          coordinates: polygonCoords,
-        }}, tolerance);
+        const simplifiedPolygon = turfSimplify(
+          {
+            type: "Feature",
+            geometry: {
+              type: "Polygon",
+              coordinates: polygonCoords,
+            },
+          },
+          tolerance
+        );
         if (simplifiedPolygon) {
           //TODO: Why just outer ring, doesn't turfSimplifiy support holes?
-          simplifiedPolygon.geometry.coordinates = [simplifiedPolygon.geometry.coordinates[0]];
+          simplifiedPolygon.geometry.coordinates = [
+            simplifiedPolygon.geometry.coordinates[0],
+          ];
           if (simplifiedPolygon.geometry.coordinates[0].length < 4) {
             ++numTooSimplifiedPolygons;
             if (polygonCoords[0].length < 4) {
-              console.log('!!!! Original multi->polygon < 4 points!', polygonCoords);
+              console.log(
+                "!!!! Original multi->polygon < 4 points!",
+                polygonCoords
+              );
             } else {
               simplifiedCoordinates.push(polygonCoords);
             }
@@ -193,51 +242,64 @@ function loadShapefiles(files) {
           }
         } else {
           if (polygonCoords[0].length < 4) {
-            console.log('!!!! Original multi->polygon not simplified!', polygonCoords);
+            console.log(
+              "!!!! Original multi->polygon not simplified!",
+              polygonCoords
+            );
           } else {
             simplifiedCoordinates.push(polygonCoords);
           }
         }
       });
       if (simplifiedCoordinates.length === 0) {
-        console.log('!! Empty multipolygon!!!');
+        console.log("!! Empty multipolygon!!!");
         return {
-          type: 'Point',
+          type: "Point",
           coordinates: geometry.coordinates[0][0][0],
         };
       }
       return {
-        type: 'MultiPolygon',
+        type: "MultiPolygon",
         coordinates: simplifiedCoordinates,
       };
     }
-    console.log('Unhandled geometry:', geometry);
+    console.log("Unhandled geometry:", geometry);
     return geometry;
   }
 
   const simplifyGeometry = state.simplifyGeometry;
 
   Promise.all(filePromises)
-    .then(result => {
-      console.log('Loaded shapefile buffer, parse shapes...');
-      result.forEach(file => { shapefiles.set(file.name.slice(-3), file.data); });
-      const shpBuffer = shapefiles.get('shp');
-      const prjString = shapefiles.get('prj');
-      const dbfBuffer = shapefiles.get('dbf');
+    .then((result) => {
+      console.log("Loaded shapefile buffer, parse shapes...");
+      result.forEach((file) => {
+        shapefiles.set(file.name.slice(-3), file.data);
+      });
+      const shpBuffer = shapefiles.get("shp");
+      const prjString = shapefiles.get("prj");
+      const dbfBuffer = shapefiles.get("dbf");
       dispatch(setFileProgress("Parsing shapes...", INDETERMINATE));
-      console.log('Parsing shapes with simplification...');
-      const parseGeometryCallback = simplifyGeometry ? parseSimplifiedGeometry : parseGeometry;
-      const parsedShape = shp.parseShp(shpBuffer, prjString, parseGeometryCallback);
+      console.log("Parsing shapes with simplification...");
+      const parseGeometryCallback = simplifyGeometry
+        ? parseSimplifiedGeometry
+        : parseGeometry;
+      const parsedShape = shp.parseShp(
+        shpBuffer,
+        prjString,
+        parseGeometryCallback
+      );
       dispatch(setFileProgress("Parsing attributes...", INDETERMINATE));
       const parsedDbf = shp.parseDbf(dbfBuffer);
       dispatch(setFileProgress("Combining to GeoJSON...", INDETERMINATE));
       state.geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded state.geoJSON:", state.geoJSON);
-      const {properties} = state.geoJSON.features[0];
-      console.log(`Number of too simplified polygons: ${numTooSimplifiedPolygons} (Keeping unsimplified originals)`);
+      const { properties } = state.geoJSON.features[0];
+      console.log(
+        `Number of too simplified polygons: ${numTooSimplifiedPolygons} (Keeping unsimplified originals)`
+      );
       dispatch(requestGeoJSONNameField(properties));
     })
-    .catch(err => {
+    .catch((err) => {
       return dispatch(setFileError(`Error loading shapefiles: ${err}`));
     });
 
@@ -318,7 +380,6 @@ function loadShapefiles(files) {
   //   });
 }
 
-
 function parseGeoJSON(nameField) {
   state.shapeFeatures = [];
   let numPoints = 0;
@@ -328,12 +389,16 @@ function parseGeoJSON(nameField) {
   let numBadFeatures = 0;
   const numOriginalFeatures = state.geoJSON.features.length;
   let lastPercent = -1;
-  console.log('parseGeoJSON:', state.geoJSON);
+  console.log("parseGeoJSON:", state.geoJSON);
 
   state.geoJSON.features.forEach((feature, i) => {
-    const percent = Math.round((i+1) * 100 / numOriginalFeatures);
+    const percent = Math.round(((i + 1) * 100) / numOriginalFeatures);
     if (percent !== lastPercent) {
-      dispatch(setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i+1, {total: numOriginalFeatures}));
+      dispatch(
+        setFileProgress("Parsing features...", COUNT_WITH_TOTAL, i + 1, {
+          total: numOriginalFeatures,
+        })
+      );
       lastPercent = percent;
     }
 
@@ -350,19 +415,21 @@ function parseGeoJSON(nameField) {
 
     feature.properties.name = feature.properties[nameField];
     // Split MultiPolygon features to multiple Polygon features
-    const {type} = feature.geometry;
+    const { type } = feature.geometry;
     if (type === "Polygon") {
       ++numPolygons;
-      if (!feature.geometry.bbox)
-        feature.geometry.bbox = turfExtent(feature);
+      if (!feature.geometry.bbox) feature.geometry.bbox = turfExtent(feature);
       state.shapeFeatures.push(feature);
-    }
-    else if (type === "MultiPolygon") {
+    } else if (type === "MultiPolygon") {
       ++numMultiPolygons;
       const numPolygonsInMultiPolygon = feature.geometry.coordinates.length;
       numMultiPolygonsExpanded += numPolygonsInMultiPolygon;
       feature.geometry.coordinates.forEach((polygonCoords, i) => {
-        dispatch(setFileProgress("Parsing multipolygon... ", COUNT_WITH_TOTAL, i + 1, {total: numPolygonsInMultiPolygon}));
+        dispatch(
+          setFileProgress("Parsing multipolygon... ", COUNT_WITH_TOTAL, i + 1, {
+            total: numPolygonsInMultiPolygon,
+          })
+        );
         const polygonFeature = turfPolygon(polygonCoords, feature.properties);
         if (!polygonFeature.geometry.bbox) {
           // polygonFeature.geometry.bbox = turfExtent(feature);
@@ -370,8 +437,7 @@ function parseGeoJSON(nameField) {
         }
         state.shapeFeatures.push(polygonFeature);
       });
-    }
-    else if (type === "Point") {
+    } else if (type === "Point") {
       ++numPoints;
       //TODO: Check valid coordinates
       //   const c = feature.geometry.coordinates;
@@ -387,17 +453,24 @@ function parseGeoJSON(nameField) {
       // if (c[1] < -90) {
       //     c[1] = (c[1] - 90) % 180 + 90;
       // }
-      if (!feature.geometry.bbox)
-        feature.geometry.bbox = turfExtent(feature);
+      if (!feature.geometry.bbox) feature.geometry.bbox = turfExtent(feature);
       state.shapeFeatures.push(feature);
-    }
-    else {
+    } else {
       console.log("Unsupported geometry type:", type);
     }
   });
-  dispatch(setFileProgress("Parsing features... done!", COUNT_WITH_TOTAL, numOriginalFeatures, {total: numOriginalFeatures}));
+  dispatch(
+    setFileProgress(
+      "Parsing features... done!",
+      COUNT_WITH_TOTAL,
+      numOriginalFeatures,
+      { total: numOriginalFeatures }
+    )
+  );
 
-  console.log(`numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`);
+  console.log(
+    `numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`
+  );
 
   shapeToPoints();
 
@@ -421,22 +494,37 @@ function shapeToPoints() {
   let lastPercent = 0;
 
   state.shapeFeatures.forEach((feature, i) => {
-    let percent = Math.round((i+1) * 100 / totCount);
+    let percent = Math.round(((i + 1) * 100) / totCount);
     if (percent !== lastPercent) {
-      dispatch(setFileProgress("Resolving polygons for binning...", COUNT_WITH_TOTAL, i+1, {total: totCount}));
+      dispatch(
+        setFileProgress(
+          "Resolving polygons for binning...",
+          COUNT_WITH_TOTAL,
+          i + 1,
+          { total: totCount }
+        )
+      );
       lastPercent = percent;
     }
-    if (feature.geometry.type === 'Point') {
+    if (feature.geometry.type === "Point") {
       state.features.push(feature);
       return;
     }
-    const {bbox} = feature.geometry;
+    const { bbox } = feature.geometry;
     const bboxWidth = bbox[2] - bbox[0];
     const bboxHeight = bbox[3] - bbox[1];
-    const [bboxSizeMin, bboxSizeMax] = bboxWidth < bboxHeight ? [bboxWidth, bboxHeight] : [bboxHeight, bboxWidth];
+    const [bboxSizeMin, bboxSizeMax] =
+      bboxWidth < bboxHeight
+        ? [bboxWidth, bboxHeight]
+        : [bboxHeight, bboxWidth];
     if (bboxSizeMax < minNodeSize) {
       // If feature less than minimum cell size, add points at centre
-      state.features.push(turfPoint([bbox[0] + bboxWidth/2, bbox[1] + bboxHeight/2], feature.properties));
+      state.features.push(
+        turfPoint(
+          [bbox[0] + bboxWidth / 2, bbox[1] + bboxHeight / 2],
+          feature.properties
+        )
+      );
       // const long = bbox[0] + halfMinNodeSize;
       // const lat = bbox[1] + halfMinNodeSize;
       // for (let x = long - halfMinNodeSize; x < long + halfMinNodeSize; x += resolution) {
@@ -445,11 +533,18 @@ function shapeToPoints() {
       //     state.features.push(pointFeature);
       //   }
       // }
-    }
-    else {
+    } else {
       let simplifiedFeature = turfSimplify(feature, tolerance);
-      for (let long = bbox[0] + halfMinNodeSize; long < bbox[2]; long += minNodeSize) {
-        for (let lat = bbox[1] + halfMinNodeSize; lat < bbox[3]; lat += minNodeSize) {
+      for (
+        let long = bbox[0] + halfMinNodeSize;
+        long < bbox[2];
+        long += minNodeSize
+      ) {
+        for (
+          let lat = bbox[1] + halfMinNodeSize;
+          lat < bbox[3];
+          lat += minNodeSize
+        ) {
           const pointFeature = turfPoint([long, lat], feature.properties);
           if (turfInside(pointFeature, simplifiedFeature)) {
             state.features.push(turfPoint([long, lat], feature.properties));
@@ -466,100 +561,140 @@ function shapeToPoints() {
   });
 }
 
-
 function loadTextFile(file) {
   console.log("[DataWorker]: Load file:", file.name);
 
-  io.readFile(file, 'text', (event) => {
-    let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
+  io.readFile(file, "text", (event) => {
+    let mode = event.lengthComputable ? COUNT_WITH_TOTAL : COUNT;
     console.log(`io.readFile progress`);
-    dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
-  }).then(result => {
-    parseDSVHeader(result.data);
-  }).catch(error => {
-    console.log("File read error:", error);
-    if (error.message && error.name)
-      dispatch(setFileError(error.name, error.message));
-    else
-      dispatch(setFileError("Error reading file", error.toString()));
-  });
+    dispatch(
+      setFileProgress("Loading file...", mode, event.loaded, {
+        total: event.total,
+      })
+    );
+  })
+    .then((result) => {
+      parseDSVHeader(result.data);
+    })
+    .catch((error) => {
+      console.log("File read error:", error);
+      if (error.message && error.name)
+        dispatch(setFileError(error.name, error.message));
+      else dispatch(setFileError("Error reading file", error.toString()));
+    });
 }
-
 
 function loadFiles(files) {
   const numFiles = files.length;
 
-  let isShapefile = !_.every(files, file => !/shp$/.test(file.name));
+  let isShapefile = !_.every(files, (file) => !/shp$/.test(file.name));
 
-  if (isShapefile)
-    loadShapefiles(files);
-  else
-    loadTextFile(files[0]);
+  if (isShapefile) loadShapefiles(files);
+  else loadTextFile(files[0]);
 }
 
 function loadNexus(file) {
   console.log("[DataWorker]: Load file:", file.name);
 
-  io.readFile(file, 'text', (event) => {
-    let mode = event.lengthComputable? COUNT_WITH_TOTAL : COUNT;
-    dispatch(setFileProgress("Loading file...", mode, event.loaded, {total: event.total}));
-  }).then(result => {
-    parseNexus(result.data);
-  }).catch(error => {
-    console.log("File read error:", error);
-    if (error.message && error.name)
-      dispatch(setFileError(error.name, error.message));
-    else
-      dispatch(setFileError("Error reading file", error.toString()));
-  });
+  io.readFile(file, "text", (event) => {
+    let mode = event.lengthComputable ? COUNT_WITH_TOTAL : COUNT;
+    dispatch(
+      setFileProgress("Loading file...", mode, event.loaded, {
+        total: event.total,
+      })
+    );
+  })
+    .then((result) => {
+      parseNexus(result.data);
+    })
+    .catch((error) => {
+      console.log("File read error:", error);
+      if (error.message && error.name)
+        dispatch(setFileError(error.name, error.message));
+      else dispatch(setFileError("Error reading file", error.toString()));
+    });
 }
 
 function parseNexus(content) {
-  dispatch(setFileProgress("Trying to parse content as a phylogenetic tree...", INDETERMINATE));
+  dispatch(
+    setFileProgress(
+      "Trying to parse content as a phylogenetic tree...",
+      INDETERMINATE
+    )
+  );
   if (content.length === 0)
-    return dispatch(setFileError("No file content to read.", "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."));
+    return dispatch(
+      setFileError(
+        "No file content to read.",
+        "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."
+      )
+    );
 
   parseTree(content)
-    .then(tree => {
+    .then((tree) => {
       console.log("Parsed tree:", tree);
       state.tree = treeUtils.prepareTree(tree);
       dispatch(setFileProgress("Transferring result...", INDETERMINATE));
       dispatch(addPhyloTree(tree));
     })
-    .catch(error => {
+    .catch((error) => {
       dispatch(setFileError(error, "Please check the format."));
     });
-
 }
 
 function parseDSVHeader(content) {
   console.log("[DataWorker]: parseDSVHeader(content)...");
-  dispatch(setFileProgress("Trying to parse the file as delimiter-separated values...", INDETERMINATE));
+  dispatch(
+    setFileProgress(
+      "Trying to parse the file as delimiter-separated values...",
+      INDETERMINATE
+    )
+  );
   if (content.length === 0)
-    return dispatch(setFileError("No file content to read.", "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."));
+    return dispatch(
+      setFileError(
+        "No file content to read.",
+        "For large files (>100Mb), this may be a bug in Chrome. Please check the file, or try with another browser."
+      )
+    );
   var extractLine = /^(.+)(\r\n|\n|\r)?$/gm;
   var result;
   let headLines = [];
-  while ((result = extractLine.exec(content)) !== null && headLines.length < 5) {
+  while (
+    (result = extractLine.exec(content)) !== null &&
+    headLines.length < 5
+  ) {
     headLines.push(result[1]);
   }
 
   if (headLines.length < 3)
-    return dispatch(setFileError(`Could only read ${headLines.length} lines.`, "Please check the file format."));
+    return dispatch(
+      setFileError(
+        `Could only read ${headLines.length} lines.`,
+        "Please check the file format."
+      )
+    );
 
   let headerLine = headLines[0];
-  let isTSV = headerLine.split('\t').length > 1;
-  let isCSV = headerLine.split(',').length > 1;
+  let isTSV = headerLine.split("\t").length > 1;
+  let isCSV = headerLine.split(",").length > 1;
 
   if (!isTSV && !isCSV)
-    return dispatch(setFileError("Couldn't recognise the format as CSV or TSV"));
+    return dispatch(
+      setFileError("Couldn't recognise the format as CSV or TSV")
+    );
 
-  state.DSVType = isTSV? "TSV" : "CSV";
-  let parser = isTSV? d3.tsv : d3.csv;
+  state.DSVType = isTSV ? "TSV" : "CSV";
+  let parser = isTSV ? d3.tsv : d3.csv;
 
-  dispatch(setFileProgress(`Trying to parse the file as ${state.DSVType}...`, INDETERMINATE));
+  dispatch(
+    setFileProgress(
+      `Trying to parse the file as ${state.DSVType}...`,
+      INDETERMINATE
+    )
+  );
 
-  const parsedHead = parser.parseRows(headLines.join('\n'));
+  const parsedHead = parser.parseRows(headLines.join("\n"));
 
   let columns = parsedHead[0];
 
@@ -572,10 +707,9 @@ function parseDSVHeader(content) {
   state.DSVStringContent = content;
 }
 
-
 function parseDSV(fieldsToColumns) {
   console.log("[DataWorker]: parseDSV with fieldsToColumns:", fieldsToColumns);
-  const {Name, Latitude, Longitude} = fieldsToColumns; // Contains index of corresponding field
+  const { Name, Latitude, Longitude } = fieldsToColumns; // Contains index of corresponding field
 
   let parser = state.DSVType == "TSV" ? d3.tsv : d3.csv;
   let numSkipped = 0;
@@ -583,43 +717,56 @@ function parseDSV(fieldsToColumns) {
 
   let features = parser.parseRows(state.DSVStringContent, (row, index) => {
     // Skip header
-    if (index === 0)
-      return null;
+    if (index === 0) return null;
     ++count;
-    const name = row[Name].replace(/_/g, ' ');
+    const name = row[Name].replace(/_/g, " ");
     const lat = +row[Latitude];
     let long = +row[Longitude];
-    if (name && lat >= lat && long >= long) { // not undefined/NaN etc
+    if (name && lat >= lat && long >= long) {
+      // not undefined/NaN etc
       if (count % 1000 === 0) {
-        dispatch(setFileProgress("Parsing rows...", COUNT, count, {numSkipped}));
+        dispatch(
+          setFileProgress("Parsing rows...", COUNT, count, { numSkipped })
+        );
         // postMessage({type: "progress", payload: { count, numSkipped, activity: "Parsing rows..." }});
       }
-      if (row[Longitude] === '180') {
+      if (row[Longitude] === "180") {
         long = -180;
       }
       return {
-        type: 'Feature',
+        type: "Feature",
         geometry: {
-          type: 'Point',
-          coordinates: [long, lat]
+          type: "Point",
+          coordinates: [long, lat],
         },
         properties: {
-          name
-        }
+          name,
+        },
       };
     }
     ++numSkipped;
     return null;
   });
-  console.log(`Parsed ${features.length} valid features and skipped ${numSkipped} bad ones.`);
+  console.log(
+    `Parsed ${features.length} valid features and skipped ${numSkipped} bad ones.`
+  );
 
   if (features.length === 0)
-    return dispatch(setFileError(`No valid records could be parsed. ${numSkipped} skipped due to missing name or coordinates. Please check the format.`));
+    return dispatch(
+      setFileError(
+        `No valid records could be parsed. ${numSkipped} skipped due to missing name or coordinates. Please check the format.`
+      )
+    );
 
   // Store features
   state.features = features;
 
-  dispatch(setFileProgress("Parsing rows... done!", COUNT, count, {numSkipped, done: true}));
+  dispatch(
+    setFileProgress("Parsing rows... done!", COUNT, count, {
+      numSkipped,
+      done: true,
+    })
+  );
 
   dispatch(setFileProgress("Aggregating species...", INDETERMINATE));
   groupByName();
@@ -632,14 +779,24 @@ function parseDSV(fieldsToColumns) {
 }
 
 function groupByName() {
-  state.species = S.sortedCountBy(feature => feature.properties.name, state.features);
+  state.species = S.sortedCountBy(
+    (feature) => feature.properties.name,
+    state.features
+  );
   // state.speciesCountMap = d3.map(state.species, d => d.name);
-  state.speciesCountMap = new Map(state.species.map(({name, count}) =>  [name, count]));
+  state.speciesCountMap = new Map(
+    state.species.map(({ name, count }) => [name, count])
+  );
 }
 
 function getSummaryBins() {
   // Bin and map to summary bins, all individual features not needed
-  dispatch(setBinningProgress("Calculating summary statistics per cell...", INDETERMINATE));
+  dispatch(
+    setBinningProgress(
+      "Calculating summary statistics per cell...",
+      INDETERMINATE
+    )
+  );
   const binSizes = {};
   state.bins.forEach((bin) => {
     binSizes[bin.binId] = bin.features.length;
@@ -651,12 +808,29 @@ function getSummaryBins() {
 
   return state.bins.map((bin, i) => {
     if (i % 10 === 0) {
-      dispatch(setFileProgress(`Calculating cell summary statistics...`, COUNT_WITH_TOTAL, i + 1, { total: numBins }));
+      dispatch(
+        setFileProgress(
+          `Calculating cell summary statistics...`,
+          COUNT_WITH_TOTAL,
+          i + 1,
+          { total: numBins }
+        )
+      );
       // console.log(`Calculating summary statistics per cell (${i + 1} / ${numBins})...`);
     }
-    const countedSpecies = S.countBy(feature => feature.properties.name, bin.features);
-    const topCommonSpecies = S.topSortedBy(d => d.count, 10, countedSpecies);
-    const topIndicatorSpecies = S.topIndicatorItems('name', state.speciesCountMap, state.species[0].count, topCommonSpecies[0].count, 10, countedSpecies);
+    const countedSpecies = S.countBy(
+      (feature) => feature.properties.name,
+      bin.features
+    );
+    const topCommonSpecies = S.topSortedBy((d) => d.count, 10, countedSpecies);
+    const topIndicatorSpecies = S.topIndicatorItems(
+      "name",
+      state.speciesCountMap,
+      state.species[0].count,
+      topCommonSpecies[0].count,
+      10,
+      countedSpecies
+    );
     // const jaccardIndex = getJaccardIndex(bin, state.speciesToBins, binSizes, minJaccardIndex);
     // const jaccardIndex = {};
     // const jaccardIndex = jaccardIndexes[bin.binId];
@@ -671,7 +845,9 @@ function getSummaryBins() {
       size: bin.size,
       count: bin.features.length,
       speciesCount: countedSpecies.length,
-      species: bin.features.map(f => state.speciesToBins[f.properties.name].speciesId),
+      species: bin.features.map(
+        (f) => state.speciesToBins[f.properties.name].speciesId
+      ),
       topCommonSpecies,
       topIndicatorSpecies,
       // jaccardIndex,
@@ -684,23 +860,22 @@ function binData(dispatchResult = false) {
   if (state.features.length === 0) {
     return;
   }
-  const unitText = state.binning.unit === Binning.DEGREE ? '˚' : '′';
+  const unitText = state.binning.unit === Binning.DEGREE ? "˚" : "′";
   const minText = `${Math.pow(2, state.binning.minNodeSizeLog2)}${unitText}`;
   const maxText = `${Math.pow(2, state.binning.maxNodeSizeLog2)}${unitText}`;
   const statusText = `Binning species.with adaptive resolution from ${minText} to ${maxText}..`;
   console.log(statusText);
   dispatch(setBinningProgress(statusText, INDETERMINATE));
   const binner = new QuadtreeGeoBinner()
-  .scale(state.binning.unit === Binning.DEGREE ? 1 : 60)
-  .minNodeSizeLog2(state.binning.minNodeSizeLog2)
-  .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
-  .nodeCapacity(state.binning.nodeCapacity)
-  .lowerThreshold(state.binning.lowerThreshold);
+    .scale(state.binning.unit === Binning.DEGREE ? 1 : 60)
+    .minNodeSizeLog2(state.binning.minNodeSizeLog2)
+    .maxNodeSizeLog2(state.binning.maxNodeSizeLog2)
+    .nodeCapacity(state.binning.nodeCapacity)
+    .lowerThreshold(state.binning.lowerThreshold);
   state.bins = binner.bins(state.features, state.binning.patchSparseNodes);
   state.bins.forEach((bin, i) => {
     bin.binId = i;
   });
-
 
   const speciesToBins = {};
   state.species.forEach(({ name }, speciesId) => {
@@ -737,60 +912,85 @@ function dispatchAddSpeciesAndBins() {
 
   // dispatch(addSpeciesAndBins(state.species, state.summaryBins,
   //   getPajekNetwork(state.species, state.features, state.bins)));
-  dispatch(addSpeciesAndBins(state.species, state.summaryBins, state.speciesToBins));
+  dispatch(
+    addSpeciesAndBins(state.species, state.summaryBins, state.speciesToBins)
+  );
 }
 
 function calculateClusterStatistics(clusterIds) {
   mergeClustersToBins(clusterIds, state.bins);
 
-  dispatch(setClusteringProgress("Calculating cluster statistics...", INDETERMINATE));
-  const clusterStatistics = getClusterStatistics(clusterIds, state.bins, state.species[0].count, state.speciesCountMap)
+  dispatch(
+    setClusteringProgress("Calculating cluster statistics...", INDETERMINATE)
+  );
+  const clusterStatistics = getClusterStatistics(
+    clusterIds,
+    state.bins,
+    state.species[0].count,
+    state.speciesCountMap
+  );
 
   dispatch(setClusteringProgress("Transferring clusters...", INDETERMINATE));
   dispatch(addClustersAndStatistics(clusterIds, clusterStatistics));
 }
 
 function onInfomapFinished(error, clusterIds) {
-  if (error)
-    console.log("Error running Infomap:", error);
-  else
-    calculateClusterStatistics(clusterIds);
+  if (error) console.log("Error running Infomap:", error);
+  else calculateClusterStatistics(clusterIds);
 }
 
 function getClusters(infomapArgs, options = {}) {
   let networkData = undefined;
-  console.log('state.tree:', state.tree, 'maxLength:', state.tree.maxLength, 'options:', options);
+  console.log(
+    "state.tree:",
+    state.tree,
+    "maxLength:",
+    state.tree.maxLength,
+    "options:",
+    options
+  );
   if (state.tree && state.tree.maxLength && options.useTree) {
     networkData = getBipartitePhyloNetwork(state);
   } else {
     networkData = getBipartiteNetwork(state);
   }
 
-  var haveWorker = typeof Worker === 'function'; // Only Firefox support nested workers
+  var haveWorker = typeof Worker === "function"; // Only Firefox support nested workers
   if (haveWorker) {
-    calculateInfomapClusters(dispatch, infomapArgs, networkData, onInfomapFinished, state);
-  }
-  else {
+    calculateInfomapClusters(
+      dispatch,
+      infomapArgs,
+      networkData,
+      onInfomapFinished,
+      state
+    );
+  } else {
     dispatch(calculateClusters(networkData, infomapArgs));
   }
 }
 
 function getPajek() {
-  const networkData = getPajekNetwork(state.species, state.speciesToBins, state.bins);
+  const networkData = getPajekNetwork(
+    state.species,
+    state.speciesToBins,
+    state.bins
+  );
 
   dispatch({
-    type: 'GET_PAJEK_SUCCESSFUL',
+    type: "GET_PAJEK_SUCCESSFUL",
     payload: networkData,
   });
 }
 
-onmessage = function(event) {
-  const {type} = event.data;
+onmessage = function (event) {
+  const { type } = event.data;
   console.log("[DataWorker]: got message of type:", type);
   try {
     switch (type) {
       case LOAD_FILES:
-        console.log("Reset data worker state (except binning) and load files...");
+        console.log(
+          "Reset data worker state (except binning) and load files..."
+        );
         state = {
           ...getInitialState(),
           binning: state.binning,
@@ -812,7 +1012,7 @@ onmessage = function(event) {
       case ADD_CLUSTERS:
         calculateClusterStatistics(event.data.clusterIds);
         break;
-      case 'GET_PAJEK':
+      case "GET_PAJEK":
         getPajek();
         break;
       case BINNING_CHANGE_UNIT:
@@ -856,7 +1056,7 @@ onmessage = function(event) {
         console.log("[DataWorker]: Unrecognised message type:", type);
     }
   } catch (err) {
-    console.log('[DataWorker]: Error:', err);
+    console.log("[DataWorker]: Error:", err);
     dispatchError(err.message);
   }
 };

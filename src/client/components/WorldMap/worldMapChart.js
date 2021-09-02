@@ -208,6 +208,10 @@ world.update = function (el, properties) {
 
     const getClusterColor = (d) => {
       const clusterColor = props.clusterColors[d.clusterId];
+      if (!clusterColor) {
+        console.log(`No color for cluster ${d.clusterId}, using default color`);
+        return "#ccc";
+      }
       if (props.selectedClusterId >= 0) {
         return d.clusterId === props.selectedClusterId
           ? clusterColor.css()
