@@ -4,6 +4,7 @@ import { Form, Radio } from "semantic-ui-react";
 import TangleInput from "../lib/TangleInput";
 import Tooltip from "../lib/Tooltip";
 import { CLUSTERING_PROGRESS } from "../../constants/ActionTypes";
+import TreeWeight from "../Phylogram/TreeWeight";
 
 class InfomapDimmer extends Component {
   static propTypes = {
@@ -168,20 +169,23 @@ class InfomapDimmer extends Component {
             />
           </div>
           {!phyloregions.useTree ? null : (
-            <Form style={{ marginTop: 10 }}>
-              <h4>Weight model:</h4>
-              {treeWeightModels.map((model, index) => (
-                <Form.Field key={index}>
-                  <Radio
-                    label={model.name}
-                    name="treeWeightRadioGroup"
-                    value={index}
-                    checked={treeWeightModelIndex === index}
-                    onChange={handleChangeTreeWeightModel}
-                  />
-                </Form.Field>
-              ))}
-            </Form>
+            <div>
+              <Form style={{ marginTop: 10 }}>
+                <h4>Weight model:</h4>
+                {treeWeightModels.map((model, index) => (
+                  <Form.Field key={index}>
+                    <Radio
+                      label={model.name}
+                      name="treeWeightRadioGroup"
+                      value={index}
+                      checked={treeWeightModelIndex === index}
+                      onChange={handleChangeTreeWeightModel}
+                    />
+                  </Form.Field>
+                ))}
+              </Form>
+              <TreeWeight />
+            </div>
           )}
         </div>
       ) : null;
