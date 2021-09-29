@@ -1,71 +1,89 @@
-import React from 'react';
-// import d3 from "d3";
+import { useState } from 'react';
+import {
+  Box,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+} from '@chakra-ui/react';
+import { AxisLeft, AxisBottom } from './svg/Axis';
+import Curve from './svg/Curve';
 
-export default class TreeWeight extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      weight: 0.5,
-      width: 300,
-      height: 200,
-    };
+export default function TreeWeight() {
+  const [weight, setWeight] = useState(0.5);
+  const [width, setWidth] = useState(400);
+  const [height, setHeight] = useState(250);
+
+  const inputProps = {
+    min: 0,
+    max: 1,
+    step: 0.01,
+    value: weight,
+  };
+
+  const data: [number, number][] = [];
+  const exp1 = (x: number) => Math.exp(x + 1) - Math.E;
+  const w = exp1(exp1(weight));
+
+  for (let x = 0; x <= 1; x = x + 0.001) {
+    data.push([x, x * Math.exp(w * (x - 1))]);
   }
 
-  // componentDidMount() {
-  //   const { width, height } = this.state;
+  const domain: [number, number] = [
+    Math.min(data[0][0], data[data.length - 1][0]),
+    Math.max(data[0][0], data[data.length - 1][0]),
+  ];
 
-  //   const svg = d3.select(".tree-weight").select("svg");
-
-  //   const x = d3.scale.linear().range([0, 10]);
-  //   const y = d3.scale.linear().range([10, 0]);
-
-  //   const xAxis = d3.svg.axis().orient("bottom").scale(x).ticks(10);
-  //   const yAxis = d3.svg.axis().orient("left").scale(y).ticks(5);
-
-  //   svg.select(".xAxis").call(xAxis);
-  //   svg.select(".yAxis").call(yAxis);
-  // }
-
-  render() {
-    const { weight, width, height } = this.state;
-
-    return (
-      <div
-        className="tree-weight"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: '300px',
-          gap: '10px',
-        }}
+  return (
+    <Box d="flex" width={400} flexDirection="column" p={4}>
+      <Box
+        as="svg"
+        d="flex"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox={`-40 -20 ${width + 70} ${height + 70}`}
+        width={width}
+        height={height}
       >
-        <svg
-          ref={(ref) => (this.ref = ref)}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox={`-30 -20 ${width + 50} ${height + 50}`}
-          width="100%"
-          height="200px"
+        <AxisLeft domain={[0, 1]} range={[0, height]} label="Link weight" />
+        <AxisBottom
+          height={height}
+          domain={domain}
+          range={[0, width]}
+          label="Distance"
+        />
+        <Curve
+          data={data}
+          xDomain={domain}
+          yDomain={[0, 1]}
+          width={width}
+          height={height}
+          strokeWidth="1.5"
+        />
+      </Box>
+      <Box d="flex">
+        <Slider
+          aria-label="weight"
+          onChange={(weight) => setWeight(weight)}
+          {...inputProps}
         >
-          <g className="xAxis" transform={`translate(0, ${height + 1})`}></g>
-          <g className="yAxis"></g>
-        </svg>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <input
-            style={{ flex: 'auto' }}
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={weight}
-            onChange={(e) => this.setState({ weight: e.target.value })}
-            className="slider"
-            id="myRange"
-          ></input>
-          <span className="tangle ui orange label">
-            {Number(weight).toFixed(1)}
-          </span>
-        </div>
-      </div>
-    );
-  }
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb />
+        </Slider>
+        <NumberInput onChange={(_, value) => setWeight(value)} {...inputProps}>
+          <NumberInputField />
+          <NumberInputStepper>
+            <NumberIncrementStepper />
+            <NumberDecrementStepper />
+          </NumberInputStepper>
+        </NumberInput>
+      </Box>
+    </Box>
+  );
 }
