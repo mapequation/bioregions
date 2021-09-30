@@ -29,14 +29,14 @@ const LandRenderer = observer(function LandRenderer({
   width,
   height,
 }: RendererProps) {
-  const { projectionStore, landStore, speciesStore } = useStore();
+  const { mapStore, landStore, speciesStore } = useStore();
 
   if (ctx == null) {
     return null;
   }
 
   const { land110m, land50m } = landStore;
-  const { projection } = projectionStore;
+  const { projection } = mapStore;
 
   const { pointCollection } = speciesStore;
 
@@ -64,7 +64,7 @@ const LandRenderer = observer(function LandRenderer({
     ctx.fill();
   };
 
-  if (projectionStore.isZooming) {
+  if (mapStore.isZooming) {
     render(land110m);
   } else {
     render(land50m);
@@ -80,7 +80,7 @@ export default observer(function WorldMap({
 }: WorldMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
-  const { projectionStore } = useStore();
+  const { mapStore } = useStore();
 
   useEffect(() => {
     if (canvasRef.current === null) {
@@ -94,8 +94,9 @@ export default observer(function WorldMap({
     }
 
     setContext(ctx);
+    mapStore.setContext(ctx);
 
-    const canvasZoom = zoom(projectionStore.projection) as d3Zoom.ZoomBehavior<
+    const canvasZoom = zoom(mapStore.projection) as d3Zoom.ZoomBehavior<
       HTMLCanvasElement,
       CanvasDatum
     >;
@@ -103,16 +104,16 @@ export default observer(function WorldMap({
     const canvas = select<HTMLCanvasElement, any>(canvasRef.current);
 
     canvasZoom
-      .on('zoom.render', () => projectionStore.onZoom())
-      .on('end.render', () => projectionStore.onZoomEnd());
+      .on('zoom.render', () => mapStore.onZoom())
+      .on('end.render', () => mapStore.onZoomEnd());
 
     canvasZoom(canvas);
-  }, [projectionStore]);
+  }, [mapStore]);
 
   return (
     <div className="world-map">
       <canvas width={width} height={height} ref={canvasRef} />
-      <LandRenderer ctx={context} width={width} height={height} />
+      {/* <LandRenderer ctx={context} width={width} height={height} /> */}
     </div>
   );
 });

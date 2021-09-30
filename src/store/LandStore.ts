@@ -43,5 +43,7 @@ export default class LandStore {
     // console.log('geojson:', geojson);
     // this.land110m = geojson;
     this.loaded = true;
+    console.log('mapStore.render()');
+    this.rootStore.mapStore.render();
   }
 }

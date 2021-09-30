@@ -87,7 +87,7 @@ export default class SpeciesStore {
     const binner = new QuadtreeGeoBinner();
 
     console.log('Stream...');
-    const batchSize = 10000;
+    // const batchSize = 10000;
 
     const loader = this.loadData((items) => {
       for (let item of items) {
@@ -97,9 +97,10 @@ export default class SpeciesStore {
         );
         this.pointCollection.features.push(pointFeature);
         binner.addFeature(pointFeature);
-        if (this.pointCollection.features.length % batchSize === 0) {
-          this.updatePointCollection();
-        }
+        // if (this.pointCollection.features.length % batchSize === 0) {
+        //   this.updatePointCollection();
+        // }
+        this.rootStore.mapStore.renderPoint(item.longitude, item.latitude);
       }
     });
 
