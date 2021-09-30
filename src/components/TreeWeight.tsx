@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  Box,
+  Flex,
   Slider,
   SliderTrack,
   SliderFilledTrack,
@@ -11,13 +11,14 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
 } from '@chakra-ui/react';
+import { extent, range, map, zip } from 'd3';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
 
 export default function TreeWeight() {
   const [weight, setWeight] = useState(0.5);
-  const [width, setWidth] = useState(400);
-  const [height, setHeight] = useState(250);
+  const width = 400;
+  const height = 250;
 
   const inputProps = {
     min: 0,
@@ -26,24 +27,18 @@ export default function TreeWeight() {
     value: weight,
   };
 
-  const data: [number, number][] = [];
   const exp1 = (x: number) => Math.exp(x + 1) - Math.E;
   const w = exp1(exp1(weight));
+  const f = (x: number) => x * Math.exp(w * (x - 1));
 
-  for (let x = 0; x <= 1; x = x + 0.001) {
-    data.push([x, x * Math.exp(w * (x - 1))]);
-  }
-
-  const domain: [number, number] = [
-    Math.min(data[0][0], data[data.length - 1][0]),
-    Math.max(data[0][0], data[data.length - 1][0]),
-  ];
+  const x = range(0, 1, 1000);
+  const y = map(x, f);
+  const data = zip(x, y) as [number, number][];
+  const domain = extent(x) as [number, number];
 
   return (
-    <Box d="flex" width={400} flexDirection="column" p={4}>
-      <Box
-        as="svg"
-        d="flex"
+    <Flex width={400} flexDirection="column" p={4}>
+      <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox={`-40 -20 ${width + 70} ${height + 70}`}
         width={width}
@@ -64,8 +59,20 @@ export default function TreeWeight() {
           height={height}
           strokeWidth="1.5"
         />
-      </Box>
-      <Box d="flex">
+      </svg>
+      <Flex>
+        <NumberInput
+          maxW="100px"
+          mr={2}
+          onChange={(_, value) => setWeight(value)}
+          {...inputProps}
+        >
+          <NumberInputField />
+          <NumberInputStepper>
+            <NumberIncrementStepper />
+            <NumberDecrementStepper />
+          </NumberInputStepper>
+        </NumberInput>
         <Slider
           aria-label="weight"
           onChange={(weight) => setWeight(weight)}
@@ -76,14 +83,7 @@ export default function TreeWeight() {
           </SliderTrack>
           <SliderThumb />
         </Slider>
-        <NumberInput onChange={(_, value) => setWeight(value)} {...inputProps}>
-          <NumberInputField />
-          <NumberInputStepper>
-            <NumberIncrementStepper />
-            <NumberDecrementStepper />
-          </NumberInputStepper>
-        </NumberInput>
-      </Box>
-    </Box>
+      </Flex>
+    </Flex>
   );
 }

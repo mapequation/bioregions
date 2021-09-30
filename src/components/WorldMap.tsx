@@ -1,31 +1,32 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { observer } from 'mobx-react';
+import { useStore } from '../store/';
+// const initialCoordinates = [52.53102, 13.3848];
+// const initialZoomLevel = 5;
+// const minZoomLevel = 3;
+// const maxZoomLevel = 10;
 
-function WorldMap() {
-  const [value, setValue] = useState(-1);
+export default observer(function WorldMap() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const store = useStore();
 
   useEffect(() => {
-    setValue(2);
-    console.log('useEffect sets value to 2');
-  }, [value]);
+    const onWindowResize = () => {
+      // console.log(window.innerWidth, window.innerHeight)
+    };
+    window.addEventListener('resize', onWindowResize);
 
-  useLayoutEffect(() => {
-    setValue(1);
-    console.log('useLayoutEffect sets value to 1');
-  }, [value]);
+    return () => window.removeEventListener('resize', onWindowResize);
+  }, []);
+
+  useEffect(() => {
+    console.log('Render land110m:', store.landStore.land110m);
+  }, [store.landStore.land110m]);
 
   return (
-    <>
-      <button
-        onClick={() => {
-          setValue(0);
-          console.log('onClick sets value to 0');
-        }}
-      >
-        Update Data
-      </button>
-      <div>{value}</div>
-    </>
+    <div className="WorldMap">
+      <div>Land loaded: {store.landStore.loaded ? 'true' : 'false'}</div>
+      <canvas ref={canvasRef} />
+    </div>
   );
-}
-
-export default WorldMap;
+});

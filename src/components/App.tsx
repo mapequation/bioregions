@@ -1,5 +1,6 @@
 import './App.css';
 import TreeWeight from './TreeWeight';
+import WorldMap from './WorldMap';
 
 export default function App() {
   return (
@@ -7,6 +8,7 @@ export default function App() {
       <h1>Infomap Bioregions</h1>
 
       <TreeWeight />
+      <WorldMap />
     </>
   );
 }
