@@ -16,6 +16,8 @@ export default class MapStore {
   geoPath: d3.GeoPath | null = null;
   width: number = 800;
   height: number = 600;
+  renderPointIndex: number = 0;
+  batchSize: number = 5000;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -29,6 +31,10 @@ export default class MapStore {
       onZoom: action,
       onZoomEnd: action,
     });
+  }
+
+  get features() {
+    return this.rootStore.speciesStore.pointCollection.features;
   }
 
   renderLand() {
@@ -71,13 +77,27 @@ export default class MapStore {
     this._renderPoint(position, this.context2d);
   }
 
+  private _renderPoints() {
+    const { features } = this;
+    const endIndex = Math.min(
+      this.renderPointIndex + this.batchSize,
+      features.length,
+    );
+    for (let i = this.renderPointIndex; i < endIndex; ++i) {
+      this._renderPoint(features[i].geometry.coordinates, this.context2d!);
+    }
+    this.renderPointIndex = endIndex;
+    if (this.renderPointIndex < features.length) {
+      requestAnimationFrame(() => this._renderPoints());
+    }
+  }
+
   renderPoints() {
-    if (this.context2d === null) {
+    if (this.context2d === null || this.features.length === 0) {
       return;
     }
-    this.rootStore.speciesStore.pointCollection.features.forEach((point) => {
-      this._renderPoint(point.geometry.coordinates, this.context2d!);
-    });
+    this.renderPointIndex = 0;
+    this._renderPoints();
   }
 
   render() {
