@@ -1,15 +1,9 @@
 import { GeoProjection } from 'd3';
-import { BBox, Feature, GeoJsonProperties, Polygon, Point } from 'geojson';
+import { BBox, Feature, GeoJsonProperties, Polygon } from 'geojson';
 import { area } from './geomath';
+import type { PointFeature } from '../store/SpeciesStore';
 
 type VisitCallback = (node: Node) => true | void;
-
-export interface SpeciesProperties {
-  species: string;
-  [key: string]: any;
-}
-
-type SpeciesFeature = Feature<Point, SpeciesProperties>;
 
 export class Node implements Feature<Polygon> {
   x1: number; // west
@@ -18,7 +12,7 @@ export class Node implements Feature<Polygon> {
   y2: number; // north
   visible: boolean;
   isLeaf: boolean = true;
-  features: SpeciesFeature[] = [];
+  features: PointFeature[] = [];
   parent: Node | null = null;
   private children: [
     Node | undefined,
@@ -116,7 +110,7 @@ export class Node implements Feature<Polygon> {
   }
 
   add(
-    feature: SpeciesFeature,
+    feature: PointFeature,
     maxNodeSizeLog2: number,
     minNodeSizeLog2: number,
     nodeCapacity: number,
@@ -161,7 +155,7 @@ export class Node implements Feature<Polygon> {
   // Recursively inserts the specified point or polygon into descendants of
   // this node.
   private addChild(
-    feature: SpeciesFeature,
+    feature: PointFeature,
     maxNodeSizeLog2: number,
     minNodeSizeLog2: number,
     nodeCapacity: number,
@@ -231,7 +225,7 @@ export class Node implements Feature<Polygon> {
       this.features.length === 0 &&
       nonEmptyChildren.length < 4;
 
-    const aggregatedFeatures: SpeciesFeature[] = [];
+    const aggregatedFeatures: PointFeature[] = [];
     nonEmptyChildren.forEach((child: Node) =>
       child
         ?.patchPartiallyEmptyNodes(maxNodeSizeLog2)
@@ -265,7 +259,7 @@ export class Node implements Feature<Polygon> {
       this.sizeLog2 <= maxNodeSizeLog2 &&
       (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
 
-    const aggregatedFeatures: SpeciesFeature[] = [];
+    const aggregatedFeatures: PointFeature[] = [];
     nonEmptyChildren.forEach((child) =>
       child
         ?.patchSparseNodes(maxNodeSizeLog2, lowerThreshold)
@@ -404,7 +398,7 @@ export class QuadtreeGeoBinner {
     return this.maxNodeSizeLog2 - Math.log2(this.scale);
   }
 
-  addFeature(feature: SpeciesFeature) {
+  addFeature(feature: PointFeature) {
     this.root?.add(
       feature,
       this.maxSizeLog2,
@@ -413,7 +407,7 @@ export class QuadtreeGeoBinner {
     );
   }
 
-  addFeatures(features: SpeciesFeature[]) {
+  addFeatures(features: PointFeature[]) {
     features.forEach((feature) => this.addFeature(feature));
     return this;
   }

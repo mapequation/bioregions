@@ -1,18 +1,19 @@
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { makeObservable, observable } from 'mobx';
+import type RootStore from './RootStore';
 
 // const URL_LAND_50m = 'https://cdn.jsdelivr.net/npm/world-atlas@2/land-50m.json';
 // const URL_LAND_110m =
 //   'https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json';
 
 export default class LandStore {
-  rootStore: any = null;
+  rootStore: RootStore;
   land50m: d3.GeoPermissibleObjects | null = null;
   land110m: d3.GeoPermissibleObjects | null = null;
   loaded: boolean = false;
 
-  constructor(rootStore: any) {
+  constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
     makeObservable(this, {
