@@ -19,10 +19,58 @@ type WorldMapProps = {
 };
 
 type RendererProps = {
-  ctx: CanvasRenderingContext2D;
+  ctx?: CanvasRenderingContext2D | null;
+  width: number;
+  height: number;
 };
 
-const LandRenderer = observer(function LandRenderer({ ctx }: RendererProps) {
+const LandRenderer = observer(function LandRenderer({
+  ctx,
+  width,
+  height,
+}: RendererProps) {
+  const { projectionStore, landStore, speciesStore } = useStore();
+
+  if (ctx == null) {
+    return null;
+  }
+
+  const { land110m, land50m } = landStore;
+  const { projection } = projectionStore;
+
+  const { pointCollection } = speciesStore;
+
+  const path = d3.geoPath(projection, ctx);
+  const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
+
+  const renderPoints = (points: PointFeatureCollection) =>
+    points.features.forEach((point) => {
+      const [x, y] = projection(
+        point.geometry.coordinates as [number, number],
+      )!;
+      ctx.fillStyle = 'red';
+      ctx.fillRect(x, y, 2, 2);
+    });
+
+  const render = (land: any) => {
+    ctx.clearRect(0, 0, width, height);
+    ctx.beginPath();
+    path(sphere);
+    ctx.fillStyle = 'AliceBlue';
+    ctx.fill();
+    ctx.beginPath();
+    path(land);
+    ctx.fillStyle = '#777';
+    ctx.fill();
+  };
+
+  if (projectionStore.isZooming) {
+    render(land110m);
+  } else {
+    render(land50m);
+    renderPoints(pointCollection);
+  }
+
   return null;
 });
 
@@ -31,56 +79,8 @@ export default observer(function WorldMap({
   height = 600,
 }: WorldMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [context, setContext] = useState(null);
-  const store = useStore();
-
-  // useEffect(() => {
-  //   const onWindowResize = () => {
-  //     // console.log(window.innerWidth, window.innerHeight)
-  //   };
-  //   window.addEventListener('resize', onWindowResize);
-
-  //   return () => window.removeEventListener('resize', onWindowResize);
-  // }, []);
-
-  const { land110m, land50m } = store.landStore;
-  const { pointCollection } = store.speciesStore;
-
-  const projection = 'geoOrthographic';
-  const geoProjection: d3.GeoProjection = d3[projection]().precision(0.1)!;
-
-  const getPath = (ctx: CanvasRenderingContext2D) =>
-    d3.geoPath(geoProjection, ctx);
-
-  const getPointRenderer =
-    (ctx: CanvasRenderingContext2D) => (points: PointFeatureCollection) => {
-      points.features.forEach((point) => {
-        const [x, y] = geoProjection(
-          point.geometry.coordinates as [number, number],
-        )!;
-        ctx.fillStyle = 'red';
-        ctx.fillRect(x, y, 2, 2);
-      });
-    };
-
-  const getLandRenderer =
-    (ctx: CanvasRenderingContext2D, path: d3.GeoPath) => (land: any) => {
-      ctx.clearRect(0, 0, width, height);
-      ctx.beginPath();
-      path(sphere);
-      ctx.fillStyle = 'AliceBlue';
-      ctx.fill();
-      ctx.beginPath();
-      path(land);
-      ctx.fillStyle = '#777';
-      ctx.fill();
-    };
-
-  const canvasZoom = zoom(geoProjection) as d3Zoom.ZoomBehavior<
-    HTMLCanvasElement,
-    CanvasDatum
-  >;
-  const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
+  const [context, setContext] = useState<CanvasRenderingContext2D | null>(null);
+  const { projectionStore } = useStore();
 
   useEffect(() => {
     if (canvasRef.current === null) {
@@ -93,30 +93,26 @@ export default observer(function WorldMap({
       return;
     }
 
-    const path = getPath(ctx);
+    setContext(ctx);
+
+    const canvasZoom = zoom(projectionStore.projection) as d3Zoom.ZoomBehavior<
+      HTMLCanvasElement,
+      CanvasDatum
+    >;
+
     const canvas = select<HTMLCanvasElement, any>(canvasRef.current);
-    const renderPoints = getPointRenderer(ctx);
-    const render = getLandRenderer(ctx, path);
 
     canvasZoom
-      .on('zoom.render', () => render(land110m))
-      .on('end.render', () => {
-        render(land50m);
-        renderPoints(pointCollection);
-      });
+      .on('zoom.render', () => projectionStore.onZoom())
+      .on('end.render', () => projectionStore.onZoomEnd());
 
     canvasZoom(canvas);
-    render(land50m);
-    renderPoints(pointCollection);
-
-    // console.log('Render land...');
-  }, [width, height, land110m, land50m, pointCollection]);
+  }, [projectionStore]);
 
   return (
     <div className="world-map">
-      <div>Land loaded: {store.landStore.loaded ? 'true' : 'false'}</div>
-      <div>Species loaded: {store.speciesStore.loaded ? 'true' : 'false'}</div>
       <canvas width={width} height={height} ref={canvasRef} />
+      <LandRenderer ctx={context} width={width} height={height} />
     </div>
   );
 });
