@@ -7,8 +7,8 @@ export default function App() {
     <>
       <h1>Infomap Bioregions</h1>
 
-      <TreeWeight />
       <WorldMap />
+      <TreeWeight />
     </>
   );
 }

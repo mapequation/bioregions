@@ -51,7 +51,7 @@ export default class Store {
     this.result = 10;
     // this.landStore = new LandStore(this);
 
-    this.loadDataLayer().catch(console.error);
+    // this.loadDataLayer().catch(console.error);
   }
 
   private async *loadData(
