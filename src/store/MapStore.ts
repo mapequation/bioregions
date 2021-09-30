@@ -55,27 +55,28 @@ export default class MapStore {
     ctx.fill();
   }
 
-  renderPoint(long: number, lat: number) {
+  private _renderPoint(
+    position: [long: number, lat: number],
+    ctx: CanvasRenderingContext2D,
+  ) {
+    const [x, y] = this.projection(position)!;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(x, y, 2, 2);
+  }
+
+  renderPoint(position: [long: number, lat: number]) {
     if (this.context2d === null) {
       return;
     }
-    const ctx = this.context2d;
-    const [x, y] = this.projection([long, lat])!;
-    ctx.fillStyle = 'red';
-    ctx.fillRect(x, y, 2, 2);
+    this._renderPoint(position, this.context2d);
   }
 
   renderPoints() {
     if (this.context2d === null) {
       return;
     }
-    const ctx = this.context2d;
     this.rootStore.speciesStore.pointCollection.features.forEach((point) => {
-      const [x, y] = this.projection(
-        point.geometry.coordinates as [number, number],
-      )!;
-      ctx.fillStyle = 'red';
-      ctx.fillRect(x, y, 2, 2);
+      this._renderPoint(point.geometry.coordinates, this.context2d!);
     });
   }
 

@@ -4,7 +4,7 @@ import { spawn, Thread, Worker } from 'threads';
 import { QuadtreeGeoBinner, Node } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import Infomap from '@mapequation/infomap';
-import { Feature, FeatureCollection, Point } from 'geojson';
+import type { Feature, FeatureCollection, Point } from '../types/geojson';
 
 // export type Point = [number, number];
 
@@ -100,7 +100,7 @@ export default class SpeciesStore {
         // if (this.pointCollection.features.length % batchSize === 0) {
         //   this.updatePointCollection();
         // }
-        this.rootStore.mapStore.renderPoint(item.longitude, item.latitude);
+        this.rootStore.mapStore.renderPoint(pointFeature.geometry.coordinates);
       }
     });
 

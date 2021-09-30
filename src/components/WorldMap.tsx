@@ -45,9 +45,7 @@ const LandRenderer = observer(function LandRenderer({
 
   const renderPoints = (points: PointFeatureCollection) =>
     points.features.forEach((point) => {
-      const [x, y] = projection(
-        point.geometry.coordinates as [number, number],
-      )!;
+      const [x, y] = projection(point.geometry.coordinates)!;
       ctx.fillStyle = 'red';
       ctx.fillRect(x, y, 2, 2);
     });
