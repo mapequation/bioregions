@@ -3,7 +3,6 @@ import { action, makeObservable, observable } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { QuadtreeGeoBinner, Node } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
-import Infomap from '@mapequation/infomap';
 import type { Feature, FeatureCollection, Point } from '../types/geojson';
 
 // export type Point = [number, number];
@@ -46,6 +45,7 @@ export default class SpeciesStore {
   rootStore: RootStore;
   loaded: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
+  binner: QuadtreeGeoBinner = new QuadtreeGeoBinner();
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -84,10 +84,9 @@ export default class SpeciesStore {
   }
 
   async loadSpecies() {
-    const binner = new QuadtreeGeoBinner();
-
     console.log('Stream...');
     // const batchSize = 10000;
+    const { mapStore } = this.rootStore;
 
     const loader = this.loadData((items) => {
       for (let item of items) {
@@ -96,113 +95,34 @@ export default class SpeciesStore {
           { name: item.species },
         );
         this.pointCollection.features.push(pointFeature);
-        binner.addFeature(pointFeature);
+        this.binner.addFeature(pointFeature);
         // if (this.pointCollection.features.length % batchSize === 0) {
         //   this.updatePointCollection();
         // }
-        this.rootStore.mapStore.renderPoint(pointFeature.geometry.coordinates);
+        if (mapStore.renderType === 'raw') {
+          mapStore.renderPoint(pointFeature.geometry.coordinates);
+        }
       }
     });
 
     await loader.next(); // Waits until streaming is done
     this.updatePointCollection();
+    mapStore.render();
 
-    const cells = binner.cellsNonEmpty();
+    const cells = this.binner.cellsNonEmpty();
     console.log('Done binning!', cells);
     console.log(
       'Leaf cells:',
       cells.filter((cell) => cell.isLeaf),
     );
-    console.log('binner:', binner);
+    console.log('binner:', this.binner);
     console.log('point collection:', this.pointCollection);
     console.log(
       'speciesTopList:',
       cells.map((cell) => cell.speciesTopList),
     );
 
-    const m = new Map<string, Set<string>>();
-
-    cells.forEach((cell) => {
-      cell.speciesTopList.forEach(({ species }) => {
-        if (!m.has(species)) {
-          m.set(species, new Set());
-        }
-
-        const ids = m.get(species);
-        ids?.add(cell.id);
-      });
-    });
-
-    let nodeId = 0;
-    let network = '*Vertices\n';
-
-    let nodeMap = new Map<string, number>();
-
-    for (let species of m.keys()) {
-      let id = nodeId++;
-      nodeMap.set(species, id);
-      network += `${id} "${species}"\n`;
-    }
-
-    let bipartiteStartId = nodeId;
-
-    for (let cell of cells) {
-      let id = nodeId++;
-      nodeMap.set(cell.id, id);
-      network += `${id} "${cell.id}"\n`;
-    }
-
-    network += `*Bipartite ${bipartiteStartId}\n`;
-
-    for (let each of m.entries()) {
-      for (let cell of each[1].values()) {
-        network += `${nodeMap.get(each[0])} ${nodeMap.get(cell)}\n`;
-      }
-    }
-
-    //console.log(network);
-
-    try {
-      const { json } = await new Infomap()
-        .on('data', (output) => console.log(output))
-        .runAsync({
-          network,
-          args: '-o json --silent',
-        });
-
-      console.log(json);
-    } catch (err) {
-      console.log(err);
-    }
-
-    const colorToRGBArray = (hex: string) =>
-      hex.match(/[0-9a-f]{2}/g)?.map((x) => parseInt(x, 16));
-    const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
-      number,
-      number,
-    ];
-    const domainMax = domainExtent[1];
-    const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-    domain.push(domainMax);
-    const heatmapOpacityScale = d3
-      .scaleLog()
-      .domain(domainExtent)
-      .range([0, 8]);
-    const colorRange = [
-      '#ffffcc',
-      '#ffeda0',
-      '#fed976',
-      '#feb24c',
-      '#fd8d3c',
-      '#fc4e2a',
-      '#e31a1c',
-      '#bd0026',
-      '#800026',
-    ]; // Colorbrewer YlOrRd
-    const heatmapColor = (d: Node) =>
-      colorToRGBArray(
-        colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))],
-      );
+    await this.rootStore.infomapStore.runInfomap(cells);
 
     this.loaded = true;
   }

@@ -31,7 +31,7 @@ export default function TreeWeight() {
   const w = exp1(exp1(weight));
   const f = (x: number) => x * Math.exp(w * (x - 1));
 
-  const x = range(0, 1, 1000);
+  const x = range(0, 1, 0.001);
   const y = map(x, f);
   const data = zip(x, y) as [number, number][];
   const domain = extent(x) as [number, number];

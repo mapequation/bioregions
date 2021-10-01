@@ -1,5 +1,5 @@
 import { GeoProjection } from 'd3';
-import { BBox, Feature, GeoJsonProperties, Polygon } from 'geojson';
+import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
 import type { PointFeature } from '../store/SpeciesStore';
 
@@ -20,12 +20,12 @@ export class Node implements Feature<Polygon> {
     Node | undefined,
     Node | undefined,
   ] = [undefined, undefined, undefined, undefined];
-  clusterId: number = -1;
+  bioregionId: number = -1;
   path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
   private _recalcStats: boolean = true;
-  private _speciesTopList: { count: number; species: string }[] = [];
+  private _speciesTopList: { count: number; name: string }[] = [];
   // @ts-ignore
   type = 'Feature';
 
@@ -80,10 +80,15 @@ export class Node implements Feature<Polygon> {
       type: 'Polygon',
       coordinates: [
         [
+          // [this.x1, this.y1],
+          // [this.x2, this.y1],
+          // [this.x2, this.y2],
+          // [this.x1, this.y2],
+          // [this.x1, this.y1],
           [this.x1, this.y1],
-          [this.x2, this.y1],
-          [this.x2, this.y2],
           [this.x1, this.y2],
+          [this.x2, this.y2],
+          [this.x2, this.y1],
           [this.x1, this.y1],
         ],
       ],
@@ -276,12 +281,12 @@ export class Node implements Feature<Polygon> {
   calcStats() {
     const speciesMap: Map<string, number> = new Map();
     for (let feature of this.features) {
-      const { species } = feature.properties;
-      speciesMap.set(species, (speciesMap.get(species) ?? 0) + 1);
+      const { name } = feature.properties;
+      speciesMap.set(name, (speciesMap.get(name) ?? 0) + 1);
     }
 
     this._speciesTopList = Array.from(speciesMap.entries())
-      .map(([species, count]) => ({ count, species }))
+      .map(([name, count]) => ({ count, name }))
       .sort((a, b) => (a.count > b.count ? -1 : 1));
 
     this._recalcStats = false;
@@ -300,6 +305,8 @@ export class QuadtreeGeoBinner {
   lowerThreshold: number = 0;
   root: Node | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
+  private _cells: Node[] = [];
+  private _cellsNeedUpdate: boolean = true;
 
   constructor() {
     this.initExtent();
@@ -317,6 +324,13 @@ export class QuadtreeGeoBinner {
 
   private initRoot() {
     this.root = new Node(this.extent, this.maxNodeSizeLog2);
+  }
+
+  get cells() {
+    if (this._cellsNeedUpdate) {
+      this.generateCells();
+    }
+    return this._cells;
   }
 
   /**
@@ -405,6 +419,7 @@ export class QuadtreeGeoBinner {
       this.minSizeLog2,
       this.nodeCapacity,
     );
+    this._cellsNeedUpdate = true;
   }
 
   addFeatures(features: PointFeature[]) {
@@ -428,13 +443,13 @@ export class QuadtreeGeoBinner {
   }
 
   /**
-   * Get all bins less than maxNodeSizeLog2
+   * Generate all bins less than maxNodeSizeLog2
    * @param patchSparseNodes {Boolean} Keep parent cell behind sub-cells if
    * some but not all four sub-cells get the minimum number of records to be
    * included. Default false.
    * @return an Array of quadtree nodes
    */
-  cells(patchSparseNodes = false): Node[] {
+  generateCells(patchSparseNodes = false): Node[] {
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
     }
@@ -448,10 +463,24 @@ export class QuadtreeGeoBinner {
       nodes.push(node);
     });
 
+    this._cells = nodes;
+    this._cellsNeedUpdate = false;
     return nodes;
   }
 
-  static renderer(projection: GeoProjection) {
+  visitWithinThresholds(callback: VisitCallback) {
+    this.visitNonEmpty((node: Node) => {
+      // Skip biggest non-empty nodes if its number of features are below the lower threshold
+      if (node.numFeatures < this.lowerThreshold) {
+        return true;
+      }
+      if (callback(node)) {
+        return true;
+      }
+    });
+  }
+
+  static getSVGRenderer(projection: GeoProjection) {
     return (d: Node) =>
       'M' +
       [

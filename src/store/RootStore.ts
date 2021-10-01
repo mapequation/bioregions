@@ -1,11 +1,13 @@
+import MapStore from './MapStore';
 import LandStore from './LandStore';
 import SpeciesStore from './SpeciesStore';
-import MapStore from './MapStore';
+import InfomapStore from './InfomapStore';
 
 export default class Store {
+  mapStore = new MapStore(this);
   landStore = new LandStore(this);
   speciesStore = new SpeciesStore(this);
-  mapStore = new MapStore(this);
+  infomapStore = new InfomapStore(this);
 
   constructor() {
     console.log('Creating root store...');
