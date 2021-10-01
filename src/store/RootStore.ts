@@ -8,8 +8,4 @@ export default class Store {
   landStore = new LandStore(this);
   speciesStore = new SpeciesStore(this);
   infomapStore = new InfomapStore(this);
-
-  constructor() {
-    console.log('Creating root store...');
-  }
 }

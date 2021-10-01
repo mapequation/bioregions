@@ -33,17 +33,7 @@ export default class LandStore {
     this.land110m = topojson.feature(land110m, land110m.objects.land);
     this.land50m = topojson.feature(land50m, land50m.objects.land);
 
-    // const res = await fetch('maps/physical/land.topojson');
-    // if (!res.ok) {
-    //   console.error(`Failed to load land: ${res.statusText}`);
-    //   return;
-    // }
-    // const land = await res.json();
-    // const geojson = topojson.feature(land, land.objects.land);
-    // console.log('geojson:', geojson);
-    // this.land110m = geojson;
     this.loaded = true;
-    console.log('mapStore.render()');
     this.rootStore.mapStore.render();
   }
 }

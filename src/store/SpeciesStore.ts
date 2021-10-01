@@ -124,6 +124,7 @@ export default class SpeciesStore {
 
     await this.rootStore.infomapStore.runInfomap(cells);
 
+    mapStore.render();
     this.loaded = true;
   }
 }

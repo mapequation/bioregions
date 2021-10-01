@@ -31,24 +31,24 @@ export default class MapStore {
   rootStore: RootStore;
   loaded: boolean = false;
   isZooming: boolean = false;
-  
-  projectionName: Projection = PROJECTIONS[0];
+
+  projectionName: Projection = PROJECTIONS[1];
   projection = d3[this.projectionName]().precision(0.1)!;
-  
+
   canvas: HTMLCanvasElement | null = null;
   svg: SVGSVGElement | null = null;
   context2d: CanvasRenderingContext2D | null = null;
-  
+
   geoPath: d3.GeoPath | null = null;
-  
+
   width: number = 800;
   height: number = 600;
-  
+
   renderPointIndex: number = 0;
   batchSize: number = 5000;
-  
+
   renderType: RenderType = 'grid';
-  gridColorBy: GridColorBy = 'records';  
+  gridColorBy: GridColorBy = 'modules';
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -58,6 +58,7 @@ export default class MapStore {
       isZooming: observable,
       projectionName: observable,
       renderType: observable,
+      gridColorBy: observable,
       onZoom: action,
       onZoomEnd: action,
     });
@@ -155,36 +156,70 @@ export default class MapStore {
     // this.renderLand({ clip: true });
 
     const { cells } = this.binner;
+    const { tree } = this.rootStore.infomapStore;
 
-    //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
-    const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
-      number,
-      number,
-    ];
-    const domainMax = domainExtent[1];
-    const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-    domain.push(domainMax);
-    const heatmapOpacityScale = d3
-      .scaleLog()
-      .domain(domainExtent)
-      .range([0, 8]);
-    const colorRange = [
-      '#ffffcc',
-      '#ffeda0',
-      '#fed976',
-      '#feb24c',
-      '#fd8d3c',
-      '#fc4e2a',
-      '#e31a1c',
-      '#bd0026',
-      '#800026',
-    ]; // Colorbrewer YlOrRd
-    const heatmapColor = (d: Node) =>
-      colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))];
+    if (this.gridColorBy === 'records' || !tree) {
+      //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
+      const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
+        number,
+        number,
+      ];
+      const domainMax = domainExtent[1];
+      const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
+      domain.push(domainMax);
+      const heatmapOpacityScale = d3
+        .scaleLog()
+        .domain(domainExtent)
+        .range([0, 8]);
+      const colorRange = [
+        '#ffffcc',
+        '#ffeda0',
+        '#fed976',
+        '#feb24c',
+        '#fd8d3c',
+        '#fc4e2a',
+        '#e31a1c',
+        '#bd0026',
+        '#800026',
+      ]; // Colorbrewer YlOrRd
+      const heatmapColor = (d: Node) =>
+        colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))];
+      cells.forEach((cell: Node) => {
+        this._renderGridCell(cell, this.context2d!, heatmapColor(cell));
+      });
+    } else {
+      const CAT_20 = [
+        '#D66F87',
+        '#BDE628',
+        '#27A3E7',
+        '#89EBC0',
+        '#A0915F',
+        '#F6BE1D',
+        '#E6B9FB',
+        '#629E47',
+        '#59B5BF',
+        '#A581A6',
+        '#AEB327',
+        '#F3D2A3',
+        '#F990CE',
+        '#869AF4',
+        '#A7D2F3',
+        '#A18C82',
+        '#E2CB74',
+        '#F3A19B',
+        '#FC739B',
+        '#DECE4D',
+      ];
+      const { numTopModules } = tree;
+      const bioregionColor = (cell: Node) => {
+        return CAT_20[cell.bioregionId % CAT_20.length];
+      };
 
-    cells.forEach((cell: Node) => {
-      this._renderGridCell(cell, this.context2d!, heatmapColor(cell));
-    });
+      console.log(numTopModules);
+      cells.forEach((cell: Node) => {
+        this._renderGridCell(cell, this.context2d!, bioregionColor(cell));
+      });
+    }
   }
 
   render() {

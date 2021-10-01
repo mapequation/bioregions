@@ -14,6 +14,8 @@ export default class InfomapStore {
     silent: true,
     output: 'json',
     twoLevel: true,
+    numTrials: 1,
+    skipAdjustBipartiteFlow: true,
   };
   tree: Tree | null = null;
 
@@ -28,12 +30,12 @@ export default class InfomapStore {
   setBioregionIds(cells: Node[]) {
     const tree = this.tree!;
     const bipartiteStartId = tree.bipartiteStartId!;
-    for (let i = bipartiteStartId; i < tree.nodes.length; ++i) {
-      const node = tree.nodes[i];
-      const cellId = i - bipartiteStartId;
-      // TODO use multilevel modules instead of path
+    tree.nodes.forEach((node) => {
+      if (node.id < bipartiteStartId) return;
+
+      const cellId = node.id - bipartiteStartId;
       cells[cellId].bioregionId = node.path[0];
-    }
+    });
   }
 
   async runInfomap(cells: Node[]) {
@@ -46,9 +48,9 @@ export default class InfomapStore {
           args: this.args,
         });
 
-      this.setBioregionIds(cells);
       console.log(json);
       this.tree = json ?? null;
+      this.setBioregionIds(cells);
     } catch (err) {
       console.log(err);
     }
