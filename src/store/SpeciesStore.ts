@@ -84,8 +84,6 @@ export default class SpeciesStore {
   }
 
   async loadSpecies() {
-    console.log('Stream...');
-    // const batchSize = 10000;
     const { mapStore } = this.rootStore;
 
     const loader = this.loadData((items) => {
@@ -94,11 +92,11 @@ export default class SpeciesStore {
           [item.longitude, item.latitude],
           { name: item.species },
         );
+
         this.pointCollection.features.push(pointFeature);
+
         this.binner.addFeature(pointFeature);
-        // if (this.pointCollection.features.length % batchSize === 0) {
-        //   this.updatePointCollection();
-        // }
+
         if (mapStore.renderType === 'raw') {
           mapStore.renderPoint(pointFeature.geometry.coordinates);
         }
@@ -110,20 +108,7 @@ export default class SpeciesStore {
     mapStore.render();
 
     const cells = this.binner.cellsNonEmpty();
-    console.log('Done binning!', cells);
-    console.log(
-      'Leaf cells:',
-      cells.filter((cell) => cell.isLeaf),
-    );
-    console.log('binner:', this.binner);
-    console.log('point collection:', this.pointCollection);
-    console.log(
-      'speciesTopList:',
-      cells.map((cell) => cell.speciesTopList),
-    );
-
     await this.rootStore.infomapStore.runInfomap(cells);
-
     mapStore.render();
     this.loaded = true;
   }

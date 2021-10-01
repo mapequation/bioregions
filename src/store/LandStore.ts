@@ -24,8 +24,6 @@ export default class LandStore {
   }
 
   async loadLandLayer() {
-    console.log('Loading land.topojson...');
-
     const [land110m, land50m] = await Promise.all([
       fetch('maps/physical/land-110m.json').then((res) => res.json()),
       fetch('maps/physical/land-50m.json').then((res) => res.json()),

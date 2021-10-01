@@ -1,4 +1,3 @@
-import * as d3 from 'd3';
 import { makeObservable, observable } from 'mobx';
 import Infomap from '@mapequation/infomap';
 import type { Tree } from '@mapequation/infomap';
@@ -27,17 +26,6 @@ export default class InfomapStore {
     });
   }
 
-  setBioregionIds(cells: Node[]) {
-    const tree = this.tree!;
-    const bipartiteStartId = tree.bipartiteStartId!;
-    tree.nodes.forEach((node) => {
-      if (node.id < bipartiteStartId) return;
-
-      const cellId = node.id - bipartiteStartId;
-      cells[cellId].bioregionId = node.path[0];
-    });
-  }
-
   async runInfomap(cells: Node[]) {
     const network = networkFromCells(cells);
     try {
@@ -48,13 +36,24 @@ export default class InfomapStore {
           args: this.args,
         });
 
-      console.log(json);
-      this.tree = json ?? null;
-      this.setBioregionIds(cells);
+      if (json) {
+        this.tree = json;
+        setBioregionIds(json, cells);
+      }
     } catch (err) {
       console.log(err);
     }
   }
+}
+
+function setBioregionIds(tree: Tree, cells: Node[]) {
+  const bipartiteStartId = tree.bipartiteStartId!;
+  tree.nodes.forEach((node) => {
+    if (node.id < bipartiteStartId) return;
+
+    const cellId = node.id - bipartiteStartId;
+    cells[cellId].bioregionId = node.path[0];
+  });
 }
 
 function networkFromCells(cells: Node[]): BipartiteNetwork {

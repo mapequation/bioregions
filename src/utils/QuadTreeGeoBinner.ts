@@ -449,7 +449,7 @@ export class QuadtreeGeoBinner {
    * included. Default false.
    * @return an Array of quadtree nodes
    */
-  generateCells(patchSparseNodes = false): Node[] {
+  generateCells(patchSparseNodes = true): Node[] {
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
     }

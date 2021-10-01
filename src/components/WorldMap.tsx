@@ -12,7 +12,6 @@ export default observer(function WorldMap({
   height = 600,
 }: WorldMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
   const { mapStore } = useStore();
 
   useEffect(() => {
@@ -20,14 +19,12 @@ export default observer(function WorldMap({
       return;
     }
 
-    mapStore.setSVG(svgRef.current!);
     mapStore.setCanvas(canvasRef.current);
   }, [mapStore]);
 
   return (
     <div>
       <canvas width={width} height={height} ref={canvasRef} />
-      <svg width={width} height={height} ref={svgRef} />
     </div>
   );
 });

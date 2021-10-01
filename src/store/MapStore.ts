@@ -32,7 +32,7 @@ export default class MapStore {
   loaded: boolean = false;
   isZooming: boolean = false;
 
-  projectionName: Projection = PROJECTIONS[1];
+  projectionName: Projection = PROJECTIONS[0];
   projection = d3[this.projectionName]().precision(0.1)!;
 
   canvas: HTMLCanvasElement | null = null;
@@ -72,7 +72,7 @@ export default class MapStore {
     return this.rootStore.speciesStore.binner;
   }
 
-  renderLand({ clip = false } = {}) {
+  renderLand({ clip = true } = {}) {
     if (this.context2d === null || !this.rootStore.landStore.loaded) {
       return;
     }
@@ -84,13 +84,12 @@ export default class MapStore {
     const path = this.geoPath!;
 
     const ctx = this.context2d;
-    if (!clip) {
-      ctx.clearRect(0, 0, this.width, this.height);
-    }
+    ctx.clearRect(0, 0, this.width, this.height);
     ctx.beginPath();
     path(sphere);
     ctx.fillStyle = 'AliceBlue';
     ctx.fill();
+
     ctx.beginPath();
     path(land);
     ctx.fillStyle = '#777';
@@ -154,7 +153,6 @@ export default class MapStore {
     }
 
     // this.renderLand({ clip: true });
-
     const { cells } = this.binner;
     const { tree } = this.rootStore.infomapStore;
 
@@ -223,13 +221,18 @@ export default class MapStore {
   }
 
   render() {
-    this.renderLand();
+    if (this.context2d === null) {
+      return;
+    }
     console.log('Render type:', this.renderType);
+    this.context2d.save();
+    this.renderLand();
     if (this.renderType === 'raw') {
       this.renderPoints();
     } else {
       this.renderGrid();
     }
+    this.context2d.restore();
   }
 
   setProjection(projection: Projection) {
@@ -293,7 +296,7 @@ export default class MapStore {
 
   onZoom() {
     this.isZooming = true;
-    this.renderLand();
+    this.renderLand({ clip: false });
   }
 
   onZoomEnd() {
