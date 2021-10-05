@@ -1,3 +1,4 @@
+import { action, makeObservable, observable } from 'mobx';
 import { GeoProjection } from 'd3';
 import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
@@ -80,11 +81,6 @@ export class Node implements Feature<Polygon> {
       type: 'Polygon',
       coordinates: [
         [
-          // [this.x1, this.y1],
-          // [this.x2, this.y1],
-          // [this.x2, this.y2],
-          // [this.x1, this.y2],
-          // [this.x1, this.y1],
           [this.x1, this.y1],
           [this.x1, this.y2],
           [this.x2, this.y2],
@@ -306,9 +302,22 @@ export class QuadtreeGeoBinner {
   root: Node | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   private _cells: Node[] = [];
-  private _cellsNeedUpdate: boolean = true;
+  cellsNeedUpdate: boolean = true;
 
   constructor() {
+    makeObservable(this, {
+      maxNodeSizeLog2: observable,
+      minNodeSizeLog2: observable,
+      nodeCapacity: observable,
+      lowerThreshold: observable,
+      cellsNeedUpdate: observable,
+      setMaxNodeSizeLog2: action,
+      setMinNodeSizeLog2: action,
+      setNodeCapacity: action,
+      setLowerThreshold: action,
+      setCellsNeedUpdate: action,
+    });
+
     this.initExtent();
     this.initRoot();
   }
@@ -327,7 +336,7 @@ export class QuadtreeGeoBinner {
   }
 
   get cells() {
-    if (this._cellsNeedUpdate) {
+    if (this.cellsNeedUpdate) {
       this.generateCells();
     }
     return this._cells;
@@ -383,6 +392,7 @@ export class QuadtreeGeoBinner {
 
   setMinNodeSizeLog2(value: number) {
     this.minNodeSizeLog2 = value;
+    console.log('setMinNodeSizeLog2:', value);
     return this;
   }
 
@@ -394,6 +404,10 @@ export class QuadtreeGeoBinner {
   setLowerThreshold(value: number) {
     this.lowerThreshold = value;
     return this;
+  }
+
+  setCellsNeedUpdate(value: boolean = true) {
+    this.cellsNeedUpdate = value;
   }
 
   visit(callback: VisitCallback) {
@@ -419,7 +433,7 @@ export class QuadtreeGeoBinner {
       this.minSizeLog2,
       this.nodeCapacity,
     );
-    this._cellsNeedUpdate = true;
+    this.setCellsNeedUpdate();
   }
 
   addFeatures(features: PointFeature[]) {
@@ -464,7 +478,7 @@ export class QuadtreeGeoBinner {
     });
 
     this._cells = nodes;
-    this._cellsNeedUpdate = false;
+    this.setCellsNeedUpdate(false);
     return nodes;
   }
 

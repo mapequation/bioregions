@@ -1,23 +1,13 @@
-import * as d3 from 'd3';
 import { action, makeObservable, observable } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
-import { QuadtreeGeoBinner, Node } from '../utils/QuadTreeGeoBinner';
+import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import type { Feature, FeatureCollection, Point } from '../types/geojson';
-
-// export type Point = [number, number];
-
-// export interface PointProps extends GeoJsonProperties {
-//   name: string,
-// }
 
 export interface PointProperties {
   name: string;
   [key: string]: any;
 }
-// export type PointProperties = GeoJsonProperties & {
-//   name: string,
-// }
 
 export type PointFeature = Feature<Point, PointProperties>;
 export type PointFeatureCollection = FeatureCollection<Point, PointProperties>;
@@ -56,7 +46,7 @@ export default class SpeciesStore {
       setPointCollection: action,
     });
 
-    this.loadSpecies().catch(console.error);
+    // this.loadSpecies().catch(console.error);
   }
 
   setPointCollection(pointCollection: PointFeatureCollection) {

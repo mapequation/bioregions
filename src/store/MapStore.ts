@@ -61,6 +61,7 @@ export default class MapStore {
       gridColorBy: observable,
       onZoom: action,
       onZoomEnd: action,
+      setProjection: action,
     });
   }
 
@@ -152,7 +153,6 @@ export default class MapStore {
       return;
     }
 
-    // this.renderLand({ clip: true });
     const { cells } = this.binner;
     const { tree } = this.rootStore.infomapStore;
 
@@ -224,14 +224,16 @@ export default class MapStore {
     if (this.context2d === null) {
       return;
     }
-    console.log('Render type:', this.renderType);
+
     this.context2d.save();
+
     this.renderLand();
     if (this.renderType === 'raw') {
       this.renderPoints();
     } else {
       this.renderGrid();
     }
+
     this.context2d.restore();
   }
 

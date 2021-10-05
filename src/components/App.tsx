@@ -1,37 +1,22 @@
+import { Container, HStack, VStack, Heading } from '@chakra-ui/react';
 import TreeWeight from './TreeWeight';
 import WorldMap from './WorldMap';
-
-import { useStore } from '../store';
-import { Select } from '@chakra-ui/react';
-import type { Projection } from '../store/MapStore';
-import { PROJECTIONS } from '../store/MapStore';
-
-function ProjectionSelect() {
-  const { mapStore } = useStore();
-
-  return (
-    <Select
-      value={mapStore.projectionName}
-      name="projection"
-      onChange={(e) => mapStore.setProjection(e.target.value as Projection)}
-    >
-      {PROJECTIONS.map((projection) => (
-        <option value={projection} key={projection}>
-          {projection}
-        </option>
-      ))}
-    </Select>
-  );
-}
+import ControlPanel from './ControlPanel';
 
 export default function App() {
   return (
-    <>
-      <h1>Infomap Bioregions</h1>
+    <Container maxW="container.xl">
+      <Heading as="h1" size="xl" color="gray.700">
+        Infomap Bioregions
+      </Heading>
 
-      <ProjectionSelect />
-      <WorldMap />
-      <TreeWeight />
-    </>
+      <HStack spacing="30px" alignItems="flex-start">
+        <ControlPanel />
+        <VStack flex={1}>
+          <WorldMap />
+          <TreeWeight />
+        </VStack>
+      </HStack>
+    </Container>
   );
 }
