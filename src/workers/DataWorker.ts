@@ -45,26 +45,20 @@ function loadPreview() {
   });
 }
 
-function loadSample() {
+function loadSample(filename: string) {
   console.log('loadSample...');
 
-  loadFile('/data/mammals_neotropics.csv', {
-    //loadFile('/data/head.csv', {
-    //preview: 500,
+  const papaArgs = {
     complete() {
       dataStream.complete();
       dataStream = new Subject();
     },
     chunk(chunk: ParseResult<any>) {
-      // for (let d of chunk.data) {
-      //   // @ts-ignore
-      //   if (d.longitude === undefined) {
-      //     console.log('!! undefined data point:', d, 'from chunk:', chunk);
-      //   }
-      // }
       dataStream.next(chunk.data);
     },
-  });
+  };
+
+  loadFile(filename, papaArgs);
 
   return 'loadSample finished';
 }

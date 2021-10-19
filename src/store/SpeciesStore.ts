@@ -45,8 +45,6 @@ export default class SpeciesStore {
       pointCollection: observable.ref,
       setPointCollection: action,
     });
-
-    // this.loadSpecies().catch(console.error);
   }
 
   setPointCollection(pointCollection: PointFeatureCollection) {
@@ -60,6 +58,7 @@ export default class SpeciesStore {
   }
 
   private async *loadData(
+    filename: string,
     getItems: (
       items: { longitude: number; latitude: number; species: string }[],
     ) => void,
@@ -68,15 +67,15 @@ export default class SpeciesStore {
 
     dataWorker.stream().subscribe(getItems);
 
-    yield dataWorker.loadSample();
+    yield dataWorker.loadSample(filename);
 
     return await Thread.terminate(dataWorker);
   }
 
-  async loadSpecies() {
+  async loadSpecies(filename: string) {
     const { mapStore } = this.rootStore;
 
-    const loader = this.loadData((items) => {
+    const loader = this.loadData(filename, (items) => {
       for (let item of items) {
         const pointFeature = createPointFeature(
           [item.longitude, item.latitude],
@@ -95,10 +94,6 @@ export default class SpeciesStore {
 
     await loader.next(); // Waits until streaming is done
     this.updatePointCollection();
-    mapStore.render();
-
-    const cells = this.binner.cellsNonEmpty();
-    await this.rootStore.infomapStore.runInfomap(cells);
     mapStore.render();
     this.loaded = true;
   }

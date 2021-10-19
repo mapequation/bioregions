@@ -16,8 +16,10 @@ interface CanvasDatum {
 
 export interface IMapRenderer { }
 
-type RenderType = 'raw' | 'grid';
-type GridColorBy = 'records' | 'modules';
+export type RenderType = 'raw' | 'grid';
+export type GridColorBy = 'records' | 'modules';
+
+type GetGridColor = (d: Node) => string;
 
 export const PROJECTIONS = [
   'geoMercator',
@@ -48,7 +50,7 @@ export default class MapStore {
   batchSize: number = 5000;
 
   renderType: RenderType = 'raw';
-  gridColorBy: GridColorBy = 'modules';
+  gridColorBy: GridColorBy = 'records';
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -62,8 +64,6 @@ export default class MapStore {
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
-      setRenderType: action,
-      setGridColorBy: action,
     });
   }
 
@@ -150,6 +150,64 @@ export default class MapStore {
     ctx.fill();
   }
 
+  private heatmapColor(): GetGridColor {
+    const { cells } = this.binner;
+
+    //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
+    const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
+      number,
+      number,
+    ];
+    const domainMax = domainExtent[1];
+
+    const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
+    domain.push(domainMax);
+
+    const heatmapOpacityScale = d3.scaleLog().domain(domainExtent).range([0, 8]);
+
+    const colorRange = [
+      '#ffffcc',
+      '#ffeda0',
+      '#fed976',
+      '#feb24c',
+      '#fd8d3c',
+      '#fc4e2a',
+      '#e31a1c',
+      '#bd0026',
+      '#800026',
+    ]; // Colorbrewer YlOrRd
+
+    return (d: Node) =>
+      colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))];
+  }
+
+  private bioregionColor(): GetGridColor {
+    const CAT_20 = [
+      '#D66F87',
+      '#BDE628',
+      '#27A3E7',
+      '#89EBC0',
+      '#A0915F',
+      '#F6BE1D',
+      '#E6B9FB',
+      '#629E47',
+      '#59B5BF',
+      '#A581A6',
+      '#AEB327',
+      '#F3D2A3',
+      '#F990CE',
+      '#869AF4',
+      '#A7D2F3',
+      '#A18C82',
+      '#E2CB74',
+      '#F3A19B',
+      '#FC739B',
+      '#DECE4D',
+    ];
+
+    return (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
+  }
+
   renderGrid() {
     if (this.context2d === null) {
       return;
@@ -158,64 +216,11 @@ export default class MapStore {
     const { cells } = this.binner;
     const { tree } = this.rootStore.infomapStore;
 
-    if (this.gridColorBy === 'records' || !tree) {
-      //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
-      const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
-        number,
-        number,
-      ];
-      const domainMax = domainExtent[1];
-      const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-      domain.push(domainMax);
-      const heatmapOpacityScale = d3
-        .scaleLog()
-        .domain(domainExtent)
-        .range([0, 8]);
-      const colorRange = [
-        '#ffffcc',
-        '#ffeda0',
-        '#fed976',
-        '#feb24c',
-        '#fd8d3c',
-        '#fc4e2a',
-        '#e31a1c',
-        '#bd0026',
-        '#800026',
-      ]; // Colorbrewer YlOrRd
-      const heatmapColor = (d: Node) =>
-        colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))];
-      cells.forEach((cell: Node) => {
-        this._renderGridCell(cell, this.context2d!, heatmapColor(cell));
-      });
-    } else {
-      const CAT_20 = [
-        '#D66F87',
-        '#BDE628',
-        '#27A3E7',
-        '#89EBC0',
-        '#A0915F',
-        '#F6BE1D',
-        '#E6B9FB',
-        '#629E47',
-        '#59B5BF',
-        '#A581A6',
-        '#AEB327',
-        '#F3D2A3',
-        '#F990CE',
-        '#869AF4',
-        '#A7D2F3',
-        '#A18C82',
-        '#E2CB74',
-        '#F3A19B',
-        '#FC739B',
-        '#DECE4D',
-      ];
-      const { numTopModules } = tree;
-      const bioregionColor = (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
+    const getGridColor = (this.gridColorBy === 'records' || !tree)
+      ? this.heatmapColor()
+      : this.bioregionColor();
 
-      console.log('num top modules:', numTopModules);
-      cells.forEach((cell: Node) => this._renderGridCell(cell, this.context2d!, bioregionColor(cell)));
-    }
+    cells.forEach((cell: Node) => this._renderGridCell(cell, this.context2d!, getGridColor(cell)));
   }
 
   render() {
@@ -233,16 +238,6 @@ export default class MapStore {
     }
 
     this.context2d.restore();
-  }
-
-  setRenderType(renderType: RenderType) {
-    this.renderType = renderType;
-    this.render();
-  }
-
-  setGridColorBy(gridColorBy: GridColorBy) {
-    this.gridColorBy = gridColorBy;
-    this.render();
   }
 
   setProjection(projection: Projection) {
