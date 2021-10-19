@@ -14,7 +14,7 @@ interface CanvasDatum {
   radius: number;
 }
 
-export interface IMapRenderer {}
+export interface IMapRenderer { }
 
 type RenderType = 'raw' | 'grid';
 type GridColorBy = 'records' | 'modules';
@@ -47,7 +47,7 @@ export default class MapStore {
   renderPointIndex: number = 0;
   batchSize: number = 5000;
 
-  renderType: RenderType = 'grid';
+  renderType: RenderType = 'raw';
   gridColorBy: GridColorBy = 'modules';
 
   constructor(rootStore: RootStore) {
@@ -62,6 +62,8 @@ export default class MapStore {
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
+      setRenderType: action,
+      setGridColorBy: action,
     });
   }
 
@@ -209,14 +211,10 @@ export default class MapStore {
         '#DECE4D',
       ];
       const { numTopModules } = tree;
-      const bioregionColor = (cell: Node) => {
-        return CAT_20[cell.bioregionId % CAT_20.length];
-      };
+      const bioregionColor = (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
 
-      console.log(numTopModules);
-      cells.forEach((cell: Node) => {
-        this._renderGridCell(cell, this.context2d!, bioregionColor(cell));
-      });
+      console.log('num top modules:', numTopModules);
+      cells.forEach((cell: Node) => this._renderGridCell(cell, this.context2d!, bioregionColor(cell)));
     }
   }
 
@@ -235,6 +233,16 @@ export default class MapStore {
     }
 
     this.context2d.restore();
+  }
+
+  setRenderType(renderType: RenderType) {
+    this.renderType = renderType;
+    this.render();
+  }
+
+  setGridColorBy(gridColorBy: GridColorBy) {
+    this.gridColorBy = gridColorBy;
+    this.render();
   }
 
   setProjection(projection: Projection) {
