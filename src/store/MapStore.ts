@@ -37,7 +37,6 @@ export const PROJECTIONNAME: Record<Projection, string> = {
 
 export default class MapStore {
   rootStore: RootStore;
-  loaded: boolean = false;
   isZooming: boolean = false;
 
   projectionName: Projection = PROJECTIONS[0];
@@ -62,7 +61,6 @@ export default class MapStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
-      loaded: observable,
       isZooming: observable,
       projectionName: observable,
       renderType: observable,
@@ -70,7 +68,17 @@ export default class MapStore {
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
+      setRenderType: action,
+      setGridColorBy: action,
     });
+  }
+
+  setRenderType(type: RenderType) {
+    this.renderType = type;
+  }
+
+  setGridColorBy(colorBy: GridColorBy) {
+    this.gridColorBy = colorBy;
   }
 
   get features() {

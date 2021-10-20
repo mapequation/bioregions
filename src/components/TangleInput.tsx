@@ -59,16 +59,16 @@ const getStep = (
     return value === 0
       ? 1
       : Math.pow(
-          10,
-          Math.floor(
-            Math.log10(
-              Math.max(
-                1,
-                Math.abs(value) + (sign * Math.sign(value) < 0 ? -1 : 0),
-              ),
+        10,
+        Math.floor(
+          Math.log10(
+            Math.max(
+              1,
+              Math.abs(value) + (sign * Math.sign(value) < 0 ? -1 : 0),
             ),
           ),
-        ) * step;
+        ),
+      ) * step;
   }
   return step;
 };
@@ -127,14 +127,6 @@ export default function TangleInput({
       const { min, max } = refState.current;
       nextValue = clamp(nextValue, min, max);
 
-      // console.log(
-      //   `Pressed, startX: ${startX} (${
-      //     refState.current.startX
-      //   }), lastX: ${lastX}, pixel change: ${pixelChange}, numSteps: ${numSteps}, currentStep: ${currentStep}, nextValue: ${currentValue} + ${numSteps} * ${currentStep} = ${
-      //     currentValue + numSteps * currentStep
-      //   } (${nextValue}), min: ${min}, max: ${max}`,
-      // );
-
       // Adjust current step size if log step
       if (logScale) {
         let nextStep = getStep(nextValue, step, logScale, numSteps);
@@ -167,7 +159,7 @@ export default function TangleInput({
 
   const onWindowMouseUp = useCallback(
     (e: MouseEvent) => {
-      console.log('onMouseUp', refState.current.currentValue);
+      //console.log('onMouseUp', refState.current.currentValue);
       e.preventDefault();
       window.removeEventListener('mousemove', onWindowMouseMove);
       window.removeEventListener('mouseup', onWindowMouseUp);
@@ -182,13 +174,13 @@ export default function TangleInput({
   const onMouseDown = useCallback(
     (e: MouseEvent) => {
       const { screenX } = e;
-      console.log('onMouseDown');
+      //console.log('onMouseDown');
       e.preventDefault();
       e.stopImmediatePropagation();
       setIsPressed(true);
       setCurrentValue(value);
       refState.current.startX = refState.current.lastX = screenX;
-      console.log('Mouse down at X:', screenX, 'value:', value);
+      //console.log('Mouse down at X:', screenX, 'value:', value);
 
       window.addEventListener('mousemove', onWindowMouseMove);
       window.addEventListener('mouseup', onWindowMouseUp);
@@ -205,16 +197,12 @@ export default function TangleInput({
       window.removeEventListener('mousemove', onWindowMouseMove);
       window.removeEventListener('mouseup', onWindowMouseUp);
       window.removeEventListener('mousedown', onWindowMouseUp);
-      // if (ref.current != null) {
-      //   ref.current.removeEventListener('mousedown', onMouseDown);
-      // }
     };
   }, [onMouseDown, onWindowMouseMove, onWindowMouseUp]);
-  // }, []);
 
   useEffect(() => {
     if (refState.current) {
-      console.log(`useEffect(min: ${min}, max: ${max})`);
+      //console.log(`useEffect(min: ${min}, max: ${max})`);
       refState.current.min = min;
       refState.current.max = max;
     }
@@ -228,9 +216,6 @@ export default function TangleInput({
 
   // isChanged compares the value between mouseDown and mouseUp
   const isChanged = currentFormattedValue !== oldFormattedValue;
-
-  // const val = isPressed ? currentValue : value;
-  // const currentStep = getStep(currentValue, step, logScale);
 
   return (
     <span
@@ -248,19 +233,3 @@ export default function TangleInput({
     </span>
   );
 }
-
-// (value: {value}, startX: {startX}, lastX: {lastX}, currentValue:{' '}
-// {currentValue}, currentStep: {currentStep}, isPressed:{' '}
-// {isPressed ? '1' : '0'}, isChanged: {isChanged ? '1' : '0'})
-
-// .tangle {
-//   cursor: ew-resize;
-// }
-
-// .tangle.tangle-pressed {
-//   opacity: 0.8;
-// }
-
-// .tangle.tangle-pressed.tangle-changed {
-//   background-color: rgb(255, 209, 209);
-// }

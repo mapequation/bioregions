@@ -1,32 +1,10 @@
 import React, { HTMLProps, useState } from "react";
 import { observer } from "mobx-react";
-import { Button, Input } from '@chakra-ui/react';
-import { Table, Tr, Td, Tbody, Thead, Th } from '@chakra-ui/react';
-import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, ModalProps } from "@chakra-ui/react";
+import { Button, Input, Collapse } from '@chakra-ui/react';
+import { Table, Tr, Td, Tbody, Thead, Th, Tfoot } from '@chakra-ui/react';
+import Modal from './Modal';
 import { useStore } from '../../store';
 
-
-type MyModalProps = {
-  header: string;
-} & ModalProps;
-
-const MyModal = ({ header, isOpen, onClose, children }: React.PropsWithChildren<MyModalProps>) => {
-  return (
-    <Modal onClose={onClose} size="xl" isOpen={isOpen}>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>{header}</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody>
-          {children}
-        </ModalBody>
-        <ModalFooter>
-          <Button onClick={onClose}>Close</Button>
-        </ModalFooter>
-      </ModalContent>
-    </Modal>
-  )
-}
 
 type ExampleDataProps = {
   onClick?: (filename: string) => void;
@@ -74,8 +52,38 @@ const LoadData = ({ onChange }: HTMLProps<HTMLInputElement>) => {
   )
 }
 
+const Preview = ({ lines }: { lines: string[] }) => {
+  const [header, ...rest] = lines;
+  return (
+    <Table size="sm" variant="simple">
+      <Thead>
+        <Tr>
+          {header.split(",").map((cell, i) => <Th key={i}>{cell}</Th>)}
+        </Tr>
+      </Thead>
+      <Tbody>
+        {rest.map((line, i) => (
+          <Tr key={i}>
+            {line.split(",").map((cell, j) => (
+              <Td key={j}>{cell}</Td>
+            ))}
+          </Tr>
+        ))}
+      </Tbody>
+      <Tfoot>
+        <Tr>
+          <Td colSpan={3}>&hellip;</Td>
+        </Tr>
+      </Tfoot>
+    </Table>
+  )
+}
+
 export default observer(function Load() {
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
+  const [isExampleDataOpen, setIsExampleDataOpen] = useState(true);
+  const [file, setFile] = useState<File>();
+  const [lines, setLines] = useState<string[]>([]);
   const { speciesStore, infomapStore } = useStore();
 
   const handleLoadDataChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,18 +91,18 @@ export default observer(function Load() {
     if (file) {
       const reader = new FileReader();
       reader.onload = () => {
-        const data = reader.result as string;
-        console.log(data);
-      };
+        const lines = reader.result!.toString().split("\n");
+        setLines(lines.slice(0, 5));
+      }
       reader.readAsText(file);
-      setIsLoadModalOpen(false);
+      setFile(file);
+      setIsExampleDataOpen(false);
     } else {
       // error
     }
   }
 
   const handleExampleDataClick = async (filename: string) => {
-    console.log(filename);
     setIsLoadModalOpen(false);
     await speciesStore.loadSpecies(filename);
     const cells = speciesStore.binner.cellsNonEmpty();
@@ -104,10 +112,16 @@ export default observer(function Load() {
   return (
     <>
       <Button onClick={() => setIsLoadModalOpen(true)}>Load</Button>
-      <MyModal header="Species data" isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)}>
+      <Modal header="Species data" isOpen={isLoadModalOpen} onClose={() => setIsLoadModalOpen(false)}>
         <LoadData onChange={handleLoadDataChange} />
-        <ExampleData onClick={handleExampleDataClick} />
-      </MyModal>
+        <Collapse in={isExampleDataOpen}>
+          <ExampleData onClick={handleExampleDataClick} />
+        </Collapse>
+        <Collapse in={!isExampleDataOpen}>
+          {file != null && file.name}
+          {lines.length > 2 && <Preview lines={lines} />}
+        </Collapse>
+      </Modal>
     </>
   );
 });

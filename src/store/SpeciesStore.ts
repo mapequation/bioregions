@@ -44,7 +44,12 @@ export default class SpeciesStore {
       loaded: observable,
       pointCollection: observable.ref,
       setPointCollection: action,
+      setLoaded: action,
     });
+  }
+
+  setLoaded(loaded: boolean) {
+    this.loaded = loaded;
   }
 
   setPointCollection(pointCollection: PointFeatureCollection) {
@@ -94,7 +99,6 @@ export default class SpeciesStore {
 
     await loader.next(); // Waits until streaming is done
     this.updatePointCollection();
-    mapStore.render();
-    this.loaded = true;
+    this.setLoaded(true);
   }
 }

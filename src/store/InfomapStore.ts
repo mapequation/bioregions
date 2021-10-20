@@ -1,4 +1,4 @@
-import { makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable } from 'mobx';
 import Infomap from '@mapequation/infomap';
 import type { Tree } from '@mapequation/infomap';
 import type { BipartiteNetwork } from '@mapequation/infomap/network';
@@ -6,15 +6,18 @@ import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
 
+const defaultArgs = {
+  silent: true,
+  output: 'json',
+  skipAdjustBipartiteFlow: true,
+} as const;
+
 export default class InfomapStore {
   rootStore: RootStore;
-  loaded: boolean = false;
   args: Arguments = {
-    silent: true,
-    output: 'json',
     twoLevel: true,
     numTrials: 1,
-    skipAdjustBipartiteFlow: true,
+    ...defaultArgs,
   };
   tree: Tree | null = null;
 
@@ -22,23 +25,30 @@ export default class InfomapStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
-      loaded: observable,
+      tree: observable.ref,
+      setTree: action,
     });
+  }
+
+  setTree(tree: Tree) {
+    this.tree = tree;
   }
 
   async runInfomap(cells: Node[]) {
     const network = networkFromCells(cells);
     try {
-      const { json } = await new Infomap()
+      console.log('Running infomap...');
+      const { json: tree } = await new Infomap()
         .on('data', (output) => console.log(output))
         .runAsync({
           network,
           args: this.args,
         });
 
-      if (json) {
-        this.tree = json;
-        setBioregionIds(json, cells);
+      if (tree) {
+        setBioregionIds(tree, cells);
+        this.setTree(tree);
+        console.log('Infomap done.');
       }
     } catch (err) {
       console.log(err);

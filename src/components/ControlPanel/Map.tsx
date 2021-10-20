@@ -26,19 +26,19 @@ const ProjectionSelect = observer(function () {
 });
 
 export default observer(function () {
-  const { mapStore, speciesStore } = useStore();
+  const { mapStore, speciesStore, infomapStore } = useStore();
 
   const setRenderType = (type: RenderType) => () => {
     if (type !== mapStore.renderType) {
-      mapStore.renderType = type;
+      mapStore.setRenderType(type);
       mapStore.render();
     }
   }
 
   const setGridColorBy = (colorBy: GridColorBy) => () => {
     const shouldRender = mapStore.gridColorBy !== colorBy || mapStore.renderType !== 'grid';
-    mapStore.gridColorBy = colorBy;
-    mapStore.renderType = 'grid';
+    mapStore.setGridColorBy(colorBy);
+    mapStore.setRenderType('grid');
     if (shouldRender) {
       mapStore.render();
     }
@@ -61,6 +61,10 @@ export default observer(function () {
           </Button>
           <Button
             onClick={setGridColorBy("modules")}
+            isLoading={speciesStore.loaded && infomapStore.tree == null}
+            loadingText="Clustering"
+            spinnerPlacement='end'
+            isDisabled={infomapStore.tree == null}
             isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "modules"}
           >
             Bioregions
