@@ -6,6 +6,6 @@ import InfomapStore from './InfomapStore';
 export default class Store {
   mapStore = new MapStore(this);
   landStore = new LandStore(this);
-  speciesStore = new SpeciesStore(this);
   infomapStore = new InfomapStore(this);
+  speciesStore = new SpeciesStore(this);
 }

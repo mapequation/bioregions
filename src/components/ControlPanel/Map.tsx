@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Flex, Spacer, Select, Button, ButtonGroup, VStack } from '@chakra-ui/react';
+import { Flex, Select, Button, ButtonGroup, VStack } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type { Projection, RenderType, GridColorBy } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
@@ -36,6 +36,8 @@ export default observer(function () {
   }
 
   const setGridColorBy = (colorBy: GridColorBy) => () => {
+    console.log(`setGridColorBy(${colorBy}) Needs update? tree: ${speciesStore.binner.treeNeedUpdate} cells: ${speciesStore.binner.cellsNeedUpdate}`)
+
     const shouldRender = mapStore.gridColorBy !== colorBy || mapStore.renderType !== 'grid';
     mapStore.setGridColorBy(colorBy);
     mapStore.setRenderType('grid');
@@ -47,7 +49,6 @@ export default observer(function () {
   return (
     <VStack>
       <Flex w="100%" alignItems="center">
-        Projection: <Spacer />
         <ProjectionSelect />
       </Flex>
       <Flex w="100%">
@@ -61,7 +62,7 @@ export default observer(function () {
           </Button>
           <Button
             onClick={setGridColorBy("modules")}
-            isLoading={speciesStore.loaded && infomapStore.tree == null}
+            isLoading={infomapStore.isRunning}
             loadingText="Clustering"
             spinnerPlacement='end'
             isDisabled={infomapStore.tree == null}

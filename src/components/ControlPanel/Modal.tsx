@@ -1,11 +1,12 @@
-import { Button, Modal as ChakraModal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, ModalProps } from "@chakra-ui/react";
+import { Modal as ChakraModal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, ModalProps } from "@chakra-ui/react";
 
 
 type MyModalProps = {
   header: string;
+  footer?: React.ReactComponentElement<any>;
 } & ModalProps;
 
-export default function Modal({ header, isOpen, onClose, children }: React.PropsWithChildren<MyModalProps>) {
+export default function Modal({ header, isOpen, onClose, footer, children }: React.PropsWithChildren<MyModalProps>) {
   return (
     <ChakraModal onClose={onClose} size="xl" isOpen={isOpen}>
       <ModalOverlay />
@@ -16,7 +17,7 @@ export default function Modal({ header, isOpen, onClose, children }: React.Props
           {children}
         </ModalBody>
         <ModalFooter>
-          <Button onClick={onClose}>Close</Button>
+          {footer != null && footer}
         </ModalFooter>
       </ModalContent>
     </ChakraModal>

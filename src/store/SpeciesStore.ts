@@ -35,7 +35,7 @@ export default class SpeciesStore {
   rootStore: RootStore;
   loaded: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
-  binner: QuadtreeGeoBinner = new QuadtreeGeoBinner();
+  binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;

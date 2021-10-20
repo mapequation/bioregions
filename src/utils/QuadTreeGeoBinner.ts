@@ -3,6 +3,7 @@ import { GeoProjection } from 'd3';
 import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
 import type { PointFeature } from '../store/SpeciesStore';
+import type SpeciesStore from '../store/SpeciesStore';
 
 type VisitCallback = (node: Node) => true | void;
 
@@ -21,7 +22,7 @@ export class Node implements Feature<Polygon> {
     Node | undefined,
     Node | undefined,
   ] = [undefined, undefined, undefined, undefined];
-  bioregionId: number = -1;
+  bioregionId: number = 0;
   path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
@@ -302,27 +303,33 @@ export class QuadtreeGeoBinner {
   root: Node | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   private _cells: Node[] = [];
-  cellsNeedUpdate: boolean = true;
+  private _speciesStore: SpeciesStore;
 
-  constructor() {
+  cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
+  treeNeedUpdate: boolean = true; // Revisit data to regenerate tree if dirty
+
+  constructor(speciesStore: SpeciesStore) {
+    this._speciesStore = speciesStore;
     makeObservable(this, {
       maxNodeSizeLog2: observable,
       minNodeSizeLog2: observable,
       nodeCapacity: observable,
       lowerThreshold: observable,
       cellsNeedUpdate: observable,
+      treeNeedUpdate: observable,
       setMaxNodeSizeLog2: action,
       setMinNodeSizeLog2: action,
       setNodeCapacity: action,
       setLowerThreshold: action,
       setCellsNeedUpdate: action,
+      getCells: action,
     });
 
-    this.initExtent();
-    this.initRoot();
+    this._initExtent();
+    this._initRoot();
   }
 
-  private initExtent() {
+  private _initExtent() {
     // power of 2 from unscaled unit
     let size = Math.pow(2, this.maxNodeSizeLog2) / this.scale;
     while (size <= 180) {
@@ -331,28 +338,20 @@ export class QuadtreeGeoBinner {
     this.extent = [-size, -size, size, size];
   }
 
-  private initRoot() {
+  private _initRoot() {
     this.root = new Node(this.extent, this.maxNodeSizeLog2);
   }
 
-  get cells() {
-    if (this.cellsNeedUpdate) {
-      this.generateCells();
-    }
-    return this._cells;
-  }
-
-  /**
-   * Set to 60 to have sizes subdivided to eventually one minute.
-   */
   get scale() {
     return this._scale;
   }
 
   set scale(scale: number) {
+    // Set to 60 to have sizes subdivided to eventually one minute.
     this._scale = scale;
-    this.initExtent();
-    this.initRoot();
+    this._initExtent();
+    this._initRoot();
+    this.setTreeNeedUpdate();
   }
 
   setScale(scale: number) {
@@ -377,44 +376,13 @@ export class QuadtreeGeoBinner {
       }
     }
     this._extent = [x1, y1, x2, y2];
-    this.initRoot();
+    this._initRoot();
+    this.setTreeNeedUpdate();
   }
 
   setExtent(extent: BBox) {
     this.extent = extent;
     return this;
-  }
-
-  setMaxNodeSizeLog2(value: number) {
-    this.maxNodeSizeLog2 = value;
-    return this;
-  }
-
-  setMinNodeSizeLog2(value: number) {
-    this.minNodeSizeLog2 = value;
-    return this;
-  }
-
-  setNodeCapacity(value: number) {
-    this.nodeCapacity = value;
-    return this;
-  }
-
-  setLowerThreshold(value: number) {
-    this.lowerThreshold = value;
-    return this;
-  }
-
-  setCellsNeedUpdate(value: boolean = true) {
-    this.cellsNeedUpdate = value;
-  }
-
-  visit(callback: VisitCallback) {
-    this.root?.visit(callback);
-  }
-
-  visitNonEmpty(callback: VisitCallback) {
-    this.root?.visitNonEmpty(callback);
   }
 
   get minSizeLog2() {
@@ -423,6 +391,41 @@ export class QuadtreeGeoBinner {
 
   get maxSizeLog2() {
     return this.maxNodeSizeLog2 - Math.log2(this.scale);
+  }
+
+  setMinNodeSizeLog2(minNodeSizeLog2: number) {
+    this.minNodeSizeLog2 = minNodeSizeLog2;
+    this.setTreeNeedUpdate();
+    return this;
+  }
+
+  setMaxNodeSizeLog2(maxNodeSizeLog2: number) {
+    this.maxNodeSizeLog2 = maxNodeSizeLog2;
+    this.setTreeNeedUpdate();
+    return this;
+  }
+
+  setNodeCapacity(nodeCapacity: number) {
+    this.nodeCapacity = nodeCapacity;
+    this.setTreeNeedUpdate();
+    return this;
+  }
+
+  setLowerThreshold(lowerThreshold: number) {
+    this.lowerThreshold = lowerThreshold;
+    this.setTreeNeedUpdate();
+    return this;
+  }
+
+  setCellsNeedUpdate(value: boolean = true) {
+    this.cellsNeedUpdate = value;
+  }
+
+  setTreeNeedUpdate(value: boolean = true) {
+    this.treeNeedUpdate = value;
+    if (value) {
+      this.cellsNeedUpdate = true;
+    }
   }
 
   addFeature(feature: PointFeature) {
@@ -440,19 +443,45 @@ export class QuadtreeGeoBinner {
     return this;
   }
 
-  private clear() {
-    this.initRoot();
+  visit(callback: VisitCallback) {
+    this.root?.visit(callback);
   }
 
-  /**
-   * Get all non-empty grid cells
-   */
-  cellsNonEmpty(): Node[] {
-    const nodes: Node[] = [];
-    this.visitNonEmpty((node) => {
-      nodes.push(node);
-    });
-    return nodes;
+  visitNonEmpty(callback: VisitCallback) {
+    this.root?.visitNonEmpty(callback);
+  }
+
+  getCells() {
+    if (this.treeNeedUpdate) {
+      this.generateTree();
+    }
+    if (this.cellsNeedUpdate) {
+      this.generateCells();
+    }
+    return this._cells;
+  }
+
+  get cells() {
+    return this.getCells();
+  }
+
+  // /**
+  //  * Get all non-empty grid cells
+  //  */
+  // cellsNonEmpty(): Node[] {
+  //   const nodes: Node[] = [];
+  //   this.visitNonEmpty((node) => {
+  //     nodes.push(node);
+  //   });
+  //   return nodes;
+  // }
+
+  generateTree() {
+    console.log("Generate tree...");
+    this._initExtent();
+    this._initRoot();
+    this.addFeatures(this._speciesStore.pointCollection.features);
+    this.setTreeNeedUpdate(false);
   }
 
   /**
@@ -460,9 +489,10 @@ export class QuadtreeGeoBinner {
    * @param patchSparseNodes {Boolean} Keep parent cell behind sub-cells if
    * some but not all four sub-cells get the minimum number of records to be
    * included. Default false.
-   * @return an Array of quadtree nodes
+   * @return Array of quadtree nodes
    */
   generateCells(patchSparseNodes = true): Node[] {
+    console.log("Generate cells...");
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
     }
@@ -481,30 +511,30 @@ export class QuadtreeGeoBinner {
     return nodes;
   }
 
-  visitWithinThresholds(callback: VisitCallback) {
-    this.visitNonEmpty((node: Node) => {
-      // Skip biggest non-empty nodes if its number of features are below the lower threshold
-      if (node.numFeatures < this.lowerThreshold) {
-        return true;
-      }
-      if (callback(node)) {
-        return true;
-      }
-    });
-  }
+  // visitWithinThresholds(callback: VisitCallback) {
+  //   this.visitNonEmpty((node: Node) => {
+  //     // Skip biggest non-empty nodes if its number of features are below the lower threshold
+  //     if (node.numFeatures < this.lowerThreshold) {
+  //       return true;
+  //     }
+  //     if (callback(node)) {
+  //       return true;
+  //     }
+  //   });
+  // }
 
-  static getSVGRenderer(projection: GeoProjection) {
-    return (d: Node) =>
-      'M' +
-      [
-        [d.x1, d.y1],
-        [d.x2, d.y1],
-        [d.x2, d.y2],
-        [d.x1, d.y2],
-      ]
-        // @ts-ignore
-        .map((point) => projection(point))
-        .join('L') +
-      'Z';
-  }
+  // static getSVGRenderer(projection: GeoProjection) {
+  //   return (d: Node) =>
+  //     'M' +
+  //     [
+  //       [d.x1, d.y1],
+  //       [d.x2, d.y1],
+  //       [d.x2, d.y2],
+  //       [d.x1, d.y2],
+  //     ]
+  //       // @ts-ignore
+  //       .map((point) => projection(point))
+  //       .join('L') +
+  //     'Z';
+  // }
 }

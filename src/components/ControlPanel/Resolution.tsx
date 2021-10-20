@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
+import { Button, Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 
@@ -25,11 +25,21 @@ const MinMaxInputs = ({ label, minProps, maxProps, min, max, ...common }: MinMax
 }
 
 export default observer(function Resolution() {
-  const { speciesStore } = useStore();
+  const { speciesStore, mapStore, infomapStore } = useStore();
   const { binner } = speciesStore;
 
   const formatBinSize = (sizeLog2: number, _: number): string =>
     sizeLog2 < 0 ? `1/${Math.pow(2, -sizeLog2)}` : `${Math.pow(2, sizeLog2)}`;
+
+  const onClick = async () => {
+    await infomapStore.run();
+    mapStore.render();
+  }
+
+  const onChangeNodeCapacity = (value: number) => {
+    console.log("!!! onChangeNodeCapacity", value)
+    binner.setNodeCapacity(value);
+  }
 
   return (
     <VStack align="flex-start">
@@ -69,10 +79,12 @@ export default observer(function Resolution() {
           maxProps={{
             min: binner.lowerThreshold,
             value: binner.nodeCapacity,
-            onChange: (value) => binner.setNodeCapacity(value),
+            //onChange: (value) => binner.setNodeCapacity(value),
+            onChange: (value) => onChangeNodeCapacity(value),
           }}
         />
       </Flex>
+      <Button size="sm" onClick={onClick}>Run binner</Button>
     </VStack>
   );
 });

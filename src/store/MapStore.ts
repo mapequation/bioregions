@@ -156,7 +156,7 @@ export default class MapStore {
     this._renderPoints();
   }
 
-  _renderGridCell(node: Node, ctx: CanvasRenderingContext2D, color: string) {
+  private _renderGridCell(node: Node, ctx: CanvasRenderingContext2D, color: string) {
     const path = this.geoPath!;
     ctx.beginPath();
     path(node.geometry);
@@ -164,9 +164,7 @@ export default class MapStore {
     ctx.fill();
   }
 
-  private heatmapColor(): GetGridColor {
-    const { cells } = this.binner;
-
+  private static _heatmapColor(cells: Node[]): GetGridColor {
     //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
     const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
       number,
@@ -195,7 +193,7 @@ export default class MapStore {
       colorRange[Math.floor(heatmapOpacityScale(cell.recordsPerArea))];
   }
 
-  private bioregionColor(): GetGridColor {
+  private static _bioregionColor(): GetGridColor {
     const CAT_20 = [
       '#D66F87',
       '#BDE628',
@@ -231,8 +229,8 @@ export default class MapStore {
     const { tree } = this.rootStore.infomapStore;
 
     const getGridColor = (this.gridColorBy === 'records' || !tree)
-      ? this.heatmapColor()
-      : this.bioregionColor();
+      ? MapStore._heatmapColor(cells)
+      : MapStore._bioregionColor();
 
     cells.forEach((cell: Node) => this._renderGridCell(cell, this.context2d!, getGridColor(cell)));
   }
