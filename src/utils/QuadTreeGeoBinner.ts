@@ -407,7 +407,6 @@ export class QuadtreeGeoBinner {
   }
 
   setNodeCapacity(nodeCapacity: number) {
-    console.log("setNodeCapacity");
     this.nodeCapacity = nodeCapacity;
     this.setTreeNeedUpdate();
     return this;
