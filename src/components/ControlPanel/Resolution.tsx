@@ -1,5 +1,7 @@
+import { useMemo, useCallback } from 'react';
 import { observer } from 'mobx-react';
-import { Button, Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
+import debounce from 'lodash/debounce';
+import { Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 
@@ -31,10 +33,30 @@ export default observer(function Resolution() {
   const formatBinSize = (sizeLog2: number, _: number): string =>
     sizeLog2 < 0 ? `1/${Math.pow(2, -sizeLog2)}` : `${Math.pow(2, sizeLog2)}`;
 
-  const onClick = async () => {
+  const render = useCallback(async () => {
     await infomapStore.run();
     mapStore.render();
-  }
+  }, [infomapStore, mapStore]);
+
+  const setMinNodeSizeLog2 = useMemo(() => debounce((value) => {
+    binner.setMinNodeSizeLog2(value);
+    render();
+  }, 500), [binner, render]);
+
+  const setMaxNodeSizeLog2 = useMemo(() => debounce((value) => {
+    binner.setMaxNodeSizeLog2(value);
+    render();
+  }, 500), [binner, render]);
+
+  const setLowerThreshold = useMemo(() => debounce((value) => {
+    binner.setLowerThreshold(value);
+    render();
+  }, 500), [binner, render]);
+
+  const setNodeCapacity = useMemo(() => debounce((value) => {
+    binner.setNodeCapacity(value);
+    render();
+  }, 500), [binner, render]);
 
   return (
     <VStack align="flex-start">
@@ -50,12 +72,12 @@ export default observer(function Resolution() {
           minProps={{
             max: binner.maxNodeSizeLog2,
             value: binner.minNodeSizeLog2,
-            onChange: (value) => binner.setMinNodeSizeLog2(value),
+            onChange: setMinNodeSizeLog2,
           }}
           maxProps={{
             min: binner.minNodeSizeLog2,
             value: binner.maxNodeSizeLog2,
-            onChange: (value) => binner.setMaxNodeSizeLog2(value),
+            onChange: setMaxNodeSizeLog2,
           }}
         />
       </Flex>
@@ -69,16 +91,15 @@ export default observer(function Resolution() {
           minProps={{
             max: binner.nodeCapacity,
             value: binner.lowerThreshold,
-            onChange: (value) => binner.setLowerThreshold(value),
+            onChange: setLowerThreshold,
           }}
           maxProps={{
             min: binner.lowerThreshold,
             value: binner.nodeCapacity,
-            onChange: (value) => binner.setNodeCapacity(value),
+            onChange: setNodeCapacity,
           }}
         />
       </Flex>
-      <Button size="sm" onClick={onClick}>Run binner</Button>
     </VStack>
   );
 });

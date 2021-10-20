@@ -29,6 +29,7 @@ export default class InfomapStore {
       tree: observable.ref,
       isRunning: observable,
       setTree: action,
+      setIsRunning: action,
       run: action,
     });
   }
@@ -37,8 +38,12 @@ export default class InfomapStore {
     this.tree = tree;
   }
 
+  setIsRunning(isRunning: boolean = true) {
+    this.isRunning = isRunning;
+  }
+
   async run() {
-    this.isRunning = true;
+    this.setIsRunning();
     const { cells } = this.rootStore.speciesStore.binner;
     const network = networkFromCells(cells);
     try {
@@ -55,10 +60,10 @@ export default class InfomapStore {
         this.setTree(tree);
         console.log('Infomap done.');
       }
-      this.isRunning = false;
     } catch (err) {
       console.log(err);
     }
+    this.setIsRunning(false);
   }
 }
 
