@@ -19,7 +19,7 @@ export interface IMapRenderer { }
 export type RenderType = 'raw' | 'grid';
 export type GridColorBy = 'records' | 'modules';
 
-type GetGridColor = (d: Node) => string;
+type GetGridColor = (cell: Node) => string;
 
 export const PROJECTIONS = [
   'geoMercator',
@@ -28,6 +28,12 @@ export const PROJECTIONS = [
 ] as const;
 
 export type Projection = typeof PROJECTIONS[number];
+
+export const PROJECTIONNAME: Record<Projection, string> = {
+  geoMercator: 'Mercator',
+  geoOrthographic: 'Orthographic',
+  geoNaturalEarth1: 'Natural Earth'
+} as const;
 
 export default class MapStore {
   rootStore: RootStore;
@@ -177,8 +183,8 @@ export default class MapStore {
       '#800026',
     ]; // Colorbrewer YlOrRd
 
-    return (d: Node) =>
-      colorRange[Math.floor(heatmapOpacityScale(d.recordsPerArea))];
+    return (cell: Node) =>
+      colorRange[Math.floor(heatmapOpacityScale(cell.recordsPerArea))];
   }
 
   private bioregionColor(): GetGridColor {

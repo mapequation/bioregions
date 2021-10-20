@@ -2,7 +2,7 @@ import { observer } from 'mobx-react';
 import { Flex, Spacer, Select, Button, ButtonGroup, VStack } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type { Projection, RenderType, GridColorBy } from '../../store/MapStore';
-import { PROJECTIONS } from '../../store/MapStore';
+import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
 
 const ProjectionSelect = observer(function () {
   const { mapStore } = useStore();
@@ -18,7 +18,7 @@ const ProjectionSelect = observer(function () {
     >
       {PROJECTIONS.map((projection) => (
         <option value={projection} key={projection}>
-          {projection}
+          {PROJECTIONNAME[projection]}
         </option>
       ))}
     </Select>
