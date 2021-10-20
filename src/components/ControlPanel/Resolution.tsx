@@ -3,27 +3,26 @@ import { Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 
-type TangleInputsProps = {
+type MinMaxInputsProps = {
   label: string;
   minProps: TangleInputProps;
   maxProps: TangleInputProps;
-}
+} & Partial<TangleInputProps>;
 
-const TangleInputs = ({ label, minProps, maxProps }: TangleInputsProps) => {
+const MinMaxInputs = ({ label, minProps, maxProps, min, max, ...common }: MinMaxInputsProps) => {
   return (
     <>
       <Box>{label}</Box>
       <Spacer />
       <Box>
         <Text fontSize="xs" textTransform="uppercase">
-          Min: <TangleInput {...minProps} />{' '}
-          Max: <TangleInput {...maxProps} />
+          Min: <TangleInput {...minProps} min={min} {...common} />{' '}
+          Max: <TangleInput {...maxProps} max={max} {...common} />
         </Text>
       </Box>
     </>
   )
 }
-
 
 export default observer(function Resolution() {
   const { speciesStore } = useStore();
@@ -35,46 +34,41 @@ export default observer(function Resolution() {
   return (
     <VStack align="flex-start">
       <Flex w="100%">
-        <TangleInputs
+        <MinMaxInputs
           label="Cell size"
+          suffix='˚'
+          format={formatBinSize}
+          speed={0.1}
+          min={-3}
+          max={6}
+          step={1}
           minProps={{
-            suffix: '˚',
-            value: binner.minNodeSizeLog2,
-            min: -3,
             max: binner.maxNodeSizeLog2,
-            format: formatBinSize,
-            step: 1,
-            speed: 0.1,
+            value: binner.minNodeSizeLog2,
             onChange: (value) => binner.setMinNodeSizeLog2(value),
           }}
           maxProps={{
-            suffix: '˚',
-            value: binner.maxNodeSizeLog2,
             min: binner.minNodeSizeLog2,
-            max: 6,
-            format: formatBinSize,
-            speed: 0.1,
+            value: binner.maxNodeSizeLog2,
             onChange: (value) => binner.setMaxNodeSizeLog2(value),
           }}
         />
       </Flex>
       <Flex w="100%" alignItems="flex-end">
-        <TangleInputs
+        <MinMaxInputs
           label="Cell capacity"
+          speed={0.2}
+          logScale
+          min={0}
+          max={1000}
           minProps={{
-            value: binner.lowerThreshold,
-            min: 0,
             max: binner.nodeCapacity,
-            logScale: true,
-            speed: 0.2,
+            value: binner.lowerThreshold,
             onChange: (value) => binner.setLowerThreshold(value),
           }}
           maxProps={{
-            value: binner.nodeCapacity,
             min: binner.lowerThreshold,
-            max: 1000,
-            logScale: true,
-            speed: 0.2,
+            value: binner.nodeCapacity,
             onChange: (value) => binner.setNodeCapacity(value),
           }}
         />
