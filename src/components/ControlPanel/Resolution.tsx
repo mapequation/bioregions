@@ -36,11 +36,6 @@ export default observer(function Resolution() {
     mapStore.render();
   }
 
-  const onChangeNodeCapacity = (value: number) => {
-    console.log("!!! onChangeNodeCapacity", value)
-    binner.setNodeCapacity(value);
-  }
-
   return (
     <VStack align="flex-start">
       <Flex w="100%">
@@ -79,8 +74,7 @@ export default observer(function Resolution() {
           maxProps={{
             min: binner.lowerThreshold,
             value: binner.nodeCapacity,
-            //onChange: (value) => binner.setNodeCapacity(value),
-            onChange: (value) => onChangeNodeCapacity(value),
+            onChange: (value) => binner.setNodeCapacity(value),
           }}
         />
       </Flex>

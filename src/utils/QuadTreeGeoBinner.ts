@@ -310,6 +310,7 @@ export class QuadtreeGeoBinner {
 
   constructor(speciesStore: SpeciesStore) {
     this._speciesStore = speciesStore;
+
     makeObservable(this, {
       maxNodeSizeLog2: observable,
       minNodeSizeLog2: observable,
@@ -406,6 +407,7 @@ export class QuadtreeGeoBinner {
   }
 
   setNodeCapacity(nodeCapacity: number) {
+    console.log("setNodeCapacity");
     this.nodeCapacity = nodeCapacity;
     this.setTreeNeedUpdate();
     return this;

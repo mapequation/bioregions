@@ -36,8 +36,6 @@ export default observer(function () {
   }
 
   const setGridColorBy = (colorBy: GridColorBy) => () => {
-    console.log(`setGridColorBy(${colorBy}) Needs update? tree: ${speciesStore.binner.treeNeedUpdate} cells: ${speciesStore.binner.cellsNeedUpdate}`)
-
     const shouldRender = mapStore.gridColorBy !== colorBy || mapStore.renderType !== 'grid';
     mapStore.setGridColorBy(colorBy);
     mapStore.setRenderType('grid');

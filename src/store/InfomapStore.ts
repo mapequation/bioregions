@@ -29,7 +29,6 @@ export default class InfomapStore {
       tree: observable.ref,
       isRunning: observable,
       setTree: action,
-      setNeedUpdate: action,
       run: action,
     });
   }
@@ -38,15 +37,9 @@ export default class InfomapStore {
     this.tree = tree;
   }
 
-  setNeedUpdate() {
-    this.tree = null;
-  }
-
   async run() {
     this.isRunning = true;
-    console.log(`Infomap run before: Needs update? tree: ${this.rootStore.speciesStore.binner.treeNeedUpdate} cells: ${this.rootStore.speciesStore.binner.cellsNeedUpdate}`)
     const { cells } = this.rootStore.speciesStore.binner;
-    console.log(`Infomap run after get cells: Needs update? tree: ${this.rootStore.speciesStore.binner.treeNeedUpdate} cells: ${this.rootStore.speciesStore.binner.cellsNeedUpdate}`)
     const network = networkFromCells(cells);
     try {
       console.log('Running infomap...');
@@ -61,8 +54,6 @@ export default class InfomapStore {
         setBioregionIds(tree, cells);
         this.setTree(tree);
         console.log('Infomap done.');
-
-        console.log(`Infomap done: Needs update? tree: ${this.rootStore.speciesStore.binner.treeNeedUpdate} cells: ${this.rootStore.speciesStore.binner.cellsNeedUpdate}`)
       }
       this.isRunning = false;
     } catch (err) {
@@ -71,7 +62,7 @@ export default class InfomapStore {
   }
 }
 
-export function setBioregionIds(tree: Tree, cells: Node[]) {
+function setBioregionIds(tree: Tree, cells: Node[]) {
   const bipartiteStartId = tree.bipartiteStartId!;
   tree.nodes.forEach((node) => {
     if (node.id < bipartiteStartId) return;
