@@ -392,7 +392,6 @@ export class QuadtreeGeoBinner {
 
   setMinNodeSizeLog2(value: number) {
     this.minNodeSizeLog2 = value;
-    console.log('setMinNodeSizeLog2:', value);
     return this;
   }
 
