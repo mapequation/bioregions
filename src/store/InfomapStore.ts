@@ -43,8 +43,11 @@ export default class InfomapStore {
   }
 
   async run() {
-    this.setIsRunning();
     const { cells } = this.rootStore.speciesStore.binner;
+    if (cells.length === 0) {
+      return;
+    }
+    this.setIsRunning();
     const network = networkFromCells(cells);
     try {
       console.log('Running infomap...');

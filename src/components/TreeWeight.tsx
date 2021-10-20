@@ -17,8 +17,8 @@ import Curve from './svg/Curve';
 
 export default function TreeWeight() {
   const [weight, setWeight] = useState(0.5);
-  const width = 400;
-  const height = 250;
+  const width = 250;
+  const height = 120;
 
   const inputProps = {
     min: 0,
@@ -37,7 +37,7 @@ export default function TreeWeight() {
   const domain = extent(x) as [number, number];
 
   return (
-    <Flex width={400} flexDirection="column" p={4}>
+    <Flex w="100%" flexDirection="column" p={4}>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox={`-40 -20 ${width + 70} ${height + 70}`}
@@ -49,7 +49,7 @@ export default function TreeWeight() {
           height={height}
           domain={domain}
           range={[0, width]}
-          label="Distance"
+          label="Tree distance"
         />
         <Curve
           data={data}
@@ -62,7 +62,8 @@ export default function TreeWeight() {
       </svg>
       <Flex>
         <NumberInput
-          maxW="100px"
+          maxW="80px"
+          size="xs"
           mr={2}
           onChange={(_, value) => setWeight(value)}
           {...inputProps}
@@ -75,6 +76,7 @@ export default function TreeWeight() {
         </NumberInput>
         <Slider
           aria-label="weight"
+          size="sm"
           onChange={(weight) => setWeight(weight)}
           {...inputProps}
         >

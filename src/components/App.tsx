@@ -1,5 +1,4 @@
 import { Container, HStack, VStack, Heading } from '@chakra-ui/react';
-import TreeWeight from './TreeWeight';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
 
@@ -14,7 +13,6 @@ export default function App() {
         <ControlPanel />
         <VStack flex={1}>
           <WorldMap />
-          <TreeWeight />
         </VStack>
       </HStack>
     </Container>
