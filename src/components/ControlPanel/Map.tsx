@@ -26,7 +26,7 @@ const ProjectionSelect = observer(function () {
 });
 
 export default observer(function () {
-  const { mapStore } = useStore();
+  const { mapStore, speciesStore } = useStore();
 
   const setRenderType = (type: RenderType) => () => {
     if (type !== mapStore.renderType) {
@@ -36,8 +36,10 @@ export default observer(function () {
   }
 
   const setGridColorBy = (colorBy: GridColorBy) => () => {
-    if (colorBy !== mapStore.gridColorBy) {
-      mapStore.gridColorBy = colorBy;
+    const shouldRender = mapStore.gridColorBy !== colorBy || mapStore.renderType !== 'grid';
+    mapStore.gridColorBy = colorBy;
+    mapStore.renderType = 'grid';
+    if (shouldRender) {
       mapStore.render();
     }
   }
@@ -49,19 +51,20 @@ export default observer(function () {
         <ProjectionSelect />
       </Flex>
       <Flex w="100%">
-        Show
-        <Spacer />
-        <ButtonGroup variant="outline" isAttached size="sm">
+        <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded}>
           <Button onClick={setRenderType("raw")} isActive={mapStore.renderType === "raw"}>Records</Button>
-          <Button onClick={setRenderType("grid")} isActive={mapStore.renderType === "grid"}>Cells</Button>
-        </ButtonGroup>
-      </Flex>
-      <Flex w="100%">
-        Cell colors
-        <Spacer />
-        <ButtonGroup variant="outline" isAttached size="sm" isDisabled={mapStore.renderType === "raw"}>
-          <Button onClick={setGridColorBy("records")} isActive={mapStore.gridColorBy === "records"}>Heatmap</Button>
-          <Button onClick={setGridColorBy("modules")} isActive={mapStore.gridColorBy === "modules"}>Bioregions</Button>
+          <Button
+            onClick={setGridColorBy("records")}
+            isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "records"}
+          >
+            Heatmap
+          </Button>
+          <Button
+            onClick={setGridColorBy("modules")}
+            isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "modules"}
+          >
+            Bioregions
+          </Button>
         </ButtonGroup>
       </Flex>
     </VStack>

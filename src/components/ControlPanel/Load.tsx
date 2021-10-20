@@ -76,7 +76,6 @@ const LoadData = ({ onChange }: HTMLProps<HTMLInputElement>) => {
 
 export default observer(function Load() {
   const [isLoadModalOpen, setIsLoadModalOpen] = useState(false);
-  const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const { speciesStore, infomapStore } = useStore();
 
   const handleLoadDataChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,7 +88,6 @@ export default observer(function Load() {
       };
       reader.readAsText(file);
       setIsLoadModalOpen(false);
-      setIsDataModalOpen(true);
     } else {
       // error
     }
