@@ -20,7 +20,7 @@ export const LoadExample = function () {
     setIsOpen(false);
     await speciesStore.load(filename);
     if (treename) {
-      await treeStore.loadTree(treename);
+      await treeStore.load(treename);
     }
     await infomapStore.run();
   }
@@ -68,8 +68,6 @@ export const LoadData = function () {
   const setColumn = [setNameColumn, setLongColumn, setLatColumn];
 
   const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    setIsOpen(true);
-
     const { files } = event.target;
     if (!files || files.length === 0) {
       return;
@@ -91,10 +89,12 @@ export const LoadData = function () {
     }
 
     if (tree) {
-      await treeStore.loadTree(tree);
+      await treeStore.load(tree);
     }
 
     if (occurrenceData) {
+      setIsOpen(true);
+
       try {
         const { data, header } = await loadPreview(occurrenceData);
         setFile(occurrenceData);

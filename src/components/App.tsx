@@ -16,6 +16,7 @@ export default observer(function App() {
       <HStack spacing="30px" alignItems="flex-start">
         <ControlPanel />
         <VStack flex={1}>
+          <WorldMap />
           {treeStore.treeString != null && <Tree
             source={treeStore.treeString}
             size={{ width: 600, height: 400 }}
@@ -23,7 +24,6 @@ export default observer(function App() {
             showLeafLabels
             interactive
           />}
-          <WorldMap />
         </VStack>
       </HStack>
     </Container>

@@ -66,12 +66,12 @@ export default observer(function () {
           </Button>
         </ButtonGroup>
       </Flex>
-      <FormControl display="flex" w="100%" alignItems="center">
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={!speciesStore.loaded}>
         <FormLabel htmlFor="clip" mb="0">
           Clip to land
         </FormLabel>
         <Spacer />
-        <Switch id="clip" defaultChecked />
+        <Switch id="clip" defaultChecked isDisabled={!speciesStore.loaded} />
       </FormControl>
     </VStack>
   )

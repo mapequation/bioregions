@@ -1,7 +1,6 @@
 import { makeObservable, observable, action } from 'mobx';
 import type RootStore from './RootStore';
-import { loadTree } from '../utils/tree';
-import { prepareTree } from '../utils/tree/treeUtils';
+import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
 
 type Tree = {
@@ -22,7 +21,7 @@ export default class TreeStore {
   loaded: boolean = false;
   tree: Tree | null = null;
   treeString: string | null = null;
-
+  includeTreeInNetwork: boolean = false;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -31,6 +30,8 @@ export default class TreeStore {
       loaded: observable,
       tree: observable.ref,
       treeString: observable,
+      includeTreeInNetwork: observable,
+      toggleIncludeTree: action,
       setTree: action,
       setTreeString: action,
     });
@@ -44,13 +45,19 @@ export default class TreeStore {
     this.treeString = treeString;
   }
 
-  async loadTree(file: File | string) {
-    this.setTreeString(await loadText(file));
+  setLoaded(loaded: boolean = true) {
+    this.loaded = loaded;
+  }
 
-    const tree = await loadTree(file);
+  toggleIncludeTree() {
+    this.includeTreeInNetwork = !this.includeTreeInNetwork;
+  }
+
+  async load(file: File | string) {
+    const tree = await loadText(file);
+    this.setTreeString(tree);
     // @ts-ignore
-    this.setTree(prepareTree(tree));
-    console.log(this.tree);
-    this.loaded = true;
+    this.setTree(prepareTree(parseTree(tree)));
+    this.setLoaded()
   }
 }

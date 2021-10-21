@@ -39,6 +39,8 @@ export function AxisBottom({
         <g key={value} transform={`translate(${offset}, 0)`}>
           <line y2="6" stroke="currentColor" />
           <text
+            fill="currentColor"
+            strokeWidth={0}
             fontSize="10px"
             textAnchor="middle"
             transform="translate(0, 20)"
@@ -50,6 +52,8 @@ export function AxisBottom({
       {label !== null && (
         <text
           textAnchor="middle"
+          fill="currentColor"
+          strokeWidth={0}
           transform={`translate(${x1 / 2}, ${40})`}
           fontSize="14"
         >
@@ -89,6 +93,8 @@ export function AxisLeft({
         <g key={value} transform={`translate(0, ${y1 - offset})`}>
           <line x2="-6" stroke="currentColor" />
           <text
+            fill="currentColor"
+            strokeWidth={0}
             dy="3px"
             fontSize="10px"
             textAnchor="middle"
@@ -100,6 +106,8 @@ export function AxisLeft({
       ))}
       {label != null && (
         <text
+          fill="currentColor"
+          strokeWidth={0}
           transform={`translate(-40, ${y1 / 2}) rotate(-90)`}
           textAnchor="middle"
           fontSize="14"

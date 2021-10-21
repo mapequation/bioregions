@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { observer } from 'mobx-react';
 import {
   Flex,
   Slider,
@@ -14,8 +15,10 @@ import {
 import { extent, range, map, zip } from 'd3';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
+import { useStore } from '../store';
 
-export default function TreeWeight() {
+export default observer(function TreeWeight() {
+  const { treeStore } = useStore();
   const [weight, setWeight] = useState(0.5);
   const width = 250;
   const height = 120;
@@ -36,9 +39,12 @@ export default function TreeWeight() {
   const data = zip(x, y) as [number, number][];
   const domain = extent(x) as [number, number];
 
+  const color = treeStore.loaded ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
+
   return (
     <Flex w="100%" flexDirection="column" p={4}>
       <svg
+        style={{ color, stroke: color }}
         xmlns="http://www.w3.org/2000/svg"
         viewBox={`-40 -20 ${width + 70} ${height + 70}`}
         width={width}
@@ -57,11 +63,13 @@ export default function TreeWeight() {
           yDomain={[0, 1]}
           width={width}
           height={height}
-          strokeWidth="1.5"
+          strokeWidth="2"
+          stroke={treeStore.loaded ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
         />
       </svg>
       <Flex>
         <NumberInput
+          isDisabled={!treeStore.loaded}
           maxW="80px"
           size="xs"
           mr={2}
@@ -75,6 +83,7 @@ export default function TreeWeight() {
           </NumberInputStepper>
         </NumberInput>
         <Slider
+          isDisabled={!treeStore.loaded}
           aria-label="weight"
           size="sm"
           onChange={(weight) => setWeight(weight)}
@@ -88,4 +97,4 @@ export default function TreeWeight() {
       </Flex>
     </Flex>
   );
-}
+});
