@@ -43,3 +43,18 @@ export function loadPreview(file: string | File, args: ParseConfig = {}) {
     });
   });
 }
+
+export async function loadText(file: string | File) {
+  if (typeof file === "string") {
+    return fetch(file).then(res => res.text());
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(reader.result as string);
+    }
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}

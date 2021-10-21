@@ -2,6 +2,7 @@ import { makeObservable, observable, action } from 'mobx';
 import type RootStore from './RootStore';
 import { loadTree } from '../utils/tree';
 import { prepareTree } from '../utils/tree/treeUtils';
+import { loadText } from '../utils/loader';
 
 type Tree = {
   parent: Tree | null;
@@ -44,12 +45,7 @@ export default class TreeStore {
   }
 
   async loadTree(file: File | string) {
-    const filename = typeof file === 'string' ? file : file.name;
-    fetch(filename)
-      .then(res => res.text())
-      .then(treeString => {
-        this.setTreeString(treeString);
-      });
+    this.setTreeString(await loadText(file));
 
     const tree = await loadTree(file);
     // @ts-ignore

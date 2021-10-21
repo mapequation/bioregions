@@ -55,7 +55,7 @@ export const LoadExample = function () {
 
 
 export const LoadData = function () {
-  const { speciesStore, infomapStore } = useStore();
+  const { speciesStore, treeStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
@@ -70,12 +70,34 @@ export const LoadData = function () {
   const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsOpen(true);
 
-    const file = event.target.files?.item(0);
+    const { files } = event.target;
+    if (!files || files.length === 0) {
+      return;
+    }
 
-    if (file) {
+    let occurrenceData: File | null = null;
+    let tree: File | null = null;
+
+    const ext = (filename: string) => filename.split(".").pop();
+
+    for (let file of files) {
+      const fileExt = ext(file.name) ?? ""
+
+      if (['csv', 'tsv'].includes(fileExt) && occurrenceData === null) {
+        occurrenceData = file;
+      } else if (fileExt === "nwk") {
+        tree = file;
+      }
+    }
+
+    if (tree) {
+      await treeStore.loadTree(tree);
+    }
+
+    if (occurrenceData) {
       try {
-        const { data, header } = await loadPreview(file);
-        setFile(file);
+        const { data, header } = await loadPreview(occurrenceData);
+        setFile(occurrenceData);
         setHeader(header);
         setNameColumn(header[0]);
         setLongColumn(header[1]);
@@ -121,7 +143,8 @@ export const LoadData = function () {
       <input
         type="file"
         id="file-input"
-        accept=".csv,.tsv"
+        accept=".csv,.tsv,.nwk"
+        multiple
         style={{ visibility: "hidden", display: "none" }}
         onChange={onChange}
       />
