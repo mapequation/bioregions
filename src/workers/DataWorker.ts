@@ -1,26 +1,26 @@
 import { expose } from 'threads/worker';
 import { Observable, Subject } from 'threads/observable';
-import { ParseResult } from 'papaparse';
+import { ParseConfig, ParseResult } from 'papaparse';
 import { loadFile } from '../utils/loader';
 
 let dataStream = new Subject();
 
-function load(filename: string) {
-  console.log('load...');
+function load(file: string | File, args: ParseConfig = {}) {
+  console.log('Loading...');
 
-  const papaArgs = {
-    complete() {
-      dataStream.complete();
-      dataStream = new Subject();
-    },
-    chunk(chunk: ParseResult<any>) {
-      dataStream.next(chunk.data);
-    },
-  };
-
-  loadFile(filename, papaArgs);
-
-  return 'load finished';
+  return new Promise<string>(resolve => {
+    loadFile(file, {
+      complete() {
+        dataStream.complete();
+        dataStream = new Subject();
+        resolve("Loading finished");
+      },
+      chunk(chunk: ParseResult<any>) {
+        dataStream.next(chunk.data);
+      },
+      ...args,
+    });
+  });
 }
 
 // @ts-ignore

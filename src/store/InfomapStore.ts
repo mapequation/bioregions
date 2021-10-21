@@ -45,12 +45,13 @@ export default class InfomapStore {
   async run() {
     const { cells } = this.rootStore.speciesStore.binner;
     if (cells.length === 0) {
+      console.error("No cells in binner!")
       return;
     }
     this.setIsRunning();
     const network = networkFromCells(cells);
     try {
-      console.log('Running infomap...');
+      console.log('Running Infomap...');
       const { json: tree } = await new Infomap()
         .on('data', (output) => console.log(output))
         .runAsync({

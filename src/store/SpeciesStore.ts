@@ -1,5 +1,6 @@
 import { action, makeObservable, observable } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
+import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import type { Feature, FeatureCollection, Point } from '../types/geojson';
@@ -13,7 +14,7 @@ export type PointFeature = Feature<Point, PointProperties>;
 export type PointFeatureCollection = FeatureCollection<Point, PointProperties>;
 
 export const createPointFeature = (
-  coordinates: [number, number],
+  coordinates: [longitude: number, latitude: number],
   properties: PointProperties,
 ): PointFeature => ({
   type: 'Feature',
@@ -63,28 +64,37 @@ export default class SpeciesStore {
   }
 
   private async *loadData(
-    filename: string,
+    file: string | File,
     getItems: (
-      items: { longitude: number; latitude: number; species: string }[],
+      items: { [key: string]: string | number }[],
     ) => void,
+    args: ParseConfig = {},
   ) {
     const dataWorker = await spawn(new Worker('../workers/DataWorker.ts'));
 
     dataWorker.stream().subscribe(getItems);
 
-    yield dataWorker.load(filename);
+    yield dataWorker.load(file, args);
 
     return await Thread.terminate(dataWorker);
   }
 
-  async loadSpecies(filename: string) {
+  async load(
+    file: string | File,
+    nameColumn = "species",
+    longColumn = "longitude",
+    latColumn = "latitude",
+  ) {
     const { mapStore } = this.rootStore;
+    const mapper = createMapper(nameColumn, longColumn, latColumn);
 
-    const loader = this.loadData(filename, (items) => {
+    const loader = this.loadData(file, (items) => {
+      console.log("Get chunk")
       for (let item of items) {
+        const mappedItem = mapper(item);
         const pointFeature = createPointFeature(
-          [item.longitude, item.latitude],
-          { name: item.species },
+          [mappedItem.longitude, mappedItem.latitude],
+          { name: mappedItem.name },
         );
 
         this.pointCollection.features.push(pointFeature);
@@ -97,8 +107,16 @@ export default class SpeciesStore {
       }
     });
 
-    await loader.next(); // Waits until streaming is done
+    await loader.next();
     this.updatePointCollection();
     this.setLoaded(true);
   }
+}
+
+function createMapper(nameColumn: string, longColumn: string, latColumn: string) {
+  return (item: { [key: string]: string | number }) => ({
+    name: item[nameColumn].toString(),
+    longitude: +item[longColumn],
+    latitude: +item[latColumn],
+  });
 }

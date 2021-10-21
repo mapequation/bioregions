@@ -1,5 +1,5 @@
 import { action, makeObservable, observable } from 'mobx';
-import { GeoProjection } from 'd3';
+//import { GeoProjection } from 'd3';
 import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
 import type { PointFeature } from '../store/SpeciesStore';

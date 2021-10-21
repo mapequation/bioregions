@@ -1,25 +1,25 @@
 import Papa, { ParseConfig, ParseResult, ParseError } from 'papaparse';
 
-export function loadFile(file: string | File, papaArgs: ParseConfig = {}) {
+export function loadFile(file: string | File, args: ParseConfig = {}) {
   Papa.parse(file, {
-    download: true,
+    download: typeof file === 'string',
     dynamicTyping: true,
     header: true,
     chunkSize: 1024 * 1024, // 1 MB
     worker: false,
     skipEmptyLines: true,
-    ...papaArgs,
+    ...args,
   });
 }
 
-export function preview(file: string | File, papaArgs: ParseConfig = {}) {
+export function preview(file: string | File, args: ParseConfig = {}) {
   loadFile(file, {
     preview: 10,
-    ...papaArgs,
+    ...args,
   });
 }
 
-export function loadPreview(file: string | File) {
+export function loadPreview(file: string | File, args: ParseConfig = {}) {
   const data: Array<any> = [];
   const errors: ParseError[] = [];
   let header: string[] = [];
@@ -39,6 +39,7 @@ export function loadPreview(file: string | File) {
         data.push(...chunk.data);
         errors.push(...chunk.errors);
       },
+      ...args,
     });
   });
 }

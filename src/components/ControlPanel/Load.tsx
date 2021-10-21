@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { observer } from "mobx-react";
 import { Button, Tag, Select, Icon } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
 import { FiUpload } from 'react-icons/fi';
@@ -9,9 +8,9 @@ import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 
 
-export const LoadExample = observer(function () {
-  const [isOpen, setIsOpen] = useState(false);
+export const LoadExample = function () {
   const { speciesStore, infomapStore } = useStore();
+  const [isOpen, setIsOpen] = useState(false);
 
   const rowHover = {
     background: "var(--chakra-colors-gray-50)",
@@ -19,7 +18,7 @@ export const LoadExample = observer(function () {
 
   const loadFile = (filename: string) => async () => {
     setIsOpen(false);
-    await speciesStore.loadSpecies(filename);
+    await speciesStore.load(filename);
     await infomapStore.run();
   }
 
@@ -49,18 +48,19 @@ export const LoadExample = observer(function () {
       </Modal>
     </>
   );
-});
+};
 
 
-export const LoadData = observer(function () {
+export const LoadData = function () {
+  const { speciesStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
   const [lines, setLines] = useState<any[]>([]);
 
-  const [nameColumn, setNameColumn] = useState<number>(0);
-  const [longColumn, setLongColumn] = useState<number>(1);
-  const [latColumn, setLatColumn] = useState<number>(2);
+  const [nameColumn, setNameColumn] = useState<string>("");
+  const [longColumn, setLongColumn] = useState<string>("");
+  const [latColumn, setLatColumn] = useState<string>("");
 
   const setColumn = [setNameColumn, setLongColumn, setLatColumn];
 
@@ -72,7 +72,11 @@ export const LoadData = observer(function () {
     if (file) {
       try {
         const { data, header } = await loadPreview(file);
+        setFile(file);
         setHeader(header);
+        setNameColumn(header[0]);
+        setLongColumn(header[1]);
+        setLatColumn(header[2]);
         setLines(data);
       } catch (e) {
         console.error(e);
@@ -86,13 +90,23 @@ export const LoadData = observer(function () {
   const onClose = () => {
     setIsOpen(false);
     setFile(undefined);
+    setNameColumn("");
+    setLongColumn("");
+    setLatColumn("");
     setHeader([]);
     setLines([]);
   }
 
   const onSubmit = async () => {
-    console.log(nameColumn, longColumn, latColumn);
-    //setIsOpen(false);
+    if (!file) {
+      console.error("No file!")
+      return;
+    }
+
+    setIsOpen(false);
+    await speciesStore.load(file, nameColumn, longColumn, latColumn);
+    await infomapStore.run();
+    onClose(); // cleanup state
   }
 
   const columns = ["name", "longitude", "latitude"] as const;
@@ -104,7 +118,7 @@ export const LoadData = observer(function () {
       <input
         type="file"
         id="file-input"
-        accept=".csv"
+        accept=".csv,.tsv"
         style={{ visibility: "hidden", display: "none" }}
         onChange={onChange}
       />
@@ -113,7 +127,7 @@ export const LoadData = observer(function () {
         header="Load data"
         isOpen={isOpen}
         onClose={onClose}
-        footer={<Button children={"Submit"} onClick={onSubmit} />}
+        footer={<Button children={"Finish"} onClick={onSubmit} />}
       >
         <Table size="sm" variant="simple">
           <TableCaption placement="top">File preview</TableCaption>
@@ -123,7 +137,7 @@ export const LoadData = observer(function () {
             </Tr>
           </Thead>
           <Tbody>
-            {lines.slice(0, visibleRows).map((line, i) => (
+            {lines.slice(0, visibleRows).map((_, i) => (
               <Tr key={i}>
                 {header.map(field => (
                   <Td key={field}>{lines[i][field]}</Td>
@@ -152,7 +166,7 @@ export const LoadData = observer(function () {
                 <Td><Tag textTransform="capitalize">{column}</Tag></Td>
                 <Td><Icon as={BsArrowRight} /></Td>
                 <Td>
-                  <Select size="sm" defaultValue={i} onChange={(e) => setColumn[i](+e.target.value)}>
+                  <Select size="sm" value={i} onChange={(e) => setColumn[i](header[+e.target.value])}>
                     {header.map((cell, j) => (
                       <option value={j} key={j}>{cell}</option>
                     ))}
@@ -165,4 +179,4 @@ export const LoadData = observer(function () {
       </Modal>
     </>
   );
-});
+};

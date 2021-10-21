@@ -42,8 +42,8 @@ export type BBox =
  */
 // export type Position = number[]; // [number, number] | [number, number, number];
 export type Position = [
-  latitude: number,
   longitude: number,
+  latitude: number,
   // elevation?: number,
 ];
 
@@ -165,7 +165,7 @@ export type GeoJsonProperties = { [name: string]: any } | null;
 export interface Feature<
   G extends Geometry | null = Geometry,
   P = GeoJsonProperties,
-> extends GeoJsonObject {
+  > extends GeoJsonObject {
   type: 'Feature';
   /**
    * The feature's geometry
@@ -189,7 +189,7 @@ export interface Feature<
 export interface FeatureCollection<
   G extends Geometry | null = Geometry,
   P = GeoJsonProperties,
-> extends GeoJsonObject {
+  > extends GeoJsonObject {
   type: 'FeatureCollection';
   features: Array<Feature<G, P>>;
 }
