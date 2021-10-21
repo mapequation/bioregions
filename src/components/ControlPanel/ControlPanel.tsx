@@ -9,7 +9,7 @@ import TreeWeight from '../TreeWeight';
 export default function ControlPanel() {
   return (
     <Box>
-      <Section label="Load data">
+      <Section label="Data">
         <VStack align="stretch">
           <LoadData />
           <LoadExample />

@@ -53,7 +53,6 @@ export default class MapStore {
   height: number = 600;
 
   renderPointIndex: number = 0;
-  batchSize: number = 5000;
 
   renderType: RenderType = 'raw';
   gridColorBy: GridColorBy = 'records';
@@ -136,20 +135,21 @@ export default class MapStore {
     this._renderPoint(point, this.context2d);
   }
 
-  private _renderPoints() {
+  private _renderPoints(batchSize: number) {
     if (this.renderType !== 'raw') return;
 
     const { features } = this;
-    const endIndex = Math.min(
-      this.renderPointIndex + this.batchSize,
-      features.length,
-    );
+
+    const endIndex = Math.min(this.renderPointIndex + batchSize, features.length);
+
     for (let i = this.renderPointIndex; i < endIndex; ++i) {
       this._renderPoint(features[i], this.context2d!);
     }
+
     this.renderPointIndex = endIndex;
+
     if (this.renderPointIndex < features.length) {
-      requestAnimationFrame(() => this._renderPoints());
+      requestAnimationFrame(() => this._renderPoints(batchSize));
     }
   }
 
@@ -157,8 +157,10 @@ export default class MapStore {
     if (this.context2d === null || this.features.length === 0) {
       return;
     }
+
     this.renderPointIndex = 0;
-    this._renderPoints();
+
+    this._renderPoints(5000);
   }
 
   private _renderGridCell(node: Node, ctx: CanvasRenderingContext2D, color: string) {

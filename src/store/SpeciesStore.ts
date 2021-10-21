@@ -57,9 +57,9 @@ export default class SpeciesStore {
     this.pointCollection = pointCollection;
   }
 
-  updatePointCollection() {
+  updatePointCollection(pointCollection = this.pointCollection) {
     this.setPointCollection(
-      createPointCollection(this.pointCollection.features),
+      createPointCollection(pointCollection.features),
     );
   }
 
@@ -84,7 +84,14 @@ export default class SpeciesStore {
     nameColumn = "species",
     longColumn = "longitude",
     latColumn = "latitude",
+    clear = true,
   ) {
+    if (clear) {
+      this.binner.setTreeNeedUpdate();
+      this.updatePointCollection(createPointCollection());
+      this.rootStore.mapStore.render();
+    }
+
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
