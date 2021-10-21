@@ -20,6 +20,8 @@ export default class TreeStore {
   rootStore: RootStore;
   loaded: boolean = false;
   tree: Tree | null = null;
+  treeString: string | null = null;
+
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -27,17 +29,28 @@ export default class TreeStore {
     makeObservable(this, {
       loaded: observable,
       tree: observable.ref,
+      treeString: observable,
       setTree: action,
+      setTreeString: action,
     });
-
-    this.loadTree("/data/mammals_neotropics.nwk");
   }
 
   setTree(tree: Tree) {
     this.tree = tree;
   }
 
+  setTreeString(treeString: string) {
+    this.treeString = treeString;
+  }
+
   async loadTree(file: File | string) {
+    const filename = typeof file === 'string' ? file : file.name;
+    fetch(filename)
+      .then(res => res.text())
+      .then(treeString => {
+        this.setTreeString(treeString);
+      });
+
     const tree = await loadTree(file);
     // @ts-ignore
     this.setTree(prepareTree(tree));

@@ -11,7 +11,7 @@ export function normalizeSpeciesName(speciesName) {
 function _visitTreeDepthFirst(opts, node, callback, depth, childIndex, parent) {
   if (!opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent)) return true;
   let childExit = !_.every(node.children || [], (child, i) => !_visitTreeDepthFirst(opts, child, callback, depth + 1, i, node));
-  if (childExit || opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent)) return true;
+  if (childExit || (opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent))) return true;
   return false;
 }
 
