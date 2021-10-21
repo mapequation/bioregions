@@ -9,16 +9,19 @@ import { loadPreview } from '../../utils/loader';
 
 
 export const LoadExample = function () {
-  const { speciesStore, infomapStore } = useStore();
+  const { speciesStore, infomapStore, treeStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
 
   const rowHover = {
     background: "var(--chakra-colors-gray-50)",
   };
 
-  const loadFile = (filename: string) => async () => {
+  const loadFile = (filename: string, treename?: string) => async () => {
     setIsOpen(false);
     await speciesStore.load(filename);
+    if (treename) {
+      await treeStore.loadTree(treename);
+    }
     await infomapStore.run();
   }
 
@@ -35,7 +38,7 @@ export const LoadExample = function () {
             </Tr>
           </Thead>
           <Tbody style={{ cursor: "pointer" }}>
-            <Tr _hover={rowHover} onClick={loadFile("/data/mammals_neotropics.csv")}>
+            <Tr _hover={rowHover} onClick={loadFile("/data/mammals_neotropics.csv", "/data/mammals_neotropics.nwk")}>
               <Td>Mammals in the South American neotropics</Td>
               <Td isNumeric>2.8</Td>
             </Tr>

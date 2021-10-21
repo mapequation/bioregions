@@ -1,6 +1,7 @@
 import MapStore from './MapStore';
 import LandStore from './LandStore';
 import SpeciesStore from './SpeciesStore';
+import TreeStore from './TreeStore';
 import InfomapStore from './InfomapStore';
 
 export default class Store {
@@ -8,4 +9,5 @@ export default class Store {
   landStore = new LandStore(this);
   infomapStore = new InfomapStore(this);
   speciesStore = new SpeciesStore(this);
+  treeStore = new TreeStore(this);
 }
