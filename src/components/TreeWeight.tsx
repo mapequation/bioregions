@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { observer } from 'mobx-react';
 import {
+  Icon,
   Flex,
   Slider,
   SliderTrack,
@@ -69,21 +70,13 @@ export default observer(function TreeWeight() {
           stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
         />
       </svg>
-      <Flex>
-        <NumberInput
-          isDisabled={!enabled}
-          maxW="80px"
-          size="xs"
-          mr={2}
-          onChange={(_, value) => setWeight(value)}
-          {...inputProps}
-        >
-          <NumberInputField />
-          <NumberInputStepper>
-            <NumberIncrementStepper />
-            <NumberDecrementStepper />
-          </NumberInputStepper>
-        </NumberInput>
+      <Flex alignItems="center">
+        <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => setWeight(0)}>
+          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} stroke-linecap="round" stroke-linejoin="round">
+            <rect height="36" rx="8" stroke-width="3" width="45" x="9" y="9" />
+            <path d="m18 36 27-18" stroke-width="4.5" />
+          </g>
+        </Icon>
         <Slider
           isDisabled={!enabled}
           aria-label="weight"
@@ -96,6 +89,26 @@ export default observer(function TreeWeight() {
           </SliderTrack>
           <SliderThumb />
         </Slider>
+        <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => setWeight(1)}>
+          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} stroke-linecap="round" stroke-linejoin="round">
+            <rect height="36" rx="8" stroke-width="3" width="45" x="9" y="9" />
+            <path d="m45 18c0 10-12.08 18-27 18" stroke-width="4.5" />
+          </g>
+        </Icon>
+        <NumberInput
+          isDisabled={!enabled}
+          maxW="70px"
+          size="xs"
+          ml={2}
+          onChange={(_, value) => setWeight(value)}
+          {...inputProps}
+        >
+          <NumberInputField />
+          <NumberInputStepper>
+            <NumberIncrementStepper />
+            <NumberDecrementStepper />
+          </NumberInputStepper>
+        </NumberInput>
       </Flex>
     </Flex>
   );
