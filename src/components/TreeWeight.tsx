@@ -39,7 +39,9 @@ export default observer(function TreeWeight() {
   const data = zip(x, y) as [number, number][];
   const domain = extent(x) as [number, number];
 
-  const color = treeStore.loaded ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
+  const enabled = treeStore.loaded && treeStore.includeTreeInNetwork;
+
+  const color = enabled ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
 
   return (
     <Flex w="100%" flexDirection="column" p={4}>
@@ -64,12 +66,12 @@ export default observer(function TreeWeight() {
           width={width}
           height={height}
           strokeWidth="2"
-          stroke={treeStore.loaded ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
+          stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
         />
       </svg>
       <Flex>
         <NumberInput
-          isDisabled={!treeStore.loaded}
+          isDisabled={!enabled}
           maxW="80px"
           size="xs"
           mr={2}
@@ -83,7 +85,7 @@ export default observer(function TreeWeight() {
           </NumberInputStepper>
         </NumberInput>
         <Slider
-          isDisabled={!treeStore.loaded}
+          isDisabled={!enabled}
           aria-label="weight"
           size="sm"
           onChange={(weight) => setWeight(weight)}
