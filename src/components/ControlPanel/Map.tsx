@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Flex, Select, Button, ButtonGroup, VStack } from '@chakra-ui/react';
+import { Flex, Select, Button, ButtonGroup, VStack, FormControl, FormLabel, Switch, Spacer } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type { Projection, RenderType, GridColorBy } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
@@ -46,9 +46,7 @@ export default observer(function () {
 
   return (
     <VStack>
-      <Flex w="100%" alignItems="center">
-        <ProjectionSelect />
-      </Flex>
+      <ProjectionSelect />
       <Flex w="100%">
         <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded}>
           <Button onClick={setRenderType("raw")} isActive={mapStore.renderType === "raw"}>Records</Button>
@@ -61,8 +59,6 @@ export default observer(function () {
           <Button
             onClick={setGridColorBy("modules")}
             isLoading={infomapStore.isRunning}
-            loadingText="Clustering"
-            spinnerPlacement='end'
             isDisabled={infomapStore.tree == null}
             isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "modules"}
           >
@@ -70,6 +66,13 @@ export default observer(function () {
           </Button>
         </ButtonGroup>
       </Flex>
+      <FormControl display="flex" w="100%" alignItems="center">
+        <FormLabel htmlFor="clip" mb="0">
+          Clip to land
+        </FormLabel>
+        <Spacer />
+        <Switch id="clip" defaultChecked />
+      </FormControl>
     </VStack>
   )
 });

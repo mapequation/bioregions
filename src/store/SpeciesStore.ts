@@ -72,7 +72,7 @@ export default class SpeciesStore {
 
     dataWorker.stream().subscribe(getItems);
 
-    yield dataWorker.loadSample(filename);
+    yield dataWorker.load(filename);
 
     return await Thread.terminate(dataWorker);
   }

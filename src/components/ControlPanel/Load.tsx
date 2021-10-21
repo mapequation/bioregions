@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { observer } from "mobx-react";
-import { Button, Skeleton, Tag, Select, Icon } from '@chakra-ui/react';
+import { Button, Tag, Select, Icon } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
 import { FiUpload } from 'react-icons/fi';
 import { Table, Tr, Td, Tbody, Thead, Th, Tfoot, TableCaption } from '@chakra-ui/react';
 import Modal from './Modal';
 import { useStore } from '../../store';
+import { loadPreview } from '../../utils/loader';
 
 
 export const LoadExample = observer(function () {
@@ -55,7 +56,7 @@ export const LoadData = observer(function () {
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
-  const [lines, setLines] = useState<string[][]>([]);
+  const [lines, setLines] = useState<any[]>([]);
 
   const [nameColumn, setNameColumn] = useState<number>(0);
   const [longColumn, setLongColumn] = useState<number>(1);
@@ -63,23 +64,20 @@ export const LoadData = observer(function () {
 
   const setColumn = [setNameColumn, setLongColumn, setLatColumn];
 
-  const handleLoadDataChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsOpen(true);
 
     const file = event.target.files?.item(0);
 
     if (file) {
-      const reader = new FileReader();
-
-      reader.onload = () => {
-        const lines = reader.result!.toString().split("\n");
-        const [header, ...rest] = lines;
-        setFile(file);
-        setHeader(header.split(','));
-        setLines(rest.map(line => line.split(',')));
+      try {
+        const { data, header } = await loadPreview(file);
+        setHeader(header);
+        setLines(data);
+      } catch (e) {
+        console.error(e);
       }
 
-      reader.readAsText(file);
     } else {
       // error
     }
@@ -98,6 +96,7 @@ export const LoadData = observer(function () {
   }
 
   const columns = ["name", "longitude", "latitude"] as const;
+  const visibleRows = 5;
 
   return (
     <>
@@ -107,7 +106,7 @@ export const LoadData = observer(function () {
         id="file-input"
         accept=".csv"
         style={{ visibility: "hidden", display: "none" }}
-        onChange={handleLoadDataChange}
+        onChange={onChange}
       />
 
       <Modal
@@ -116,55 +115,53 @@ export const LoadData = observer(function () {
         onClose={onClose}
         footer={<Button children={"Submit"} onClick={onSubmit} />}
       >
-        <Skeleton isLoaded={lines.length > 1}>
-          <Table size="sm" variant="simple">
-            <TableCaption placement="top">File preview</TableCaption>
-            <Thead>
-              <Tr>
-                {header.map((cell, i) => <Th key={i}>{cell}</Th>)}
+        <Table size="sm" variant="simple">
+          <TableCaption placement="top">File preview</TableCaption>
+          <Thead>
+            <Tr>
+              {header.map((cell, i) => <Th key={i}>{cell}</Th>)}
+            </Tr>
+          </Thead>
+          <Tbody>
+            {lines.slice(0, visibleRows).map((line, i) => (
+              <Tr key={i}>
+                {header.map(field => (
+                  <Td key={field}>{lines[i][field]}</Td>
+                ))}
               </Tr>
-            </Thead>
-            <Tbody>
-              {lines.slice(0, 5).map((line, i) => (
-                <Tr key={i}>
-                  {line.map((cell, j) => (
-                    <Td key={j}>{cell}</Td>
-                  ))}
-                </Tr>
-              ))}
-            </Tbody>
-            <Tfoot>
-              <Tr>
-                <Td colSpan={3}>&hellip;</Td>
-              </Tr>
-            </Tfoot>
-          </Table>
+            ))}
+          </Tbody>
+          <Tfoot>
+            <Tr>
+              <Td colSpan={3}>&hellip;</Td>
+            </Tr>
+          </Tfoot>
+        </Table>
 
-          <Table size="sm" variant="simple">
-            <TableCaption placement="top">Map data columns</TableCaption>
-            <Thead>
-              <Tr>
-                <Th colSpan={2}>Column</Th>
-                <Th>Data</Th>
+        <Table size="sm" variant="simple">
+          <TableCaption placement="top">Map data columns</TableCaption>
+          <Thead>
+            <Tr>
+              <Th colSpan={2}>Column</Th>
+              <Th>Data</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {columns.map((column, i) => (
+              <Tr key={i}>
+                <Td><Tag textTransform="capitalize">{column}</Tag></Td>
+                <Td><Icon as={BsArrowRight} /></Td>
+                <Td>
+                  <Select size="sm" defaultValue={i} onChange={(e) => setColumn[i](+e.target.value)}>
+                    {header.map((cell, j) => (
+                      <option value={j} key={j}>{cell}</option>
+                    ))}
+                  </Select>
+                </Td>
               </Tr>
-            </Thead>
-            <Tbody>
-              {columns.map((column, i) => (
-                <Tr key={i}>
-                  <Td><Tag textTransform="capitalize">{column}</Tag></Td>
-                  <Td><Icon as={BsArrowRight} /></Td>
-                  <Td>
-                    <Select size="sm" defaultValue={i} onChange={(e) => setColumn[i](+e.target.value)}>
-                      {header.map((cell, j) => (
-                        <option value={j} key={j}>{cell}</option>
-                      ))}
-                    </Select>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </Skeleton>
+            ))}
+          </Tbody>
+        </Table>
       </Modal>
     </>
   );
