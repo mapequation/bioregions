@@ -89,7 +89,6 @@ export default class SpeciesStore {
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
     const loader = this.loadData(file, (items) => {
-      console.log("Get chunk")
       for (let item of items) {
         const mappedItem = mapper(item);
         const pointFeature = createPointFeature(
@@ -102,7 +101,7 @@ export default class SpeciesStore {
         this.binner.addFeature(pointFeature);
 
         if (mapStore.renderType === 'raw') {
-          mapStore.renderPoint(pointFeature.geometry.coordinates);
+          mapStore.renderPoint(pointFeature);
         }
       }
     });

@@ -5,6 +5,7 @@ import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
 import zoom from '../utils/zoom';
+import { PointFeature } from './SpeciesStore';
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
@@ -118,29 +119,33 @@ export default class MapStore {
   }
 
   private _renderPoint(
-    position: [long: number, lat: number],
+    point: PointFeature,
     ctx: CanvasRenderingContext2D,
   ) {
-    const [x, y] = this.projection(position)!;
+    const path = this.geoPath!;
+    ctx.beginPath();
+    path(point);
     ctx.fillStyle = 'red';
-    ctx.fillRect(x, y, 2, 2);
+    ctx.fill();
   }
 
-  renderPoint(position: [long: number, lat: number]) {
+  renderPoint(point: PointFeature) {
     if (this.context2d === null) {
       return;
     }
-    this._renderPoint(position, this.context2d);
+    this._renderPoint(point, this.context2d);
   }
 
   private _renderPoints() {
+    if (this.renderType !== 'raw') return;
+
     const { features } = this;
     const endIndex = Math.min(
       this.renderPointIndex + this.batchSize,
       features.length,
     );
     for (let i = this.renderPointIndex; i < endIndex; ++i) {
-      this._renderPoint(features[i].geometry.coordinates, this.context2d!);
+      this._renderPoint(features[i], this.context2d!);
     }
     this.renderPointIndex = endIndex;
     if (this.renderPointIndex < features.length) {
@@ -255,10 +260,15 @@ export default class MapStore {
   setProjection(projection: Projection) {
     this.projectionName = projection;
     this.projection = d3[projection]().precision(0.1)!;
-    this.geoPath = d3.geoPath(this.projection, this.context2d);
+    this.setGeoPath(this.projection, this.context2d!);
     this.adjustHeight();
     this.applyZoom();
     this.render();
+  }
+
+  setGeoPath(projection: d3.GeoProjection, ctx: CanvasRenderingContext2D) {
+    this.geoPath = d3.geoPath(projection, ctx);
+    this.geoPath.pointRadius(0.5);
   }
 
   setSVG(svg: SVGSVGElement) {
@@ -274,7 +284,7 @@ export default class MapStore {
       return;
     }
 
-    this.geoPath = d3.geoPath(this.projection, this.context2d);
+    this.setGeoPath(this.projection, this.context2d);
     this.adjustHeight();
     this.applyZoom();
   }
