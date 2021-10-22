@@ -25,9 +25,7 @@ export default class PhylocanvasTree extends React.Component<TreeProps> {
   }
 
   fixResolution = (tree: any) => {
-    console.log("fix resolution on tree:", tree)
     setTimeout(() => {
-      console.log("Fix!")
       const { canvas } = tree.deck;
       const { width, height } = canvas;
       canvas.width = 2 * width;
@@ -44,9 +42,7 @@ export default class PhylocanvasTree extends React.Component<TreeProps> {
   }
 
   render() {
-    return (
-      <div id="tree-div" ref={this.canvasRef} />
-    );
+    return <div id="tree-div" ref={this.canvasRef} />;
   }
 
 }

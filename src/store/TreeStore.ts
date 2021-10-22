@@ -2,24 +2,12 @@ import { makeObservable, observable, action } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
+import type { Node as PhyloTree } from '../utils/tree'
 
-type Tree = {
-  parent: Tree | null;
-  children: Tree[];
-  name: string;
-  uid: number;
-  originalChildIndex: number;
-  isLeaf: boolean;
-  depth: number;
-  branchLength: number;
-  leafCount: number;
-  maxLength: number;
-  rootDist: number;
-}
 export default class TreeStore {
   rootStore: RootStore;
   loaded: boolean = false;
-  tree: Tree | null = null;
+  tree: PhyloTree | null = null;
   treeString: string | null = null;
   includeTreeInNetwork: boolean = false;
 

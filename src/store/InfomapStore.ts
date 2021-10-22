@@ -5,7 +5,7 @@ import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
-import type { PhyloTree } from '../store/TreeStore';
+import type { Node as PhyloTree } from '../utils/tree';
 import { visitTreeDepthFirst } from '../utils/tree'
 
 const defaultArgs = {
@@ -83,7 +83,7 @@ export default class InfomapStore {
       : networkFromCells(cells);
 
     try {
-      console.log('Running Infomap...');
+      console.time('infomap');
       const { json: tree } = await new Infomap()
         .on('data', this.parseOutput)
         .runAsync({
@@ -94,8 +94,8 @@ export default class InfomapStore {
       if (tree) {
         setBioregionIds(tree, cells);
         this.setTree(tree);
-        console.log('Infomap done.');
       }
+      console.timeEnd('infomap');
     } catch (err) {
       console.log(err);
     }

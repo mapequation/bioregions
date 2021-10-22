@@ -478,11 +478,12 @@ export class QuadtreeGeoBinner {
   // }
 
   generateTree() {
-    console.log("Generate tree...");
+    console.time('generateTree');
     this._initExtent();
     this._initRoot();
     this.addFeatures(this._speciesStore.pointCollection.features);
     this.setTreeNeedUpdate(false);
+    console.timeEnd('generateTree');
   }
 
   /**
@@ -493,7 +494,7 @@ export class QuadtreeGeoBinner {
    * @return Array of quadtree nodes
    */
   generateCells(patchSparseNodes = true): Node[] {
-    console.log("Generate cells...");
+    console.time('generateCells');
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
     }
@@ -509,6 +510,7 @@ export class QuadtreeGeoBinner {
 
     this._cells = nodes;
     this.setCellsNeedUpdate(false);
+    console.timeEnd('generateCells');
     return nodes;
   }
 
