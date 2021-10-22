@@ -1,28 +1,31 @@
 import { useMemo, useCallback } from 'react';
 import { observer } from 'mobx-react';
 import debounce from 'lodash/debounce';
-import { Box, VStack, Flex, Spacer, Text } from '@chakra-ui/react';
+import { Box, VStack, Flex, Spacer, Text, FormControl, FormLabel } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 
 type MinMaxInputsProps = {
   label: string;
+  isDisabled?: boolean;
   minProps: TangleInputProps;
   maxProps: TangleInputProps;
 } & Partial<TangleInputProps>;
 
-const MinMaxInputs = ({ label, minProps, maxProps, min, max, ...common }: MinMaxInputsProps) => {
+const MinMaxInputs = ({ label, isDisabled = false, minProps, maxProps, min, max, ...common }: MinMaxInputsProps) => {
   return (
-    <>
-      <Box>{label}</Box>
+    <FormControl display="flex" w="100%" alignItems="center" isDisabled={isDisabled}>
+      <FormLabel htmlFor="clip" mb="0">
+        {label}
+      </FormLabel>
       <Spacer />
       <Box>
-        <Text fontSize="xs" textTransform="uppercase">
+        <Text fontSize="xs" textTransform="uppercase" color={isDisabled ? "var(--chakra-colors-gray-400)" : "var(--chakra-colors-gray-800)"}>
           Min: <TangleInput {...minProps} min={min} {...common} />{' '}
           Max: <TangleInput {...maxProps} max={max} {...common} />
         </Text>
       </Box>
-    </>
+    </FormControl>
   )
 }
 
@@ -62,6 +65,7 @@ export default observer(function Resolution() {
     <VStack align="flex-start">
       <Flex w="100%">
         <MinMaxInputs
+          isDisabled={speciesStore.isLoading}
           label="Cell size"
           suffix='˚'
           format={formatBinSize}
@@ -83,6 +87,7 @@ export default observer(function Resolution() {
       </Flex>
       <Flex w="100%" alignItems="flex-end">
         <MinMaxInputs
+          isDisabled={speciesStore.isLoading}
           label="Cell capacity"
           speed={0.2}
           logScale

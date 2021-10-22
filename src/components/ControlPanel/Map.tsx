@@ -48,7 +48,7 @@ export default observer(function () {
     <VStack>
       <ProjectionSelect />
       <Flex w="100%">
-        <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded}>
+        <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded || speciesStore.isLoading}>
           <Button onClick={setRenderType("raw")} isActive={mapStore.renderType === "raw"}>Records</Button>
           <Button
             onClick={setGridColorBy("records")}

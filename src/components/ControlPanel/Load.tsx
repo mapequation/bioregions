@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { observer } from 'mobx-react';
 import { Button, Tag, Select, Icon } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
 import { FiUpload } from 'react-icons/fi';
@@ -8,7 +9,7 @@ import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 
 
-export const LoadExample = function () {
+export const LoadExample = observer(function () {
   const { speciesStore, infomapStore, treeStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -18,6 +19,9 @@ export const LoadExample = function () {
 
   const loadFile = (filename: string, treename?: string) => async () => {
     setIsOpen(false);
+    treeStore.setLoaded(false);
+    infomapStore.setTree(null);
+
     await speciesStore.load(filename);
     if (treename) {
       await treeStore.load(treename);
@@ -27,7 +31,7 @@ export const LoadExample = function () {
 
   return (
     <>
-      <Button size="sm" onClick={() => setIsOpen(true)}>Load examples</Button>
+      <Button isDisabled={speciesStore.isLoading} size="sm" onClick={() => setIsOpen(true)}>Load examples</Button>
 
       <Modal header="Example Data" isOpen={isOpen} onClose={() => setIsOpen(false)}>
         <Table size="sm" variant="simple">
@@ -51,10 +55,10 @@ export const LoadExample = function () {
       </Modal>
     </>
   );
-};
+});
 
 
-export const LoadData = function () {
+export const LoadData = observer(function () {
   const { speciesStore, treeStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
@@ -72,6 +76,9 @@ export const LoadData = function () {
     if (!files || files.length === 0) {
       return;
     }
+
+    treeStore.setLoaded(false);
+    infomapStore.setTree(null);
 
     let occurrenceData: File | null = null;
     let tree: File | null = null;
@@ -139,7 +146,7 @@ export const LoadData = function () {
 
   return (
     <>
-      <Button leftIcon={<FiUpload />} size="sm" as="label" htmlFor="file-input">Load data...</Button>
+      <Button isDisabled={speciesStore.isLoading} leftIcon={<FiUpload />} size="sm" as="label" htmlFor="file-input">Load data...</Button>
       <input
         type="file"
         id="file-input"
@@ -205,4 +212,4 @@ export const LoadData = function () {
       </Modal>
     </>
   );
-};
+});

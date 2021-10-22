@@ -42,6 +42,7 @@ export const createMultiPointGeometryCollection = (
 export default class SpeciesStore {
   rootStore: RootStore;
   loaded: boolean = false;
+  isLoading: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
   multiPointCollection: GeometryCollection = createMultiPointGeometryCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);;
@@ -51,14 +52,20 @@ export default class SpeciesStore {
 
     makeObservable(this, {
       loaded: observable,
+      isLoading: observable,
       pointCollection: observable.ref,
       setPointCollection: action,
       setLoaded: action,
+      setIsLoading: action,
     });
   }
 
   setLoaded(loaded: boolean) {
     this.loaded = loaded;
+  }
+
+  setIsLoading(isLoading: boolean = true) {
+    this.isLoading = isLoading;
   }
 
   setPointCollection(pointCollection: PointFeatureCollection) {
@@ -94,6 +101,8 @@ export default class SpeciesStore {
     latColumn = "latitude",
     clear = true,
   ) {
+    this.setIsLoading();
+
     if (clear) {
       this.binner.setTreeNeedUpdate();
       this.updatePointCollection(createPointCollection());
@@ -103,7 +112,7 @@ export default class SpeciesStore {
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
-    performance.mark('start');
+    console.time("load");
 
     const loader = this.loadData(file, (items) => {
 
@@ -130,13 +139,11 @@ export default class SpeciesStore {
 
     await loader.next();
 
-    performance.mark('end');
-    performance.measure('load', 'start', 'end');
-    const entries = performance.getEntriesByType("measure");
-    console.log('Loaded in', entries[0].duration);
+    console.timeEnd("load");
 
     this.updatePointCollection();
     this.setLoaded(true);
+    this.setIsLoading(false);
   }
 }
 

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Box, Heading } from '@chakra-ui/react';
+import { Box, Heading, Spinner, Flex } from '@chakra-ui/react';
 
 const Section = ({
   label,
   children,
-}: React.PropsWithChildren<{ label: string }>) => (
+  isLoading = false,
+}: React.PropsWithChildren<{ label: string, isLoading?: boolean }>) => (
   <Box
     border="gray.800"
     borderWidth={1}
@@ -15,7 +16,9 @@ const Section = ({
     mt={4}
     w="300px"
     minW="200px"
+    pos="relative"
   >
+    {isLoading && <Flex zIndex={1} pos="absolute" left={0} top={0} w="100%" h="100%" align="center" justify="center"><Spinner size="lg" /></Flex>}
     <Box pos="relative" zIndex={1}>
       <Heading
         as="h5"

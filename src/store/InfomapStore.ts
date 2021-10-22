@@ -34,7 +34,7 @@ export default class InfomapStore {
     });
   }
 
-  setTree(tree: Tree) {
+  setTree(tree: Tree | null) {
     this.tree = tree;
   }
 
@@ -67,6 +67,7 @@ export default class InfomapStore {
     } catch (err) {
       console.log(err);
     }
+
     this.setIsRunning(false);
   }
 }

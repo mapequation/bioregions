@@ -4,10 +4,10 @@ import TreeWeight from '../TreeWeight';
 import { useStore } from '../../store'
 
 export default observer(function () {
-  const { treeStore } = useStore();
+  const { treeStore, speciesStore, infomapStore } = useStore();
   return (
     <VStack>
-      <FormControl display="flex" w="100%" alignItems="center" isDisabled={!treeStore.loaded}>
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={!treeStore.loaded || speciesStore.isLoading || infomapStore.isRunning}>
         <FormLabel htmlFor="includeTree" mb="0">
           Include tree
         </FormLabel>

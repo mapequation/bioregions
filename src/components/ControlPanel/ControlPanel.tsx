@@ -1,23 +1,27 @@
 import { Box, VStack } from '@chakra-ui/react';
+import { observer } from 'mobx-react';
 import Section from './Section';
 import { LoadData, LoadExample } from './Load';
 import Resolution from './Resolution';
 import Infomap from './Infomap';
 import Map from './Map';
+import { useStore } from '../../store';
 
-export default function ControlPanel() {
+export default observer(function ControlPanel() {
+  const { speciesStore, infomapStore } = useStore();
+
   return (
     <Box>
-      <Section label="Data">
+      <Section label="Data" isLoading={speciesStore.isLoading}>
         <VStack align="stretch">
           <LoadData />
           <LoadExample />
         </VStack>
       </Section>
-      <Section label="Resolution">
+      <Section label="Resolution" isLoading={speciesStore.isLoading}>
         <Resolution />
       </Section>
-      <Section label="Infomap">
+      <Section label="Infomap" isLoading={infomapStore.isRunning}>
         <Infomap />
       </Section>
       <Section label="Map">
@@ -25,4 +29,4 @@ export default function ControlPanel() {
       </Section>
     </Box>
   );
-};
+});
