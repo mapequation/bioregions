@@ -22,10 +22,10 @@ export const LoadExample = observer(function () {
     treeStore.setLoaded(false);
     infomapStore.setTree(null);
 
-    await speciesStore.load(filename);
     if (treename) {
       await treeStore.load(treename);
     }
+    await speciesStore.load(filename);
     await infomapStore.run();
   }
 

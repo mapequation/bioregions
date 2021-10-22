@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { observer } from 'mobx-react';
 import {
   Icon,
   Flex,
@@ -16,10 +15,8 @@ import {
 import { extent, range, map, zip } from 'd3';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
-import { useStore } from '../store';
 
-export default observer(function TreeWeight() {
-  const { treeStore } = useStore();
+export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolean }) {
   const [weight, setWeight] = useState(0.5);
   const width = 250;
   const height = 120;
@@ -40,9 +37,7 @@ export default observer(function TreeWeight() {
   const data = zip(x, y) as [number, number][];
   const domain = extent(x) as [number, number];
 
-  const enabled = treeStore.loaded && treeStore.includeTreeInNetwork;
-
-  const color = enabled ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
+  const color = !isDisabled ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
 
   return (
     <Flex w="100%" flexDirection="column" p={4}>
@@ -67,18 +62,18 @@ export default observer(function TreeWeight() {
           width={width}
           height={height}
           strokeWidth="2"
-          stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
+          stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
         />
       </svg>
       <Flex alignItems="center" justifyContent="center" width="100%">
         <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => setWeight(0)}>
-          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+          <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m18 36 27-18" strokeWidth="4.5" />
           </g>
         </Icon>
         <Slider
-          isDisabled={!enabled}
+          isDisabled={isDisabled}
           aria-label="weight"
           size="sm"
           onChange={(weight) => setWeight(weight)}
@@ -90,13 +85,13 @@ export default observer(function TreeWeight() {
           <SliderThumb />
         </Slider>
         <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => setWeight(1)}>
-          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+          <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m45 18c0 10-12.08 18-27 18" strokeWidth="4.5" />
           </g>
         </Icon>
         <NumberInput
-          isDisabled={!enabled}
+          isDisabled={isDisabled}
           maxW="70px"
           size="xs"
           ml={2}
@@ -112,4 +107,4 @@ export default observer(function TreeWeight() {
       </Flex>
     </Flex>
   );
-});
+};

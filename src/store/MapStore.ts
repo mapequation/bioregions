@@ -137,9 +137,23 @@ export default class MapStore {
     if (this.renderType !== 'raw') return;
 
     const { multiPoints } = this;
+    if (this.renderBatchIndex === 0) {
+      console.time("renderPoints");
+    }
 
-    this._renderMultiPoint(multiPoints[this.renderBatchIndex], this.context2d!)
-    ++this.renderBatchIndex;
+    // TODO: Adapt the number of batches to what can be run within 60 fps
+    const numBatches = 4;
+    const batchSize = Math.min(multiPoints.length, this.renderBatchIndex + numBatches);
+
+    for (let i = this.renderBatchIndex; i < batchSize; i++) {
+      this._renderMultiPoint(multiPoints[i], this.context2d!)
+    }
+
+    this.renderBatchIndex += numBatches;
+
+    if (this.renderBatchIndex >= multiPoints.length) {
+      console.timeEnd("renderPoints");
+    }
 
     if (this.renderBatchIndex < multiPoints.length) {
       requestAnimationFrame(() => this._renderPoints());

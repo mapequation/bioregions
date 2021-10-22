@@ -1,10 +1,10 @@
-import { Box, VStack } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import Section from './Section';
-import { LoadData, LoadExample } from './Load';
 import Resolution from './Resolution';
 import Infomap from './Infomap';
 import Map from './Map';
+import Data from './Data';
 import { useStore } from '../../store';
 
 export default observer(function ControlPanel() {
@@ -13,10 +13,7 @@ export default observer(function ControlPanel() {
   return (
     <Box>
       <Section label="Data" isLoading={speciesStore.isLoading}>
-        <VStack align="stretch">
-          <LoadData />
-          <LoadExample />
-        </VStack>
+        <Data />
       </Section>
       <Section label="Resolution" isLoading={speciesStore.isLoading}>
         <Resolution />
