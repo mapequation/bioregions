@@ -5,8 +5,8 @@ import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
+import { visitTreeDepthFirst, visitTreeDepthFirstPostOrder, prepareTree } from '../utils/tree'
 import type { Node as PhyloTree } from '../utils/tree';
-import { visitTreeDepthFirst } from '../utils/tree'
 
 const defaultArgs = {
   silent: false,
@@ -78,9 +78,7 @@ export default class InfomapStore {
     }
     this.setIsRunning();
 
-    const network = this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
-      ? networkFromCellsWithTree(cells, this.rootStore.treeStore.tree!)
-      : networkFromCells(cells);
+    const network = this._createNetwork();
 
     try {
       console.time('infomap');
@@ -103,121 +101,109 @@ export default class InfomapStore {
     this.setCurrentTrial(0);
     this.setIsRunning(false);
   }
+
+  private _createNetwork(): BipartiteNetwork {
+    return this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
+      ? this.createNetworkWithTree()
+      : this.createNetwork()
+  }
+
+  private createNetwork(): Required<BipartiteNetwork> {
+    /*
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added.
+    */
+    const network: Required<BipartiteNetwork> = {
+      nodes: [],
+      links: [],
+      bipartiteStartId: 0,
+    };
+    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+
+    let nodeId = 0;
+    const nodeMap: { [key: string]: number } = {}; // map from node name to node id
+
+    const addNode = (name: string) => {
+      const id = nodeId++;
+      nodeMap[name] = id;
+      network.nodes.push({ id, name });
+    };
+
+
+    for (let { id: cellId } of cells) {
+      addNode(cellId);
+    }
+
+    network.bipartiteStartId = nodeId;
+
+    for (let name of Object.keys(nameToCellIds)) {
+      addNode(name);
+    }
+
+    for (let [name, cells] of Object.entries(nameToCellIds)) {
+      const source = nodeMap[name]!;
+      for (let cell of cells.values()) {
+        network.links.push({ source, target: nodeMap[cell]! });
+      }
+    }
+
+    return network;
+  }
+
+  private createNetworkWithTree(): BipartiteNetwork {
+    /*
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added (as in createNetwork).
+    First species (leaf) nodes, then the internal tree nodes.
+    */
+    const network = this.createNetwork();
+    const tree = this.rootStore.treeStore.tree!;
+    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+
+    let nodeId = network.nodes.length;
+    const nodeMap: { [key: string]: number } = {};
+
+
+    /**
+     * 1. Depth first search post order (from leafs):
+     * 2. If leaf node
+     *    - create set with the species as only element
+     * 3. If non-leaf
+     *    - create set with union from children sets from (2)
+     *    - add links from node to grid cells
+     */
+
+    // Include internal tree nodes into network
+    visitTreeDepthFirstPostOrder(tree, (node) => {
+      if (node.isLeaf) {
+        node.speciesSet = new Set([node.name]);
+        return;
+      }
+
+      const set = new Set();
+      node.children.forEach(child => {
+        if (child.speciesSet) {
+          for (let species in child.speciesSet.values())
+            set.add(species);
+        }
+      });
+      //console.log(set);
+
+    });
+
+    return network;
+  }
 }
 
 function setBioregionIds(tree: Tree, cells: Node[]) {
   const bipartiteStartId = tree.bipartiteStartId!;
+
+  // Tree nodes are sorted on flow, loop through all to find grid cell nodes
   tree.nodes.forEach((node) => {
-    if (node.id < bipartiteStartId) return;
+    if (node.id >= bipartiteStartId) return;
 
-    const cellId = node.id - bipartiteStartId;
-    cells[cellId].bioregionId = node.path[0];
-  });
-}
-
-function networkFromCells(cells: Node[]): BipartiteNetwork {
-  const network: Required<BipartiteNetwork> = {
-    nodes: [],
-    links: [],
-    bipartiteStartId: 0,
-  };
-
-  const namesToGridCells = new Map<string, Set<string>>();
-
-  cells.forEach((cell) => {
-    cell.speciesTopList.forEach(({ name }) => {
-      if (!namesToGridCells.has(name)) {
-        namesToGridCells.set(name, new Set());
-      }
-
-      namesToGridCells.get(name)?.add(cell.id);
-    });
-  });
-
-  let nodeId = 0;
-  const nodeMap = new Map<string, number>();
-
-  const addNode = (name: string) => {
-    const id = nodeId++;
-    nodeMap.set(name, id);
-    network.nodes.push({ id, name });
-  };
-
-  for (let name of namesToGridCells.keys()) {
-    addNode(name);
-  }
-
-  network.bipartiteStartId = nodeId;
-
-  for (let { id: cellId } of cells) {
-    addNode(cellId);
-  }
-
-  for (let [name, cells] of namesToGridCells.entries()) {
-    const source = nodeMap.get(name)!;
-    for (let cell of cells.values()) {
-      network.links.push({ source, target: nodeMap.get(cell)! });
-    }
-  }
-
-  return network;
-}
-
-function networkFromCellsWithTree(cells: Node[], tree: PhyloTree): BipartiteNetwork {
-  /*
-  Starts with cells as nodes up until the bipartiteStartId.
-  Then the feature nodes are added. First species (leaf) nodes,
-  then the internal tree nodes.
-  */
-
-  const network: Required<BipartiteNetwork> = {
-    nodes: [],
-    links: [],
-    bipartiteStartId: 0,
-  };
-
-  const namesToGridCells = new Map<string, Set<string>>();
-
-  cells.forEach((cell) => {
-    cell.speciesTopList.forEach(({ name }) => {
-      if (!namesToGridCells.has(name)) {
-        namesToGridCells.set(name, new Set());
-      }
-
-      namesToGridCells.get(name)?.add(cell.id);
-    });
-  });
-
-  let nodeId = 0;
-  const nodeMap = new Map<string, number>();
-
-  const addNode = (name: string) => {
-    const id = nodeId++;
-    nodeMap.set(name, id);
-    network.nodes.push({ id, name });
-  };
-
-  for (let name of namesToGridCells.keys()) {
-    addNode(name);
-  }
-
-  network.bipartiteStartId = nodeId;
-
-  for (let { id: cellId } of cells) {
-    addNode(cellId);
-  }
-
-  for (let [name, cells] of namesToGridCells.entries()) {
-    const source = nodeMap.get(name)!;
-    for (let cell of cells.values()) {
-      network.links.push({ source, target: nodeMap.get(cell)! });
-    }
-  }
-
-
-
-
-  return network;
+    cells[node.id].bioregionId = node.path[0];
+  })
 }
 
 

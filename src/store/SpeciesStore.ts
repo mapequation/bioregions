@@ -1,4 +1,4 @@
-import { action, makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable, computed } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
@@ -45,7 +45,7 @@ export default class SpeciesStore {
   isLoading: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
   multiPointCollection: GeometryCollection = createMultiPointGeometryCollection();
-  binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);;
+  binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -53,11 +53,16 @@ export default class SpeciesStore {
     makeObservable(this, {
       loaded: observable,
       isLoading: observable,
+      numPoints: computed,
       pointCollection: observable.ref,
       setPointCollection: action,
       setLoaded: action,
       setIsLoading: action,
     });
+  }
+
+  get numPoints() {
+    return this.pointCollection.features.length;
   }
 
   setLoaded(loaded: boolean) {
@@ -112,6 +117,15 @@ export default class SpeciesStore {
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
+    const nameHistogram: { [key: string]: number } = {}
+    const countName = (name: string) => {
+      if (!(name in nameHistogram)) {
+        nameHistogram[name] = 0;
+      }
+
+      nameHistogram[name]++;
+    }
+
     console.time("load");
 
     const loader = this.loadData(file, (items) => {
@@ -124,6 +138,8 @@ export default class SpeciesStore {
           [mappedItem.longitude, mappedItem.latitude],
           { name: mappedItem.name },
         );
+
+        countName(mappedItem.name);
 
         this.pointCollection.features.push(pointFeature);
 
@@ -139,6 +155,7 @@ export default class SpeciesStore {
 
     await loader.next();
 
+    console.log(nameHistogram);
     console.timeEnd("load");
 
     this.updatePointCollection();

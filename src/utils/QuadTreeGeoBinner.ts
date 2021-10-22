@@ -1,4 +1,4 @@
-import { action, makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable, computed } from 'mobx';
 //import { GeoProjection } from 'd3';
 import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
@@ -302,7 +302,7 @@ export class QuadtreeGeoBinner {
   lowerThreshold: number = 10;
   root: Node | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
-  private _cells: Node[] = [];
+  _cells: Node[] = [];
   private _speciesStore: SpeciesStore;
 
   cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
@@ -323,7 +323,9 @@ export class QuadtreeGeoBinner {
       setNodeCapacity: action,
       setLowerThreshold: action,
       setCellsNeedUpdate: action,
-      getCells: action,
+      generateCells: action,
+      _cells: observable.ref,
+      cells: computed,
     });
 
     this._initExtent();
@@ -452,7 +454,7 @@ export class QuadtreeGeoBinner {
     this.root?.visitNonEmpty(callback);
   }
 
-  getCells() {
+  get cells() {
     if (this.treeNeedUpdate) {
       this.generateTree();
     }
@@ -462,8 +464,23 @@ export class QuadtreeGeoBinner {
     return this._cells;
   }
 
-  get cells() {
-    return this.getCells();
+  get nameToCellIds() {
+    // TODO: Check lazy computed
+    console.log("Binner: Calculating nameToCellIds");
+    const nameToCellIds: { [name: string]: Set<string> } = {};
+    const { cells } = this;
+
+    cells.forEach((cell) => {
+      cell.speciesTopList.forEach(({ name }) => {
+        if (!(name in nameToCellIds)) {
+          nameToCellIds[name] = new Set();
+        }
+
+        nameToCellIds[name]?.add(cell.id);
+      });
+    });
+
+    return nameToCellIds;
   }
 
   // /**

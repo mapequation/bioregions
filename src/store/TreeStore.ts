@@ -1,7 +1,8 @@
-import { makeObservable, observable, action } from 'mobx';
+import { makeObservable, observable, action, computed } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
+import { visitTreeDepthFirst } from '../utils/tree'
 import type { Node as PhyloTree } from '../utils/tree'
 
 export default class TreeStore {
@@ -19,13 +20,45 @@ export default class TreeStore {
       tree: observable.ref,
       treeString: observable,
       includeTreeInNetwork: observable,
+      numNodesInTree: computed,
+      numLeafNodesInTree: computed,
       toggleIncludeTree: action,
       setTree: action,
       setTreeString: action,
     });
   }
 
-  setTree(tree: Tree) {
+  get numNodesInTree() {
+    if (this.tree === null) {
+      return 0;
+    }
+
+    let numNodes = 0;
+
+    visitTreeDepthFirst(this.tree, () => {
+      ++numNodes;
+    });
+
+    return numNodes;
+  }
+
+  get numLeafNodesInTree() {
+    if (this.tree === null) {
+      return 0;
+    }
+
+    let numLeafs = 0;
+
+    visitTreeDepthFirst(this.tree, (node) => {
+      if (node.isLeaf) {
+        ++numLeafs;
+      }
+    });
+
+    return numLeafs;
+  }
+
+  setTree(tree: PhyloTree) {
     this.tree = tree;
   }
 

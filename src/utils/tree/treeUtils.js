@@ -372,7 +372,7 @@ export function prepareTree(tree) {
   visitTreeDepthFirst({ postOrder: true }, tree, (node, depth, childIndex) => {
     node.uid = ++uid;
     node.originalChildIndex = childIndex;
-    node.isLeaf = !node.children;
+    node.isLeaf = node.children.length === 0;
     node.depth = depth;
     // Ensure nodes has positive length property, else use length 1
     if (node.branchLength === undefined || node.branchLength < 0) {

@@ -1,5 +1,5 @@
 import { observer } from "mobx-react";
-import { VStack, FormControl, FormLabel, Spacer, Switch, NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper, Progress } from '@chakra-ui/react';
+import { Button, VStack, FormControl, FormLabel, Spacer, Switch, NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper, Progress } from '@chakra-ui/react';
 import TreeWeight from '../TreeWeight';
 import { useStore } from '../../store'
 
@@ -7,7 +7,7 @@ export default observer(function () {
   const { treeStore, speciesStore, infomapStore } = useStore();
   return (
     <VStack>
-      <FormControl display="flex" w="100%" alignItems="center" isDisabled={speciesStore.isLoading || infomapStore.isRunning}>
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={!speciesStore.loaded || infomapStore.isRunning}>
         <FormLabel htmlFor="includeTree" mb="0">
           Include tree
         </FormLabel>
@@ -19,7 +19,7 @@ export default observer(function () {
         />
       </FormControl>
       <TreeWeight isDisabled={!treeStore.loaded || !treeStore.includeTreeInNetwork} />
-      <FormControl display="flex" w="100%" alignItems="center" isDisabled={speciesStore.isLoading || infomapStore.isRunning}>
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={infomapStore.isRunning}>
         <FormLabel htmlFor="trials" mb="0">
           Trials
         </FormLabel>
@@ -37,6 +37,15 @@ export default observer(function () {
           </NumberInputStepper>
         </NumberInput>
       </FormControl>
+      <Button
+        size="sm"
+        w="100%"
+        onClick={() => infomapStore.run()}
+        isLoading={infomapStore.isRunning}
+        disabled={!speciesStore.loaded || infomapStore.isRunning}
+      >
+        Run Infomap
+      </Button>
       {infomapStore.isRunning &&
         <Progress
           value={infomapStore.currentTrial}
