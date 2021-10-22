@@ -5,8 +5,7 @@ import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
-import { visitTreeDepthFirst, visitTreeDepthFirstPostOrder, prepareTree } from '../utils/tree'
-import type { Node as PhyloTree } from '../utils/tree';
+import { visitTreeDepthFirstPostOrder } from '../utils/tree'
 
 const defaultArgs = {
   silent: false,
@@ -180,16 +179,17 @@ export default class InfomapStore {
         return;
       }
 
-      const set = new Set();
+      node.speciesSet = new Set();
+
       node.children.forEach(child => {
         if (child.speciesSet) {
-          for (let species in child.speciesSet.values())
-            set.add(species);
+          for (const each of child.speciesSet) {
+            node.speciesSet?.add(each);
+          }
         }
       });
-      //console.log(set);
-
     });
+    console.log(tree);
 
     return network;
   }
