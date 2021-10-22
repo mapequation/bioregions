@@ -162,6 +162,9 @@ export default class InfomapStore {
     let nodeId = network.nodes.length;
     const nodeMap: { [key: string]: number } = {};
 
+    for (let cellId = 0; cellId < network.bipartiteStartId; ++cellId) {
+      nodeMap[network.nodes[cellId].name!] = cellId;
+    }
 
     /**
      * 1. Depth first search post order (from leafs):
@@ -188,6 +191,17 @@ export default class InfomapStore {
           }
         }
       });
+
+      network.nodes.push({ id: nodeId++, name: node.name });
+
+      for (const species of node.speciesSet!) {
+        if (!nameToCellIds[species]) {
+          continue;
+        }
+        for (const cellId of nameToCellIds[species]) {
+          network.links.push({ source: nodeId, target: nodeMap[cellId], weight: 0.2 });
+        }
+      }
     });
     console.log(tree);
 
