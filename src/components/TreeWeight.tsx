@@ -70,11 +70,11 @@ export default observer(function TreeWeight() {
           stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
         />
       </svg>
-      <Flex alignItems="center">
+      <Flex alignItems="center" justifyContent="center" width="100%">
         <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => setWeight(0)}>
-          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} stroke-linecap="round" stroke-linejoin="round">
-            <rect height="36" rx="8" stroke-width="3" width="45" x="9" y="9" />
-            <path d="m18 36 27-18" stroke-width="4.5" />
+          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+            <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
+            <path d="m18 36 27-18" strokeWidth="4.5" />
           </g>
         </Icon>
         <Slider
@@ -90,9 +90,9 @@ export default observer(function TreeWeight() {
           <SliderThumb />
         </Slider>
         <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => setWeight(1)}>
-          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} stroke-linecap="round" stroke-linejoin="round">
-            <rect height="36" rx="8" stroke-width="3" width="45" x="9" y="9" />
-            <path d="m45 18c0 10-12.08 18-27 18" stroke-width="4.5" />
+          <g fill="none" stroke={enabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+            <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
+            <path d="m45 18c0 10-12.08 18-27 18" strokeWidth="4.5" />
           </g>
         </Icon>
         <NumberInput

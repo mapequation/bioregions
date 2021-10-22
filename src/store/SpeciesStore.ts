@@ -3,7 +3,7 @@ import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
-import type { Feature, FeatureCollection, Point } from '../types/geojson';
+import type { Feature, FeatureCollection, Point, MultiPoint, GeometryCollection } from '../types/geojson';
 
 export interface PointProperties {
   name: string;
@@ -32,10 +32,18 @@ export const createPointCollection = (
   features,
 });
 
+export const createMultiPointGeometryCollection = (
+  geometries: MultiPoint[] = [],
+): GeometryCollection => ({
+  type: 'GeometryCollection',
+  geometries,
+});
+
 export default class SpeciesStore {
   rootStore: RootStore;
   loaded: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
+  multiPointCollection: GeometryCollection = createMultiPointGeometryCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);;
 
   constructor(rootStore: RootStore) {
@@ -95,7 +103,12 @@ export default class SpeciesStore {
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
+    performance.mark('start');
+
     const loader = this.loadData(file, (items) => {
+
+      const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
+
       for (let item of items) {
         const mappedItem = mapper(item);
         const pointFeature = createPointFeature(
@@ -105,15 +118,23 @@ export default class SpeciesStore {
 
         this.pointCollection.features.push(pointFeature);
 
-        this.binner.addFeature(pointFeature);
+        multiPoint.coordinates.push(pointFeature.geometry.coordinates);
 
-        if (mapStore.renderType === 'raw') {
-          mapStore.renderPoint(pointFeature);
-        }
+        this.binner.addFeature(pointFeature);
       }
+      this.multiPointCollection.geometries.push(multiPoint);
+
+      mapStore.renderMultiPoint(multiPoint);
     });
 
+
     await loader.next();
+
+    performance.mark('end');
+    performance.measure('load', 'start', 'end');
+    const entries = performance.getEntriesByType("measure");
+    console.log('Loaded in', entries[0].duration);
+
     this.updatePointCollection();
     this.setLoaded(true);
   }

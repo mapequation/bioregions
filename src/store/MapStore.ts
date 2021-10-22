@@ -5,7 +5,7 @@ import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
 import zoom from '../utils/zoom';
-import { PointFeature } from './SpeciesStore';
+import { MultiPoint } from '../types/geojson';
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
@@ -52,7 +52,7 @@ export default class MapStore {
   width: number = 800;
   height: number = 600;
 
-  renderPointIndex: number = 0;
+  renderBatchIndex: number = 0;
 
   renderType: RenderType = 'raw';
   gridColorBy: GridColorBy = 'records';
@@ -81,8 +81,8 @@ export default class MapStore {
     this.gridColorBy = colorBy;
   }
 
-  get features() {
-    return this.rootStore.speciesStore.pointCollection.features;
+  get multiPoints() {
+    return this.rootStore.speciesStore.multiPointCollection.geometries as MultiPoint[];
   }
 
   get binner() {
@@ -117,10 +117,7 @@ export default class MapStore {
     }
   }
 
-  private _renderPoint(
-    point: PointFeature,
-    ctx: CanvasRenderingContext2D,
-  ) {
+  private _renderMultiPoint(point: MultiPoint, ctx: CanvasRenderingContext2D) {
     const path = this.geoPath!;
     ctx.beginPath();
     path(point);
@@ -128,39 +125,34 @@ export default class MapStore {
     ctx.fill();
   }
 
-  renderPoint(point: PointFeature) {
+  renderMultiPoint(point: MultiPoint) {
     if (this.context2d === null) {
       return;
     }
-    this._renderPoint(point, this.context2d);
+
+    this._renderMultiPoint(point, this.context2d);
   }
 
-  private _renderPoints(batchSize: number) {
+  private _renderPoints() {
     if (this.renderType !== 'raw') return;
 
-    const { features } = this;
+    const { multiPoints } = this;
 
-    const endIndex = Math.min(this.renderPointIndex + batchSize, features.length);
+    this._renderMultiPoint(multiPoints[this.renderBatchIndex], this.context2d!)
+    ++this.renderBatchIndex;
 
-    for (let i = this.renderPointIndex; i < endIndex; ++i) {
-      this._renderPoint(features[i], this.context2d!);
-    }
-
-    this.renderPointIndex = endIndex;
-
-    if (this.renderPointIndex < features.length) {
-      requestAnimationFrame(() => this._renderPoints(batchSize));
+    if (this.renderBatchIndex < multiPoints.length) {
+      requestAnimationFrame(() => this._renderPoints());
     }
   }
 
   renderPoints() {
-    if (this.context2d === null || this.features.length === 0) {
+    if (this.context2d === null || this.multiPoints.length === 0) {
       return;
     }
 
-    this.renderPointIndex = 0;
-
-    this._renderPoints(5000);
+    this.renderBatchIndex = 0;
+    this._renderPoints();
   }
 
   private _renderGridCell(node: Node, ctx: CanvasRenderingContext2D, color: string) {
