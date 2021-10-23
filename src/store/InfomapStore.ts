@@ -7,6 +7,10 @@ import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
 import { visitTreeDepthFirstPostOrder } from '../utils/tree'
 
+interface BioregionsNetwork extends Required<BipartiteNetwork> {
+  nodeIdMap: { [name: string]: number };
+}
+
 const defaultArgs = {
   silent: false,
   output: 'json',
@@ -101,30 +105,30 @@ export default class InfomapStore {
     this.setIsRunning(false);
   }
 
-  private _createNetwork(): BipartiteNetwork {
+  private _createNetwork(): BioregionsNetwork {
     return this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
       ? this.createNetworkWithTree()
       : this.createNetwork()
   }
 
-  private createNetwork(): Required<BipartiteNetwork> {
+  private createNetwork(): BioregionsNetwork {
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added.
     */
-    const network: Required<BipartiteNetwork> = {
+    const network: BioregionsNetwork = {
       nodes: [],
       links: [],
       bipartiteStartId: 0,
+      nodeIdMap: {},
     };
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = 0;
-    const nodeMap: { [key: string]: number } = {}; // map from node name to node id
 
     const addNode = (name: string) => {
       const id = nodeId++;
-      nodeMap[name] = id;
+      network.nodeIdMap[name] = id;
       network.nodes.push({ id, name });
     };
 
@@ -140,16 +144,16 @@ export default class InfomapStore {
     }
 
     for (let [name, cells] of Object.entries(nameToCellIds)) {
-      const source = nodeMap[name]!;
+      const source = network.nodeIdMap[name]!;
       for (let cell of cells.values()) {
-        network.links.push({ source, target: nodeMap[cell]! });
+        network.links.push({ source, target: network.nodeIdMap[cell]! });
       }
     }
 
     return network;
   }
 
-  private createNetworkWithTree(): BipartiteNetwork {
+  private createNetworkWithTree(): BioregionsNetwork {
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added (as in createNetwork).
@@ -160,11 +164,6 @@ export default class InfomapStore {
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = network.nodes.length;
-    const nodeMap: { [key: string]: number } = {};
-
-    for (let cellId = 0; cellId < network.bipartiteStartId; ++cellId) {
-      nodeMap[network.nodes[cellId].name!] = cellId;
-    }
 
     /**
      * 1. Depth first search post order (from leafs):
@@ -199,7 +198,11 @@ export default class InfomapStore {
           continue;
         }
         for (const cellId of nameToCellIds[species]) {
-          network.links.push({ source: nodeId, target: nodeMap[cellId], weight: 0.2 });
+          network.links.push({
+            source: nodeId,
+            target: network.nodeIdMap[cellId],
+            weight: 0.2
+          });
         }
       }
     });
