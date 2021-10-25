@@ -8,7 +8,7 @@ import Data from './Data';
 import { useStore } from '../../store';
 
 export default observer(function ControlPanel() {
-  const { speciesStore, infomapStore } = useStore();
+  const { speciesStore } = useStore();
 
   return (
     <Box>
@@ -18,7 +18,7 @@ export default observer(function ControlPanel() {
       <Section label="Resolution" isLoading={speciesStore.isLoading}>
         <Resolution />
       </Section>
-      <Section label="Infomap" isLoading={infomapStore.isRunning}>
+      <Section label="Infomap">
         <Infomap />
       </Section>
       <Section label="Map">

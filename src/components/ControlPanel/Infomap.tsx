@@ -4,7 +4,15 @@ import TreeWeight from '../TreeWeight';
 import { useStore } from '../../store'
 
 export default observer(function () {
-  const { treeStore, speciesStore, infomapStore } = useStore();
+  const { treeStore, speciesStore, infomapStore, mapStore } = useStore();
+
+  const runInfomap = async () => {
+    await infomapStore.run();
+    if (mapStore.renderType === 'grid' && mapStore.gridColorBy === 'modules') {
+      mapStore.render();
+    }
+  }
+
   return (
     <VStack>
       <FormControl display="flex" w="100%" alignItems="center" isDisabled={!speciesStore.loaded || infomapStore.isRunning}>
@@ -40,7 +48,7 @@ export default observer(function () {
       <Button
         size="sm"
         w="100%"
-        onClick={() => infomapStore.run()}
+        onClick={runInfomap}
         isLoading={infomapStore.isRunning}
         disabled={!speciesStore.loaded || infomapStore.isRunning}
       >
