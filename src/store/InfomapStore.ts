@@ -11,7 +11,9 @@ interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
 }
 
-const defaultArgs = {
+type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output' | 'skipAdjustBipartiteFlow'>>>;
+
+const defaultArgs: RequiredArgs = {
   silent: false,
   output: 'json',
   skipAdjustBipartiteFlow: true,
@@ -19,7 +21,7 @@ const defaultArgs = {
 
 export default class InfomapStore {
   rootStore: RootStore;
-  args: Arguments = {
+  args: RequiredArgs & Arguments = {
     twoLevel: true,
     numTrials: 1,
     ...defaultArgs,
