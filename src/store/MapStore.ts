@@ -17,8 +17,7 @@ interface CanvasDatum {
 
 export interface IMapRenderer { }
 
-export type RenderType = 'raw' | 'grid';
-export type GridColorBy = 'records' | 'modules';
+export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
 type GetGridColor = (cell: Node) => string;
 
@@ -54,8 +53,7 @@ export default class MapStore {
 
   renderBatchIndex: number = 0;
 
-  renderType: RenderType = 'raw';
-  gridColorBy: GridColorBy = 'records';
+  renderType: RenderType = 'records';
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -64,21 +62,15 @@ export default class MapStore {
       isZooming: observable,
       projectionName: observable,
       renderType: observable,
-      gridColorBy: observable,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
       setRenderType: action,
-      setGridColorBy: action,
     });
   }
 
   setRenderType(type: RenderType) {
     this.renderType = type;
-  }
-
-  setGridColorBy(colorBy: GridColorBy) {
-    this.gridColorBy = colorBy;
   }
 
   get multiPoints() {
@@ -134,7 +126,7 @@ export default class MapStore {
   }
 
   private _renderPoints() {
-    if (this.renderType !== 'raw') return;
+    if (this.renderType !== 'records') return;
 
     const { multiPoints } = this;
     if (this.renderBatchIndex === 0) {
@@ -241,7 +233,7 @@ export default class MapStore {
     const { cells } = this.binner;
     const { tree } = this.rootStore.infomapStore;
 
-    const getGridColor = (this.gridColorBy === 'records' || !tree)
+    const getGridColor = (this.renderType === 'heatmap' || !tree)
       ? MapStore._heatmapColor(cells)
       : MapStore._bioregionColor();
 
@@ -256,7 +248,7 @@ export default class MapStore {
     this.context2d.save();
 
     this.renderLand();
-    if (this.renderType === 'raw') {
+    if (this.renderType === 'records') {
       this.renderPoints();
     } else {
       this.renderGrid();

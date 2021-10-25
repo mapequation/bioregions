@@ -8,7 +8,7 @@ export default observer(function () {
 
   const runInfomap = async () => {
     await infomapStore.run();
-    if (mapStore.renderType === 'grid' && mapStore.gridColorBy === 'modules') {
+    if (mapStore.renderType === 'bioregions') {
       mapStore.render();
     }
   }

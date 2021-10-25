@@ -1,7 +1,7 @@
 import { observer } from 'mobx-react';
 import { Flex, Select, Button, ButtonGroup, VStack, FormControl, FormLabel, Switch, Spacer } from '@chakra-ui/react';
 import { useStore } from '../../store';
-import type { Projection, RenderType, GridColorBy } from '../../store/MapStore';
+import type { Projection, RenderType } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
 
 const ProjectionSelect = observer(function () {
@@ -35,32 +35,23 @@ export default observer(function () {
     }
   }
 
-  const setGridColorBy = (colorBy: GridColorBy) => () => {
-    const shouldRender = mapStore.gridColorBy !== colorBy || mapStore.renderType !== 'grid';
-    mapStore.setGridColorBy(colorBy);
-    mapStore.setRenderType('grid');
-    if (shouldRender) {
-      mapStore.render();
-    }
-  }
-
   return (
     <VStack>
       <ProjectionSelect />
       <Flex w="100%">
         <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded || speciesStore.isLoading}>
-          <Button onClick={setRenderType("raw")} isActive={mapStore.renderType === "raw"}>Records</Button>
+          <Button onClick={setRenderType("records")} isActive={mapStore.renderType === "records"}>Records</Button>
           <Button
-            onClick={setGridColorBy("records")}
-            isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "records"}
+            onClick={setRenderType("heatmap")}
+            isActive={mapStore.renderType === "heatmap"}
           >
             Heatmap
           </Button>
           <Button
-            onClick={setGridColorBy("modules")}
+            onClick={setRenderType("bioregions")}
             isLoading={infomapStore.isRunning}
             isDisabled={infomapStore.tree == null}
-            isActive={mapStore.renderType === "grid" && mapStore.gridColorBy === "modules"}
+            isActive={mapStore.renderType === "bioregions"}
           >
             Bioregions
           </Button>
