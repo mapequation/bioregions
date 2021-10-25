@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import type { Projection, RenderType } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
 
-const ProjectionSelect = observer(function () {
+const ProjectionSelect = observer(function ProjectionSelect() {
   const { mapStore } = useStore();
 
   return (
@@ -25,7 +25,7 @@ const ProjectionSelect = observer(function () {
   );
 });
 
-export default observer(function () {
+export default observer(function Map() {
   const { mapStore, speciesStore, infomapStore } = useStore();
 
   const setRenderType = (type: RenderType) => () => {

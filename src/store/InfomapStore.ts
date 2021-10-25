@@ -232,7 +232,7 @@ export default class InfomapStore {
         }
       }
     });
-    console.log(tree);
+
     console.log('Nodes missing in network', Array.from(missing));
 
     return network;

@@ -3,7 +3,7 @@ import { Button, VStack, FormControl, FormLabel, Spacer, Switch, NumberInput, Nu
 import TreeWeight from '../TreeWeight';
 import { useStore } from '../../store'
 
-export default observer(function () {
+export default observer(function Infomap() {
   const { treeStore, speciesStore, infomapStore, mapStore } = useStore();
 
   const runInfomap = async () => {

@@ -10,7 +10,7 @@ import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
 
 
-export const LoadExample = observer(function () {
+export const LoadExample = observer(function LoadExample() {
   const { speciesStore, infomapStore, treeStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -60,7 +60,7 @@ export const LoadExample = observer(function () {
 });
 
 
-export const LoadData = observer(function () {
+export const LoadData = observer(function LoadData() {
   const { speciesStore, treeStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();

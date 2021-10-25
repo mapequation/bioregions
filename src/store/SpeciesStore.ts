@@ -159,8 +159,6 @@ export default class SpeciesStore {
 
 
     await loader.next();
-
-    console.log(nameHistogram);
     console.timeEnd("load");
 
     this.updatePointCollection();

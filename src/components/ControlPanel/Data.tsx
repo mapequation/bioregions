@@ -3,7 +3,7 @@ import { VStack } from '@chakra-ui/react';
 import { LoadData, LoadExample } from './Load';
 import { useStore } from '../../store'
 
-export default observer(function () {
+export default observer(function Data() {
   const { speciesStore, treeStore } = useStore();
   return (
     <VStack align="stretch">

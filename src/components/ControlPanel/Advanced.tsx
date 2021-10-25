@@ -6,7 +6,7 @@ import { range, format } from 'd3';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-export default observer(function () {
+export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
   const [step, setStep] = useState(0);
   const { speciesStore, treeStore, infomapStore } = useStore();
@@ -20,9 +20,12 @@ export default observer(function () {
 
     const zip = new JSZip();
 
+    if (infomapStore.treeString) {
+      zip.file(`${speciesStore.name}_without_tree.tree`, infomapStore.treeString);
+    }
+
     const weights = range(steps + 1).map(i => i / steps);
     const f = format('.1f');
-    console.log(weights)
 
     for (let i = 0; i < weights.length; i++) {
       setStep(i);

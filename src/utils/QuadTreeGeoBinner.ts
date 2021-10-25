@@ -466,7 +466,6 @@ export class QuadtreeGeoBinner {
 
   get nameToCellIds() {
     // TODO: Check lazy computed
-    console.log("Binner: Calculating nameToCellIds");
     const nameToCellIds: { [name: string]: Set<string> } = {};
     const { cells } = this;
 
