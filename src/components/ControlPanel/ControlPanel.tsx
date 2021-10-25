@@ -6,6 +6,7 @@ import Infomap from './Infomap';
 import Map from './Map';
 import Data from './Data';
 import Export from './Export';
+import Advanced from './Advanced';
 import { useStore } from '../../store';
 
 export default observer(function ControlPanel() {
@@ -27,6 +28,9 @@ export default observer(function ControlPanel() {
       </Section>
       <Section label="Export">
         <Export />
+      </Section>
+      <Section label="Advanced">
+        <Advanced />
       </Section>
     </Box>
   );

@@ -28,6 +28,7 @@ export default class TreeStore {
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
       toggleIncludeTree: action,
+      setIncludeTree: action,
       setWeightParameter: action,
       setTree: action,
       setTreeString: action,
@@ -78,6 +79,10 @@ export default class TreeStore {
 
   toggleIncludeTree() {
     this.includeTreeInNetwork = !this.includeTreeInNetwork;
+  }
+
+  setIncludeTree(value: boolean = true) {
+    this.includeTreeInNetwork = value;
   }
 
   setWeightParameter(value: number) {

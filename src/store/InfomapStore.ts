@@ -219,10 +219,15 @@ export default class InfomapStore {
           continue;
         }
         for (const cellId of nameToCellIds[species]) {
+          const weight = weightFunction(node.rootDistance / tree.maxLeafDistance);
+          if (weight < 1e-3) {
+            //TODO: Test this threshold, should depend on network size or other properties?
+            continue;
+          }
           network.links.push({
             source: nodeId,
             target: network.nodeIdMap[cellId],
-            weight: weightFunction(node.rootDistance / tree.maxLeafDistance),
+            weight,
           });
         }
       }

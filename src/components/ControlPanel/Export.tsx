@@ -1,6 +1,6 @@
 import { Button, VStack } from '@chakra-ui/react'
 import { useStore } from '../../store';
-import { saveAs } from 'file-saver';
+import { saveString } from '../../utils/exporter';
 
 export default function Export() {
   const { infomapStore, speciesStore } = useStore();
@@ -8,8 +8,8 @@ export default function Export() {
   const downloadTree = () => {
     if (!infomapStore.treeString) return;
 
-    const blob = new Blob([infomapStore.treeString], { type: 'text/plain;charset=utf-8' });
-    saveAs(blob, `${speciesStore.name}.tree`);
+    const filename = `${speciesStore.name}.tree`;
+    saveString(filename, infomapStore.treeString);
   }
 
   return (
