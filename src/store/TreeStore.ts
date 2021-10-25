@@ -5,6 +5,7 @@ import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree'
 import type { Node as PhyloTree } from '../utils/tree'
 import { extent, range, map, zip } from 'd3';
+import { exp1 } from '../utils/math';
 
 export default class TreeStore {
   rootStore: RootStore;
@@ -85,7 +86,6 @@ export default class TreeStore {
   }
 
   get weightFunction() {
-    const exp1 = (x: number) => Math.exp(x + 1) - Math.E;
     const w = exp1(exp1(this.weightParameter));
     return (t: number) => t * Math.exp(w * (t - 1));
   }

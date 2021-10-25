@@ -12,6 +12,13 @@ export function clamp(value: number, min?: number, max?: number) {
   return min !== undefined && value < min
     ? min
     : max !== undefined && value > max
-    ? max
-    : value;
+      ? max
+      : value;
+}
+
+/**
+ * Shifted exponential to map 0 to 0
+ */
+export function exp1(x: number) {
+  return Math.exp(x + 1) - Math.E;
 }
