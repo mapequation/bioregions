@@ -1,6 +1,7 @@
 import { observer } from "mobx-react";
 import { Button, VStack, FormControl, FormLabel, Spacer, Switch, NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper, Progress } from '@chakra-ui/react';
 import TreeWeight from '../TreeWeight';
+import Stat from '../Stat';
 import { useStore } from '../../store'
 
 export default observer(function Infomap() {
@@ -11,6 +12,11 @@ export default observer(function Infomap() {
     if (mapStore.renderType === 'bioregions') {
       mapStore.render();
     }
+  }
+
+  const tagColorScheme = (numTopModules: number) => {
+    const colors = ["red", "red", "red", "orange", "yellow", "green"];
+    return colors[Math.min(numTopModules, colors.length - 1)];
   }
 
   return (
@@ -35,6 +41,7 @@ export default observer(function Infomap() {
         <Spacer />
         <NumberInput
           maxW="70px"
+          min={1}
           size="xs"
           value={infomapStore.args.numTrials}
           onChange={(value) => infomapStore.setNumTrials(+value)}
@@ -63,6 +70,8 @@ export default observer(function Infomap() {
           w="100%"
           color="blue.500"
         />}
+      {infomapStore.tree != null &&
+        <Stat label="Bioregions" colorScheme={tagColorScheme(infomapStore.tree.numTopModules)}>{infomapStore.tree.numTopModules.toLocaleString()}</Stat>}
     </VStack>
   );
 })

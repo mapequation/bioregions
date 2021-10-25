@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { observer } from "mobx-react";
-import { Button, VStack, Progress } from '@chakra-ui/react';
+import { Button, VStack, Progress, FormControl, FormLabel, Spacer, NumberInput, NumberInputField, NumberInputStepper, NumberIncrementStepper, NumberDecrementStepper } from '@chakra-ui/react';
 import { useStore } from '../../store'
 import { range, format } from 'd3';
 import JSZip from 'jszip';
@@ -8,23 +8,23 @@ import { saveAs } from 'file-saver';
 
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
+  const [steps, setSteps] = useState(5);
   const [step, setStep] = useState(0);
-  const { speciesStore, treeStore, infomapStore } = useStore();
-
-  const steps = 10;
+  const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
 
   const paramSweep = async () => {
     setIsRunning(true);
 
-    treeStore.setIncludeTree();
-
     const zip = new JSZip();
 
-    if (infomapStore.treeString) {
-      zip.file(`${speciesStore.name}_without_tree.tree`, infomapStore.treeString);
-    }
+    treeStore.setIncludeTree(false);
 
-    const weights = range(steps + 1).map(i => i / steps);
+    await infomapStore.run();
+    zip.file(`${speciesStore.name}_without_tree.tree`, infomapStore.treeString!);
+
+    treeStore.setIncludeTree();
+
+    const weights = range(steps).map(i => i / (steps - 1));
     const f = format('.1f');
 
     for (let i = 0; i < weights.length; i++) {
@@ -33,6 +33,10 @@ export default observer(function Advanced() {
 
       treeStore.setWeightParameter(w);
       await infomapStore.run();
+
+      if (mapStore.renderType === 'bioregions') {
+        mapStore.render();
+      }
 
       const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
       zip.file(filename, infomapStore.treeString!);
@@ -46,10 +50,30 @@ export default observer(function Advanced() {
 
   return (
     <VStack align="stretch">
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={infomapStore.isRunning}>
+        <FormLabel htmlFor="steps" mb="0">
+          Steps
+        </FormLabel>
+        <Spacer />
+        <NumberInput
+          maxW="70px"
+          min={2}
+          size="xs"
+          value={steps}
+          onChange={(value) => setSteps(+value)}
+        >
+          <NumberInputField />
+          <NumberInputStepper>
+            <NumberIncrementStepper />
+            <NumberDecrementStepper />
+          </NumberInputStepper>
+        </NumberInput>
+      </FormControl>
+
       <Button size="sm" isDisabled={!speciesStore.loaded || !treeStore.loaded} isLoading={isRunning} onClick={paramSweep}>Run parameter sweep</Button>
       {isRunning && <Progress
         value={step}
-        max={steps + 1}
+        max={steps}
         size="xs"
         w="100%"
         color="blue.500"

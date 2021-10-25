@@ -11,7 +11,7 @@ import { extension } from '../../utils/filename';
 
 
 export const LoadExample = observer(function LoadExample() {
-  const { speciesStore, infomapStore, treeStore } = useStore();
+  const { speciesStore, infomapStore, treeStore, mapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
 
   const rowHover = {
@@ -29,6 +29,9 @@ export const LoadExample = observer(function LoadExample() {
     }
     await speciesStore.load(filename);
     await infomapStore.run();
+
+    mapStore.setRenderType("bioregions");
+    mapStore.render();
   }
 
   return (
@@ -61,7 +64,7 @@ export const LoadExample = observer(function LoadExample() {
 
 
 export const LoadData = observer(function LoadData() {
-  const { speciesStore, treeStore, infomapStore } = useStore();
+  const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
@@ -139,6 +142,8 @@ export const LoadData = observer(function LoadData() {
     setIsOpen(false);
     await speciesStore.load(file, nameColumn, longColumn, latColumn);
     await infomapStore.run();
+    mapStore.setRenderType("bioregions");
+    mapStore.render();
     onClose(); // cleanup state
   }
 

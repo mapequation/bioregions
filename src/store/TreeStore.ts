@@ -2,7 +2,7 @@ import { makeObservable, observable, action, computed } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
-import { visitTreeDepthFirst } from '../utils/tree'
+import { visitTreeDepthFirstPreOrder } from '../utils/tree'
 import type { Node as PhyloTree } from '../utils/tree'
 import { extent, range, map, zip } from 'd3';
 
@@ -41,7 +41,7 @@ export default class TreeStore {
 
     let numNodes = 0;
 
-    visitTreeDepthFirst(this.tree, () => {
+    visitTreeDepthFirstPreOrder(this.tree, () => {
       ++numNodes;
     });
 
@@ -55,7 +55,7 @@ export default class TreeStore {
 
     let numLeafs = 0;
 
-    visitTreeDepthFirst(this.tree, (node) => {
+    visitTreeDepthFirstPreOrder(this.tree, (node) => {
       if (node.isLeaf) {
         ++numLeafs;
       }
