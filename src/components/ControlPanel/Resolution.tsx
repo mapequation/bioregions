@@ -4,6 +4,7 @@ import debounce from 'lodash/debounce';
 import { Box, VStack, Flex, Spacer, Text, FormControl, FormLabel } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
+import Stat from '../Stat';
 
 type MinMaxInputsProps = {
   label: string;
@@ -105,6 +106,8 @@ export default observer(function Resolution() {
           }}
         />
       </Flex>
+      {speciesStore.loaded &&
+        <Stat label="Quad tree cells">{binner.cells.length.toLocaleString()}</Stat>}
     </VStack>
   );
 });

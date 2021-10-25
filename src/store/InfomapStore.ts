@@ -106,7 +106,6 @@ export default class InfomapStore {
       if (tree) {
         setBioregionIds(tree, cells);
         this.setTree(tree);
-        console.log('Num top modules', tree.numTopModules)
       }
 
       if (treeString) {
