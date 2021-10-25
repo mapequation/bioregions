@@ -26,6 +26,7 @@ export default class InfomapStore {
     numTrials: 1,
     ...defaultArgs,
   };
+  network: BioregionsNetwork | null = null;
   tree: Tree | null = null;
   treeString: string | null = null;
   isRunning: boolean = false;
@@ -35,6 +36,7 @@ export default class InfomapStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
+      network: observable.ref,
       tree: observable.ref,
       treeString: observable,
       args: observable,
@@ -42,6 +44,7 @@ export default class InfomapStore {
       isRunning: observable,
       setTree: action,
       setTreeString: action,
+      setNetwork: action,
       setIsRunning: action,
       setNumTrials: action,
       setCurrentTrial: action,
@@ -63,6 +66,10 @@ export default class InfomapStore {
 
   setTreeString(treeString: string | null) {
     this.treeString = treeString;
+  }
+
+  setNetwork(network: BioregionsNetwork | null) {
+    this.network = network;
   }
 
   setIsRunning(isRunning: boolean = true) {
@@ -90,9 +97,8 @@ export default class InfomapStore {
     }
     this.setIsRunning();
 
-    console.time('createNetwork');
     const network = this._createNetwork();
-    console.timeEnd('createNetwork');
+    this.setNetwork(network);
 
     try {
       console.time('infomap');
@@ -122,9 +128,12 @@ export default class InfomapStore {
   }
 
   private _createNetwork(): BioregionsNetwork {
-    return this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
+    console.time('createNetwork');
+    const network = this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
       ? this.createNetworkWithTree()
       : this.createNetwork()
+    console.timeEnd('createNetwork');
+    return network;
   }
 
   private createNetwork(): BioregionsNetwork {
@@ -193,6 +202,9 @@ export default class InfomapStore {
 
     const missing = new Set<string>();
 
+    // source (tree node) -> target (grid cell) -> weight
+    const links = new Map<number, Map<number, number>>();
+
     // Include internal tree nodes into network
     visitTreeDepthFirstPostOrder(tree, (node) => {
       if (node.isLeaf) {
@@ -210,27 +222,50 @@ export default class InfomapStore {
         }
       });
 
-      network.nodes.push({ id: nodeId++, name: node.name });
+      const weight = weightFunction(node.rootDistance / tree.maxLeafDistance);
+
+      if (weight < 1e-3) {
+        //TODO: Test this threshold, should depend on network size or other properties?
+        return;
+      }
+
+      const source = nodeId++;
+      if (!links.has(source)) {
+        links.set(source, new Map());
+      }
+
+      const outLinks = links.get(source)!;
 
       for (const species of node.speciesSet!) {
         if (!nameToCellIds[species]) {
           missing.add(species);
           continue;
         }
+
         for (const cellId of nameToCellIds[species]) {
-          const weight = weightFunction(node.rootDistance / tree.maxLeafDistance);
-          if (weight < 1e-3) {
-            //TODO: Test this threshold, should depend on network size or other properties?
-            continue;
-          }
-          network.links.push({
-            source: nodeId,
-            target: network.nodeIdMap[cellId],
-            weight,
-          });
+          const target = network.nodeIdMap[cellId];
+
+          const currentWeight = outLinks.get(target) ?? 0;
+          outLinks.set(target, currentWeight + weight);
         }
       }
     });
+
+    const treeNodes = new Set<number>();
+
+    for (const [source, outLinks] of links.entries()) {
+      if (outLinks.size !== 0) {
+        treeNodes.add(source);
+      }
+
+      for (const [target, weight] of outLinks.entries()) {
+        network.links.push({ source, target, weight });
+      }
+    }
+
+    for (const id of treeNodes) {
+      network.nodes.push({ id, name: id.toString() });
+    }
 
     console.log('Nodes missing in network', Array.from(missing));
 

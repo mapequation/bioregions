@@ -6,6 +6,7 @@ import { useStore } from '../../store'
 
 export default observer(function Infomap() {
   const { treeStore, speciesStore, infomapStore, mapStore } = useStore();
+  const { network, tree } = infomapStore;
 
   const runInfomap = async () => {
     await infomapStore.run();
@@ -15,7 +16,7 @@ export default observer(function Infomap() {
   }
 
   const tagColorScheme = (numTopModules: number) => {
-    const colors = ["red", "red", "red", "orange", "yellow", "green"];
+    const colors = ["red", "red", "gray"];
     return colors[Math.min(numTopModules, colors.length - 1)];
   }
 
@@ -70,8 +71,13 @@ export default observer(function Infomap() {
           w="100%"
           color="blue.500"
         />}
-      {infomapStore.tree != null &&
-        <Stat label="Bioregions" colorScheme={tagColorScheme(infomapStore.tree.numTopModules)}>{infomapStore.tree.numTopModules.toLocaleString()}</Stat>}
+      {network != null &&
+        <>
+          <Stat label="Nodes">{network.nodes.length.toLocaleString()}</Stat>
+          <Stat label="Links">{network.links.length.toLocaleString()}</Stat>
+        </>}
+      {tree != null && !infomapStore.isRunning &&
+        <Stat label="Bioregions" colorScheme={tagColorScheme(tree.numTopModules)}>{tree.numTopModules.toLocaleString()}</Stat>}
     </VStack>
   );
 })

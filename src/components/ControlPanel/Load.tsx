@@ -20,6 +20,7 @@ export const LoadExample = observer(function LoadExample() {
 
   const loadFile = (filename: string, treename?: string) => async () => {
     setIsOpen(false);
+    speciesStore.setLoaded(false);
     treeStore.setLoaded(false);
     treeStore.setTree(null);
     infomapStore.setTree(null);
@@ -82,6 +83,7 @@ export const LoadData = observer(function LoadData() {
       return;
     }
 
+    speciesStore.setLoaded(false);
     treeStore.setLoaded(false);
     treeStore.setTree(null);
     infomapStore.setTree(null);

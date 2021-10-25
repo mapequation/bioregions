@@ -1,7 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { observer } from 'mobx-react';
 import debounce from 'lodash/debounce';
-import { Box, VStack, Flex, Spacer, Text, FormControl, FormLabel } from '@chakra-ui/react';
+import { Box, VStack, Flex, Spacer, Text, FormControl, FormLabel, Divider } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 import Stat from '../Stat';
@@ -106,8 +106,12 @@ export default observer(function Resolution() {
           }}
         />
       </Flex>
-      {speciesStore.loaded &&
-        <Stat label="Quad tree cells">{binner.cells.length.toLocaleString()}</Stat>}
+      {speciesStore.loaded && (
+        <>
+          <Divider />
+          <Stat label="Grid cells">{binner.cells.length.toLocaleString()}</Stat>
+        </>
+      )}
     </VStack>
   );
 });
