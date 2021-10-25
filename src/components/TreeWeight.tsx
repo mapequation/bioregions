@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Icon,
   Flex,
@@ -12,14 +11,18 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
 } from '@chakra-ui/react';
-import { extent, range, map, zip } from 'd3';
+import { observer } from 'mobx-react';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
+import { useStore } from '../store';
 
-export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolean }) {
-  const [weight, setWeight] = useState(0.5);
+export default observer(function TreeWeight({ isDisabled = false }: { isDisabled?: boolean }) {
+  const { treeStore } = useStore();
   const width = 250;
   const height = 120;
+
+  const weight = treeStore.weightParameter;
+  const { data, domain } = treeStore.weightCurve;
 
   const inputProps = {
     min: 0,
@@ -27,15 +30,6 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
     step: 0.01,
     value: weight,
   };
-
-  const exp1 = (x: number) => Math.exp(x + 1) - Math.E;
-  const w = exp1(exp1(weight));
-  const f = (x: number) => x * Math.exp(w * (x - 1));
-
-  const x = range(0, 1, 0.001);
-  const y = map(x, f);
-  const data = zip(x, y) as [number, number][];
-  const domain = extent(x) as [number, number];
 
   const color = !isDisabled ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
 
@@ -66,7 +60,7 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
         />
       </svg>
       <Flex alignItems="center" justifyContent="center" width="100%">
-        <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => setWeight(0)}>
+        <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => treeStore.setWeightParameter(0)}>
           <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m18 36 27-18" strokeWidth="4.5" />
@@ -76,7 +70,7 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
           isDisabled={isDisabled}
           aria-label="weight"
           size="sm"
-          onChange={(weight) => setWeight(weight)}
+          onChange={(weight) => treeStore.setWeightParameter(weight)}
           {...inputProps}
         >
           <SliderTrack>
@@ -84,7 +78,7 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
           </SliderTrack>
           <SliderThumb />
         </Slider>
-        <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => setWeight(1)}>
+        <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => treeStore.setWeightParameter(1)}>
           <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m45 18c0 10-12.08 18-27 18" strokeWidth="4.5" />
@@ -95,7 +89,7 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
           maxW="70px"
           size="xs"
           ml={2}
-          onChange={(_, value) => setWeight(value)}
+          onChange={(_, value) => treeStore.setWeightParameter(value)}
           {...inputProps}
         >
           <NumberInputField />
@@ -107,4 +101,4 @@ export default function TreeWeight({ isDisabled = false }: { isDisabled?: boolea
       </Flex>
     </Flex>
   );
-};
+});

@@ -15,18 +15,19 @@ export default observer(function () {
 
   return (
     <VStack>
-      <FormControl display="flex" w="100%" alignItems="center" isDisabled={!speciesStore.loaded || infomapStore.isRunning}>
+      <FormControl display="flex" w="100%" alignItems="center" isDisabled={infomapStore.isRunning}>
         <FormLabel htmlFor="includeTree" mb="0">
           Include tree
         </FormLabel>
         <Spacer />
         <Switch
           id="includeTree"
+          isDisabled={infomapStore.isRunning}
           checked={treeStore.includeTreeInNetwork}
           onChange={() => treeStore.toggleIncludeTree()}
         />
       </FormControl>
-      <TreeWeight isDisabled={!treeStore.loaded || !treeStore.includeTreeInNetwork} />
+      <TreeWeight isDisabled={!treeStore.includeTreeInNetwork || infomapStore.isRunning} />
       <FormControl display="flex" w="100%" alignItems="center" isDisabled={infomapStore.isRunning}>
         <FormLabel htmlFor="trials" mb="0">
           Trials

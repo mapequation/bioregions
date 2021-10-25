@@ -4,6 +4,7 @@ import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import type { Feature, FeatureCollection, Point, MultiPoint, GeometryCollection } from '../types/geojson';
+import { getName } from '../utils/filename';
 
 export interface PointProperties {
   name: string;
@@ -41,6 +42,7 @@ export const createMultiPointGeometryCollection = (
 
 export default class SpeciesStore {
   rootStore: RootStore;
+  name: string = "data";
   loaded: boolean = false;
   isLoading: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
@@ -51,6 +53,7 @@ export default class SpeciesStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
+      name: observable,
       loaded: observable,
       isLoading: observable,
       numPoints: computed,
@@ -113,6 +116,8 @@ export default class SpeciesStore {
       this.updatePointCollection(createPointCollection());
       this.rootStore.mapStore.render();
     }
+
+    this.name = getName(typeof file === "string" ? file : file.name)
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);

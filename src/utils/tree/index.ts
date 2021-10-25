@@ -11,10 +11,30 @@ export type Node = {
   isLeaf: boolean;
   depth: number;
   branchLength: number;
-  leafCount: number;
-  maxLength: number;
-  rootDist: number;
+  numLeafs: number;
+  maxLeafDistance: number;
+  rootDistance: number;
   speciesSet?: Set<string>;
+}
+
+export function visitTreeDepthFirstPreOrder(
+  node: Node,
+  callback: (node: Node) => void,
+) {
+  callback(node)
+  node.children.forEach((child) => {
+    visitTreeDepthFirstPreOrder(child, callback);
+  });
+}
+
+export function visitTreeDepthFirstPostOrder(
+  node: Node,
+  callback: (node: Node) => void,
+) {
+  node.children.forEach((child) => {
+    visitTreeDepthFirstPostOrder(child, callback);
+  });
+  callback(node);
 }
 
 type VisitOpts = {
@@ -43,26 +63,6 @@ function _visitTreeDepthFirst<T>(
   if (childExit || opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent)) return true;
 
   return false;
-}
-
-export function visitTreeDepthFirstPreOrder(
-  node: Node,
-  callback: (node: Node) => void,
-) {
-  callback(node)
-  node.children.forEach((child) => {
-    visitTreeDepthFirstPreOrder(child, callback);
-  });
-}
-
-export function visitTreeDepthFirstPostOrder(
-  node: Node,
-  callback: (node: Node) => void,
-) {
-  node.children.forEach((child) => {
-    visitTreeDepthFirstPostOrder(child, callback);
-  });
-  callback(node);
 }
 
 /**

@@ -4,6 +4,7 @@ import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirst } from '../utils/tree'
 import type { Node as PhyloTree } from '../utils/tree'
+import { extent, range, map, zip } from 'd3';
 
 export default class TreeStore {
   rootStore: RootStore;
@@ -11,6 +12,7 @@ export default class TreeStore {
   tree: PhyloTree | null = null;
   treeString: string | null = null;
   includeTreeInNetwork: boolean = false;
+  weightParameter: number = 0.5; // Domain [0,1] for tree weight
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -20,9 +22,13 @@ export default class TreeStore {
       tree: observable.ref,
       treeString: observable,
       includeTreeInNetwork: observable,
+      weightParameter: observable,
+      weightFunction: computed,
+      weightCurve: computed,
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
       toggleIncludeTree: action,
+      setWeightParameter: action,
       setTree: action,
       setTreeString: action,
     });
@@ -58,7 +64,7 @@ export default class TreeStore {
     return numLeafs;
   }
 
-  setTree(tree: PhyloTree) {
+  setTree(tree: PhyloTree | null) {
     this.tree = tree;
   }
 
@@ -72,6 +78,25 @@ export default class TreeStore {
 
   toggleIncludeTree() {
     this.includeTreeInNetwork = !this.includeTreeInNetwork;
+  }
+
+  setWeightParameter(value: number) {
+    this.weightParameter = value;
+  }
+
+  get weightFunction() {
+    const exp1 = (x: number) => Math.exp(x + 1) - Math.E;
+    const w = exp1(exp1(this.weightParameter));
+    return (t: number) => t * Math.exp(w * (t - 1));
+  }
+
+  get weightCurve() {
+    const x = range(0, 1, 0.001);
+    const f = this.weightFunction;
+    const y = map(x, f);
+    const data = zip(x, y) as [number, number][];
+    const domain = extent(x) as [number, number];
+    return { data, domain }
   }
 
   async load(file: File | string) {

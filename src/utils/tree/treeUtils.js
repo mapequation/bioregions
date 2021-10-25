@@ -355,15 +355,15 @@ export function normalizeNames(tree) {
  * Prepare tree with some default and aggregated properties:
  * parent - null for root
  * name - string for leaf nodes, with Capital first letter and '_' -> ' ',
- * may be undefined for parent nodes
+ *    may be undefined for parent nodes
  * uid - unique id for each node from 1 to first leaf to numNodes for root
  * originalChildIndex - original index in the children array, 0 for root.
  * isLeaf - boolean
  * depth - number of steps from root
- * length - branch length, > 0 || 1
- * leafCount - number of leaf nodes under each node, 1 for leaf nodes
- * maxLength - max branch length to leafs under each node
- * rootDist - total branch length from root
+ * branchLength - distance to parent node, > 0 || 1
+ * numLeafs - number of leaf nodes under each node, 1 for leaf nodes
+ * maxLeafDistance - max branch length to leafs under each node
+ * rootDistance - total branch length from root
  */
 export function prepareTree(tree) {
   // Traverse from leaf nodes to root to define and aggregate some properties
@@ -379,22 +379,22 @@ export function prepareTree(tree) {
       node.branchLength = 1;
     }
     if (node.isLeaf) {
-      node.leafCount = 1;
-      node.maxLength = node.branchLength;
+      node.numLeafs = 1;
+      node.maxLeafDistance = node.branchLength;
       // Ensure leaf nodes has name, and replace underscores with spaces
       node.name = node.name ? normalizeSpeciesName(node.name) : '';
     } else { // no leaf
       if (node.name) {
         node.name = node.name.replace(/_/g, ' ');
       }
-      let leafCount = 0;
-      let maxLength = 0;
+      let numLeafs = 0;
+      let maxLeafDistance = 0;
       node.children.forEach((child) => {
-        leafCount += child.leafCount;
-        maxLength = Math.max(maxLength, child.maxLength);
+        numLeafs += child.numLeafs;
+        maxLeafDistance = Math.max(maxLeafDistance, child.maxLeafDistance);
       });
-      node.leafCount = leafCount;
-      node.maxLength = node.branchLength + maxLength;
+      node.numLeafs = numLeafs;
+      node.maxLeafDistance = node.branchLength + maxLeafDistance;
     }
   });
 
@@ -402,9 +402,9 @@ export function prepareTree(tree) {
   visitTreeDepthFirst(tree, (node, depth, childIndex, parent) => {
     node.parent = parent;
     if (!parent) {
-      node.rootDist = 0;
+      node.rootDistance = 0;
     } else {
-      node.rootDist = parent.rootDist + node.branchLength;
+      node.rootDistance = parent.rootDistance + node.branchLength;
     }
   });
 

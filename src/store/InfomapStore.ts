@@ -15,9 +15,9 @@ type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output' | 'ski
 
 const defaultArgs: RequiredArgs = {
   silent: false,
-  output: 'json',
+  output: ['json', 'tree'],
   skipAdjustBipartiteFlow: true,
-} as const;
+};
 
 export default class InfomapStore {
   rootStore: RootStore;
@@ -27,6 +27,7 @@ export default class InfomapStore {
     ...defaultArgs,
   };
   tree: Tree | null = null;
+  treeString: string | null = null;
   isRunning: boolean = false;
   currentTrial: number = 0;
 
@@ -35,10 +36,12 @@ export default class InfomapStore {
 
     makeObservable(this, {
       tree: observable.ref,
+      treeString: observable,
       args: observable,
       currentTrial: observable,
       isRunning: observable,
       setTree: action,
+      setTreeString: action,
       setIsRunning: action,
       setNumTrials: action,
       setCurrentTrial: action,
@@ -56,6 +59,10 @@ export default class InfomapStore {
 
   setTree(tree: Tree | null) {
     this.tree = tree;
+  }
+
+  setTreeString(treeString: string | null) {
+    this.treeString = treeString;
   }
 
   setIsRunning(isRunning: boolean = true) {
@@ -83,11 +90,13 @@ export default class InfomapStore {
     }
     this.setIsRunning();
 
+    console.time('createNetwork');
     const network = this._createNetwork();
+    console.timeEnd('createNetwork');
 
     try {
       console.time('infomap');
-      const { json: tree } = await new Infomap()
+      const { json: tree, tree: treeString } = await new Infomap()
         .on('data', this.parseOutput)
         .runAsync({
           network,
@@ -97,7 +106,13 @@ export default class InfomapStore {
       if (tree) {
         setBioregionIds(tree, cells);
         this.setTree(tree);
+        console.log('Num top modules', tree.numTopModules)
       }
+
+      if (treeString) {
+        this.setTreeString(treeString);
+      }
+
       console.timeEnd('infomap');
     } catch (err) {
       console.log(err);
@@ -163,7 +178,8 @@ export default class InfomapStore {
     */
     const network = this.createNetwork();
     const tree = this.rootStore.treeStore.tree!;
-    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+    const { weightFunction } = this.rootStore.treeStore;
+    const { nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = network.nodes.length;
 
@@ -175,6 +191,8 @@ export default class InfomapStore {
      *    - create set with union from children sets from (2)
      *    - add links from node to grid cells
      */
+
+    const missing = new Set<string>();
 
     // Include internal tree nodes into network
     visitTreeDepthFirstPostOrder(tree, (node) => {
@@ -197,18 +215,20 @@ export default class InfomapStore {
 
       for (const species of node.speciesSet!) {
         if (!nameToCellIds[species]) {
+          missing.add(species);
           continue;
         }
         for (const cellId of nameToCellIds[species]) {
           network.links.push({
             source: nodeId,
             target: network.nodeIdMap[cellId],
-            weight: 0.2
+            weight: weightFunction(node.rootDistance / tree.maxLeafDistance),
           });
         }
       }
     });
     console.log(tree);
+    console.log('Nodes missing in network', Array.from(missing));
 
     return network;
   }

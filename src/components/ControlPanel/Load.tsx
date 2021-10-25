@@ -7,6 +7,7 @@ import { Table, Tr, Td, Tbody, Thead, Th, Tfoot, TableCaption } from '@chakra-ui
 import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
+import { extension } from '../../utils/filename';
 
 
 export const LoadExample = observer(function () {
@@ -20,6 +21,7 @@ export const LoadExample = observer(function () {
   const loadFile = (filename: string, treename?: string) => async () => {
     setIsOpen(false);
     treeStore.setLoaded(false);
+    treeStore.setTree(null);
     infomapStore.setTree(null);
 
     if (treename) {
@@ -78,15 +80,14 @@ export const LoadData = observer(function () {
     }
 
     treeStore.setLoaded(false);
+    treeStore.setTree(null);
     infomapStore.setTree(null);
 
     let occurrenceData: File | null = null;
     let tree: File | null = null;
 
-    const ext = (filename: string) => filename.split(".").pop();
-
     for (let file of files) {
-      const fileExt = ext(file.name) ?? ""
+      const fileExt = extension(file.name);
 
       if (['csv', 'tsv'].includes(fileExt) && occurrenceData === null) {
         occurrenceData = file;
