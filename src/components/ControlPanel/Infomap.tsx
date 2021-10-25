@@ -24,7 +24,7 @@ export default observer(function () {
           id="includeTree"
           isDisabled={infomapStore.isRunning}
           checked={treeStore.includeTreeInNetwork}
-          onChange={() => treeStore.toggleIncludeTree()}
+          onChange={() => treeStore.setIncludeTree(!treeStore.includeTreeInNetwork)}
         />
       </FormControl>
       <TreeWeight isDisabled={!treeStore.includeTreeInNetwork || infomapStore.isRunning} />

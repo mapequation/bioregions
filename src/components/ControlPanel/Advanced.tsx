@@ -11,6 +11,8 @@ export default observer(function () {
   const [step, setStep] = useState(0);
   const { speciesStore, treeStore, infomapStore } = useStore();
 
+  const steps = 10;
+
   const paramSweep = async () => {
     setIsRunning(true);
 
@@ -18,9 +20,9 @@ export default observer(function () {
 
     const zip = new JSZip();
 
-    const steps = 10;
-    const weights = range(steps).map(i => i / steps);
+    const weights = range(steps + 1).map(i => i / steps);
     const f = format('.1f');
+    console.log(weights)
 
     for (let i = 0; i < weights.length; i++) {
       setStep(i);
@@ -41,10 +43,10 @@ export default observer(function () {
 
   return (
     <VStack align="stretch">
-      <Button isDisabled={!speciesStore.loaded || !treeStore.loaded} isLoading={isRunning} onClick={paramSweep}>Run parameter sweep</Button>
+      <Button size="sm" isDisabled={!speciesStore.loaded || !treeStore.loaded} isLoading={isRunning} onClick={paramSweep}>Run parameter sweep</Button>
       {isRunning && <Progress
         value={step}
-        max={10}
+        max={steps + 1}
         size="xs"
         w="100%"
         color="blue.500"
