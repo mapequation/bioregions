@@ -5,7 +5,7 @@ import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { Node as PhyloTree } from '../utils/tree';
 import { extent, range, map, zip } from 'd3';
-import { interpolateExp, interpolateLog } from '../utils/math';
+import { interpolateExp } from '../utils/math';
 
 export default class TreeStore {
   rootStore: RootStore;

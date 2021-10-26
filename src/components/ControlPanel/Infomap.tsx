@@ -14,17 +14,78 @@ import {
   NumberDecrementStepper,
   Progress,
 } from '@chakra-ui/react';
-import { Table, Thead, Tbody, Tr, Th, Td, Tfoot } from '@chakra-ui/react';
+import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
 import TreeWeight from '../TreeWeight';
 import Stat from '../Stat';
 import { useStore } from '../../store';
+
+const NodesLinksTable = ({
+  numNodes,
+  numLinks,
+  numTreeNodes,
+  numTreeLinks,
+}: {
+  numNodes: number;
+  numLinks: number;
+  numTreeNodes: number;
+  numTreeLinks: number;
+}) => {
+  return (
+    <Table width="100%" size="sm" variant="simpler">
+      <Thead>
+        <Tr>
+          <Td></Td>
+          <Td>Nodes</Td>
+          <Td>Links</Td>
+        </Tr>
+      </Thead>
+      <Tbody>
+        <Tr>
+          <Td>Network</Td>
+          <Td isNumeric>
+            <Tag size="sm">{numNodes.toLocaleString()}</Tag>
+          </Td>
+          <Td isNumeric>
+            <Tag size="sm">{numLinks.toLocaleString()}</Tag>
+          </Td>
+        </Tr>
+        <Tr>
+          <Td>Tree</Td>
+          <Td isNumeric>
+            <Tag size="sm">{numTreeNodes.toLocaleString()}</Tag>
+          </Td>
+          <Td isNumeric>
+            <Tag size="sm">{numTreeLinks.toLocaleString()}</Tag>
+          </Td>
+        </Tr>
+      </Tbody>
+      <Tfoot>
+        <Tr>
+          <Td>Total</Td>
+          <Td isNumeric>
+            <Tag size="sm">{(numNodes + numTreeNodes).toLocaleString()}</Tag>
+          </Td>
+          <Td isNumeric>
+            <Tag size="sm">{(numLinks + numTreeLinks).toLocaleString()}</Tag>
+          </Td>
+        </Tr>
+      </Tfoot>
+    </Table>
+  );
+};
 
 export default observer(function Infomap() {
   const { treeStore, speciesStore, infomapStore, mapStore } = useStore();
   const { network, tree } = infomapStore;
 
   const runInfomap = async () => {
+    if (infomapStore.isRunning) {
+      infomapStore.abort();
+      return;
+    }
+
     await infomapStore.run();
+
     if (mapStore.renderType === 'bioregions') {
       mapStore.render();
     }
@@ -50,7 +111,7 @@ export default observer(function Infomap() {
         <Switch
           id="includeTree"
           isDisabled={infomapStore.isRunning}
-          checked={treeStore.includeTreeInNetwork}
+          isChecked={treeStore.includeTreeInNetwork}
           onChange={() =>
             treeStore.setIncludeTree(!treeStore.includeTreeInNetwork)
           }
@@ -86,11 +147,12 @@ export default observer(function Infomap() {
       <Button
         size="sm"
         w="100%"
+        colorScheme={infomapStore.isRunning ? 'red' : 'gray'}
         onClick={runInfomap}
-        isLoading={infomapStore.isRunning}
-        disabled={!speciesStore.loaded || infomapStore.isRunning}
+        //isLoading={infomapStore.isRunning}
+        disabled={!speciesStore.loaded}
       >
-        Run Infomap
+        {!infomapStore.isRunning ? 'Run Infomap' : 'Abort'}
       </Button>
       {infomapStore.isRunning && (
         <Progress
@@ -112,56 +174,12 @@ export default observer(function Infomap() {
         </>
       )}
       {network != null && treeStore.includeTreeInNetwork && (
-        <Table width="100%" size="sm" variant="simpler">
-          <Thead>
-            <Tr>
-              <Td></Td>
-              <Td textAlign="center">Nodes</Td>
-              <Td textAlign="center" style={{ paddingInlineEnd: 0 }}>
-                Links
-              </Td>
-            </Tr>
-          </Thead>
-          <Tbody>
-            <Tr>
-              <Td>Network</Td>
-              <Td isNumeric textAlign="right">
-                <Tag size="sm">
-                  {(
-                    network.nodes.length - network.numTreeNodes
-                  ).toLocaleString()}
-                </Tag>
-              </Td>
-              <Td isNumeric textAlign="right" style={{ paddingInlineEnd: 0 }}>
-                <Tag size="sm">
-                  {(
-                    network.links.length - network.numTreeLinks
-                  ).toLocaleString()}
-                </Tag>
-              </Td>
-            </Tr>
-            <Tr>
-              <Td>Tree</Td>
-              <Td isNumeric textAlign="right">
-                <Tag size="sm">{network.numTreeNodes.toLocaleString()}</Tag>
-              </Td>
-              <Td isNumeric textAlign="right" style={{ paddingInlineEnd: 0 }}>
-                <Tag size="sm">{network.numTreeLinks.toLocaleString()}</Tag>
-              </Td>
-            </Tr>
-          </Tbody>
-          <Tfoot>
-            <Tr>
-              <Td>Total</Td>
-              <Td isNumeric textAlign="right">
-                <Tag size="sm">{network.nodes.length.toLocaleString()}</Tag>
-              </Td>
-              <Td isNumeric textAlign="right" style={{ paddingInlineEnd: 0 }}>
-                <Tag size="sm">{network.links.length.toLocaleString()}</Tag>
-              </Td>
-            </Tr>
-          </Tfoot>
-        </Table>
+        <NodesLinksTable
+          numNodes={network.nodes.length - network.numTreeNodes}
+          numLinks={network.links.length - network.numTreeLinks}
+          numTreeNodes={network.numTreeNodes}
+          numTreeLinks={network.numTreeLinks}
+        />
       )}
       {tree != null && !infomapStore.isRunning && (
         <Stat

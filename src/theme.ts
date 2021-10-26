@@ -1,6 +1,5 @@
 import { extendTheme } from '@chakra-ui/react';
 import { tableAnatomy as parts } from '@chakra-ui/anatomy';
-import { mode } from '@chakra-ui/theme-tools';
 import type {
   PartsStyleFunction,
   SystemStyleObject,
@@ -13,34 +12,35 @@ const numericStyles: SystemStyleObject = {
 };
 
 const tableVariantSimpler: PartsStyleFunction<typeof parts> = (props) => {
-  const { colorScheme: c } = props;
-  console.log(props);
+  const paddingTop = '5px !important';
+
   return {
-    th: {
-      color: mode('gray.600', 'gray.400')(props),
-      borderBottom: '1px',
-      borderColor: mode(`${c}.100`, `${c}.700`)(props),
-      ...numericStyles,
+    thead: {
+      th: {
+        textAlign: 'center !important',
+        paddingTop,
+        paddingBottom: paddingTop,
+      },
     },
     td: {
-      // borderBottom: '1px',
-      borderColor: mode(`${c}.100`, `${c}.700`)(props),
-      ...numericStyles,
-    },
-    caption: {
-      color: mode('gray.600', 'gray.100')(props),
+      '&:first-of-type': {
+        paddingInlineStart: '0 !important',
+        textAlign: 'start',
+      },
+      '&:last-of-type': {
+        paddingInlineEnd: '0 !important',
+      },
+      textAlign: 'end',
+      paddingTop,
+      paddingBottom: paddingTop,
     },
     tfoot: {
       td: {
-        // borderColor: `${mode(`${c}.100`, `${c}.700`)(props)} !important`,
         borderColor: 'var(--chakra-colors-gray-100) !important',
         borderTop: '1px',
+        paddingTop,
+        paddingBottom: paddingTop,
         ...numericStyles,
-      },
-      tr: {
-        '&:last-of-type': {
-          th: { borderBottomWidth: 0 },
-        },
       },
     },
   };

@@ -1,6 +1,6 @@
 import { action, makeObservable, observable } from 'mobx';
 import Infomap from '@mapequation/infomap';
-import type { Tree } from '@mapequation/infomap';
+import type { Tree, Result } from '@mapequation/infomap';
 import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
@@ -35,6 +35,8 @@ export default class InfomapStore {
   treeString: string | null = null;
   isRunning: boolean = false;
   currentTrial: number = 0;
+  infomap: Infomap = new Infomap();
+  infomapId: number | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -55,6 +57,15 @@ export default class InfomapStore {
       setCurrentTrial: action,
       run: action,
     });
+
+    this.initInfomap();
+  }
+
+  initInfomap() {
+    this.infomap
+      .on('data', this.onInfomapOutput)
+      .on('error', this.onInfomapError)
+      .on('finished', this.onInfomapFinished);
   }
 
   setCurrentTrial(trial: number) {
@@ -81,6 +92,87 @@ export default class InfomapStore {
     this.isRunning = isRunning;
   }
 
+  get cells() {
+    return this.rootStore.speciesStore.binner.cells;
+  }
+
+  onInfomapFinished = (result: Result, id: number) => {
+    const { json: tree, tree: treeString } = result;
+
+    if (tree) {
+      setBioregionIds(tree, this.cells);
+      this.setTree(tree);
+    }
+
+    if (treeString) {
+      this.setTreeString(treeString);
+    }
+
+    console.timeEnd('infomap');
+    this.setIsRunning(false);
+    this.infomapId = null;
+  };
+
+  onInfomapError = (error: string, id: number) => {
+    console.error(error);
+    console.timeEnd('infomap');
+    this.setIsRunning(false);
+  };
+
+  onInfomapOutput = (output: string, id: number) => {
+    this.parseOutput(output);
+  };
+
+  async run() {
+    if (this.infomapId !== null) {
+      this.abort();
+    }
+    const { cells } = this;
+
+    if (cells.length === 0) {
+      console.error('No cells in binner!');
+      return;
+    }
+
+    this.setIsRunning();
+    this.setCurrentTrial(0);
+
+    const network = this.updateNetwork();
+
+    console.time('infomap');
+
+    return new Promise<void>((resolve, reject) => {
+      this.infomapId = this.infomap
+        .on('finished', (result, id) => {
+          this.onInfomapFinished(result, id);
+          resolve();
+        })
+        .on('error', (err, id) => {
+          this.onInfomapError(err, id);
+          reject();
+        })
+        .run({
+          network,
+          args: this.args,
+        });
+    });
+  }
+
+  abort() {
+    if (this.infomapId === null) {
+      return false;
+    }
+
+    this.infomap.terminate(this.infomapId, 0);
+    this.infomapId = null;
+    this.setIsRunning(false);
+    this.setTree(null);
+    this.setTreeString(null);
+    this.setCurrentTrial(0);
+
+    return true;
+  }
+
   parseOutput = (output: string) => {
     const trial = output.match(/^Trial (\d+)\//);
     if (trial) {
@@ -100,42 +192,44 @@ export default class InfomapStore {
     return network;
   }
 
-  async run() {
-    const { cells } = this.rootStore.speciesStore.binner;
-    if (cells.length === 0) {
-      console.error('No cells in binner!');
-      return;
-    }
-    this.setIsRunning();
+  // async run() {
+  //   const { cells } = this.rootStore.speciesStore.binner;
 
-    const network = this.updateNetwork();
+  //   if (cells.length === 0) {
+  //     console.error('No cells in binner!');
+  //     return;
+  //   }
 
-    try {
-      console.time('infomap');
-      const { json: tree, tree: treeString } = await new Infomap()
-        .on('data', this.parseOutput)
-        .runAsync({
-          network,
-          args: this.args,
-        });
+  //   this.setIsRunning();
 
-      if (tree) {
-        setBioregionIds(tree, cells);
-        this.setTree(tree);
-      }
+  //   const network = this.updateNetwork();
 
-      if (treeString) {
-        this.setTreeString(treeString);
-      }
+  //   try {
+  //     console.time('infomap');
+  //     const { json: tree, tree: treeString } = await new Infomap()
+  //       .on('data', this.parseOutput)
+  //       .runAsync({
+  //         network,
+  //         args: this.args,
+  //       });
 
-      console.timeEnd('infomap');
-    } catch (err) {
-      console.log(err);
-    }
+  //     if (tree) {
+  //       setBioregionIds(tree, cells);
+  //       this.setTree(tree);
+  //     }
 
-    this.setCurrentTrial(0);
-    this.setIsRunning(false);
-  }
+  //     if (treeString) {
+  //       this.setTreeString(treeString);
+  //     }
+
+  //     console.timeEnd('infomap');
+  //   } catch (err) {
+  //     console.log(err);
+  //   }
+
+  //   this.setCurrentTrial(0);
+  //   this.setIsRunning(false);
+  // }
 
   private _createNetwork(): BioregionsNetwork {
     console.time('createNetwork');
