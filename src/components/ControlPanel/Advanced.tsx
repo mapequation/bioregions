@@ -27,46 +27,50 @@ export default observer(function Advanced() {
   const paramSweep = async () => {
     setIsRunning(true);
 
-    const zip = new JSZip();
+    try {
+      const zip = new JSZip();
 
-    treeStore.setIncludeTree(false);
+      treeStore.setIncludeTree(false);
 
-    await infomapStore.run();
-    zip.file(
-      `${speciesStore.name}_without_tree.tree`,
-      infomapStore.treeString!,
-    );
-
-    treeStore.setIncludeTree();
-
-    const weights = range(steps).map((i) => i / (steps - 1));
-    const f = format('.1f');
-
-    for (let i = 0; i < weights.length; i++) {
-      setStep(i);
-      const w = weights[i];
-
-      treeStore.setWeightParameter(w);
       await infomapStore.run();
+      zip.file(
+        `${speciesStore.name}_without_tree.tree`,
+        infomapStore.treeString!,
+      );
 
-      // if (!finished) {
-      //   setIsRunning(false);
-      //   setStep(0);
-      //   return;
-      // }
+      treeStore.setIncludeTree();
 
-      if (mapStore.renderType === 'bioregions') {
-        mapStore.render();
+      const weights = range(steps).map((i) => i / (steps - 1));
+      const f = format('.1f');
+
+      for (let i = 0; i < weights.length; i++) {
+        setStep(i);
+        const w = weights[i];
+
+        treeStore.setWeightParameter(w);
+        await infomapStore.run();
+
+        // if (!finished) {
+        //   setIsRunning(false);
+        //   setStep(0);
+        //   return;
+        // }
+
+        if (mapStore.renderType === 'bioregions') {
+          mapStore.render();
+        }
+
+        const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
+        zip.file(filename, infomapStore.treeString!);
       }
 
-      const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
-      zip.file(filename, infomapStore.treeString!);
+      const zipFile = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipFile, 'sweep.zip');
+      setIsRunning(false);
+    } catch (err) {
+      console.error('Error in parameter sweep:', err);
+      setIsRunning(false);
     }
-
-    const zipFile = await zip.generateAsync({ type: 'blob' });
-    saveAs(zipFile, 'sweep.zip');
-
-    setIsRunning(false);
   };
 
   return (
