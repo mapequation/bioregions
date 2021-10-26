@@ -9,6 +9,8 @@ import { visitTreeDepthFirstPostOrder } from '../utils/tree'
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
+  numTreeNodes: number;
+  numTreeLinks: number;
 }
 
 type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output' | 'skipAdjustBipartiteFlow'>>>;
@@ -146,6 +148,8 @@ export default class InfomapStore {
       links: [],
       bipartiteStartId: 0,
       nodeIdMap: {},
+      numTreeNodes: 0,
+      numTreeLinks: 0,
     };
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
@@ -260,11 +264,13 @@ export default class InfomapStore {
 
       for (const [target, weight] of outLinks.entries()) {
         network.links.push({ source, target, weight });
+        network.numTreeLinks++;
       }
     }
 
     for (const id of treeNodes) {
       network.nodes.push({ id, name: id.toString() });
+      network.numTreeNodes++;
     }
 
     console.log('Nodes missing in network', Array.from(missing));

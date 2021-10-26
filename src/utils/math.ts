@@ -17,8 +17,17 @@ export function clamp(value: number, min?: number, max?: number) {
 }
 
 /**
- * Shifted exponential to map 0 to 0
+ * Interpolate exponentially from [0,1] to [0,1]
  */
-export function exp1(x: number) {
-  return Math.exp(x + 1) - Math.E;
+export function interpolateExp(x: number, a: number = 1) {
+  // return (Math.exp(x + 1) - Math.E) / EXP2_MINUS_E;
+  return (Math.exp(a * x + 1) - Math.E) / (Math.exp(a + 1) - Math.E);
+}
+
+/**
+ * Interpolate logarithmically from [0,1] to [0,1]
+ */
+export function interpolateLog(x: number, a: number = 1) {
+  // return Math.log(x + 1) / LN2;
+  return Math.log(a * x + 1) / Math.log(a + 1);
 }
