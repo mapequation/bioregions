@@ -16,7 +16,11 @@ import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
 import { useStore } from '../store';
 
-export default observer(function TreeWeight({ isDisabled = false }: { isDisabled?: boolean }) {
+export default observer(function TreeWeight({
+  isDisabled = false,
+}: {
+  isDisabled?: boolean;
+}) {
   const { treeStore } = useStore();
   const width = 250;
   const height = 120;
@@ -31,7 +35,9 @@ export default observer(function TreeWeight({ isDisabled = false }: { isDisabled
     value: weight,
   };
 
-  const color = !isDisabled ? "var(--chakra-colors-gray-800)" : "var(--chakra-colors-gray-300)";
+  const color = !isDisabled
+    ? 'var(--chakra-colors-gray-800)'
+    : 'var(--chakra-colors-gray-300)';
 
   return (
     <Flex w="100%" flexDirection="column" p={4}>
@@ -56,12 +62,30 @@ export default observer(function TreeWeight({ isDisabled = false }: { isDisabled
           width={width}
           height={height}
           strokeWidth="2"
-          stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"}
+          stroke={
+            !isDisabled
+              ? 'var(--chakra-colors-blue-500)'
+              : 'var(--chakra-colors-gray-300)'
+          }
         />
       </svg>
       <Flex alignItems="center" justifyContent="center" width="100%">
-        <Icon viewBox="0 0 63 54" mr={2} cursor="pointer" onClick={() => treeStore.setWeightParameter(0)}>
-          <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+        <Icon
+          viewBox="0 0 63 54"
+          mr={2}
+          cursor="pointer"
+          onClick={() => treeStore.setWeightParameter(0, true)}
+        >
+          <g
+            fill="none"
+            stroke={
+              !isDisabled
+                ? 'var(--chakra-colors-blue-500)'
+                : 'var(--chakra-colors-gray-300)'
+            }
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m18 36 27-18" strokeWidth="4.5" />
           </g>
@@ -70,6 +94,7 @@ export default observer(function TreeWeight({ isDisabled = false }: { isDisabled
           isDisabled={isDisabled}
           aria-label="weight"
           size="sm"
+          onChangeEnd={(weight) => treeStore.setWeightParameter(weight, true)}
           onChange={(weight) => treeStore.setWeightParameter(weight)}
           {...inputProps}
         >
@@ -78,8 +103,22 @@ export default observer(function TreeWeight({ isDisabled = false }: { isDisabled
           </SliderTrack>
           <SliderThumb />
         </Slider>
-        <Icon viewBox="0 0 63 54" ml={2} cursor="pointer" onClick={() => treeStore.setWeightParameter(1)}>
-          <g fill="none" stroke={!isDisabled ? "var(--chakra-colors-blue-500)" : "var(--chakra-colors-gray-300)"} strokeLinecap="round" strokeLinejoin="round">
+        <Icon
+          viewBox="0 0 63 54"
+          ml={2}
+          cursor="pointer"
+          onClick={() => treeStore.setWeightParameter(1, true)}
+        >
+          <g
+            fill="none"
+            stroke={
+              !isDisabled
+                ? 'var(--chakra-colors-blue-500)'
+                : 'var(--chakra-colors-gray-300)'
+            }
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <rect height="36" rx="8" strokeWidth="3" width="45" x="9" y="9" />
             <path d="m45 18c0 10-12.08 18-27 18" strokeWidth="4.5" />
           </g>
@@ -89,7 +128,7 @@ export default observer(function TreeWeight({ isDisabled = false }: { isDisabled
           maxW="70px"
           size="xs"
           ml={2}
-          onChange={(_, value) => treeStore.setWeightParameter(value)}
+          onChange={(_, value) => treeStore.setWeightParameter(value, true)}
           {...inputProps}
         >
           <NumberInputField />

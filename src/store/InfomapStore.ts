@@ -5,7 +5,7 @@ import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import type { Node } from '../utils/QuadTreeGeoBinner';
-import { visitTreeDepthFirstPostOrder } from '../utils/tree'
+import { visitTreeDepthFirstPostOrder } from '../utils/tree';
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
@@ -13,7 +13,9 @@ interface BioregionsNetwork extends Required<BipartiteNetwork> {
   numTreeLinks: number;
 }
 
-type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output' | 'skipAdjustBipartiteFlow'>>>;
+type RequiredArgs = Required<
+  Readonly<Pick<Arguments, 'silent' | 'output' | 'skipAdjustBipartiteFlow'>>
+>;
 
 const defaultArgs: RequiredArgs = {
   silent: false,
@@ -46,6 +48,7 @@ export default class InfomapStore {
       isRunning: observable,
       setTree: action,
       setTreeString: action,
+      updateNetwork: action,
       setNetwork: action,
       setIsRunning: action,
       setNumTrials: action,
@@ -89,18 +92,23 @@ export default class InfomapStore {
     if (summary) {
       this.setCurrentTrial(this.currentTrial + 1);
     }
+  };
+
+  updateNetwork() {
+    const network = this._createNetwork();
+    this.setNetwork(network);
+    return network;
   }
 
   async run() {
     const { cells } = this.rootStore.speciesStore.binner;
     if (cells.length === 0) {
-      console.error("No cells in binner!")
+      console.error('No cells in binner!');
       return;
     }
     this.setIsRunning();
 
-    const network = this._createNetwork();
-    this.setNetwork(network);
+    const network = this.updateNetwork();
 
     try {
       console.time('infomap');
@@ -131,9 +139,11 @@ export default class InfomapStore {
 
   private _createNetwork(): BioregionsNetwork {
     console.time('createNetwork');
-    const network = this.rootStore.treeStore.loaded && this.rootStore.treeStore.includeTreeInNetwork
-      ? this.createNetworkWithTree()
-      : this.createNetwork()
+    const network =
+      this.rootStore.treeStore.loaded &&
+      this.rootStore.treeStore.includeTreeInNetwork
+        ? this.createNetworkWithTree()
+        : this.createNetwork();
     console.timeEnd('createNetwork');
     return network;
   }
@@ -160,7 +170,6 @@ export default class InfomapStore {
       network.nodeIdMap[name] = id;
       network.nodes.push({ id, name });
     };
-
 
     for (let { id: cellId } of cells) {
       addNode(cellId);
@@ -218,7 +227,7 @@ export default class InfomapStore {
 
       node.speciesSet = new Set();
 
-      node.children.forEach(child => {
+      node.children.forEach((child) => {
         if (child.speciesSet) {
           for (const each of child.speciesSet) {
             node.speciesSet?.add(each);
@@ -287,11 +296,8 @@ function setBioregionIds(tree: Tree, cells: Node[]) {
     if (node.id >= bipartiteStartId) return;
 
     cells[node.id].bioregionId = node.path[0];
-  })
+  });
 }
-
-
-
 
 /*
 

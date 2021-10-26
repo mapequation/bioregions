@@ -5,7 +5,7 @@ import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { Node as PhyloTree } from '../utils/tree';
 import { extent, range, map, zip } from 'd3';
-import { interpolateExp } from '../utils/math';
+import { interpolateExp, interpolateLog } from '../utils/math';
 
 export default class TreeStore {
   rootStore: RootStore;
@@ -79,16 +79,22 @@ export default class TreeStore {
 
   setIncludeTree(value: boolean = true) {
     this.includeTreeInNetwork = value;
+    this.rootStore.infomapStore.updateNetwork();
   }
 
-  setWeightParameter(value: number) {
+  setWeightParameter(value: number, updateNetwork: boolean = false) {
     this.weightParameter = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
   }
 
   get weightFunction() {
-    const w = interpolateExp(this.weightParameter, 10);
+    // const w = interpolateExp(this.weightParameter, 10);
+    // const w = interpolateLog(this.weightParameter, 10);
+    const w = this.weightParameter;
     // return (t: number) => interpolateExp(t, 200 * this.weightParameter + 1);
-    return (t: number) => interpolateExp(t, 10 * w + 1);
+    return (t: number) => interpolateExp(t, 200 * w + 1);
   }
 
   get weightCurve() {
