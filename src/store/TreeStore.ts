@@ -28,6 +28,7 @@ export default class TreeStore {
       weightCurve: computed,
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
+      setLoaded: action,
       setIncludeTree: action,
       setWeightParameter: action,
       setTree: action,

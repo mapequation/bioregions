@@ -3,7 +3,13 @@ import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
-import type { Feature, FeatureCollection, Point, MultiPoint, GeometryCollection } from '../types/geojson';
+import type {
+  Feature,
+  FeatureCollection,
+  Point,
+  MultiPoint,
+  GeometryCollection,
+} from '../types/geojson';
 import { getName } from '../utils/filename';
 
 export interface PointProperties {
@@ -42,11 +48,12 @@ export const createMultiPointGeometryCollection = (
 
 export default class SpeciesStore {
   rootStore: RootStore;
-  name: string = "data";
+  name: string = 'data';
   loaded: boolean = false;
   isLoading: boolean = false;
   pointCollection: PointFeatureCollection = createPointCollection();
-  multiPointCollection: GeometryCollection = createMultiPointGeometryCollection();
+  multiPointCollection: GeometryCollection =
+    createMultiPointGeometryCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
 
   constructor(rootStore: RootStore) {
@@ -81,16 +88,12 @@ export default class SpeciesStore {
   }
 
   updatePointCollection(pointCollection = this.pointCollection) {
-    this.setPointCollection(
-      createPointCollection(pointCollection.features),
-    );
+    this.setPointCollection(createPointCollection(pointCollection.features));
   }
 
   private async *loadData(
     file: string | File,
-    getItems: (
-      items: { [key: string]: string | number }[],
-    ) => void,
+    getItems: (items: { [key: string]: string | number }[]) => void,
     args: ParseConfig = {},
   ) {
     const dataWorker = await spawn(new Worker('../workers/DataWorker.ts'));
@@ -104,9 +107,9 @@ export default class SpeciesStore {
 
   async load(
     file: string | File,
-    nameColumn = "species",
-    longColumn = "longitude",
-    latColumn = "latitude",
+    nameColumn = 'species',
+    longColumn = 'longitude',
+    latColumn = 'latitude',
     clear = true,
   ) {
     this.setIsLoading();
@@ -117,24 +120,23 @@ export default class SpeciesStore {
       this.rootStore.mapStore.render();
     }
 
-    this.name = getName(typeof file === "string" ? file : file.name)
+    this.name = getName(typeof file === 'string' ? file : file.name);
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
 
-    const nameHistogram: { [key: string]: number } = {}
+    const nameHistogram: { [key: string]: number } = {};
     const countName = (name: string) => {
       if (!(name in nameHistogram)) {
         nameHistogram[name] = 0;
       }
 
       nameHistogram[name]++;
-    }
+    };
 
-    console.time("load");
+    console.time('load');
 
     const loader = this.loadData(file, (items) => {
-
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
 
       for (let item of items) {
@@ -157,9 +159,8 @@ export default class SpeciesStore {
       mapStore.renderMultiPoint(multiPoint);
     });
 
-
     await loader.next();
-    console.timeEnd("load");
+    console.timeEnd('load');
 
     this.updatePointCollection();
     this.setLoaded(true);
@@ -167,7 +168,11 @@ export default class SpeciesStore {
   }
 }
 
-function createMapper(nameColumn: string, longColumn: string, latColumn: string) {
+function createMapper(
+  nameColumn: string,
+  longColumn: string,
+  latColumn: string,
+) {
   return (item: { [key: string]: string | number }) => ({
     name: item[nameColumn].toString(),
     longitude: +item[longColumn],
