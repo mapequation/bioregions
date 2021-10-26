@@ -4,10 +4,11 @@ import './index.css';
 import App from './components/App';
 import reportWebVitals from './reportWebVitals';
 import { ChakraProvider } from '@chakra-ui/react';
+import theme from './theme';
 import store, { StoreContext } from './store';
 
 ReactDOM.render(
-  <ChakraProvider>
+  <ChakraProvider theme={theme}>
     <StoreContext.Provider value={store}>
       <App />
     </StoreContext.Provider>

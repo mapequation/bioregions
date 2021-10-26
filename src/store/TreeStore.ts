@@ -2,10 +2,10 @@ import { makeObservable, observable, action, computed } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
-import { visitTreeDepthFirstPreOrder } from '../utils/tree'
-import type { Node as PhyloTree } from '../utils/tree'
+import { visitTreeDepthFirstPreOrder } from '../utils/tree';
+import type { Node as PhyloTree } from '../utils/tree';
 import { extent, range, map, zip } from 'd3';
-import { interpolateExp, interpolateLog } from '../utils/math';
+import { interpolateExp } from '../utils/math';
 
 export default class TreeStore {
   rootStore: RootStore;
@@ -97,7 +97,7 @@ export default class TreeStore {
     const y = map(x, f);
     const data = zip(x, y) as [number, number][];
     const domain = extent(x) as [number, number];
-    return { data, domain }
+    return { data, domain };
   }
 
   async load(file: File | string) {
@@ -105,6 +105,6 @@ export default class TreeStore {
     this.setTreeString(tree);
     // @ts-ignore
     this.setTree(prepareTree(parseTree(tree)));
-    this.setLoaded()
+    this.setLoaded();
   }
 }
