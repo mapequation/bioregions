@@ -192,45 +192,6 @@ export default class InfomapStore {
     return network;
   }
 
-  // async run() {
-  //   const { cells } = this.rootStore.speciesStore.binner;
-
-  //   if (cells.length === 0) {
-  //     console.error('No cells in binner!');
-  //     return;
-  //   }
-
-  //   this.setIsRunning();
-
-  //   const network = this.updateNetwork();
-
-  //   try {
-  //     console.time('infomap');
-  //     const { json: tree, tree: treeString } = await new Infomap()
-  //       .on('data', this.parseOutput)
-  //       .runAsync({
-  //         network,
-  //         args: this.args,
-  //       });
-
-  //     if (tree) {
-  //       setBioregionIds(tree, cells);
-  //       this.setTree(tree);
-  //     }
-
-  //     if (treeString) {
-  //       this.setTreeString(treeString);
-  //     }
-
-  //     console.timeEnd('infomap');
-  //   } catch (err) {
-  //     console.log(err);
-  //   }
-
-  //   this.setCurrentTrial(0);
-  //   this.setIsRunning(false);
-  // }
-
   private _createNetwork(): BioregionsNetwork {
     console.time('createNetwork');
     const network =

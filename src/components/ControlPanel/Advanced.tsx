@@ -50,12 +50,6 @@ export default observer(function Advanced() {
         treeStore.setWeightParameter(w);
         await infomapStore.run();
 
-        // if (!finished) {
-        //   setIsRunning(false);
-        //   setStep(0);
-        //   return;
-        // }
-
         if (mapStore.renderType === 'bioregions') {
           mapStore.render();
         }
@@ -66,11 +60,11 @@ export default observer(function Advanced() {
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
       saveAs(zipFile, 'sweep.zip');
-      setIsRunning(false);
     } catch (err) {
       console.error('Error in parameter sweep:', err);
-      setIsRunning(false);
     }
+
+    setIsRunning(false);
   };
 
   return (
