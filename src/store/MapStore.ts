@@ -15,24 +15,24 @@ interface CanvasDatum {
   radius: number;
 }
 
-export interface IMapRenderer { }
+export interface IMapRenderer {}
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
 type GetGridColor = (cell: Node) => string;
 
 export const PROJECTIONS = [
-  'geoMercator',
   'geoOrthographic',
+  'geoMercator',
   'geoNaturalEarth1',
 ] as const;
 
 export type Projection = typeof PROJECTIONS[number];
 
 export const PROJECTIONNAME: Record<Projection, string> = {
-  geoMercator: 'Mercator',
   geoOrthographic: 'Orthographic',
-  geoNaturalEarth1: 'Natural Earth'
+  geoMercator: 'Mercator',
+  geoNaturalEarth1: 'Natural Earth',
 } as const;
 
 export default class MapStore {
@@ -74,7 +74,8 @@ export default class MapStore {
   }
 
   get multiPoints() {
-    return this.rootStore.speciesStore.multiPointCollection.geometries as MultiPoint[];
+    return this.rootStore.speciesStore.multiPointCollection
+      .geometries as MultiPoint[];
   }
 
   get binner() {
@@ -130,21 +131,24 @@ export default class MapStore {
 
     const { multiPoints } = this;
     if (this.renderBatchIndex === 0) {
-      console.time("renderPoints");
+      console.time('renderPoints');
     }
 
     // TODO: Adapt the number of batches to what can be run within 60 fps
     const numBatches = 4;
-    const batchSize = Math.min(multiPoints.length, this.renderBatchIndex + numBatches);
+    const batchSize = Math.min(
+      multiPoints.length,
+      this.renderBatchIndex + numBatches,
+    );
 
     for (let i = this.renderBatchIndex; i < batchSize; i++) {
-      this._renderMultiPoint(multiPoints[i], this.context2d!)
+      this._renderMultiPoint(multiPoints[i], this.context2d!);
     }
 
     this.renderBatchIndex += numBatches;
 
     if (this.renderBatchIndex >= multiPoints.length) {
-      console.timeEnd("renderPoints");
+      console.timeEnd('renderPoints');
     }
 
     if (this.renderBatchIndex < multiPoints.length) {
@@ -161,7 +165,11 @@ export default class MapStore {
     this._renderPoints();
   }
 
-  private _renderGridCell(node: Node, ctx: CanvasRenderingContext2D, color: string) {
+  private _renderGridCell(
+    node: Node,
+    ctx: CanvasRenderingContext2D,
+    color: string,
+  ) {
     const path = this.geoPath!;
     ctx.beginPath();
     path(node.geometry);
@@ -180,7 +188,10 @@ export default class MapStore {
     const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
     domain.push(domainMax);
 
-    const heatmapOpacityScale = d3.scaleLog().domain(domainExtent).range([0, 8]);
+    const heatmapOpacityScale = d3
+      .scaleLog()
+      .domain(domainExtent)
+      .range([0, 8]);
 
     const colorRange = [
       '#ffffcc',
@@ -233,11 +244,14 @@ export default class MapStore {
     const { cells } = this.binner;
     const { tree } = this.rootStore.infomapStore;
 
-    const getGridColor = (this.renderType === 'heatmap' || !tree)
-      ? MapStore._heatmapColor(cells)
-      : MapStore._bioregionColor();
+    const getGridColor =
+      this.renderType === 'heatmap' || !tree
+        ? MapStore._heatmapColor(cells)
+        : MapStore._bioregionColor();
 
-    cells.forEach((cell: Node) => this._renderGridCell(cell, this.context2d!, getGridColor(cell)));
+    cells.forEach((cell: Node) =>
+      this._renderGridCell(cell, this.context2d!, getGridColor(cell)),
+    );
   }
 
   render() {

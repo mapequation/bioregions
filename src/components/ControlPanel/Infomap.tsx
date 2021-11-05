@@ -148,6 +148,7 @@ export default observer(function Infomap() {
         size="sm"
         w="100%"
         colorScheme={infomapStore.isRunning ? 'red' : 'gray'}
+        variant={infomapStore.isRunning ? 'outline' : 'solid'}
         onClick={runInfomap}
         //isLoading={infomapStore.isRunning}
         disabled={!speciesStore.loaded}
