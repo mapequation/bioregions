@@ -8,6 +8,7 @@
     "@craco/craco": "^6.4.0",
     "@emotion/react": "^11.5.0",
     "@emotion/styled": "^11.3.0",
+    "@mapequation/c3": "^1.0.0",
     "@mapequation/infomap": "^1.7.3",
     "@phylocanvas/phylocanvas.gl": "^1.12.0",
     "@testing-library/jest-dom": "^5.14.1",

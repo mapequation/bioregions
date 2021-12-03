@@ -1,8 +1,27 @@
 import { observer } from 'mobx-react';
-import { Flex, Select, Button, ButtonGroup, VStack, FormControl, FormLabel, Switch, Spacer } from '@chakra-ui/react';
+import {
+  Flex,
+  Select,
+  Button,
+  ButtonGroup,
+  VStack,
+  FormControl,
+  FormLabel,
+  Switch,
+  Spacer,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
+  Box,
+  HStack,
+} from '@chakra-ui/react';
+import { useState } from 'react';
 import { useStore } from '../../store';
 import type { Projection, RenderType } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
+import { SchemeName } from '@mapequation/c3';
+import ColorSettings from './ColorSettings';
 
 const ProjectionSelect = observer(function ProjectionSelect() {
   const { mapStore } = useStore();
@@ -33,37 +52,54 @@ export default observer(function Map() {
       mapStore.setRenderType(type);
       mapStore.render();
     }
-  }
+  };
 
   return (
     <VStack>
       <ProjectionSelect />
       <Flex w="100%">
-        <ButtonGroup variant="outline" isAttached size="sm" isDisabled={!speciesStore.loaded || speciesStore.isLoading}>
-          <Button onClick={setRenderType("records")} isActive={mapStore.renderType === "records"}>Records</Button>
+        <ButtonGroup
+          variant="outline"
+          isAttached
+          size="sm"
+          isDisabled={!speciesStore.loaded || speciesStore.isLoading}
+        >
           <Button
-            onClick={setRenderType("heatmap")}
-            isActive={mapStore.renderType === "heatmap"}
+            onClick={setRenderType('records')}
+            isActive={mapStore.renderType === 'records'}
+          >
+            Records
+          </Button>
+          <Button
+            onClick={setRenderType('heatmap')}
+            isActive={mapStore.renderType === 'heatmap'}
           >
             Heatmap
           </Button>
           <Button
-            onClick={setRenderType("bioregions")}
+            onClick={setRenderType('bioregions')}
             isLoading={infomapStore.isRunning}
             isDisabled={infomapStore.tree == null}
-            isActive={mapStore.renderType === "bioregions"}
+            isActive={mapStore.renderType === 'bioregions'}
           >
             Bioregions
           </Button>
         </ButtonGroup>
       </Flex>
-      <FormControl display="flex" w="100%" alignItems="center" isDisabled={true}>
+      <FormControl
+        display="flex"
+        w="100%"
+        alignItems="center"
+        isDisabled={true}
+      >
         <FormLabel htmlFor="clip" mb="0">
           Clip to land
         </FormLabel>
         <Spacer />
         <Switch id="clip" defaultChecked isDisabled={true} />
       </FormControl>
+
+      <ColorSettings />
     </VStack>
-  )
+  );
 });

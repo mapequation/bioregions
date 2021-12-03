@@ -1,4 +1,10 @@
-import { action, makeObservable, observable } from 'mobx';
+import {
+  action,
+  makeObservable,
+  observable,
+  computed,
+  runInAction,
+} from 'mobx';
 import Infomap from '@mapequation/infomap';
 import type { Tree, Result } from '@mapequation/infomap';
 import type { BipartiteNetwork } from '@mapequation/infomap/network';
@@ -23,6 +29,13 @@ const defaultArgs: RequiredArgs = {
   skipAdjustBipartiteFlow: true,
 };
 
+type Bioregion = {
+  flow: number;
+  bioregionId: number;
+  numGridCells: number;
+  species: string[];
+};
+
 export default class InfomapStore {
   rootStore: RootStore;
   args: RequiredArgs & Arguments = {
@@ -37,6 +50,7 @@ export default class InfomapStore {
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
   infomapId: number | null = null;
+  bioregions: Bioregion[] = [];
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -48,6 +62,8 @@ export default class InfomapStore {
       args: observable,
       currentTrial: observable,
       isRunning: observable,
+      bioregions: observable.ref,
+      numBioregions: computed,
       setTree: action,
       setTreeString: action,
       updateNetwork: action,
@@ -66,6 +82,10 @@ export default class InfomapStore {
       .on('data', this.onInfomapOutput)
       .on('error', this.onInfomapError)
       .on('finished', this.onInfomapFinished);
+  }
+
+  get numBioregions() {
+    return this.bioregions.length;
   }
 
   setCurrentTrial(trial: number) {
@@ -102,6 +122,35 @@ export default class InfomapStore {
     if (tree) {
       setBioregionIds(tree, this.cells);
       this.setTree(tree);
+      console.log(tree);
+      const bioregions: Bioregion[] = Array.from(
+        { length: tree.numTopModules },
+        () => ({
+          flow: 0,
+          bioregionId: 0,
+          numGridCells: 0,
+          species: [],
+        }),
+      );
+      tree.nodes.forEach((node) => {
+        const bioregionId = node.modules[0];
+        const bioregion = bioregions[bioregionId - 1];
+        bioregion.bioregionId = bioregionId;
+        bioregion.flow += node.flow;
+        if (node.id >= tree.bipartiteStartId!) {
+          bioregion.species.push(node.name);
+        } else {
+          ++bioregion.numGridCells;
+        }
+      });
+      console.log(
+        'Bioregions:',
+        bioregions,
+        bioregions.map((r) => r.flow),
+      );
+      runInAction(() => {
+        this.bioregions = bioregions;
+      });
     }
 
     if (treeString) {

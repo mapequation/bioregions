@@ -1,11 +1,13 @@
 import * as d3 from 'd3';
-import { action, makeObservable, observable } from 'mobx';
+import { action, computed, makeObservable, observable } from 'mobx';
 import { Node } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
 import zoom from '../utils/zoom';
 import { MultiPoint } from '../types/geojson';
+// import * as c3 from '@mapequation/c3';
+// import type { SchemeName } from '@mapequation/c3';
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
@@ -41,6 +43,7 @@ export default class MapStore {
 
   projectionName: Projection = PROJECTIONS[0];
   projection = d3[this.projectionName]().precision(0.1)!;
+  rotation: [number, number] = [40, 0]; // for orthographic projection
 
   canvas: HTMLCanvasElement | null = null;
   svg: SVGSVGElement | null = null;
@@ -67,6 +70,10 @@ export default class MapStore {
       setProjection: action,
       setRenderType: action,
     });
+
+    if (this.projectionName === 'geoOrthographic') {
+      this.projection.rotate(this.rotation);
+    }
   }
 
   setRenderType(type: RenderType) {
@@ -209,7 +216,7 @@ export default class MapStore {
       colorRange[Math.floor(heatmapOpacityScale(cell.recordsPerArea))];
   }
 
-  private static _bioregionColor(): GetGridColor {
+  private _bioregionColor(): GetGridColor {
     const CAT_20 = [
       '#D66F87',
       '#BDE628',
@@ -233,7 +240,9 @@ export default class MapStore {
       '#DECE4D',
     ];
 
-    return (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
+    // return (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
+    const { bioregionColors } = this.rootStore.colorStore;
+    return (cell: Node) => bioregionColors[cell.bioregionId - 1];
   }
 
   renderGrid() {
@@ -247,7 +256,7 @@ export default class MapStore {
     const getGridColor =
       this.renderType === 'heatmap' || !tree
         ? MapStore._heatmapColor(cells)
-        : MapStore._bioregionColor();
+        : this._bioregionColor();
 
     cells.forEach((cell: Node) =>
       this._renderGridCell(cell, this.context2d!, getGridColor(cell)),
@@ -274,6 +283,9 @@ export default class MapStore {
   setProjection(projection: Projection) {
     this.projectionName = projection;
     this.projection = d3[projection]().precision(0.1)!;
+    if (projection === 'geoOrthographic' || true) {
+      this.projection.rotate(this.rotation);
+    }
     this.setGeoPath(this.projection, this.context2d!);
     this.adjustHeight();
     this.applyZoom();
