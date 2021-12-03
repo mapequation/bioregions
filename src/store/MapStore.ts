@@ -40,6 +40,10 @@ export const PROJECTIONNAME: Record<Projection, string> = {
 export default class MapStore {
   rootStore: RootStore;
   isZooming: boolean = false;
+  renderDataWhileZooming: boolean = true;
+  setRenderDataWhileZooming(value: boolean) {
+    this.renderDataWhileZooming = value;
+  }
 
   projectionName: Projection = PROJECTIONS[0];
   projection = d3[this.projectionName]().precision(0.1)!;
@@ -63,6 +67,8 @@ export default class MapStore {
 
     makeObservable(this, {
       isZooming: observable,
+      renderDataWhileZooming: observable,
+      setRenderDataWhileZooming: action,
       projectionName: observable,
       renderType: observable,
       onZoom: action,
@@ -263,6 +269,14 @@ export default class MapStore {
     );
   }
 
+  renderData() {
+    if (this.renderType === 'records') {
+      this.renderPoints();
+    } else {
+      this.renderGrid();
+    }
+  }
+
   render() {
     if (this.context2d === null) {
       return;
@@ -271,11 +285,7 @@ export default class MapStore {
     this.context2d.save();
 
     this.renderLand();
-    if (this.renderType === 'records') {
-      this.renderPoints();
-    } else {
-      this.renderGrid();
-    }
+    this.renderData();
 
     this.context2d.restore();
   }
@@ -349,7 +359,11 @@ export default class MapStore {
 
   onZoom() {
     this.isZooming = true;
-    this.renderLand({ clip: false });
+    if (this.renderDataWhileZooming && this.renderType !== 'records') {
+      this.render();
+    } else {
+      this.renderLand({ clip: false });
+    }
   }
 
   onZoomEnd() {

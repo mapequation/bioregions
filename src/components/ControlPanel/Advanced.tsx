@@ -12,6 +12,7 @@ import {
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
+  Switch,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
@@ -69,6 +70,19 @@ export default observer(function Advanced() {
 
   return (
     <VStack align="stretch">
+      <FormControl display="flex" w="100%" alignItems="center">
+        <FormLabel htmlFor="render-data-on-zoom" mb="0">
+          Render data while zooming
+        </FormLabel>
+        <Spacer />
+        <Switch
+          id="render-data-on-zoom"
+          isChecked={mapStore.renderDataWhileZooming}
+          onChange={() =>
+            mapStore.setRenderDataWhileZooming(!mapStore.renderDataWhileZooming)
+          }
+        />
+      </FormControl>
       <FormControl
         display="flex"
         w="100%"

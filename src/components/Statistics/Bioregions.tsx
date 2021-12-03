@@ -6,8 +6,13 @@ import { range } from 'd3';
 export default observer(function Statistics() {
   const { infomapStore, colorStore } = useStore();
 
-  const { colorBioregion } = colorStore;
   const { numBioregions } = infomapStore;
+
+  if (numBioregions === 0) {
+    return null;
+  }
+
+  const { colorBioregion } = colorStore;
   // const { binner } = speciesStore;
   // const { cells } = binner;
 
