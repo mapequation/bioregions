@@ -31,14 +31,6 @@ export default observer(function Advanced() {
     try {
       const zip = new JSZip();
 
-      treeStore.setIncludeTree(false);
-
-      await infomapStore.run();
-      zip.file(
-        `${speciesStore.name}_without_tree.tree`,
-        infomapStore.treeString!,
-      );
-
       treeStore.setIncludeTree();
 
       const weights = range(steps).map((i) => i / (steps - 1));
@@ -58,6 +50,14 @@ export default observer(function Advanced() {
         const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
         zip.file(filename, infomapStore.treeString!);
       }
+
+      treeStore.setIncludeTree(false);
+
+      await infomapStore.run();
+      zip.file(
+        `${speciesStore.name}_without_tree.tree`,
+        infomapStore.treeString!,
+      );
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
       saveAs(zipFile, 'sweep.zip');

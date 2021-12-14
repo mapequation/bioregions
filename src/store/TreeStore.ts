@@ -15,6 +15,15 @@ export default class TreeStore {
   includeTreeInNetwork: boolean = false;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
 
+  focusTime: number = 0.5;
+  setFocusTime(value: number) {
+    this.focusTime = value;
+  }
+  focusWidth: number = 0.1;
+  setFocusWidth(value: number) {
+    this.focusWidth = value;
+  }
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -24,6 +33,10 @@ export default class TreeStore {
       treeString: observable,
       includeTreeInNetwork: observable,
       weightParameter: observable,
+      focusTime: observable,
+      setFocusTime: action,
+      focusWidth: observable,
+      setFocusWidth: action,
       weightFunction: computed,
       weightCurve: computed,
       numNodesInTree: computed,
@@ -84,6 +97,7 @@ export default class TreeStore {
   }
 
   setWeightParameter(value: number, updateNetwork: boolean = false) {
+    console.log('Set weight parameter:', value);
     this.weightParameter = value;
     if (updateNetwork) {
       this.rootStore.infomapStore.updateNetwork();
@@ -91,11 +105,10 @@ export default class TreeStore {
   }
 
   get weightFunction() {
-    // const w = interpolateExp(this.weightParameter, 10);
-    // const w = interpolateLog(this.weightParameter, 10);
-    const w = this.weightParameter;
-    // return (t: number) => interpolateExp(t, 200 * this.weightParameter + 1);
-    return (t: number) => interpolateExp(t, 200 * w + 1);
+    // const w = this.weightParameter;
+    // return (t: number) => interpolateExp(t, 200 * w + 1);
+    const tMid = this.weightParameter;
+    return (t: number) => (Math.abs(t - tMid) <= this.focusWidth ? 1 : 0);
   }
 
   get weightCurve() {

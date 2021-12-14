@@ -13,6 +13,12 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   Progress,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
+  Box,
+  Flex,
 } from '@chakra-ui/react';
 import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
 import TreeWeight from '../TreeWeight';
@@ -97,7 +103,26 @@ export default observer(function Infomap() {
   };
 
   return (
-    <VStack>
+    <VStack w="100%">
+      <Flex w="100%" ml={4} mt={4}>
+        <Slider
+          focusThumbOnChange={false}
+          value={infomapStore.diversityOrder}
+          onChange={(value) => infomapStore.setDiversityOrder(value)}
+          onChangeEnd={(value) => infomapStore.setDiversityOrder(value, true)}
+          min={0}
+          max={3}
+          step={0.1}
+        >
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb fontSize="sm" boxSize="32px">
+            {infomapStore.diversityOrder}
+          </SliderThumb>
+        </Slider>
+        <Box mx={10}>Diversity order</Box>
+      </Flex>
       <FormControl
         display="flex"
         w="100%"

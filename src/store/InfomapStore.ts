@@ -17,6 +17,7 @@ interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
   numTreeNodes: number;
   numTreeLinks: number;
+  sumLinkWeight: number;
 }
 
 type RequiredArgs = Required<
@@ -52,6 +53,20 @@ export default class InfomapStore {
   infomapId: number | null = null;
   bioregions: Bioregion[] = [];
 
+  // The link weight balance from no tree (0) to only tree (1)
+  treeWeightBalance: number = 0.5;
+  setTreeWeightBalance(value: number) {
+    this.treeWeightBalance = value;
+  }
+
+  diversityOrder: number = 0;
+  setDiversityOrder(value: number, updateNetwork: boolean = false) {
+    this.diversityOrder = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
+  }
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -63,6 +78,10 @@ export default class InfomapStore {
       currentTrial: observable,
       isRunning: observable,
       bioregions: observable.ref,
+      diversityOrder: observable,
+      setDiversityOrder: action,
+      treeWeightBalance: observable,
+      setTreeWeightBalance: action,
       numBioregions: computed,
       setTree: action,
       setTreeString: action,
@@ -248,6 +267,7 @@ export default class InfomapStore {
       this.rootStore.treeStore.includeTreeInNetwork
         ? this.createNetworkWithTree()
         : this.createNetwork();
+
     console.timeEnd('createNetwork');
     return network;
   }
@@ -264,6 +284,7 @@ export default class InfomapStore {
       nodeIdMap: {},
       numTreeNodes: 0,
       numTreeLinks: 0,
+      sumLinkWeight: 0,
     };
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
@@ -285,10 +306,17 @@ export default class InfomapStore {
       addNode(name);
     }
 
+    const { diversityOrder } = this;
     for (let [name, cells] of Object.entries(nameToCellIds)) {
       const source = network.nodeIdMap[name]!;
       for (let cell of cells.values()) {
-        network.links.push({ source, target: network.nodeIdMap[cell]! });
+        const weight = 1 / cells.size ** diversityOrder;
+        network.sumLinkWeight += weight;
+        network.links.push({
+          source,
+          target: network.nodeIdMap[cell]!,
+          weight,
+        });
       }
     }
 
@@ -308,6 +336,8 @@ export default class InfomapStore {
 
     let nodeId = network.nodes.length;
 
+    const sumNonTreeLinkWeights = network.sumLinkWeight;
+
     /**
      * 1. Depth first search post order (from leafs):
      * 2. If leaf node
@@ -321,6 +351,8 @@ export default class InfomapStore {
 
     // source (tree node) -> target (grid cell) -> weight
     const links = new Map<number, Map<number, number>>();
+
+    let sumTreeLinkWeight = 0;
 
     // Include internal tree nodes into network
     visitTreeDepthFirstPostOrder(tree, (node) => {
@@ -339,18 +371,21 @@ export default class InfomapStore {
         }
       });
 
+      // const numSpecies = node.speciesSet.size;
+
       const weight = weightFunction(node.rootDistance / tree.maxLeafDistance);
 
-      if (weight < 1e-3) {
+      if (weight < 1e-4) {
         //TODO: Test this threshold, should depend on network size or other properties?
         return;
       }
 
+      // const outLinks = new Map<number, number>();
+
       const source = nodeId++;
       if (!links.has(source)) {
-        links.set(source, new Map());
+        links.set(source, new Map<number, number>());
       }
-
       const outLinks = links.get(source)!;
 
       for (const species of node.speciesSet!) {
@@ -362,11 +397,37 @@ export default class InfomapStore {
         for (const cellId of nameToCellIds[species]) {
           const target = network.nodeIdMap[cellId];
 
+          // Aggregate weight
           const currentWeight = outLinks.get(target) ?? 0;
           outLinks.set(target, currentWeight + weight);
+          ++sumTreeLinkWeight;
         }
       }
+
+      // const source = nodeId++;
+      // if (!links.has(source)) {
+      //   links.set(source, outLinks);
+      // } else {
+      //   console.warn('Ancestor already got out links!', source, links);
+      // }
     });
+
+    const { treeWeightBalance } = this;
+
+    // s * t = n
+
+    // st / (n + st) = b
+    // st = bn + bst
+    // s(t - bt) = bn
+    // s = bn / (t - bt) = bn/(t(1-b))
+    const s =
+      sumTreeLinkWeight > 0
+        ? (treeWeightBalance * sumNonTreeLinkWeights) /
+          (sumTreeLinkWeight * (1 - treeWeightBalance))
+        : 0;
+    console.log(
+      `Sum non-tree link weight: ${sumNonTreeLinkWeights}, tree link weight: ${sumTreeLinkWeight}, -> s: ${s}`,
+    );
 
     const treeNodes = new Set<number>();
 
@@ -376,7 +437,7 @@ export default class InfomapStore {
       }
 
       for (const [target, weight] of outLinks.entries()) {
-        network.links.push({ source, target, weight });
+        network.links.push({ source, target, weight: weight * s });
         network.numTreeLinks++;
       }
     }

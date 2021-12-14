@@ -7,11 +7,11 @@ export default class ColorStore {
   rootStore: RootStore;
 
   scheme: SchemeName = 'Turbo';
-  saturation: number = 0.7;
-  saturationEnd: number = 0.5;
-  lightness: number = 0.6;
-  lightnessEnd: number = 0.4;
-  midpoint: number = 4;
+  saturation: number = 0.55;
+  saturationEnd: number = 0.8;
+  lightness: number = 0.5;
+  lightnessEnd: number = 0.9;
+  midpoint: number = 4.5;
   steepness: number = 1;
   strength: number = 0;
   offset: number = 0;
