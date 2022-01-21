@@ -42,6 +42,10 @@ export default class InfomapStore {
   args: RequiredArgs & Arguments = {
     twoLevel: true,
     numTrials: 1,
+    regularized: false,
+    regularizationStrength: 1,
+    entropyCorrected: false,
+    entropyCorrectionStrength: 1,
     ...defaultArgs,
   };
   network: BioregionsNetwork | null = null;
@@ -113,6 +117,22 @@ export default class InfomapStore {
 
   setNumTrials(numTrials: number) {
     this.args.numTrials = numTrials;
+  }
+
+  setRegularized(value: boolean = true) {
+    this.args.regularized = value;
+  }
+
+  setRegularizationStrength(strength: number) {
+    this.args.regularizationStrength = strength;
+  }
+
+  setEntropyCorrected(value: boolean = true) {
+    this.args.entropyCorrected = value;
+  }
+
+  setEntropyCorrectionStrength(strength: number) {
+    this.args.entropyCorrectionStrength = strength;
   }
 
   setTree(tree: Tree | null) {

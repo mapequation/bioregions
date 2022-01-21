@@ -169,6 +169,71 @@ export default observer(function Infomap() {
           </NumberInputStepper>
         </NumberInput>
       </FormControl>
+      <FormControl display="flex" w="100%" alignItems="center">
+        <FormLabel htmlFor="regularized" mb="0">
+          Regularized
+        </FormLabel>
+        <Spacer />
+        <Switch
+          id="regularized"
+          isChecked={infomapStore.args.regularized}
+          onChange={() =>
+            infomapStore.setRegularized(!infomapStore.args.regularized)
+          }
+        />
+      </FormControl>
+      <Flex w="100%" ml={4} mt={4}>
+        <Slider
+          isDisabled={!infomapStore.args.regularized}
+          focusThumbOnChange={false}
+          value={infomapStore.args.regularizationStrength}
+          onChange={(value) => infomapStore.setRegularizationStrength(value)}
+          min={0}
+          max={5}
+          step={0.01}
+        >
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb fontSize="sm" boxSize="32px">
+            {infomapStore.args.regularizationStrength}
+          </SliderThumb>
+        </Slider>
+        <Box mx={10}>Regularization strength</Box>
+      </Flex>
+      <FormControl display="flex" w="100%" alignItems="center">
+        <FormLabel htmlFor="entropyCorrected" mb="0">
+          Entropy corrected
+        </FormLabel>
+        <Spacer />
+        <Switch
+          id="entropyCorrected"
+          isChecked={infomapStore.args.entropyCorrected}
+          onChange={() =>
+            infomapStore.setEntropyCorrected(
+              !infomapStore.args.entropyCorrected,
+            )
+          }
+        />
+      </FormControl>
+      <Flex w="100%" ml={4} mt={4}>
+        <Slider
+          focusThumbOnChange={false}
+          value={infomapStore.args.entropyCorrectionStrength}
+          onChange={(value) => infomapStore.setEntropyCorrectionStrength(value)}
+          min={0}
+          max={5}
+          step={0.01}
+        >
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb fontSize="sm" boxSize="32px">
+            {infomapStore.args.entropyCorrectionStrength}
+          </SliderThumb>
+        </Slider>
+        <Box mx={10}>Entropy correction strength</Box>
+      </Flex>
       <Button
         size="sm"
         w="100%"
