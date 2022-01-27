@@ -1,7 +1,16 @@
 import { useMemo, useCallback } from 'react';
 import { observer } from 'mobx-react';
 import debounce from 'lodash/debounce';
-import { Box, VStack, Flex, Spacer, Text, FormControl, FormLabel, Divider } from '@chakra-ui/react';
+import {
+  Box,
+  VStack,
+  Flex,
+  Spacer,
+  Text,
+  FormControl,
+  FormLabel,
+  Divider,
+} from '@chakra-ui/react';
 import { useStore } from '../../store';
 import TangleInput, { TangleInputProps } from '../TangleInput';
 import Stat from '../Stat';
@@ -13,22 +22,35 @@ type MinMaxInputsProps = {
   maxProps: TangleInputProps;
 } & Partial<TangleInputProps>;
 
-const MinMaxInputs = ({ label, isDisabled = false, minProps, maxProps, min, max, ...common }: MinMaxInputsProps) => {
+const MinMaxInputs = ({
+  label,
+  isDisabled = false,
+  minProps,
+  maxProps,
+  min,
+  max,
+  ...common
+}: MinMaxInputsProps) => {
   return (
-    <FormControl display="flex" w="100%" alignItems="center" isDisabled={isDisabled}>
+    <FormControl
+      display="flex"
+      w="100%"
+      alignItems="center"
+      isDisabled={isDisabled}
+    >
       <FormLabel htmlFor="clip" mb="0">
         {label}
       </FormLabel>
       <Spacer />
       <Box>
-        <Text fontSize="xs" textTransform="uppercase" color={isDisabled ? "var(--chakra-colors-gray-400)" : "var(--chakra-colors-gray-800)"}>
-          Min: <TangleInput {...minProps} min={min} {...common} />{' '}
-          Max: <TangleInput {...maxProps} max={max} {...common} />
+        <Text fontSize="xs" textTransform="uppercase">
+          Min: <TangleInput {...minProps} min={min} {...common} /> Max:{' '}
+          <TangleInput {...maxProps} max={max} {...common} />
         </Text>
       </Box>
     </FormControl>
-  )
-}
+  );
+};
 
 export default observer(function Resolution() {
   const { speciesStore, mapStore, infomapStore } = useStore();
@@ -42,25 +64,41 @@ export default observer(function Resolution() {
     mapStore.render();
   }, [infomapStore, mapStore]);
 
-  const setMinNodeSizeLog2 = useMemo(() => debounce((value) => {
-    binner.setMinNodeSizeLog2(value);
-    render();
-  }, 500), [binner, render]);
+  const setMinNodeSizeLog2 = useMemo(
+    () =>
+      debounce((value) => {
+        binner.setMinNodeSizeLog2(value);
+        render();
+      }, 500),
+    [binner, render],
+  );
 
-  const setMaxNodeSizeLog2 = useMemo(() => debounce((value) => {
-    binner.setMaxNodeSizeLog2(value);
-    render();
-  }, 500), [binner, render]);
+  const setMaxNodeSizeLog2 = useMemo(
+    () =>
+      debounce((value) => {
+        binner.setMaxNodeSizeLog2(value);
+        render();
+      }, 500),
+    [binner, render],
+  );
 
-  const setLowerThreshold = useMemo(() => debounce((value) => {
-    binner.setLowerThreshold(value);
-    render();
-  }, 500), [binner, render]);
+  const setLowerThreshold = useMemo(
+    () =>
+      debounce((value) => {
+        binner.setLowerThreshold(value);
+        render();
+      }, 500),
+    [binner, render],
+  );
 
-  const setNodeCapacity = useMemo(() => debounce((value) => {
-    binner.setNodeCapacity(value);
-    render();
-  }, 500), [binner, render]);
+  const setNodeCapacity = useMemo(
+    () =>
+      debounce((value) => {
+        binner.setNodeCapacity(value);
+        render();
+      }, 500),
+    [binner, render],
+  );
 
   return (
     <VStack align="flex-start">
@@ -68,7 +106,7 @@ export default observer(function Resolution() {
         <MinMaxInputs
           isDisabled={speciesStore.isLoading}
           label="Cell size"
-          suffix='˚'
+          suffix="˚"
           format={formatBinSize}
           speed={0.1}
           min={-3}

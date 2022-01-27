@@ -9,11 +9,17 @@ type TreeProps = {
   showLeafLabels: boolean;
   interactive: boolean;
   nodeSize?: number;
+  fillColour?: string;
+  strokeColour?: string;
+  fontColour?: string;
 };
 
 export default class PhylocanvasTree extends React.Component<TreeProps> {
   static defaultProps = {
     nodeSize: 4,
+    fillColour: '#222222',
+    strokeColour: '#222222',
+    fontColour: '#222222',
   };
   static displayName = 'Phylocanvas';
 

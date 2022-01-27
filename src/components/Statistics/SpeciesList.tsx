@@ -1,10 +1,22 @@
-import { Box, Table, Thead, Tbody, Tr, Th, Td, Input } from '@chakra-ui/react';
+import {
+  Box,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Input,
+  Text,
+  useColorModeValue,
+} from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import PieChart from './PieChart';
 
 export default observer(function SpeciesList() {
   const { speciesStore } = useStore();
+  const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 
   if (speciesStore.numSpecies === 0) {
     return null;
@@ -14,9 +26,8 @@ export default observer(function SpeciesList() {
     <Box
       p={4}
       w="100%"
-      bg="white"
       rounded="md"
-      borderColor="blackAlpha.200"
+      borderColor={borderColor}
       borderWidth="2px"
       boxShadow="md"
     >
@@ -38,7 +49,9 @@ export default observer(function SpeciesList() {
           {speciesStore.speciesTopList.slice(0, 100).map((species) => {
             return (
               <Tr key={species.name} w="100%">
-                <Td>{species.name}</Td>
+                <Td>
+                  <Text>{species.name}</Text>
+                </Td>
                 <Td isNumeric>{species.count.toLocaleString()}</Td>
                 <Td>
                   <PieChart values={species.regions} />

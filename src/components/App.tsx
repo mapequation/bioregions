@@ -1,4 +1,10 @@
-import { Container, HStack, VStack, Heading } from '@chakra-ui/react';
+import {
+  Container,
+  HStack,
+  VStack,
+  Heading,
+  useColorModeValue,
+} from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
@@ -9,6 +15,8 @@ import Logo from './ControlPanel/Logo';
 
 export default observer(function App() {
   const { treeStore } = useStore();
+  const treeColor = useColorModeValue('#666666', '#eeeeee');
+
   return (
     <Container maxW="container.xl" pb={12}>
       <Heading as="h1" size="xl" color="gray.700">
@@ -26,6 +34,9 @@ export default observer(function App() {
               showLabels
               showLeafLabels
               interactive
+              fillColour={treeColor}
+              strokeColour={treeColor}
+              fontColour={treeColor}
             />
           )}
           <Statistics />

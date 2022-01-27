@@ -12,7 +12,7 @@ export default class TreeStore {
   loaded: boolean = false;
   tree: PhyloTree | null = null;
   treeString: string | null = null;
-  includeTreeInNetwork: boolean = false;
+  includeTreeInNetwork: boolean = true;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
 
   integrationTime: number = 1;

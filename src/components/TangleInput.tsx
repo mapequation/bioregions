@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { Box, useColorModeValue } from '@chakra-ui/react';
 import { clamp } from '../utils/math';
 
 export const useMousePosition = () => {
@@ -57,16 +58,16 @@ const getStep = (
     return value === 0
       ? 1
       : Math.pow(
-        10,
-        Math.floor(
-          Math.log10(
-            Math.max(
-              1,
-              Math.abs(value) + (sign * Math.sign(value) < 0 ? -1 : 0),
+          10,
+          Math.floor(
+            Math.log10(
+              Math.max(
+                1,
+                Math.abs(value) + (sign * Math.sign(value) < 0 ? -1 : 0),
+              ),
             ),
           ),
-        ),
-      ) * step;
+        ) * step;
   }
   return step;
 };
@@ -98,80 +99,91 @@ export default function TangleInput({
   const [isPressed, setIsPressed] = useState(false);
   const [currentValue, setCurrentValue] = useState(value);
   const [currentStep, setCurrentStep] = useState(step);
+  const bg = useColorModeValue('hsl(0, 0%, 90%)', 'hsl(0, 0%, 33%)');
+  const bgChanged = useColorModeValue('hsl(0, 100%, 90%)', 'hsl(0, 20%, 33%)');
 
-  const onWindowMouseMove = useCallback((e: MouseEvent) => {
-    e.preventDefault();
+  const onWindowMouseMove = useCallback(
+    (e: MouseEvent) => {
+      e.preventDefault();
 
-    const lastX = e.screenX;
+      const lastX = e.screenX;
 
-    // const pixelChange = lastX - startX;
-    const pixelChange = lastX - refState.current.lastX!;
-    const numSteps =
-      pixelChange > 0
-        ? Math.floor(speed * pixelChange)
-        : Math.ceil(speed * pixelChange);
+      // const pixelChange = lastX - startX;
+      const pixelChange = lastX - refState.current.lastX!;
+      const numSteps =
+        pixelChange > 0
+          ? Math.floor(speed * pixelChange)
+          : Math.ceil(speed * pixelChange);
 
-    if (numSteps === 0) return;
+      if (numSteps === 0) return;
 
-    const { currentValue } = refState.current;
-    let currentStep = getStep(currentValue, step, logScale, numSteps);
+      const { currentValue } = refState.current;
+      let currentStep = getStep(currentValue, step, logScale, numSteps);
 
-    let nextValue = currentValue + numSteps * currentStep;
+      let nextValue = currentValue + numSteps * currentStep;
 
-    // Clamp to step-resolved bounds
-    const { min, max } = refState.current;
-    nextValue = clamp(nextValue, min, max);
+      // Clamp to step-resolved bounds
+      const { min, max } = refState.current;
+      nextValue = clamp(nextValue, min, max);
 
-    // Adjust current step size if log step
-    if (logScale) {
-      let nextStep = getStep(nextValue, step, logScale, numSteps);
-      let oldLog = Math.floor(Math.log10(currentValue));
-      let newLog = Math.floor(Math.log10(nextValue));
+      // Adjust current step size if log step
+      if (logScale) {
+        let nextStep = getStep(nextValue, step, logScale, numSteps);
+        let oldLog = Math.floor(Math.log10(currentValue));
+        let newLog = Math.floor(Math.log10(nextValue));
 
-      if (newLog !== oldLog) {
-        if (newLog < oldLog) {
-          // Recalculate next value with smaller step size, so e.g. 200, 100, 0 -> 200, 100, 90, ...
-          // nextStep = Math.pow(10, Math.floor(oldLog - 1)) * this.props.logScale;
-          nextValue = currentValue + numSteps * nextStep;
-          // Re-calculate new step size
-          nextStep = getStep(nextValue, step, logScale, numSteps);
+        if (newLog !== oldLog) {
+          if (newLog < oldLog) {
+            // Recalculate next value with smaller step size, so e.g. 200, 100, 0 -> 200, 100, 90, ...
+            // nextStep = Math.pow(10, Math.floor(oldLog - 1)) * this.props.logScale;
+            nextValue = currentValue + numSteps * nextStep;
+            // Re-calculate new step size
+            nextStep = getStep(nextValue, step, logScale, numSteps);
+          }
+          currentStep = nextStep;
+          // Round to step resolution
+          nextValue = stepRound(currentStep, nextValue);
+          // Clamp to step-resolved bounds
+          nextValue = clamp(nextValue, min, max);
         }
-        currentStep = nextStep;
-        // Round to step resolution
-        nextValue = stepRound(currentStep, nextValue);
-        // Clamp to step-resolved bounds
-        nextValue = clamp(nextValue, min, max);
       }
-    }
 
-    refState.current.lastX = lastX;
-    refState.current.currentValue = nextValue;
-    setCurrentValue(nextValue);
-    setCurrentStep(currentStep);
-  }, [step, logScale, speed]);
+      refState.current.lastX = lastX;
+      refState.current.currentValue = nextValue;
+      setCurrentValue(nextValue);
+      setCurrentStep(currentStep);
+    },
+    [step, logScale, speed],
+  );
 
-  const onWindowMouseUp = useCallback((e: MouseEvent) => {
-    e.preventDefault();
-    window.removeEventListener('mousemove', onWindowMouseMove);
-    window.removeEventListener('mouseup', onWindowMouseUp);
-    setIsPressed(false);
-    if (onChange) {
-      onChange(refState.current.currentValue);
-    }
-  }, [onWindowMouseMove, onChange]);
+  const onWindowMouseUp = useCallback(
+    (e: MouseEvent) => {
+      e.preventDefault();
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+      setIsPressed(false);
+      if (onChange) {
+        onChange(refState.current.currentValue);
+      }
+    },
+    [onWindowMouseMove, onChange],
+  );
 
-  const onMouseDown = useCallback((e: MouseEvent) => {
-    const { screenX } = e;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    setIsPressed(true);
-    setCurrentValue(value);
-    refState.current.startX = refState.current.lastX = screenX;
+  const onMouseDown = useCallback(
+    (e: MouseEvent) => {
+      const { screenX } = e;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setIsPressed(true);
+      setCurrentValue(value);
+      refState.current.startX = refState.current.lastX = screenX;
 
-    window.addEventListener('mousemove', onWindowMouseMove);
-    window.addEventListener('mouseup', onWindowMouseUp);
-    //window.addEventListener('mousedown', onWindowMouseUp);
-  }, [onWindowMouseMove, onWindowMouseUp, value]);
+      window.addEventListener('mousemove', onWindowMouseMove);
+      window.addEventListener('mouseup', onWindowMouseUp);
+      //window.addEventListener('mousedown', onWindowMouseUp);
+    },
+    [onWindowMouseMove, onWindowMouseUp, value],
+  );
 
   useEffect(() => {
     if (ref.current) {
@@ -202,7 +214,7 @@ export default function TangleInput({
       ref={ref}
       style={{
         cursor: 'ew-resize',
-        backgroundColor: isChanged ? 'rgb(255, 209, 209)' : '#E8E8E8',
+        backgroundColor: isChanged ? bgChanged : bg,
         opacity: isPressed ? 0.8 : 1,
         padding: '3px 6px',
       }}

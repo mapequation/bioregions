@@ -153,10 +153,19 @@ export default observer(function Infomap() {
       <TreeHistogram
         isDisabled={!treeStore.includeTreeInNetwork || infomapStore.isRunning}
       />
-      <Flex w="100%" mt={4} gap={2} alignItems="center">
-        <Box w="50%">Integration time</Box>
+      <FormControl
+        display="flex"
+        w="100%"
+        alignItems="center"
+        isDisabled={!treeStore.includeTreeInNetwork}
+      >
+        <FormLabel htmlFor="integrationTime" mb="0">
+          Integration time
+        </FormLabel>
+        <Spacer />
         <Slider
           w="50%"
+          isDisabled={!treeStore.includeTreeInNetwork}
           focusThumbOnChange={false}
           value={treeStore.integrationTime}
           onChange={(value) => treeStore.setIntegrationTime(value)}
@@ -168,11 +177,9 @@ export default observer(function Infomap() {
           <SliderTrack>
             <SliderFilledTrack />
           </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="32px">
-            {treeStore.integrationTime}
-          </SliderThumb>
+          <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
         </Slider>
-      </Flex>
+      </FormControl>
       <FormControl
         display="flex"
         w="100%"

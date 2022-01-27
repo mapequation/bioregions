@@ -1,4 +1,13 @@
-import { Box, Table, Thead, Tbody, Tr, Th, Td } from '@chakra-ui/react';
+import {
+  Box,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  useColorModeValue,
+} from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
@@ -27,6 +36,7 @@ const BioregionInfo = observer(function Bioregion({
 }) {
   const { colorStore } = useStore();
   const { colorBioregion } = colorStore;
+  const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 
   //const { mostCommon, mostIndicative } = useExampleData();
 
@@ -37,9 +47,8 @@ const BioregionInfo = observer(function Bioregion({
     <Box
       p={4}
       w="100%"
-      bg="white"
       rounded="md"
-      borderColor="blackAlpha.200"
+      borderColor={borderColor}
       borderWidth="2px"
       boxShadow="md"
     >
