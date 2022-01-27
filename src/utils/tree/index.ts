@@ -82,3 +82,10 @@ export function visitTreeDepthFirstPostOrder(
 // export function visitTreeDepthFirst<T>(root: Node, callback: VisitCallback<T>, opts: VisitOpts = defaultVisitOpts) {
 //   return _visitTreeDepthFirst(opts, root, callback, 0, 0);
 // }
+
+// export function getTreeHistogram(tree: Node, { minTime }: { minTime: number} = {}) {
+
+//   visitTreeDepthFirstPreOrder(tree, (node) => {
+
+//   })
+// }

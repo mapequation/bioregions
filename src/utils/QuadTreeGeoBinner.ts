@@ -276,7 +276,10 @@ export class Node implements Feature<Polygon> {
   }
 
   calcStats() {
-    const speciesMap: Map<string, number> = new Map();
+    type FeatureName = string;
+    type FeatureCount = number;
+
+    const speciesMap: Map<FeatureName, FeatureCount> = new Map();
     for (let feature of this.features) {
       const { name } = feature.properties;
       speciesMap.set(name, (speciesMap.get(name) ?? 0) + 1);

@@ -238,50 +238,6 @@ export default observer(function Infomap() {
           </Slider>
         </Flex>
       </Collapse>
-      <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="entropyCorrected" mb="0">
-          Entropy correction
-        </FormLabel>
-        <Spacer />
-        <Switch
-          id="entropyCorrected"
-          isChecked={infomapStore.args.entropyCorrected}
-          onChange={() =>
-            infomapStore.setEntropyCorrected(
-              !infomapStore.args.entropyCorrected,
-            )
-          }
-        />
-      </FormControl>
-      <Collapse
-        in={infomapStore.args.entropyCorrected}
-        animateOpacity
-        style={{ width: '100%' }}
-      >
-        <Flex w="100%" pl={2} py={2} style={{ display: 'none' }}>
-          <Box w="50%" fontSize="0.9rem">
-            Strength
-          </Box>
-          <Slider
-            w="50%"
-            focusThumbOnChange={false}
-            value={infomapStore.args.entropyCorrectionStrength}
-            onChange={(value) =>
-              infomapStore.setEntropyCorrectionStrength(value)
-            }
-            min={0}
-            max={5}
-            step={0.01}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="32px">
-              {infomapStore.args.entropyCorrectionStrength}
-            </SliderThumb>
-          </Slider>
-        </Flex>
-      </Collapse>
       <Button
         size="sm"
         w="100%"

@@ -13,44 +13,52 @@ export default observer(function Statistics() {
   return (
     <>
       {infomapStore.bioregions.map((bioregion: Bioregion) => (
-        <BioregionInfo
-          bioregionId={bioregion.bioregionId}
-          key={bioregion.bioregionId}
-        />
+        <BioregionInfo bioregion={bioregion} key={bioregion.bioregionId} />
       ))}
     </>
   );
 });
 
 const BioregionInfo = observer(function Bioregion({
-  bioregionId,
+  bioregion,
 }: {
-  bioregionId: number;
+  bioregion: Bioregion;
 }) {
   const { colorStore } = useStore();
   const { colorBioregion } = colorStore;
 
-  const { mostCommon, mostIndicative } = useExampleData();
+  //const { mostCommon, mostIndicative } = useExampleData();
+
+  const mostCommon = bioregion.mostCommon.slice(0, 9);
+  const mostIndicative = bioregion.mostIndicative.slice(0, 9);
 
   return (
-    <Box p={4} w="100%" bg="gray.100" rounded="sm" boxShadow="md">
+    <Box
+      p={4}
+      w="100%"
+      bg="white"
+      rounded="md"
+      borderColor="blackAlpha.200"
+      borderWidth="2px"
+      boxShadow="md"
+    >
       <Box
-        bg={colorBioregion(bioregionId)}
+        bg={colorBioregion(bioregion.bioregionId)}
         w="100%"
         h="100%"
-        rounded="sm"
+        rounded="md"
         textAlign="center"
-        color="gray.200"
+        color="white"
         borderColor="blackAlpha.200"
         borderWidth="2px"
         fontWeight={600}
         py={2}
-        textShadow="1px 1px 2px black"
+        textShadow="1px 1px 2px var(--chakra-colors-blackAlpha-700)"
       >
-        Bioregion {bioregionId}
+        Bioregion {bioregion.bioregionId}
       </Box>
 
-      <Table variant="simple" color="gray.800">
+      <Table variant="simple">
         <Thead>
           <Tr>
             <Th colSpan={3} textAlign="center">
@@ -70,19 +78,19 @@ const BioregionInfo = observer(function Bioregion({
           </Tr>
         </Thead>
         <Tbody>
-          {mostCommon.map((commonSpecies, index) => {
+          {mostCommon.map((commonSpecies: any, index: number) => {
             const indicativeSpecies = mostIndicative[index];
             return (
               <Tr key={index} w="100%">
                 <Td>{commonSpecies.name}</Td>
-                <Td isNumeric>{commonSpecies.count}</Td>
+                <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
                 <Td>
                   <PieChart values={commonSpecies.regions} />
                 </Td>
-                <Td>{indicativeSpecies.name}</Td>
-                <Td isNumeric>{indicativeSpecies.score.toFixed(2)}</Td>
+                <Td>{indicativeSpecies?.name}</Td>
+                <Td isNumeric>{indicativeSpecies?.score.toFixed(2)}</Td>
                 <Td>
-                  <PieChart values={indicativeSpecies.regions} />
+                  <PieChart values={indicativeSpecies?.regions} />
                 </Td>
               </Tr>
             );
@@ -114,7 +122,6 @@ const PieChart = observer(function PieChart({
       0,
     ),
   };
-  console.log(rest);
 
   if (rest.fraction > 0) {
     aggregated.push(rest);

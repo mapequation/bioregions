@@ -35,31 +35,23 @@ export default observer(function Advanced() {
 
       treeStore.setIncludeTree();
 
-      // const weights = range(steps).map((i) => i / (steps - 1));
-      // const f = format('.1f');
+      const times = range(steps).map((i) => i / (steps - 1));
+      const f = format('.2f');
 
-      // for (let i = 0; i < weights.length; i++) {
-      //   setStep(i);
-      //   const w = weights[i];
-      //   treeStore.setWeightParameter(w);
+      for (let i = 0; i < times.length; i++) {
+        setStep(i);
+        const t = times[i];
+        treeStore.setIntegrationTime(t);
 
-      //   await infomapStore.run();
+        await infomapStore.run();
 
-      //   if (mapStore.renderType === 'bioregions') {
-      //     mapStore.render();
-      //   }
+        if (mapStore.renderType === 'bioregions') {
+          mapStore.render();
+        }
 
-      //   const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
-      //   zip.file(filename, infomapStore.treeString!);
-      // }
-
-      treeStore.setIncludeTree(false);
-
-      await infomapStore.run();
-      zip.file(
-        `${speciesStore.name}_without_tree.tree`,
-        infomapStore.treeString!,
-      );
+        const filename = `${speciesStore.name}_time_${f(t)}.tree`;
+        zip.file(filename, infomapStore.treeString!);
+      }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
       saveAs(zipFile, 'sweep.zip');
@@ -70,7 +62,7 @@ export default observer(function Advanced() {
     setIsRunning(false);
   };
 
-  const formatCodelength = format('.6f');
+  const formatCodelength = format('.4f');
   const formatPercent = format('.1%');
 
   return (
@@ -78,12 +70,56 @@ export default observer(function Advanced() {
       <VStack>
         <Stat label="Levels">{infomapStore.numLevels}</Stat>
         <Stat label="Codelength">
-          {formatCodelength(infomapStore.codelength)}
+          {formatCodelength(infomapStore.codelength)} bits
         </Stat>
         <Stat label="Codelength savings">
           {formatPercent(infomapStore.relativeCodelengthSavings)}
         </Stat>
       </VStack>
+      <FormControl display="flex" w="100%" alignItems="center">
+        <FormLabel htmlFor="entropyCorrected" mb="0">
+          Entropy correction
+        </FormLabel>
+        <Spacer />
+        <Switch
+          id="entropyCorrected"
+          isChecked={infomapStore.args.entropyCorrected}
+          onChange={() =>
+            infomapStore.setEntropyCorrected(
+              !infomapStore.args.entropyCorrected,
+            )
+          }
+        />
+      </FormControl>
+      {/* <Collapse
+        in={infomapStore.args.entropyCorrected}
+        animateOpacity
+        style={{ width: '100%' }}
+      >
+        <Flex w="100%" pl={2} py={2}>
+          <Box w="50%" fontSize="0.9rem">
+            Strength
+          </Box>
+          <Slider
+            w="50%"
+            focusThumbOnChange={false}
+            value={infomapStore.args.entropyCorrectionStrength}
+            onChange={(value) =>
+              infomapStore.setEntropyCorrectionStrength(value)
+            }
+            min={0}
+            max={5}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="32px">
+              {infomapStore.args.entropyCorrectionStrength}
+            </SliderThumb>
+          </Slider>
+        </Flex>
+      </Collapse> */}
       <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="render-data-on-zoom" mb="0">
           Render data while zooming

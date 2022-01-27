@@ -55,6 +55,7 @@ export default class SpeciesStore {
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
+  speciesCount = new Map<string, number>();
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -65,6 +66,10 @@ export default class SpeciesStore {
       isLoading: observable,
       numPoints: computed,
       pointCollection: observable.ref,
+      speciesCount: observable.ref,
+      speciesTopList: computed,
+      numSpecies: computed,
+      numRecords: computed,
       setPointCollection: action,
       setLoaded: action,
       setIsLoading: action,
@@ -73,6 +78,20 @@ export default class SpeciesStore {
 
   get numPoints() {
     return this.pointCollection.features.length;
+  }
+
+  get numRecords() {
+    return this.numPoints;
+  }
+
+  get numSpecies() {
+    return this.speciesCount.size;
+  }
+
+  get speciesTopList() {
+    return Array.from(this.speciesCount.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   setLoaded(loaded: boolean) {
@@ -85,10 +104,22 @@ export default class SpeciesStore {
 
   setPointCollection(pointCollection: PointFeatureCollection) {
     this.pointCollection = pointCollection;
+    this.updateSpeciesCount();
   }
 
   updatePointCollection(pointCollection = this.pointCollection) {
     this.setPointCollection(createPointCollection(pointCollection.features));
+  }
+
+  updateSpeciesCount() {
+    type Name = string;
+    type Count = number;
+    const speciesCount = new Map<Name, Count>();
+    this.pointCollection.features.forEach((feature) => {
+      const { name } = feature.properties;
+      speciesCount.set(name, (speciesCount.get(name) ?? 0) + 1);
+    });
+    this.speciesCount = speciesCount;
   }
 
   private async *loadData(

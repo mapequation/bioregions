@@ -82,6 +82,7 @@ export default class TreeStore {
 
   setTree(tree: PhyloTree | null) {
     this.tree = tree;
+    // this.calculateTreeStats();
   }
 
   setTreeString(treeString: string) {

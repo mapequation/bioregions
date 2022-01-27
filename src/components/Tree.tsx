@@ -8,24 +8,20 @@ type TreeProps = {
   showLabels: boolean;
   showLeafLabels: boolean;
   interactive: boolean;
+  nodeSize?: number;
 };
 
 export default class PhylocanvasTree extends React.Component<TreeProps> {
+  static defaultProps = {
+    nodeSize: 4,
+  };
   static displayName = 'Phylocanvas';
 
   tree: any = null;
   canvasRef = React.createRef<HTMLDivElement>();
 
-  getProps(props = {}) {
-    return {
-      nodeSize: 4,
-      ...this.props,
-      ...props,
-    };
-  }
-
   componentDidMount() {
-    this.tree = new PhylocanvasGL(this.canvasRef.current, this.getProps(), [
+    this.tree = new PhylocanvasGL(this.canvasRef.current, this.props, [
       this.fixResolution,
     ]);
   }
@@ -40,7 +36,7 @@ export default class PhylocanvasTree extends React.Component<TreeProps> {
   };
 
   componentDidUpdate(props: TreeProps) {
-    this.tree.setProps(this.getProps(props));
+    this.tree.setProps(props);
   }
 
   componentWillUnmount() {

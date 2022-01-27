@@ -34,14 +34,25 @@ export type Bioregion = {
   flow: number;
   bioregionId: number;
   numGridCells: number;
+  numRecords: number;
   species: string[];
+  mostCommon: {
+    name: string;
+    count: number;
+    regions: { id: number; fraction: number }[];
+  }[];
+  mostIndicative: {
+    name: string;
+    score: number;
+    regions: { id: number; fraction: number }[];
+  }[];
 };
 
 export default class InfomapStore {
   rootStore: RootStore;
   args: RequiredArgs & Arguments = {
     twoLevel: true,
-    numTrials: 1,
+    numTrials: process.env.NODE_ENV === 'production' ? 5 : 1,
     regularized: false,
     regularizationStrength: 1,
     entropyCorrected: true,
@@ -174,7 +185,7 @@ export default class InfomapStore {
     const { json: tree, tree: treeString } = result;
 
     if (tree) {
-      const bioregions = createBioregions(tree, this.cells);
+      const bioregions = this.createBioregions(tree);
       this.setTree(tree);
       runInAction(() => {
         this.bioregions = bioregions;
@@ -459,39 +470,85 @@ export default class InfomapStore {
 
     return network;
   }
-}
 
-function createBioregions(tree: Tree, cells: Node[]) {
-  const bipartiteStartId = tree.bipartiteStartId!;
+  createBioregions(tree: Tree) {
+    type Species = string;
+    type BioregionId = number;
 
-  // Tree nodes are sorted on flow, loop through all to find grid cell nodes
-  tree.nodes.forEach((node) => {
-    if (node.id >= bipartiteStartId) return;
+    const { speciesStore } = this.rootStore;
+    const { cells } = this;
 
-    cells[node.id].bioregionId = node.path[0];
-  });
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      if (node.id >= tree.bipartiteStartId!) return;
 
-  console.log(tree);
-  const bioregions: Bioregion[] = Array.from(
-    { length: tree.numTopModules },
-    () => ({
-      flow: 0,
-      bioregionId: 0,
-      numGridCells: 0,
-      species: [],
-    }),
-  );
-  tree.nodes.forEach((node) => {
-    const bioregionId = node.modules[0];
-    const bioregion = bioregions[bioregionId - 1];
-    bioregion.bioregionId = bioregionId;
-    bioregion.flow += node.flow;
-    if (node.id >= tree.bipartiteStartId!) {
-      bioregion.species.push(node.name);
-    } else {
-      ++bioregion.numGridCells;
+      const cell = cells[node.id];
+
+      // set the bioregion id to the top mulitlevel module of the node
+      // different from the node path!
+      cell.bioregionId = node.modules[0];
+    });
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: tree.numTopModules },
+      () => ({
+        flow: 0,
+        bioregionId: 0,
+        numGridCells: 0,
+        numRecords: 0,
+        species: [],
+        mostCommon: [],
+        mostIndicative: [],
+      }),
+    );
+
+    tree.nodes.forEach((node) => {
+      const bioregionId = node.modules[0];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      if (node.id >= tree.bipartiteStartId!) {
+        bioregion.species.push(node.name);
+      } else {
+        ++bioregion.numGridCells;
+      }
+    });
+
+    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
+
+    for (const cell of cells) {
+      const bioregion = bioregions[cell.bioregionId - 1];
+
+      if (!bioregionSpeciesCount.has(bioregion.bioregionId)) {
+        bioregionSpeciesCount.set(bioregion.bioregionId, new Map());
+      }
+      const speciesCount = bioregionSpeciesCount.get(bioregion.bioregionId)!;
+
+      for (const species of cell.speciesTopList) {
+        bioregion.numRecords += species.count;
+        speciesCount.set(
+          species.name,
+          (speciesCount.get(species.name) ?? 0) + species.count,
+        );
+      }
     }
-  });
-  console.log('Bioregions:', bioregions);
-  return bioregions;
+
+    for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
+      const bioregion = bioregions[bioregionId - 1];
+      for (const [name, count] of speciesCount.entries()) {
+        bioregion.mostCommon.push({ name, count, regions: [] });
+
+        // Most indicative
+        const tf = count / bioregion.numRecords;
+        const idf =
+          (speciesStore.speciesCount.get(name) ?? 0) / speciesStore.numRecords;
+        const score = tf / idf;
+        bioregion.mostIndicative.push({ name, score, regions: [] });
+      }
+      bioregion.mostCommon.sort((a, b) => b.count - a.count);
+      bioregion.mostIndicative.sort((a, b) => b.score - a.score);
+    }
+    return bioregions;
+  }
 }
