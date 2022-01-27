@@ -5,13 +5,14 @@ import ControlPanel from './ControlPanel';
 import Tree from './Tree';
 import { useStore } from '../store';
 import Statistics from './Statistics';
+import Logo from './ControlPanel/Logo';
 
 export default observer(function App() {
   const { treeStore } = useStore();
   return (
     <Container maxW="container.xl" pb={12}>
       <Heading as="h1" size="xl" color="gray.700">
-        Infomap Bioregions
+        <Logo />
       </Heading>
 
       <HStack spacing="30px" alignItems="flex-start">
