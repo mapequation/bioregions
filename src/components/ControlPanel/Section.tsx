@@ -23,6 +23,7 @@ const Section = ({
       px={4}
       py={4}
       mt={4}
+      mb={8}
       w="300px"
       minW="200px"
       pos="relative"

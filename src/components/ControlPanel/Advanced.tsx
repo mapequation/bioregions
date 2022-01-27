@@ -14,6 +14,7 @@ import {
   NumberDecrementStepper,
   Switch,
   Box,
+  Collapse,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
@@ -25,6 +26,7 @@ export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState(5);
   const [step, setStep] = useState(0);
+  const [show, setShow] = useState(process.env.NODE_ENV === 'development');
   const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
 
   const paramSweep = async () => {
@@ -67,116 +69,103 @@ export default observer(function Advanced() {
 
   return (
     <VStack align="stretch">
-      <VStack>
-        <Stat label="Levels">{infomapStore.numLevels}</Stat>
-        <Stat label="Codelength">
-          {formatCodelength(infomapStore.codelength)} bits
-        </Stat>
-        <Stat label="Codelength savings">
-          {formatPercent(infomapStore.relativeCodelengthSavings)}
-        </Stat>
-      </VStack>
       <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="entropyCorrected" mb="0">
-          Entropy correction
+        <FormLabel htmlFor="showAdvanced" mb="0">
+          Show
         </FormLabel>
         <Spacer />
         <Switch
-          id="entropyCorrected"
-          isChecked={infomapStore.args.entropyCorrected}
-          onChange={() =>
-            infomapStore.setEntropyCorrected(
-              !infomapStore.args.entropyCorrected,
-            )
-          }
+          id="showAdvanced"
+          isChecked={show}
+          onChange={() => setShow(!show)}
         />
-      </FormControl>
-      {/* <Collapse
-        in={infomapStore.args.entropyCorrected}
-        animateOpacity
-        style={{ width: '100%' }}
-      >
-        <Flex w="100%" pl={2} py={2}>
-          <Box w="50%" fontSize="0.9rem">
-            Strength
-          </Box>
-          <Slider
-            w="50%"
-            focusThumbOnChange={false}
-            value={infomapStore.args.entropyCorrectionStrength}
-            onChange={(value) =>
-              infomapStore.setEntropyCorrectionStrength(value)
-            }
-            min={0}
-            max={5}
-            step={0.01}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="32px">
-              {infomapStore.args.entropyCorrectionStrength}
-            </SliderThumb>
-          </Slider>
-        </Flex>
-      </Collapse> */}
-      <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="render-data-on-zoom" mb="0">
-          Render data while zooming
-        </FormLabel>
-        <Spacer />
-        <Switch
-          id="render-data-on-zoom"
-          isChecked={mapStore.renderDataWhileZooming}
-          onChange={() =>
-            mapStore.setRenderDataWhileZooming(!mapStore.renderDataWhileZooming)
-          }
-        />
-      </FormControl>
-      <FormControl
-        display="flex"
-        w="100%"
-        alignItems="center"
-        isDisabled={infomapStore.isRunning}
-      >
-        <FormLabel htmlFor="steps" mb="0">
-          Steps
-        </FormLabel>
-        <Spacer />
-        <NumberInput
-          maxW="70px"
-          min={2}
-          size="xs"
-          value={steps}
-          onChange={(value) => setSteps(+value)}
-        >
-          <NumberInputField />
-          <NumberInputStepper>
-            <NumberIncrementStepper />
-            <NumberDecrementStepper />
-          </NumberInputStepper>
-        </NumberInput>
       </FormControl>
 
-      <Button
-        size="sm"
-        isDisabled={
-          !speciesStore.loaded || !treeStore.loaded || infomapStore.isRunning
-        }
-        isLoading={isRunning}
-        onClick={paramSweep}
-      >
-        Run parameter sweep
-      </Button>
-      {isRunning && (
-        <Progress
-          value={step}
-          max={steps}
-          size="xs"
+      <Collapse in={show} animateOpacity style={{ width: '100%' }}>
+        <VStack>
+          <Stat label="Levels">{infomapStore.numLevels}</Stat>
+          <Stat label="Codelength">
+            {formatCodelength(infomapStore.codelength)} bits
+          </Stat>
+          <Stat label="Codelength savings">
+            {formatPercent(infomapStore.relativeCodelengthSavings)}
+          </Stat>
+        </VStack>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="entropyCorrected" mb="0">
+            Entropy correction
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="entropyCorrected"
+            isChecked={infomapStore.args.entropyCorrected}
+            onChange={() =>
+              infomapStore.setEntropyCorrected(
+                !infomapStore.args.entropyCorrected,
+              )
+            }
+          />
+        </FormControl>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="render-data-on-zoom" mb="0">
+            Render data while zooming
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="render-data-on-zoom"
+            isChecked={mapStore.renderDataWhileZooming}
+            onChange={() =>
+              mapStore.setRenderDataWhileZooming(
+                !mapStore.renderDataWhileZooming,
+              )
+            }
+          />
+        </FormControl>
+        <FormControl
+          display="flex"
           w="100%"
-          color="blue.500"
-        />
-      )}
+          alignItems="center"
+          isDisabled={infomapStore.isRunning}
+        >
+          <FormLabel htmlFor="steps" mb="0">
+            <Button
+              size="sm"
+              isDisabled={
+                !speciesStore.loaded ||
+                !treeStore.loaded ||
+                infomapStore.isRunning
+              }
+              isLoading={isRunning}
+              onClick={paramSweep}
+            >
+              Run parameter sweep
+            </Button>
+          </FormLabel>
+          <Spacer />
+          <NumberInput
+            maxW="70px"
+            min={2}
+            size="xs"
+            value={steps}
+            onChange={(value) => setSteps(+value)}
+          >
+            <NumberInputField />
+            <NumberInputStepper>
+              <NumberIncrementStepper />
+              <NumberDecrementStepper />
+            </NumberInputStepper>
+          </NumberInput>
+        </FormControl>
+        {isRunning && (
+          <Progress
+            value={step}
+            max={steps}
+            size="xs"
+            w="100%"
+            color="blue.500"
+          />
+        )}
+      </Collapse>
     </VStack>
   );
 });
