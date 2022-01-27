@@ -2,6 +2,7 @@
   "name": "bioregions",
   "version": "2.0.0-alpha",
   "private": true,
+  "homepage": "/bioregions2",
   "dependencies": {
     "@chakra-ui/icons": "^1.1.1",
     "@chakra-ui/react": "^1.7.4",
@@ -56,7 +57,8 @@
     "build": "craco build",
     "test": "craco test",
     "styleguide": "styleguidist server",
-    "styleguide:build": "styleguidist build"
+    "styleguide:build": "styleguidist build",
+    "deploy": "npm run build && scp -r build/* mapequation:/var/www/bioregions2"
   },
   "eslintConfig": {
     "extends": [

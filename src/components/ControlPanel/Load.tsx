@@ -69,16 +69,16 @@ export const LoadExample = observer(function LoadExample() {
             <Tr
               _hover={rowHover}
               onClick={loadFile(
-                '/data/mammals_neotropics.csv',
-                '/data/mammals_neotropics.nwk',
+                '/bioregions2/data/mammals_neotropics.csv',
+                '/bioregions2/data/mammals_neotropics.nwk',
               )}
             >
-              <Td>Mammals in the South American neotropics</Td>
+              <Td>Neotropical mammal occurences</Td>
               <Td isNumeric>2.8</Td>
             </Tr>
             <Tr
               _hover={rowHover}
-              onClick={loadFile('/data/mammals_global.tsv')}
+              onClick={loadFile('/bioregions2/data/mammals_global.tsv')}
             >
               <Td>Global mammal occurrences</Td>
               <Td isNumeric>56</Td>
