@@ -15,13 +15,19 @@ export default class TreeStore {
   includeTreeInNetwork: boolean = false;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
 
-  integrationTime: number = 0.5;
-  setIntegrationTime = action((value: number) => {
+  integrationTime: number = 1;
+  setIntegrationTime = action((value: number, updateNetwork = false) => {
     this.integrationTime = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
   });
-  segregationTime: number = 0.1;
-  setSegregationTime = action((value: number) => {
+  segregationTime: number = 0;
+  setSegregationTime = action((value: number, updateNetwork = false) => {
     this.segregationTime = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
   });
 
   constructor(rootStore: RootStore) {

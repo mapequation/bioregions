@@ -54,6 +54,9 @@ export default observer(function TreeWeight({
         width={width}
         height={height}
       >
+        <text x={50} y={50} stroke="#eeeeee">
+          To be added
+        </text>
         <AxisLeft domain={[0, 1]} range={[0, height]} label="Branch count" />
         <AxisBottom
           height={height}
@@ -69,9 +72,9 @@ export default observer(function TreeWeight({
           height={height}
           strokeWidth="2"
           stroke={
-            !isDisabled
+            !isDisabled && false
               ? 'var(--chakra-colors-blue-500)'
-              : 'var(--chakra-colors-gray-300)'
+              : 'var(--chakra-colors-gray-100)'
           }
         />
       </svg>

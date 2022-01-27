@@ -13,11 +13,13 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   Switch,
+  Box,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import Stat from '../Stat';
 
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
@@ -68,8 +70,20 @@ export default observer(function Advanced() {
     setIsRunning(false);
   };
 
+  const formatCodelength = format('.6f');
+  const formatPercent = format('.1%');
+
   return (
     <VStack align="stretch">
+      <VStack>
+        <Stat label="Levels">{infomapStore.numLevels}</Stat>
+        <Stat label="Codelength">
+          {formatCodelength(infomapStore.codelength)}
+        </Stat>
+        <Stat label="Codelength savings">
+          {formatPercent(infomapStore.relativeCodelengthSavings)}
+        </Stat>
+      </VStack>
       <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="render-data-on-zoom" mb="0">
           Render data while zooming

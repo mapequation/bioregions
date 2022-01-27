@@ -14,14 +14,15 @@ export type Node = {
   numLeafs: number;
   maxLeafDistance: number;
   rootDistance: number;
+  time: number; // Normalized root distance, 0 in root, 1 in youngest leafs
   speciesSet?: Set<string>;
-}
+};
 
 export function visitTreeDepthFirstPreOrder(
   node: Node,
   callback: (node: Node) => void,
 ) {
-  callback(node)
+  callback(node);
   node.children.forEach((child) => {
     visitTreeDepthFirstPreOrder(child, callback);
   });
@@ -81,4 +82,3 @@ export function visitTreeDepthFirstPostOrder(
 // export function visitTreeDepthFirst<T>(root: Node, callback: VisitCallback<T>, opts: VisitOpts = defaultVisitOpts) {
 //   return _visitTreeDepthFirst(opts, root, callback, 0, 0);
 // }
-

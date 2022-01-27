@@ -2,16 +2,29 @@
 import _ from 'lodash';
 
 export function normalizeSpeciesName(speciesName) {
-  if (!speciesName || speciesName.length === 1)
-    return speciesName;
+  if (!speciesName || speciesName.length === 1) return speciesName;
   return _.upperFirst(speciesName.replace(/_/g, ' '));
 }
 
-
 function _visitTreeDepthFirst(opts, node, callback, depth, childIndex, parent) {
-  if (!opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent)) return true;
-  let childExit = !_.every(node.children || [], (child, i) => !_visitTreeDepthFirst(opts, child, callback, depth + 1, i, node));
-  if (childExit || (opts.postOrder && (!opts.include || opts.include(node)) && callback(node, depth, childIndex, parent))) return true;
+  if (
+    !opts.postOrder &&
+    (!opts.include || opts.include(node)) &&
+    callback(node, depth, childIndex, parent)
+  )
+    return true;
+  let childExit = !_.every(
+    node.children || [],
+    (child, i) =>
+      !_visitTreeDepthFirst(opts, child, callback, depth + 1, i, node),
+  );
+  if (
+    childExit ||
+    (opts.postOrder &&
+      (!opts.include || opts.include(node)) &&
+      callback(node, depth, childIndex, parent))
+  )
+    return true;
   return false;
 }
 
@@ -40,7 +53,7 @@ export function mapDepthFirst(opts, root, callback) {
     [opts, root, callback] = [{}, opts, root];
   }
   const res = [];
-  visitTreeDepthFirst(opts, root, node => {
+  visitTreeDepthFirst(opts, root, (node) => {
     res.push(callback(node));
   });
   return res;
@@ -67,13 +80,13 @@ export function visitTreeBreadthFirst(opts, root, callback) {
     x = q.shift();
     if (opts.include && !opts.include(x)) continue;
     if (callback(x)) return true;
-    (x.children || []).forEach(child => q.push(child));
+    (x.children || []).forEach((child) => q.push(child));
   }
   return false;
 }
 
 export function visitLeafNodes(root, callback) {
-  visitTreeDepthFirst(root, node => {
+  visitTreeDepthFirst(root, (node) => {
     if (!node.children) {
       callback(node);
     }
@@ -89,7 +102,7 @@ export function mapLeafNodes(root, callback) {
 
 export function getLeafNodes(root) {
   const leafNodes = [];
-  visitTreeDepthFirst(root, node => {
+  visitTreeDepthFirst(root, (node) => {
     if (!node.children) {
       leafNodes.push(node);
     }
@@ -105,11 +118,9 @@ export function setParents(tree) {
 }
 
 export function visitAncestors(opts, node, callback) {
-  if (!callback)
-    [opts, node, callback] = [{}, opts, node];
+  if (!callback) [opts, node, callback] = [{}, opts, node];
   let current = node;
-  if (opts.includeStartNode)
-    callback(current);
+  if (opts.includeStartNode) callback(current);
   while (current.parent) {
     current = current.parent;
     callback(current);
@@ -147,8 +158,7 @@ export function expandAll(node) {
     node._children = null;
   }
   // Even if not collapsed, expand possibly collapsed nodes further down
-  if (node.children)
-    node.children.forEach(expandAll);
+  if (node.children) node.children.forEach(expandAll);
   return node;
 }
 
@@ -161,10 +171,8 @@ export function expandAll(node) {
  */
 export function aggregate(root, parentMutator, leafMutator) {
   visitTreeDepthFirst({ postOrder: true }, root, (node) => {
-    if (!node.children)
-      leafMutator(node);
-    else
-      parentMutator(node);
+    if (!node.children) leafMutator(node);
+    else parentMutator(node);
   });
 }
 
@@ -176,12 +184,16 @@ export function aggregate(root, parentMutator, leafMutator) {
  */
 export function aggregateCount(tree, getLeafCount, field = 'count') {
   // Reset counts on leaf nodes and aggregate on parents
-  visitTreeDepthFirst({ postOrder: true }, tree, node => {
+  visitTreeDepthFirst({ postOrder: true }, tree, (node) => {
     if (!node.children) {
       node[field] = getLeafCount(node) || 0;
       return;
     }
-    node[field] = _.reduce(node.children, (sum, child) => sum + child[field], 0);
+    node[field] = _.reduce(
+      node.children,
+      (sum, child) => sum + child[field],
+      0,
+    );
   });
   return tree;
 }
@@ -189,16 +201,17 @@ export function aggregateCount(tree, getLeafCount, field = 'count') {
 /**
  * Sort the children on all nodes in the tree
  * @param comparator {Function|String} sort by comparator
- * 
- * Example: '-leafCount', corresponds to (a, b) => -1 * (a.leafCount - b.leafCount). 
- * 
+ *
+ * Example: '-leafCount', corresponds to (a, b) => -1 * (a.leafCount - b.leafCount).
+ *
  */
 export function sort(tree, comparator = 'originalChildIndex') {
   let _comparator = comparator;
   if (typeof comparator === 'string') {
     const first = comparator.charAt(0);
     const descending = first === '-';
-    const sortField = descending || first === '+' ? comparator.substr(1) : comparator;
+    const sortField =
+      descending || first === '+' ? comparator.substr(1) : comparator;
     const sign = descending ? -1 : 1;
     _comparator = (a, b) => sign * (a[sortField] - b[sortField]);
   }
@@ -213,11 +226,9 @@ export function sort(tree, comparator = 'originalChildIndex') {
 function _limitLeafCount(node, limit) {
   node.limitedLeafCount = node.leafCount;
 
-  if (!node.children)
-    return node;
+  if (!node.children) return node;
 
-  if (node.leafCount <= limit)
-    return node;
+  if (node.leafCount <= limit) return node;
 
   const minCollapsedLeafCount = node.leafCount - limit;
 
@@ -235,19 +246,18 @@ function _limitLeafCount(node, limit) {
         collapsedLeafCount += child.leafCount;
         child.limitedLeafCount = 0;
         // LOG(` => collapse ->  ∑ collapsedLeafCount: ${collapsedLeafCount}`);
-      }
-      else {
+      } else {
         // LOG(` => skip leaf`);
       }
-    }
-    else {
+    } else {
       if (!node.children) {
         // LOG(` => skip pivotal leaf!`);
         continue;
       }
       // Try finer-grained collapse by recursion. If not enough (due to leaf nodes
       // on next level), collapse the whole node.
-      const subMinCollapsedLeafCount = minCollapsedLeafCount - collapsedLeafCount;
+      const subMinCollapsedLeafCount =
+        minCollapsedLeafCount - collapsedLeafCount;
       const subLimit = child.leafCount - subMinCollapsedLeafCount;
       // LOG(` -> recurse with subLimit: ${subLimit}`);
 
@@ -261,8 +271,7 @@ function _limitLeafCount(node, limit) {
         collapsedLeafCount += subCollapsedLeafCount;
         // LOG(` YES! break..`);
         break;
-      }
-      else {
+      } else {
         // Collapse whole node if recursive collapse wasn't enough
         collapseAll(child);
         collapsedLeafCount += child.leafCount;
@@ -278,7 +287,6 @@ function _limitLeafCount(node, limit) {
   return node;
 }
 
-
 /**
  * Collapse small branches recursively until visible leaf count
  * is below or equal a limit
@@ -286,7 +294,7 @@ function _limitLeafCount(node, limit) {
  * @param limit {Number} the leaf count limit under which a branch is collapsed
  * @note The function stores 'limitedLeafCount' on some node,
  * which is the number of visible leaf nodes under the node.
- * 
+ *
  * @return tree {Object} the modified tree
  */
 export function limitLeafCount(tree, limit = Number.MAX_VALUE) {
@@ -311,8 +319,7 @@ export function limitLeafCount(tree, limit = Number.MAX_VALUE) {
  * else the whole branch will not be included.
  */
 export function prune(tree, include) {
-  if (!tree)
-    return tree;
+  if (!tree) return tree;
   const newTree = Object.assign({}, tree);
   newTree.children = [];
   let current = newTree;
@@ -320,7 +327,7 @@ export function prune(tree, include) {
   function clone(node) {
     if (!node.children) return;
     current.children = [];
-    _.each(node.children, child => {
+    _.each(node.children, (child) => {
       if (include(child)) {
         const parent = current;
         current = Object.assign({}, child);
@@ -350,7 +357,6 @@ export function normalizeNames(tree) {
   });
 }
 
-
 /**
  * Prepare tree with some default and aggregated properties:
  * parent - null for root
@@ -364,6 +370,7 @@ export function normalizeNames(tree) {
  * numLeafs - number of leaf nodes under each node, 1 for leaf nodes
  * maxLeafDistance - max branch length to leafs under each node
  * rootDistance - total branch length from root
+ * time - total branch length from root normalized in [0,1]
  */
 export function prepareTree(tree) {
   // Traverse from leaf nodes to root to define and aggregate some properties
@@ -383,7 +390,8 @@ export function prepareTree(tree) {
       node.maxLeafDistance = node.branchLength;
       // Ensure leaf nodes has name, and replace underscores with spaces
       node.name = node.name ? normalizeSpeciesName(node.name) : '';
-    } else { // no leaf
+    } else {
+      // no leaf
       if (node.name) {
         node.name = node.name.replace(/_/g, ' ');
       }
@@ -405,6 +413,7 @@ export function prepareTree(tree) {
       node.rootDistance = 0;
     } else {
       node.rootDistance = parent.rootDistance + node.branchLength;
+      node.time = node.rootDistance / tree.maxLeafDistance;
     }
   });
 
@@ -421,7 +430,9 @@ export function simplifyTree(tree) {
       if (child.children) {
         // Replace children
         node.children = child.children;
-        child.children.forEach(d => { d.length += child.length; });
+        child.children.forEach((d) => {
+          d.length += child.length;
+        });
       }
     }
     _.each(node.children || [], (child, i) => {

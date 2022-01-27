@@ -22,7 +22,7 @@ import {
   Flex,
 } from '@chakra-ui/react';
 import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
-import TreeWeight from '../TreeHistogram';
+import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
 import { useStore } from '../../store';
 
@@ -150,9 +150,29 @@ export default observer(function Infomap() {
           }
         />
       </FormControl>
-      <TreeWeight
+      <TreeHistogram
         isDisabled={!treeStore.includeTreeInNetwork || infomapStore.isRunning}
       />
+      <Flex w="100%" mt={4} gap={2} alignItems="center">
+        <Box w="50%">Integration time</Box>
+        <Slider
+          w="50%"
+          focusThumbOnChange={false}
+          value={treeStore.integrationTime}
+          onChange={(value) => treeStore.setIntegrationTime(value)}
+          onChangeEnd={(value) => treeStore.setIntegrationTime(value, true)}
+          min={0}
+          max={1}
+          step={0.01}
+        >
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb fontSize="sm" boxSize="32px">
+            {treeStore.integrationTime}
+          </SliderThumb>
+        </Slider>
+      </Flex>
       <FormControl
         display="flex"
         w="100%"

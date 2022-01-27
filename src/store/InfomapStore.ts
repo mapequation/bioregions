@@ -30,7 +30,7 @@ const defaultArgs: RequiredArgs = {
   skipAdjustBipartiteFlow: true,
 };
 
-type Bioregion = {
+export type Bioregion = {
   flow: number;
   bioregionId: number;
   numGridCells: number;
@@ -41,7 +41,7 @@ export default class InfomapStore {
   rootStore: RootStore;
   args: RequiredArgs & Arguments = {
     twoLevel: true,
-    numTrials: 5,
+    numTrials: 1,
     regularized: false,
     regularizationStrength: 1,
     entropyCorrected: true,
@@ -87,6 +87,9 @@ export default class InfomapStore {
       treeWeightBalance: observable,
       setTreeWeightBalance: action,
       numBioregions: computed,
+      codelength: computed,
+      numLevels: computed,
+      relativeCodelengthSavings: computed,
       setTree: action,
       setTreeString: action,
       updateNetwork: action,
@@ -109,6 +112,18 @@ export default class InfomapStore {
 
   get numBioregions() {
     return this.bioregions.length;
+  }
+
+  get codelength() {
+    return this.tree?.codelength ?? 0;
+  }
+
+  get numLevels() {
+    return this.tree?.numLevels ?? 0;
+  }
+
+  get relativeCodelengthSavings() {
+    return this.tree?.relativeCodelengthSavings ?? 0;
   }
 
   setCurrentTrial(trial: number) {
@@ -159,34 +174,8 @@ export default class InfomapStore {
     const { json: tree, tree: treeString } = result;
 
     if (tree) {
-      setBioregionIds(tree, this.cells);
+      const bioregions = createBioregions(tree, this.cells);
       this.setTree(tree);
-      console.log(tree);
-      const bioregions: Bioregion[] = Array.from(
-        { length: tree.numTopModules },
-        () => ({
-          flow: 0,
-          bioregionId: 0,
-          numGridCells: 0,
-          species: [],
-        }),
-      );
-      tree.nodes.forEach((node) => {
-        const bioregionId = node.modules[0];
-        const bioregion = bioregions[bioregionId - 1];
-        bioregion.bioregionId = bioregionId;
-        bioregion.flow += node.flow;
-        if (node.id >= tree.bipartiteStartId!) {
-          bioregion.species.push(node.name);
-        } else {
-          ++bioregion.numGridCells;
-        }
-      });
-      console.log(
-        'Bioregions:',
-        bioregions,
-        bioregions.map((r) => r.flow),
-      );
       runInAction(() => {
         this.bioregions = bioregions;
       });
@@ -364,7 +353,9 @@ export default class InfomapStore {
      *    - create set with the species as only element
      * 3. If non-leaf
      *    - create set with union from children sets from (2)
-     *    - add links from node to grid cells
+     *    - if younger than integrationTime and parent is older,
+     *      add links from this and parent node to grid cells
+     *      weighted on closeness to integration time
      */
 
     const missing = new Set<string>();
@@ -378,31 +369,35 @@ export default class InfomapStore {
     visitTreeDepthFirstPostOrder(tree, (node) => {
       if (node.isLeaf) {
         node.speciesSet = new Set([node.name]);
-        return;
-      }
-
-      node.speciesSet = new Set();
-
-      node.children.forEach((child) => {
-        if (child.speciesSet) {
-          for (const each of child.speciesSet) {
-            node.speciesSet?.add(each);
+      } else {
+        node.speciesSet = new Set();
+        node.children.forEach((child) => {
+          if (child.speciesSet) {
+            for (const each of child.speciesSet) {
+              node.speciesSet?.add(each);
+            }
           }
-        }
-      });
+        });
+      }
 
       // const numSpecies = node.speciesSet.size;
 
       const weight = 1; //weightFunction(node.rootDistance / tree.maxLeafDistance);
+      const parentIsOlder = node.parent && node.parent.time < integrationTime;
+      const nodeIsYounger = node.time >= integrationTime || node.isLeaf; // TODO: Fix normalize time to 1, now 0.9998
 
-      if (weight < 1e-4) {
-        //TODO: Test this threshold, should depend on network size or other properties?
+      if (!parentIsOlder || !nodeIsYounger) {
+        // Not on branch crossing integration time
         return;
       }
 
+      // TODO: Interpolate between node and parent links.
       // const outLinks = new Map<number, number>();
 
-      const source = nodeId++;
+      const source = node.isLeaf
+        ? network.nodeIdMap[node.name] ?? nodeId++
+        : nodeId++;
+
       if (!links.has(source)) {
         links.set(source, new Map<number, number>());
       }
@@ -423,13 +418,6 @@ export default class InfomapStore {
           ++sumTreeLinkWeight;
         }
       }
-
-      // const source = nodeId++;
-      // if (!links.has(source)) {
-      //   links.set(source, outLinks);
-      // } else {
-      //   console.warn('Ancestor already got out links!', source, links);
-      // }
     });
 
     const { treeWeightBalance } = this;
@@ -473,7 +461,7 @@ export default class InfomapStore {
   }
 }
 
-function setBioregionIds(tree: Tree, cells: Node[]) {
+function createBioregions(tree: Tree, cells: Node[]) {
   const bipartiteStartId = tree.bipartiteStartId!;
 
   // Tree nodes are sorted on flow, loop through all to find grid cell nodes
@@ -482,167 +470,28 @@ function setBioregionIds(tree: Tree, cells: Node[]) {
 
     cells[node.id].bioregionId = node.path[0];
   });
+
+  console.log(tree);
+  const bioregions: Bioregion[] = Array.from(
+    { length: tree.numTopModules },
+    () => ({
+      flow: 0,
+      bioregionId: 0,
+      numGridCells: 0,
+      species: [],
+    }),
+  );
+  tree.nodes.forEach((node) => {
+    const bioregionId = node.modules[0];
+    const bioregion = bioregions[bioregionId - 1];
+    bioregion.bioregionId = bioregionId;
+    bioregion.flow += node.flow;
+    if (node.id >= tree.bipartiteStartId!) {
+      bioregion.species.push(node.name);
+    } else {
+      ++bioregion.numGridCells;
+    }
+  });
+  console.log('Bioregions:', bioregions);
+  return bioregions;
 }
-
-/*
-
-export function getBipartitePhyloNetwork({
-  species,
-  bins,
-  speciesToBins,
-  tree,
-  treeWeightModelIndex,
-}) {
-  console.log("Generating bipartite network using phylogenetic tree...");
-  // console.log('\n\n!! getBipartitePhyloNetwork, tree:', tree, '\nbins:', bins, 'speciesToBins:', speciesToBins);
-
-  const weightModel = TREE_WEIGHT_MODELS[treeWeightModelIndex];
-  console.log("Weight model:", weightModel);
-
-  const numBins = bins.length;
-  const bipartiteOffset = (lastBipartiteOffset = numBins);
-  // Map names to index
-  const speciesNameToIndex = new Map();
-  let speciesCounter = 0;
-  species.forEach(({ name }) => {
-    speciesNameToIndex.set(name, speciesCounter);
-    ++speciesCounter;
-  });
-
-  // treeUtils.expandAll(tree);
-  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, (node) => {
-    if (node.children) {
-      speciesNameToIndex.set(node.uid, speciesCounter);
-      ++speciesCounter;
-    }
-  });
-
-  // console.log('==================\nSpecies name to index:');
-  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
-
-  // Create network with links from species to bins
-  const network = [];
-  network.push("# speciesId binId weight");
-  // bins.forEach((bin) => {
-  //   bin.features.forEach((feature) => {
-  //     const { name } = feature.properties;
-  //     console.log(`!!! add bipartite link from ${speciesNameToIndex.get(name)} (${name}) to bin ${bin.binId}. Feature:`, feature);
-  //     const weight = 1.0;// / speciesToBins[name].bins.size;
-  //     if (useNewBipartiteFormat) {
-  //       network.push(`${speciesNameToIndex.get(name) + bipartiteOffset} ${bin.binId} ${weight}`);
-  //     } else {
-  //       network.push(`f${speciesNameToIndex.get(name)} n${bin.binId + 1} ${weight}`);
-  //     }
-  //   });
-  // });
-  species.forEach(({ name }) => {
-    const { bins } = speciesToBins[name];
-    bins.forEach((binId) => {
-      // console.log(`!!! add bipartite link from ${speciesNameToIndex.get(name)} (${name}) to bin ${binId}`);
-      const weight = weightModel.degreeWeighted === 1 ? 1.0 / bins.size : 1.0;
-      if (useNewBipartiteFormat) {
-        network.push(
-          `${speciesNameToIndex.get(name) + bipartiteOffset} ${binId} ${weight}`
-        );
-      } else {
-        network.push(
-          `f${speciesNameToIndex.get(name)} n${binId + 1} ${weight}`
-        );
-      }
-    });
-  });
-
-  const T = tree.maxLength;
-  const p = 3; // -> break weight at 10^(-p)
-  const k = (p / T) * Math.LN10;
-  const minWeight = Math.pow(10, -p);
-  console.log(`T: ${T}, k: ${k}, minWeight: ${minWeight}`);
-
-  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, (node) => {
-    if (!node.children) {
-      // leaf nodes
-      node.links = new Map();
-      const spToBins = speciesToBins[node.name];
-      node.linkWeight = 1.0;
-      node.binIds = new Set();
-      if (spToBins) {
-        node.linkWeight = weightModel.degreeWeighted
-          ? 1.0 / spToBins.bins.size
-          : 1.0;
-        node.binIds = spToBins.bins;
-        // const weight = 1.0;
-        // spToBins.bins.forEach(binId => {
-        //   node.links.set(binId, (node.links.get(binId) || 0.0) + weight);
-        // });
-      }
-      // console.log(`Leaf node ${speciesNameToIndex.get(node.name)}, weight: ${node.linkWeight}, binSize: ${node.binIds.size}, node:`, node);
-    } else if (node.parent) {
-      // ancestor nodes except root
-      // node.links = new Map();
-      node.linkWeight = 0.0;
-      node.binIds = new Set();
-      const l = tree.maxLength - node.rootDist;
-      let weight = 1.0;
-      switch (weightModel.time) {
-        case "linear":
-          weight = node.rootDist / tree.maxLength;
-          // console.log(`weight = ${node.rootDist} / ${tree.maxLength} = ${weight}`);
-          break;
-        case "exponential":
-          weight = Math.exp(-1 * k * l);
-          break;
-        default:
-          weight = 1.0;
-      }
-      if (weight > minWeight) {
-        node.linkWeight = weight;
-        _.forEach(node.children, (child) => {
-          // Aggregate links from children but with different weight
-          // child.links.forEach((childWeight, binId) => {
-          //   // node.links.set(binId, (node.links.get(binId) || 0.0) + weight);
-          //   node.links.set(binId, weight);
-          // });
-          child.binIds.forEach((binId) => {
-            node.binIds.add(binId);
-          });
-        });
-        if (weightModel.degreeWeighted) {
-          node.linkWeight /= node.binIds.size;
-        }
-      }
-      // console.log(`Node ${speciesNameToIndex.get(node.uid)}, weight: ${node.linkWeight}, binSize: ${node.binIds? node.binIds.size : -1}, node:`, node);
-    }
-  });
-  // Add ancestor nodes...
-  treeUtils.visitTreeDepthFirst({ postOrder: true }, tree, (node) => {
-    if (node.children && node.parent) {
-      // node.links.forEach((weight, binId) => {
-      //   if (useNewBipartiteFormat) {
-      //     console.log(`Link ${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId}, weight: ${weight} / ${node.links.size} = ${weight / node.links.size}`)
-      //     network.push(`${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId} ${weightModel.degreeWeighted ? weight / node.links.size : weight}`);
-      //   } else {
-      //     network.push(`f${speciesNameToIndex.get(node.uid)} n${binId + 1} ${weightModel.degreeWeighted ? weight / node.links.size : weight}`);
-      //   }
-      // });
-      node.binIds.forEach((binId) => {
-        if (useNewBipartiteFormat) {
-          network.push(
-            `${speciesNameToIndex.get(node.uid) + bipartiteOffset} ${binId} ${node.linkWeight
-            }`
-          );
-        } else {
-          network.push(
-            `f${speciesNameToIndex.get(node.uid)} n${binId + 1} ${node.linkWeight
-            }`
-          );
-        }
-      });
-    }
-  });
-
-  console.log("First 20 links:", network.slice(0, 20));
-  // console.log('========== WHOLE NETWORK =========');
-  // console.log(network);
-  return network.join("\n");
-}
-*/
