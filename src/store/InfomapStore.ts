@@ -10,7 +10,6 @@ import type { Tree, Result } from '@mapequation/infomap';
 import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
-import type { Node } from '../utils/QuadTreeGeoBinner';
 import { visitTreeDepthFirstPostOrder } from '../utils/tree';
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
@@ -98,6 +97,7 @@ export default class InfomapStore {
       treeWeightBalance: observable,
       setTreeWeightBalance: action,
       numBioregions: computed,
+      haveBioregions: computed,
       codelength: computed,
       numLevels: computed,
       relativeCodelengthSavings: computed,
@@ -119,6 +119,10 @@ export default class InfomapStore {
       .on('data', this.onInfomapOutput)
       .on('error', this.onInfomapError)
       .on('finished', this.onInfomapFinished);
+  }
+
+  get haveBioregions() {
+    return this.numBioregions > 0;
   }
 
   get numBioregions() {
@@ -542,7 +546,8 @@ export default class InfomapStore {
         // Most indicative
         const tf = count / bioregion.numRecords;
         const idf =
-          (speciesStore.speciesCount.get(name) ?? 0) / speciesStore.numRecords;
+          (speciesStore.speciesMap.get(name)?.count ?? 0) /
+          speciesStore.numRecords;
         const score = tf / idf;
         bioregion.mostIndicative.push({ name, score, regions: [] });
       }

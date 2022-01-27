@@ -46,6 +46,12 @@ export const createMultiPointGeometryCollection = (
   geometries,
 });
 
+export type Species = {
+  name: string;
+  count: number;
+  regions: { id: number; fraction: number }[];
+};
+
 export default class SpeciesStore {
   rootStore: RootStore;
   name: string = 'data';
@@ -55,7 +61,7 @@ export default class SpeciesStore {
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
-  speciesCount = new Map<string, number>();
+  speciesMap = new Map<string, Species>();
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -66,7 +72,7 @@ export default class SpeciesStore {
       isLoading: observable,
       numPoints: computed,
       pointCollection: observable.ref,
-      speciesCount: observable.ref,
+      speciesMap: observable.ref,
       speciesTopList: computed,
       numSpecies: computed,
       numRecords: computed,
@@ -85,13 +91,13 @@ export default class SpeciesStore {
   }
 
   get numSpecies() {
-    return this.speciesCount.size;
+    return this.speciesMap.size;
   }
 
   get speciesTopList() {
-    return Array.from(this.speciesCount.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count);
+    return Array.from(this.speciesMap.values()).sort(
+      (a, b) => b.count - a.count,
+    );
   }
 
   setLoaded(loaded: boolean) {
@@ -104,22 +110,27 @@ export default class SpeciesStore {
 
   setPointCollection(pointCollection: PointFeatureCollection) {
     this.pointCollection = pointCollection;
-    this.updateSpeciesCount();
+    this.updateSpeciesMap();
   }
 
   updatePointCollection(pointCollection = this.pointCollection) {
     this.setPointCollection(createPointCollection(pointCollection.features));
   }
 
-  updateSpeciesCount() {
+  updateSpeciesMap() {
     type Name = string;
-    type Count = number;
-    const speciesCount = new Map<Name, Count>();
+    const speciesMap = new Map<Name, Species>();
     this.pointCollection.features.forEach((feature) => {
       const { name } = feature.properties;
-      speciesCount.set(name, (speciesCount.get(name) ?? 0) + 1);
+      const species = speciesMap.get(name) ?? {
+        name,
+        count: 0,
+        regions: [],
+      };
+      ++species.count;
+      speciesMap.set(name, species);
     });
-    this.speciesCount = speciesCount;
+    this.speciesMap = speciesMap;
   }
 
   private async *loadData(

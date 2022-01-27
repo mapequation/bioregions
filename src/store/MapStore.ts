@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { action, computed, makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable } from 'mobx';
 import { Node } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
@@ -223,30 +223,6 @@ export default class MapStore {
   }
 
   private _bioregionColor(): GetGridColor {
-    const CAT_20 = [
-      '#D66F87',
-      '#BDE628',
-      '#27A3E7',
-      '#89EBC0',
-      '#A0915F',
-      '#F6BE1D',
-      '#E6B9FB',
-      '#629E47',
-      '#59B5BF',
-      '#A581A6',
-      '#AEB327',
-      '#F3D2A3',
-      '#F990CE',
-      '#869AF4',
-      '#A7D2F3',
-      '#A18C82',
-      '#E2CB74',
-      '#F3A19B',
-      '#FC739B',
-      '#DECE4D',
-    ];
-
-    // return (cell: Node) => CAT_20[cell.bioregionId % CAT_20.length];
     const { bioregionColors } = this.rootStore.colorStore;
     return (cell: Node) => bioregionColors[cell.bioregionId - 1];
   }
