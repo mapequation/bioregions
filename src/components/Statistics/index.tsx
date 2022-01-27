@@ -1,11 +1,10 @@
 import { VStack } from '@chakra-ui/react';
-import { observer } from 'mobx-react';
 import Bioregions from './Bioregions';
 
-export default observer(function Statistics() {
+export default function Statistics() {
   return (
-    <VStack>
+    <VStack w="100%" gap={4}>
       <Bioregions />
     </VStack>
   );
-});
+}
