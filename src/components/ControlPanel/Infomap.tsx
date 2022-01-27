@@ -2,6 +2,7 @@ import { observer } from 'mobx-react';
 import {
   Tag,
   Button,
+  Collapse,
   VStack,
   FormControl,
   FormLabel,
@@ -21,7 +22,7 @@ import {
   Flex,
 } from '@chakra-ui/react';
 import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
-import TreeWeight from '../TreeWeight';
+import TreeWeight from '../TreeHistogram';
 import Stat from '../Stat';
 import { useStore } from '../../store';
 
@@ -104,8 +105,16 @@ export default observer(function Infomap() {
 
   return (
     <VStack w="100%">
-      <Flex w="100%" ml={4} mt={4}>
+      <Flex
+        w="100%"
+        mt={4}
+        gap={2}
+        alignItems="center"
+        style={{ display: 'none' }}
+      >
+        <Box w="50%">Diversity order</Box>
         <Slider
+          w="50%"
           focusThumbOnChange={false}
           value={infomapStore.diversityOrder}
           onChange={(value) => infomapStore.setDiversityOrder(value)}
@@ -121,7 +130,6 @@ export default observer(function Infomap() {
             {infomapStore.diversityOrder}
           </SliderThumb>
         </Slider>
-        <Box mx={10}>Diversity order</Box>
       </Flex>
       <FormControl
         display="flex"
@@ -169,7 +177,7 @@ export default observer(function Infomap() {
           </NumberInputStepper>
         </NumberInput>
       </FormControl>
-      <FormControl display="flex" w="100%" alignItems="center">
+      <FormControl display="none" w="100%" alignItems="center">
         <FormLabel htmlFor="regularized" mb="0">
           Regularized
         </FormLabel>
@@ -182,28 +190,37 @@ export default observer(function Infomap() {
           }
         />
       </FormControl>
-      <Flex w="100%" ml={4} mt={4}>
-        <Slider
-          isDisabled={!infomapStore.args.regularized}
-          focusThumbOnChange={false}
-          value={infomapStore.args.regularizationStrength}
-          onChange={(value) => infomapStore.setRegularizationStrength(value)}
-          min={0}
-          max={5}
-          step={0.01}
-        >
-          <SliderTrack>
-            <SliderFilledTrack />
-          </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="32px">
-            {infomapStore.args.regularizationStrength}
-          </SliderThumb>
-        </Slider>
-        <Box mx={10}>Regularization strength</Box>
-      </Flex>
+      <Collapse
+        in={infomapStore.args.regularized}
+        animateOpacity
+        style={{ width: '100%' }}
+      >
+        <Flex w="100%" pl={2} py={2}>
+          <Box w="50%" fontSize="0.9rem">
+            Strength
+          </Box>
+          <Slider
+            w="50%"
+            isDisabled={!infomapStore.args.regularized}
+            focusThumbOnChange={false}
+            value={infomapStore.args.regularizationStrength}
+            onChange={(value) => infomapStore.setRegularizationStrength(value)}
+            min={0}
+            max={5}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="32px">
+              {infomapStore.args.regularizationStrength}
+            </SliderThumb>
+          </Slider>
+        </Flex>
+      </Collapse>
       <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="entropyCorrected" mb="0">
-          Entropy corrected
+          Entropy correction
         </FormLabel>
         <Spacer />
         <Switch
@@ -216,24 +233,35 @@ export default observer(function Infomap() {
           }
         />
       </FormControl>
-      <Flex w="100%" ml={4} mt={4}>
-        <Slider
-          focusThumbOnChange={false}
-          value={infomapStore.args.entropyCorrectionStrength}
-          onChange={(value) => infomapStore.setEntropyCorrectionStrength(value)}
-          min={0}
-          max={5}
-          step={0.01}
-        >
-          <SliderTrack>
-            <SliderFilledTrack />
-          </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="32px">
-            {infomapStore.args.entropyCorrectionStrength}
-          </SliderThumb>
-        </Slider>
-        <Box mx={10}>Entropy correction strength</Box>
-      </Flex>
+      <Collapse
+        in={infomapStore.args.entropyCorrected}
+        animateOpacity
+        style={{ width: '100%' }}
+      >
+        <Flex w="100%" pl={2} py={2} style={{ display: 'none' }}>
+          <Box w="50%" fontSize="0.9rem">
+            Strength
+          </Box>
+          <Slider
+            w="50%"
+            focusThumbOnChange={false}
+            value={infomapStore.args.entropyCorrectionStrength}
+            onChange={(value) =>
+              infomapStore.setEntropyCorrectionStrength(value)
+            }
+            min={0}
+            max={5}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="32px">
+              {infomapStore.args.entropyCorrectionStrength}
+            </SliderThumb>
+          </Slider>
+        </Flex>
+      </Collapse>
       <Button
         size="sm"
         w="100%"

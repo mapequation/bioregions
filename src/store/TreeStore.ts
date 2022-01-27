@@ -15,14 +15,14 @@ export default class TreeStore {
   includeTreeInNetwork: boolean = false;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
 
-  focusTime: number = 0.5;
-  setFocusTime(value: number) {
-    this.focusTime = value;
-  }
-  focusWidth: number = 0.1;
-  setFocusWidth(value: number) {
-    this.focusWidth = value;
-  }
+  integrationTime: number = 0.5;
+  setIntegrationTime = action((value: number) => {
+    this.integrationTime = value;
+  });
+  segregationTime: number = 0.1;
+  setSegregationTime = action((value: number) => {
+    this.segregationTime = value;
+  });
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -33,17 +33,12 @@ export default class TreeStore {
       treeString: observable,
       includeTreeInNetwork: observable,
       weightParameter: observable,
-      focusTime: observable,
-      setFocusTime: action,
-      focusWidth: observable,
-      setFocusWidth: action,
-      weightFunction: computed,
-      weightCurve: computed,
+      integrationTime: observable,
+      segregationTime: observable,
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
       setLoaded: action,
       setIncludeTree: action,
-      setWeightParameter: action,
       setTree: action,
       setTreeString: action,
     });
@@ -94,30 +89,6 @@ export default class TreeStore {
   setIncludeTree(value: boolean = true) {
     this.includeTreeInNetwork = value;
     this.rootStore.infomapStore.updateNetwork();
-  }
-
-  setWeightParameter(value: number, updateNetwork: boolean = false) {
-    console.log('Set weight parameter:', value);
-    this.weightParameter = value;
-    if (updateNetwork) {
-      this.rootStore.infomapStore.updateNetwork();
-    }
-  }
-
-  get weightFunction() {
-    // const w = this.weightParameter;
-    // return (t: number) => interpolateExp(t, 200 * w + 1);
-    const tMid = this.weightParameter;
-    return (t: number) => (Math.abs(t - tMid) <= this.focusWidth ? 1 : 0);
-  }
-
-  get weightCurve() {
-    const x = range(0, 1, 0.001);
-    const f = this.weightFunction;
-    const y = map(x, f);
-    const data = zip(x, y) as [number, number][];
-    const domain = extent(x) as [number, number];
-    return { data, domain };
   }
 
   async load(file: File | string) {

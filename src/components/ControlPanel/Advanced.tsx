@@ -33,23 +33,23 @@ export default observer(function Advanced() {
 
       treeStore.setIncludeTree();
 
-      const weights = range(steps).map((i) => i / (steps - 1));
-      const f = format('.1f');
+      // const weights = range(steps).map((i) => i / (steps - 1));
+      // const f = format('.1f');
 
-      for (let i = 0; i < weights.length; i++) {
-        setStep(i);
-        const w = weights[i];
+      // for (let i = 0; i < weights.length; i++) {
+      //   setStep(i);
+      //   const w = weights[i];
+      //   treeStore.setWeightParameter(w);
 
-        treeStore.setWeightParameter(w);
-        await infomapStore.run();
+      //   await infomapStore.run();
 
-        if (mapStore.renderType === 'bioregions') {
-          mapStore.render();
-        }
+      //   if (mapStore.renderType === 'bioregions') {
+      //     mapStore.render();
+      //   }
 
-        const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
-        zip.file(filename, infomapStore.treeString!);
-      }
+      //   const filename = `${speciesStore.name}_weight_${f(w)}.tree`;
+      //   zip.file(filename, infomapStore.treeString!);
+      // }
 
       treeStore.setIncludeTree(false);
 

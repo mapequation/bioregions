@@ -41,10 +41,10 @@ export default class InfomapStore {
   rootStore: RootStore;
   args: RequiredArgs & Arguments = {
     twoLevel: true,
-    numTrials: 1,
+    numTrials: 5,
     regularized: false,
     regularizationStrength: 1,
-    entropyCorrected: false,
+    entropyCorrected: true,
     entropyCorrectionStrength: 1,
     ...defaultArgs,
   };
@@ -351,7 +351,7 @@ export default class InfomapStore {
     */
     const network = this.createNetwork();
     const tree = this.rootStore.treeStore.tree!;
-    const { weightFunction } = this.rootStore.treeStore;
+    const { integrationTime } = this.rootStore.treeStore;
     const { nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = network.nodes.length;
@@ -393,7 +393,7 @@ export default class InfomapStore {
 
       // const numSpecies = node.speciesSet.size;
 
-      const weight = weightFunction(node.rootDistance / tree.maxLeafDistance);
+      const weight = 1; //weightFunction(node.rootDistance / tree.maxLeafDistance);
 
       if (weight < 1e-4) {
         //TODO: Test this threshold, should depend on network size or other properties?
