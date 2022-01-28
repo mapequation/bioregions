@@ -184,6 +184,35 @@ export default observer(function Infomap() {
         display="flex"
         w="100%"
         alignItems="center"
+        isDisabled={!treeStore.includeTreeInNetwork}
+      >
+        <FormLabel htmlFor="treeWeight" mb="0">
+          Tree weight
+        </FormLabel>
+        <Spacer />
+        <Slider
+          w="50%"
+          isDisabled={!treeStore.includeTreeInNetwork}
+          focusThumbOnChange={false}
+          value={infomapStore.treeWeightBalance}
+          onChange={(value) => infomapStore.setTreeWeightBalance(value)}
+          onChangeEnd={(value) =>
+            infomapStore.setTreeWeightBalance(value, true)
+          }
+          min={0}
+          max={1}
+          step={0.01}
+        >
+          <SliderTrack>
+            <SliderFilledTrack />
+          </SliderTrack>
+          <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
+        </Slider>
+      </FormControl>
+      <FormControl
+        display="flex"
+        w="100%"
+        alignItems="center"
         isDisabled={infomapStore.isRunning}
       >
         <FormLabel htmlFor="trials" mb="0">

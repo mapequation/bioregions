@@ -69,8 +69,11 @@ export default class InfomapStore {
 
   // The link weight balance from no tree (0) to only tree (1)
   treeWeightBalance: number = 0.5;
-  setTreeWeightBalance(value: number) {
+  setTreeWeightBalance(value: number, updateNetwork = false) {
     this.treeWeightBalance = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
   }
 
   diversityOrder: number = 0;
