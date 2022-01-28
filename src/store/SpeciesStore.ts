@@ -49,7 +49,7 @@ export const createMultiPointGeometryCollection = (
 export type Species = {
   name: string;
   count: number;
-  regions: { id: number; fraction: number }[];
+  countPerRegion: Map<number, number>;
 };
 
 export default class SpeciesStore {
@@ -125,7 +125,7 @@ export default class SpeciesStore {
       const species = speciesMap.get(name) ?? {
         name,
         count: 0,
-        regions: [],
+        countPerRegion: new Map<number, number>(),
       };
       ++species.count;
       speciesMap.set(name, species);

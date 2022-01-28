@@ -4,26 +4,27 @@ import { useStore } from '../../store';
 export default observer(function PieChart({
   values,
 }: {
-  values: { id: number; fraction: number }[];
+  values: Iterable<[key: number, count: number]>;
 }) {
   const { colorStore } = useStore();
   const { colorBioregion } = colorStore;
-  const sorted = values.sort((a, b) => b.fraction - a.fraction);
-  const total = sorted.reduce((tot, value) => tot + value.fraction, 0);
-  sorted.forEach((value) => (value.fraction /= total));
+  const [key, count] = [0, 1];
+  const sorted = [...values].sort((a, b) => b[count] - a[count]);
+  const total = sorted.reduce((tot, value) => tot + value[count], 0);
+  sorted.forEach((value) => (value[count] /= total));
 
   const minFraction = 0.1;
-  const aggregated = sorted.filter((value) => value.fraction >= minFraction);
+  const aggregated = sorted.filter((value) => value[count] >= minFraction);
 
-  const rest = {
-    id: -1,
-    fraction: sorted.reduce(
-      (tot, value) => (value.fraction < minFraction ? tot + value.fraction : 0),
+  const rest = [
+    -1,
+    sorted.reduce(
+      (tot, value) => (value[count] < minFraction ? tot + value[count] : 0),
       0,
     ),
-  };
+  ] as [number, number];
 
-  if (rest.fraction > 0) {
+  if (rest[count] > 0) {
     aggregated.push(rest);
   }
 
@@ -42,7 +43,9 @@ export default observer(function PieChart({
           cx={0}
           cy={0}
           r={radius}
-          fill={sorted[0].id === -1 ? restColor : colorBioregion(sorted[0].id)}
+          fill={
+            sorted[0][key] === -1 ? restColor : colorBioregion(sorted[0][key])
+          }
           stroke="white"
           strokeWidth={4}
         />
@@ -51,15 +54,15 @@ export default observer(function PieChart({
         aggregated.map((value, i) => {
           const x0 = radius * Math.cos(theta);
           const y0 = radius * Math.sin(theta);
-          const x1 = radius * Math.cos(theta + 2 * Math.PI * value.fraction);
-          const y2 = radius * Math.sin(theta + 2 * Math.PI * value.fraction);
-          theta += (2 * Math.PI * value.fraction) % (2 * Math.PI);
-          const largeArcFlag = value.fraction > 0.5 ? 1 : 0;
+          const x1 = radius * Math.cos(theta + 2 * Math.PI * value[count]);
+          const y2 = radius * Math.sin(theta + 2 * Math.PI * value[count]);
+          theta += (2 * Math.PI * value[count]) % (2 * Math.PI);
+          const largeArcFlag = value[count] > 0.5 ? 1 : 0;
           return (
             <path
               key={i}
               d={`M ${x0} ${y0} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x1} ${y2} L 0 0 Z`}
-              fill={value.id === -1 ? restColor : colorBioregion(value.id)}
+              fill={value[key] === -1 ? restColor : colorBioregion(value[key])}
               stroke="white"
               strokeWidth={4}
             />

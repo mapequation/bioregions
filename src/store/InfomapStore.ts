@@ -38,12 +38,10 @@ export type Bioregion = {
   mostCommon: {
     name: string;
     count: number;
-    regions: { id: number; fraction: number }[];
   }[];
   mostIndicative: {
     name: string;
     score: number;
-    regions: { id: number; fraction: number }[];
   }[];
 };
 
@@ -541,10 +539,13 @@ export default class InfomapStore {
       }
     }
 
+    // Update speciesStore.speciesMap with regions for each species
+    const speciesBioregionMap = new Map<Species, Map<BioregionId, number>>();
+
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
       for (const [name, count] of speciesCount.entries()) {
-        bioregion.mostCommon.push({ name, count, regions: [] });
+        bioregion.mostCommon.push({ name, count });
 
         // Most indicative
         const tf = count / bioregion.numRecords;
@@ -552,11 +553,19 @@ export default class InfomapStore {
           (speciesStore.speciesMap.get(name)?.count ?? 0) /
           speciesStore.numRecords;
         const score = tf / idf;
-        bioregion.mostIndicative.push({ name, score, regions: [] });
+        bioregion.mostIndicative.push({ name, score });
+
+        const species = speciesStore.speciesMap.get(name)!;
+        species.countPerRegion.set(
+          bioregionId,
+          (species.countPerRegion.get(bioregionId) ?? 0) + count,
+        );
       }
+
       bioregion.mostCommon.sort((a, b) => b.count - a.count);
       bioregion.mostIndicative.sort((a, b) => b.score - a.score);
     }
+
     return bioregions;
   }
 }

@@ -54,7 +54,7 @@ export default observer(function SpeciesList() {
                 </Td>
                 <Td isNumeric>{species.count.toLocaleString()}</Td>
                 <Td>
-                  <PieChart values={species.regions} />
+                  <PieChart values={species.countPerRegion.entries()} />
                 </Td>
               </Tr>
             );

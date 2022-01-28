@@ -34,14 +34,19 @@ const BioregionInfo = observer(function Bioregion({
 }: {
   bioregion: Bioregion;
 }) {
-  const { colorStore } = useStore();
+  const { colorStore, speciesStore } = useStore();
   const { colorBioregion } = colorStore;
   const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 
   //const { mostCommon, mostIndicative } = useExampleData();
 
-  const mostCommon = bioregion.mostCommon.slice(0, 9);
-  const mostIndicative = bioregion.mostIndicative.slice(0, 9);
+  const numValues = Math.min(
+    Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
+    9,
+  );
+
+  const mostCommon = bioregion.mostCommon.slice(0, numValues);
+  const mostIndicative = bioregion.mostIndicative.slice(0, numValues);
 
   return (
     <Box
@@ -95,12 +100,20 @@ const BioregionInfo = observer(function Bioregion({
                 <Td>{commonSpecies.name}</Td>
                 <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
                 <Td>
-                  <PieChart values={commonSpecies.regions} />
+                  <PieChart
+                    values={speciesStore.speciesMap
+                      .get(commonSpecies.name)!
+                      .countPerRegion.entries()}
+                  />
                 </Td>
                 <Td>{indicativeSpecies?.name}</Td>
                 <Td isNumeric>{indicativeSpecies?.score.toFixed(2)}</Td>
                 <Td>
-                  <PieChart values={indicativeSpecies?.regions} />
+                  <PieChart
+                    values={speciesStore.speciesMap
+                      .get(indicativeSpecies?.name)!
+                      .countPerRegion.entries()}
+                  />
                 </Td>
               </Tr>
             );
@@ -116,86 +129,38 @@ function useExampleData() {
     {
       name: 'lorem impsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua',
       count: 123,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-        { id: 4, fraction: 0.5 },
-        { id: 5, fraction: 0.1 },
-        { id: 6, fraction: 0.1 },
-        { id: 7, fraction: 0.1 },
-        { id: 8, fraction: 0.1 },
-        { id: 9, fraction: 0.1 },
-        { id: 10, fraction: 0.1 },
-      ],
     },
     {
       name: 'ipsum',
       count: 456,
-      regions: [{ id: 5, fraction: 1 }],
     },
     {
       name: 'dolor',
       count: 789,
-      regions: [
-        { id: 4, fraction: 0.7 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'sit',
       count: 102,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'amet',
       count: 15,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'consectetur',
       count: 18,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'adipiscing',
       count: 19,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'elit',
       count: 22,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'sed',
       count: 25,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
   ].sort((a, b) => b.count - a.count);
 
@@ -203,83 +168,38 @@ function useExampleData() {
     {
       name: 'lorem',
       score: 2.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'ipsum',
       score: 1.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'dolor',
       score: 0.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'sit',
       score: 3.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'amet',
       score: 4.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'consectetur',
       score: 5.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'adipiscing',
       score: 6.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'elit',
       score: 7.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
     {
       name: 'sed',
       score: 8.23,
-      regions: [
-        { id: 1, fraction: 0.2 },
-        { id: 2, fraction: 0.3 },
-        { id: 3, fraction: 0.5 },
-      ],
     },
   ].sort((a, b) => b.score - a.score);
 
