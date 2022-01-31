@@ -1,149 +1,57 @@
-import { useMemo, useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
-import debounce from 'lodash/debounce';
 import {
   Box,
   VStack,
-  Flex,
-  Spacer,
-  Text,
-  FormControl,
-  FormLabel,
   Divider,
+  RangeSlider,
+  RangeSliderProps,
+  RangeSliderTrack,
+  RangeSliderFilledTrack,
+  RangeSliderThumb,
+  HStack,
 } from '@chakra-ui/react';
+import { format } from 'd3-format';
 import { useStore } from '../../store';
-import TangleInput, { TangleInputProps } from '../TangleInput';
 import Stat from '../Stat';
 
-type MinMaxInputsProps = {
-  label: string;
-  isDisabled?: boolean;
-  minProps: TangleInputProps;
-  maxProps: TangleInputProps;
-} & Partial<TangleInputProps>;
-
-const MinMaxInputs = ({
-  label,
-  isDisabled = false,
-  minProps,
-  maxProps,
-  min,
-  max,
-  ...common
-}: MinMaxInputsProps) => {
-  return (
-    <FormControl
-      display="flex"
-      w="100%"
-      alignItems="center"
-      isDisabled={isDisabled}
-    >
-      <FormLabel htmlFor="clip" mb="0">
-        {label}
-      </FormLabel>
-      <Spacer />
-      <Box>
-        <Text fontSize="xs" textTransform="uppercase">
-          Min: <TangleInput {...minProps} min={min} {...common} /> Max:{' '}
-          <TangleInput {...maxProps} max={max} {...common} />
-        </Text>
-      </Box>
-    </FormControl>
-  );
-};
+const formatCellCapacity = format('.0s');
 
 export default observer(function Resolution() {
   const { speciesStore, mapStore, infomapStore } = useStore();
   const { binner } = speciesStore;
-
-  const formatBinSize = (sizeLog2: number, _: number): string =>
-    sizeLog2 < 0 ? `1/${Math.pow(2, -sizeLog2)}` : `${Math.pow(2, sizeLog2)}`;
 
   const render = useCallback(async () => {
     await infomapStore.run();
     mapStore.render();
   }, [infomapStore, mapStore]);
 
-  const setMinNodeSizeLog2 = useMemo(
-    () =>
-      debounce((value) => {
-        binner.setMinNodeSizeLog2(value);
-        render();
-      }, 500),
-    [binner, render],
-  );
-
-  const setMaxNodeSizeLog2 = useMemo(
-    () =>
-      debounce((value) => {
-        binner.setMaxNodeSizeLog2(value);
-        render();
-      }, 500),
-    [binner, render],
-  );
-
-  const setLowerThreshold = useMemo(
-    () =>
-      debounce((value) => {
-        binner.setLowerThreshold(value);
-        render();
-      }, 500),
-    [binner, render],
-  );
-
-  const setNodeCapacity = useMemo(
-    () =>
-      debounce((value) => {
-        binner.setNodeCapacity(value);
-        render();
-      }, 500),
-    [binner, render],
-  );
-
   return (
     <VStack align="flex-start">
-      <Flex w="100%">
-        <MinMaxInputs
-          isDisabled={speciesStore.isLoading}
-          label="Cell size"
-          suffix="˚"
-          format={formatBinSize}
-          speed={0.1}
-          min={-3}
-          max={6}
-          step={1}
-          minProps={{
-            max: binner.maxNodeSizeLog2,
-            value: binner.minNodeSizeLog2,
-            onChange: setMinNodeSizeLog2,
-          }}
-          maxProps={{
-            min: binner.minNodeSizeLog2,
-            value: binner.maxNodeSizeLog2,
-            onChange: setMaxNodeSizeLog2,
-          }}
-        />
-      </Flex>
-      <Flex w="100%" alignItems="flex-end">
-        <MinMaxInputs
-          isDisabled={speciesStore.isLoading}
-          label="Cell capacity"
-          speed={0.2}
-          logScale
-          min={0}
-          max={1000}
-          minProps={{
-            max: binner.nodeCapacity,
-            value: binner.lowerThreshold,
-            onChange: setLowerThreshold,
-          }}
-          maxProps={{
-            min: binner.lowerThreshold,
-            value: binner.nodeCapacity,
-            onChange: setNodeCapacity,
-          }}
-        />
-      </Flex>
+      <Box>Cell size</Box>
+      <Slider
+        values={binner.cellSizeLog2Range}
+        value={binner.cellSizeLog2}
+        onChange={([start, stop]) => {
+          binner.setCellSizeLog2(start, stop);
+          render();
+        }}
+        valueFormat={(value) =>
+          value < 0 ? `1/${Math.pow(2, -value)}˚` : `${Math.pow(2, value)}˚`
+        }
+        isDisabled={speciesStore.isLoading}
+      />
+      <Box>Cell capacity</Box>
+      <Slider
+        values={binner.cellCapacityRange}
+        value={binner.cellCapacity}
+        onChange={([start, stop]) => {
+          binner.setCellCapacity(start, stop);
+          render();
+        }}
+        valueFormat={formatCellCapacity}
+        isDisabled={speciesStore.isLoading}
+      />
       {speciesStore.loaded && (
         <>
           <Divider />
@@ -153,3 +61,60 @@ export default observer(function Resolution() {
     </VStack>
   );
 });
+
+type SliderProps = {
+  values: number[];
+  value: [number, number];
+  onChange: (value: [number, number]) => void;
+  valueFormat?: (value: number) => string;
+};
+
+function Slider({
+  values,
+  value,
+  onChange,
+  valueFormat = (val) => val.toString(),
+  ...props
+}: SliderProps & RangeSliderProps) {
+  const calcLimits = (values: number[], [start, stop]: [number, number]) => {
+    const startIndex = values.indexOf(start);
+    const stopIndex = values.indexOf(stop);
+
+    if (startIndex === -1 || stopIndex === -1) {
+      throw new Error(
+        `Start or end value in (${[start, stop]}) not in domain (${values})`,
+      );
+    }
+
+    return [startIndex, stopIndex];
+  };
+
+  const [limits, setLimits] = useState(calcLimits(values, value));
+
+  useEffect(() => setLimits(calcLimits(values, value)), [values, value]);
+
+  return (
+    <HStack w="100%" fontSize="0.875rem">
+      <Box minW="4ch">{valueFormat(values[limits[0]])}</Box>
+      <RangeSlider
+        mx={2}
+        min={0}
+        max={values.length - 1}
+        step={1}
+        value={limits}
+        onChange={setLimits}
+        onChangeEnd={([start, stop]) => onChange([values[start], values[stop]])}
+        {...props}
+      >
+        <RangeSliderTrack>
+          <RangeSliderFilledTrack />
+        </RangeSliderTrack>
+        <RangeSliderThumb index={0} />
+        <RangeSliderThumb index={1} />
+      </RangeSlider>
+      <Box textAlign="right" minW="4ch">
+        {valueFormat(values[limits[1]])}
+      </Box>
+    </HStack>
+  );
+}

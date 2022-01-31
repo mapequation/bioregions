@@ -32,3 +32,42 @@ export function* range(
     }
   }
 }
+
+export function rangeArray(
+  start: number,
+  stop: number | undefined = undefined,
+  step: number = 1,
+  options: {
+    inclusive: boolean;
+  } = { inclusive: false },
+) {
+  return Array.from(range(start, stop, step, options));
+}
+
+export function rangeArrayOneSignificant(
+  start: number,
+  stop: number | undefined = undefined,
+  options: {
+    inclusive: boolean;
+  } = { inclusive: false },
+) {
+  if (stop === undefined) {
+    // If only one value provided, use that as stop
+    stop = start;
+    start = 0;
+  }
+
+  const values = [];
+  if (start === 0) {
+    values.push(0);
+  }
+  for (const order of range(start, stop)) {
+    for (const d of range(1, 10)) {
+      values.push(d * Math.pow(10, order));
+    }
+  }
+  if (options.inclusive) {
+    values.push(Math.pow(10, stop!));
+  }
+  return values;
+}

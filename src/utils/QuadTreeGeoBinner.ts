@@ -4,6 +4,7 @@ import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
 import type { PointFeature } from '../store/SpeciesStore';
 import type SpeciesStore from '../store/SpeciesStore';
+import { rangeArray, rangeArrayOneSignificant } from './range';
 
 type VisitCallback = (node: Node) => true | void;
 
@@ -31,13 +32,13 @@ export class Node implements Feature<Polygon> {
   // @ts-ignore
   type = 'Feature';
 
-  constructor(extent: BBox, maxNodeSizeLog2: number) {
+  constructor(extent: BBox, maxCellSizeLog2: number) {
     this.x1 = extent[0];
     this.y1 = extent[1];
     this.x2 = extent[2];
     this.y2 = extent[3];
 
-    this.visible = this.sizeLog2 <= maxNodeSizeLog2;
+    this.visible = this.sizeLog2 <= maxCellSizeLog2;
 
     if (this.visible) {
       this.x1 = Math.max(this.x1, -180);
@@ -113,8 +114,8 @@ export class Node implements Feature<Polygon> {
 
   add(
     feature: PointFeature,
-    maxNodeSizeLog2: number,
-    minNodeSizeLog2: number,
+    maxCellSizeLog2: number,
+    minCellSizeLog2: number,
     nodeCapacity: number,
   ) {
     this._recalcStats = true;
@@ -122,31 +123,31 @@ export class Node implements Feature<Polygon> {
     if (!this.isLeaf) {
       return this.addChild(
         feature,
-        maxNodeSizeLog2,
-        minNodeSizeLog2,
+        maxCellSizeLog2,
+        minCellSizeLog2,
         nodeCapacity,
       );
     }
 
     // Force create children
-    if (this.sizeLog2 > maxNodeSizeLog2) {
+    if (this.sizeLog2 > maxCellSizeLog2) {
       return this.addChild(
         feature,
-        maxNodeSizeLog2,
-        minNodeSizeLog2,
+        maxCellSizeLog2,
+        minCellSizeLog2,
         nodeCapacity,
       );
     }
 
     // Allow no more children
-    if (this.sizeLog2 <= minNodeSizeLog2) {
+    if (this.sizeLog2 <= minCellSizeLog2) {
       return this.features.push(feature);
     }
 
     // In-between size bounds, create children if overflowing density threshold
     if (this.features.length === nodeCapacity) {
       this.features.forEach((feature) =>
-        this.addChild(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity),
+        this.addChild(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity),
       );
       this.features = [];
     } else {
@@ -158,8 +159,8 @@ export class Node implements Feature<Polygon> {
   // this node.
   private addChild(
     feature: PointFeature,
-    maxNodeSizeLog2: number,
-    minNodeSizeLog2: number,
+    maxCellSizeLog2: number,
+    minCellSizeLog2: number,
     nodeCapacity: number,
   ) {
     // Compute the split point, and the quadrant in which to insert the point.
@@ -187,12 +188,12 @@ export class Node implements Feature<Polygon> {
 
       const child =
         this.children[i] ??
-        (this.children[i] = new Node([x1, y1, x2, y2], maxNodeSizeLog2));
+        (this.children[i] = new Node([x1, y1, x2, y2], maxCellSizeLog2));
 
       child.parent = this;
       child.id = `${this.id}${i}`;
 
-      child.add(feature, maxNodeSizeLog2, minNodeSizeLog2, nodeCapacity);
+      child.add(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
     } else {
       console.error(`Binning geometry of type ${geom.type} not implemented`);
     }
@@ -210,7 +211,7 @@ export class Node implements Feature<Polygon> {
     for (let i = 0; i < 4; ++i) this.children[i]?.visit(callback);
   }
 
-  patchPartiallyEmptyNodes(maxNodeSizeLog2: number) {
+  patchPartiallyEmptyNodes(maxCellSizeLog2: number) {
     if (this.isLeaf) return this.features;
 
     // Already patched if features at non-leaf node.
@@ -223,14 +224,14 @@ export class Node implements Feature<Polygon> {
     ) as Node[];
 
     const doPatch =
-      this.sizeLog2 <= maxNodeSizeLog2 &&
+      this.sizeLog2 <= maxCellSizeLog2 &&
       this.features.length === 0 &&
       nonEmptyChildren.length < 4;
 
     const aggregatedFeatures: PointFeature[] = [];
     nonEmptyChildren.forEach((child: Node) =>
       child
-        ?.patchPartiallyEmptyNodes(maxNodeSizeLog2)
+        ?.patchPartiallyEmptyNodes(maxCellSizeLog2)
         ?.forEach((feature) => aggregatedFeatures.push(feature)),
     );
 
@@ -242,7 +243,7 @@ export class Node implements Feature<Polygon> {
     return aggregatedFeatures;
   }
 
-  patchSparseNodes(maxNodeSizeLog2: number, lowerThreshold: number) {
+  patchSparseNodes(maxCellSizeLog2: number, lowerThreshold: number) {
     if (this.isLeaf) return this.features;
 
     // Already patched if features at non-leaf node.
@@ -258,13 +259,13 @@ export class Node implements Feature<Polygon> {
     );
 
     const doPatch =
-      this.sizeLog2 <= maxNodeSizeLog2 &&
+      this.sizeLog2 <= maxCellSizeLog2 &&
       (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
 
     const aggregatedFeatures: PointFeature[] = [];
     nonEmptyChildren.forEach((child) =>
       child
-        ?.patchSparseNodes(maxNodeSizeLog2, lowerThreshold)
+        ?.patchSparseNodes(maxCellSizeLog2, lowerThreshold)
         ?.forEach((feature) => aggregatedFeatures.push(feature)),
     );
 
@@ -299,8 +300,10 @@ export class Node implements Feature<Polygon> {
  */
 export class QuadtreeGeoBinner {
   private _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
-  maxNodeSizeLog2: number = 2;
-  minNodeSizeLog2: number = 0;
+  cellSizeLog2Range = rangeArray(-3, 6, 1, { inclusive: true });
+  maxCellSizeLog2: number = 2;
+  minCellSizeLog2: number = 0;
+  cellCapacityRange = rangeArrayOneSignificant(0, 6, { inclusive: true });
   maxCellCapacity: number = 100;
   minCellCapacity: number = 10;
   root: Node | null = null;
@@ -315,10 +318,12 @@ export class QuadtreeGeoBinner {
     this._speciesStore = speciesStore;
 
     makeObservable(this, {
-      maxNodeSizeLog2: observable,
-      minNodeSizeLog2: observable,
+      maxCellSizeLog2: observable,
+      minCellSizeLog2: observable,
       maxCellCapacity: observable,
       minCellCapacity: observable,
+      cellSizeLog2: computed,
+      cellCapacity: computed,
       cellsNeedUpdate: observable,
       treeNeedUpdate: observable,
       setCellsNeedUpdate: action,
@@ -333,7 +338,7 @@ export class QuadtreeGeoBinner {
 
   private _initExtent() {
     // power of 2 from unscaled unit
-    let size = Math.pow(2, this.maxNodeSizeLog2) / this.scale;
+    let size = Math.pow(2, this.maxCellSizeLog2) / this.scale;
     while (size <= 180) {
       size *= 2;
     }
@@ -341,7 +346,7 @@ export class QuadtreeGeoBinner {
   }
 
   private _initRoot() {
-    this.root = new Node(this.extent, this.maxNodeSizeLog2);
+    this.root = new Node(this.extent, this.maxCellSizeLog2);
   }
 
   get scale() {
@@ -388,36 +393,68 @@ export class QuadtreeGeoBinner {
   }
 
   get minSizeLog2() {
-    return this.minNodeSizeLog2 - Math.log2(this.scale);
+    return this.minCellSizeLog2 - Math.log2(this.scale);
   }
 
   get maxSizeLog2() {
-    return this.maxNodeSizeLog2 - Math.log2(this.scale);
+    return this.maxCellSizeLog2 - Math.log2(this.scale);
   }
 
-  setMinCellSizeLog2 = action((minNodeSizeLog2: number) => {
-    this.minNodeSizeLog2 = minNodeSizeLog2;
-    this.setTreeNeedUpdate();
+  setMinCellSizeLog2 = action((minCellSizeLog2: number) => {
+    if (minCellSizeLog2 !== this.minCellSizeLog2) {
+      this.minCellSizeLog2 = minCellSizeLog2;
+      this.setTreeNeedUpdate();
+    }
     return this;
   });
 
-  setMaxCellSizeLog2 = action((maxNodeSizeLog2: number) => {
-    this.maxNodeSizeLog2 = maxNodeSizeLog2;
-    this.setTreeNeedUpdate();
+  setMaxCellSizeLog2 = action((maxCellSizeLog2: number) => {
+    if (maxCellSizeLog2 !== this.maxCellSizeLog2) {
+      this.maxCellSizeLog2 = maxCellSizeLog2;
+      this.setTreeNeedUpdate();
+    }
+    return this;
+  });
+
+  setCellSizeLog2 = action(
+    (minCellSizeLog2: number, maxCellSizeLog2: number) => {
+      this.setMinCellSizeLog2(minCellSizeLog2);
+      this.setMaxCellSizeLog2(maxCellSizeLog2);
+      return this;
+    },
+  );
+
+  get cellSizeLog2(): [number, number] {
+    return [this.minCellSizeLog2, this.maxCellSizeLog2];
+  }
+
+  setMinCellCapacity = action((minCellCapacity: number) => {
+    if (minCellCapacity !== this.minCellCapacity) {
+      this.minCellCapacity = minCellCapacity;
+      this.setTreeNeedUpdate();
+    }
     return this;
   });
 
   setMaxCellCapacity = action((maxCellCapacity: number) => {
-    this.maxCellCapacity = maxCellCapacity;
-    this.setTreeNeedUpdate();
+    if (maxCellCapacity !== this.maxCellCapacity) {
+      this.maxCellCapacity = maxCellCapacity;
+      this.setTreeNeedUpdate();
+    }
     return this;
   });
 
-  setMinCellCapacity = action((minCellCapacity: number) => {
-    this.minCellCapacity = minCellCapacity;
-    this.setTreeNeedUpdate();
-    return this;
-  });
+  setCellCapacity = action(
+    (minCellCapacity: number, maxCellCapacity: number) => {
+      this.setMinCellCapacity(minCellCapacity);
+      this.setMaxCellCapacity(maxCellCapacity);
+      return this;
+    },
+  );
+
+  get cellCapacity(): [number, number] {
+    return [this.minCellCapacity, this.maxCellCapacity];
+  }
 
   setCellsNeedUpdate(value: boolean = true) {
     this.cellsNeedUpdate = value;
@@ -502,7 +539,7 @@ export class QuadtreeGeoBinner {
   }
 
   /**
-   * Generate all bins less than maxNodeSizeLog2
+   * Generate all bins less than maxCellSizeLog2
    * @param patchSparseNodes {Boolean} Keep parent cell behind sub-cells if
    * some but not all four sub-cells get the minimum number of records to be
    * included. Default false.
