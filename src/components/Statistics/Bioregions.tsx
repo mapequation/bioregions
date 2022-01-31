@@ -9,9 +9,15 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import { format } from 'd3-format';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
 import PieChart from './PieChart';
+
+const formatScore = format('.3r');
+// const formatNumber = format(',');
+const format2s = format('.2r');
+// const formatPercent = (value: number) => `${format2s(100 * value)}%`;
 
 export default observer(function Bioregions() {
   const { infomapStore } = useStore();
@@ -40,9 +46,10 @@ const BioregionInfo = observer(function Bioregion({
 
   //const { mostCommon, mostIndicative } = useExampleData();
 
+  const MAX_NUM_ROWS = 10;
   const numValues = Math.min(
     Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
-    9,
+    MAX_NUM_ROWS - 1,
   );
 
   const mostCommon = bioregion.mostCommon.slice(0, numValues);
@@ -107,7 +114,7 @@ const BioregionInfo = observer(function Bioregion({
                   />
                 </Td>
                 <Td>{indicativeSpecies?.name}</Td>
-                <Td isNumeric>{indicativeSpecies?.score.toFixed(2)}</Td>
+                <Td isNumeric>{formatScore(indicativeSpecies?.score)}</Td>
                 <Td>
                   <PieChart
                     values={speciesStore.speciesMap
@@ -123,85 +130,3 @@ const BioregionInfo = observer(function Bioregion({
     </Box>
   );
 });
-
-function useExampleData() {
-  const mostCommon = [
-    {
-      name: 'lorem impsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua',
-      count: 123,
-    },
-    {
-      name: 'ipsum',
-      count: 456,
-    },
-    {
-      name: 'dolor',
-      count: 789,
-    },
-    {
-      name: 'sit',
-      count: 102,
-    },
-    {
-      name: 'amet',
-      count: 15,
-    },
-    {
-      name: 'consectetur',
-      count: 18,
-    },
-    {
-      name: 'adipiscing',
-      count: 19,
-    },
-    {
-      name: 'elit',
-      count: 22,
-    },
-    {
-      name: 'sed',
-      count: 25,
-    },
-  ].sort((a, b) => b.count - a.count);
-
-  const mostIndicative = [
-    {
-      name: 'lorem',
-      score: 2.23,
-    },
-    {
-      name: 'ipsum',
-      score: 1.23,
-    },
-    {
-      name: 'dolor',
-      score: 0.23,
-    },
-    {
-      name: 'sit',
-      score: 3.23,
-    },
-    {
-      name: 'amet',
-      score: 4.23,
-    },
-    {
-      name: 'consectetur',
-      score: 5.23,
-    },
-    {
-      name: 'adipiscing',
-      score: 6.23,
-    },
-    {
-      name: 'elit',
-      score: 7.23,
-    },
-    {
-      name: 'sed',
-      score: 8.23,
-    },
-  ].sort((a, b) => b.score - a.score);
-
-  return { mostCommon, mostIndicative };
-}

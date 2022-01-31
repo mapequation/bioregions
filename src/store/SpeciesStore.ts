@@ -82,6 +82,15 @@ export default class SpeciesStore {
     });
   }
 
+  clearData = action(() => {
+    this.loaded = false;
+    this.isLoading = false;
+    this.pointCollection = createPointCollection();
+    this.multiPointCollection = createMultiPointGeometryCollection();
+    this.binner = new QuadtreeGeoBinner(this);
+    this.speciesMap = new Map<string, Species>();
+  });
+
   get numPoints() {
     return this.pointCollection.features.length;
   }

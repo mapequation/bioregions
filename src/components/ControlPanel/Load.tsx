@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import { Button, Tag, Select, Icon } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
@@ -17,30 +17,27 @@ import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
+import type { Example } from '../../store/ExampleStore';
+
+interface LoadOptions {
+  minCellSize?: number;
+  maxCellSize?: number;
+  minCellCapacity?: number;
+  maxCellCapacity?: number;
+}
 
 export const LoadExample = observer(function LoadExample() {
-  const { speciesStore, infomapStore, treeStore, mapStore } = useStore();
+  const store = useStore();
   const [isOpen, setIsOpen] = useState(false);
+  const { speciesStore, exampleStore } = store;
 
   const rowHover = {
     background: 'var(--chakra-colors-gray-50)',
   };
 
-  const loadFile = (filename: string, treename?: string) => async () => {
+  const loadExample = (example: Example) => {
     setIsOpen(false);
-    speciesStore.setLoaded(false);
-    treeStore.setLoaded(false);
-    treeStore.setTree(null);
-    infomapStore.setTree(null);
-
-    if (treename) {
-      await treeStore.load(treename);
-    }
-    await speciesStore.load(filename);
-    await infomapStore.run();
-
-    mapStore.setRenderType('bioregions');
-    mapStore.render();
+    exampleStore.loadExample(example);
   };
 
   return (
@@ -62,27 +59,20 @@ export const LoadExample = observer(function LoadExample() {
           <Thead>
             <Tr>
               <Th>Description</Th>
-              <Th textAlign="right">Size&nbsp;(Mb)</Th>
+              <Th textAlign="right">Size</Th>
             </Tr>
           </Thead>
           <Tbody style={{ cursor: 'pointer' }}>
-            <Tr
-              _hover={rowHover}
-              onClick={loadFile(
-                '/bioregions2/data/mammals_neotropics.csv',
-                '/bioregions2/data/mammals_neotropics.nwk',
-              )}
-            >
-              <Td>Neotropical mammal occurences</Td>
-              <Td isNumeric>2.8</Td>
-            </Tr>
-            <Tr
-              _hover={rowHover}
-              onClick={loadFile('/bioregions2/data/mammals_global.tsv')}
-            >
-              <Td>Global mammal occurrences</Td>
-              <Td isNumeric>56</Td>
-            </Tr>
+            {exampleStore.examples.map((example) => (
+              <Tr
+                key={example.name}
+                _hover={rowHover}
+                onClick={() => loadExample(example)}
+              >
+                <Td>{example.name}</Td>
+                <Td>{example.size}</Td>
+              </Tr>
+            ))}
           </Tbody>
         </Table>
       </Modal>

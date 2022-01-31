@@ -301,8 +301,8 @@ export class QuadtreeGeoBinner {
   private _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
   maxNodeSizeLog2: number = 2;
   minNodeSizeLog2: number = 0;
-  nodeCapacity: number = 100;
-  lowerThreshold: number = 10;
+  maxCellCapacity: number = 100;
+  minCellCapacity: number = 10;
   root: Node | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   _cells: Node[] = [];
@@ -317,14 +317,10 @@ export class QuadtreeGeoBinner {
     makeObservable(this, {
       maxNodeSizeLog2: observable,
       minNodeSizeLog2: observable,
-      nodeCapacity: observable,
-      lowerThreshold: observable,
+      maxCellCapacity: observable,
+      minCellCapacity: observable,
       cellsNeedUpdate: observable,
       treeNeedUpdate: observable,
-      setMaxNodeSizeLog2: action,
-      setMinNodeSizeLog2: action,
-      setNodeCapacity: action,
-      setLowerThreshold: action,
       setCellsNeedUpdate: action,
       generateCells: action,
       _cells: observable.ref,
@@ -399,29 +395,29 @@ export class QuadtreeGeoBinner {
     return this.maxNodeSizeLog2 - Math.log2(this.scale);
   }
 
-  setMinNodeSizeLog2(minNodeSizeLog2: number) {
+  setMinCellSizeLog2 = action((minNodeSizeLog2: number) => {
     this.minNodeSizeLog2 = minNodeSizeLog2;
     this.setTreeNeedUpdate();
     return this;
-  }
+  });
 
-  setMaxNodeSizeLog2(maxNodeSizeLog2: number) {
+  setMaxCellSizeLog2 = action((maxNodeSizeLog2: number) => {
     this.maxNodeSizeLog2 = maxNodeSizeLog2;
     this.setTreeNeedUpdate();
     return this;
-  }
+  });
 
-  setNodeCapacity(nodeCapacity: number) {
-    this.nodeCapacity = nodeCapacity;
+  setMaxCellCapacity = action((maxCellCapacity: number) => {
+    this.maxCellCapacity = maxCellCapacity;
     this.setTreeNeedUpdate();
     return this;
-  }
+  });
 
-  setLowerThreshold(lowerThreshold: number) {
-    this.lowerThreshold = lowerThreshold;
+  setMinCellCapacity = action((minCellCapacity: number) => {
+    this.minCellCapacity = minCellCapacity;
     this.setTreeNeedUpdate();
     return this;
-  }
+  });
 
   setCellsNeedUpdate(value: boolean = true) {
     this.cellsNeedUpdate = value;
@@ -439,7 +435,7 @@ export class QuadtreeGeoBinner {
       feature,
       this.maxSizeLog2,
       this.minSizeLog2,
-      this.nodeCapacity,
+      this.maxCellCapacity,
     );
     this.setCellsNeedUpdate();
   }
@@ -515,13 +511,13 @@ export class QuadtreeGeoBinner {
   generateCells(patchSparseNodes = true): Node[] {
     console.time('generateCells');
     if (patchSparseNodes) {
-      this.root?.patchSparseNodes(this.maxSizeLog2, this.lowerThreshold);
+      this.root?.patchSparseNodes(this.maxSizeLog2, this.minCellCapacity);
     }
 
     const nodes: Node[] = [];
     this.visitNonEmpty((node: Node) => {
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
-      if (node.numFeatures < this.lowerThreshold) {
+      if (node.numFeatures < this.minCellCapacity) {
         return true;
       }
       nodes.push(node);

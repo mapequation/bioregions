@@ -50,6 +50,12 @@ export default class TreeStore {
     });
   }
 
+  clearData = action(() => {
+    this.loaded = false;
+    this.tree = null;
+    this.treeString = null;
+  });
+
   get numNodesInTree() {
     if (this.tree === null) {
       return 0;

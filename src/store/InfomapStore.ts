@@ -122,6 +122,15 @@ export default class InfomapStore {
       .on('finished', this.onInfomapFinished);
   }
 
+  clearData = action(() => {
+    this.network = null;
+    this.tree = null;
+    this.treeString = null;
+    this.isRunning = false;
+    this.currentTrial = 0;
+    this.bioregions = [];
+  });
+
   get haveBioregions() {
     return this.numBioregions > 0;
   }
