@@ -13,14 +13,16 @@ export default class LandStore {
   land110m: d3.GeoPermissibleObjects | null = null;
   loaded: boolean = false;
 
-  constructor(rootStore: RootStore) {
+  constructor(rootStore: RootStore, { skipLoad }: { skipLoad?: boolean } = {}) {
     this.rootStore = rootStore;
 
     makeObservable(this, {
       loaded: observable,
     });
 
-    this.loadLandLayer().catch(console.error);
+    if (!skipLoad) {
+      this.loadLandLayer().catch(console.error);
+    }
   }
 
   async loadLandLayer() {
