@@ -17,9 +17,5 @@ const Algorithm = observer(() => {
   if (!documentationStore) {
     return null;
   }
-  const { tree } = documentationStore.demoStore.treeStore;
-  if (!tree) {
-    return null;
-  }
-  return <Demo tree={tree} />;
+  return <Demo />;
 });

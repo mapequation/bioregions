@@ -10,6 +10,9 @@ export default class DocumentationStore {
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
+    this.demoStore.infomapStore.setIntegrationTime(0.6);
+    this.demoStore.infomapStore.setSegregationTime(0.2);
+
     this.loadData();
   }
 

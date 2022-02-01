@@ -1,25 +1,21 @@
-import {
-  Box,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-} from '@chakra-ui/react';
-import { useState } from 'react';
+import { Box } from '@chakra-ui/react';
 import { getIntersectingBranches, Node } from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 
 export interface DemoTreeProps {
   tree: Node;
+  integrationTime: number;
+  segregationTime: number;
 }
 
 const layout = d3.tree<Node>();
 
-export default function DemoTree({ tree }: DemoTreeProps) {
-  const [separation, setSeparation] = useState(0.2);
-  const [integration, setIntegration] = useState(0.6);
-
+export default function DemoTree({
+  tree,
+  integrationTime,
+  segregationTime,
+}: DemoTreeProps) {
   const blue = 'hsl(213, 55%, 53%)';
   const red = 'hsl(4, 69%, 65%)';
   const purple = 'hsl(255, 45%, 69%)';
@@ -27,8 +23,8 @@ export default function DemoTree({ tree }: DemoTreeProps) {
   const hierTree = d3.hierarchy<Node>(tree);
   const positionedTree = layout(hierTree);
 
-  const integratingBranches = getIntersectingBranches(tree, integration);
-  const separatingBranches = getIntersectingBranches(tree, separation);
+  const integratingBranches = getIntersectingBranches(tree, integrationTime);
+  const separatingBranches = getIntersectingBranches(tree, segregationTime);
 
   const branchColorMap = new Map<string, string>();
   const fillColorMap = new Map<number, string>();
@@ -146,9 +142,9 @@ export default function DemoTree({ tree }: DemoTreeProps) {
         </text>
 
         <line
-          x1={100 * separation}
+          x1={100 * segregationTime}
           y1={5}
-          x2={100 * separation}
+          x2={100 * segregationTime}
           y2={109}
           stroke={red}
           strokeWidth={0.5}
@@ -156,9 +152,9 @@ export default function DemoTree({ tree }: DemoTreeProps) {
           strokeLinecap="round"
         />
         <line
-          x1={100 * integration}
+          x1={100 * integrationTime}
           y1={5}
-          x2={100 * integration}
+          x2={100 * integrationTime}
           y2={109}
           stroke={blue}
           strokeWidth={0.5}
@@ -166,33 +162,6 @@ export default function DemoTree({ tree }: DemoTreeProps) {
           strokeLinecap="round"
         />
       </svg>
-      <Slider
-        min={0}
-        max={1}
-        step={0.01}
-        value={separation}
-        onChange={setSeparation}
-        colorScheme="red"
-      >
-        <SliderTrack>
-          <SliderFilledTrack />
-        </SliderTrack>
-        <SliderThumb />
-      </Slider>
-      <Slider
-        isReversed
-        min={0}
-        max={1}
-        step={0.01}
-        value={1 - integration}
-        onChange={(value) => setIntegration(1 - value)}
-        colorScheme="blue"
-      >
-        <SliderTrack>
-          <SliderFilledTrack />
-        </SliderTrack>
-        <SliderThumb />
-      </Slider>
     </Box>
   );
 }
