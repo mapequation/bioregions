@@ -6,6 +6,7 @@ import InfomapStore from './InfomapStore';
 import ColorStore from './ColorStore';
 import SettingsStore from './SettingsStore';
 import ExampleStore from './ExampleStore';
+import DocumentationStore from './DocumentationStore';
 
 export default class Store {
   mapStore = new MapStore(this);
@@ -16,6 +17,7 @@ export default class Store {
   colorStore = new ColorStore(this);
   settingsStore = new SettingsStore(this);
   exampleStore = new ExampleStore(this);
+  documentationStore = new DocumentationStore(this);
 
   clearData() {
     this.infomapStore.clearData();

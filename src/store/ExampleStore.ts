@@ -36,7 +36,7 @@ export default class ExampleStore {
         name: 'Demo',
         speciesFile: '/bioregions2/data/test.csv',
         treeFile: '/bioregions2/data/test.nwk',
-        size: '140 b',
+        size: '140 B',
         settings: {
           minCellSize: 0,
           maxCellSize: 1,
@@ -49,7 +49,7 @@ export default class ExampleStore {
         name: 'Sample',
         speciesFile: '/bioregions2/data/head.csv',
         treeFile: '/bioregions2/data/head.nwk',
-        size: '370 b',
+        size: '370 B',
         settings: {
           minCellSize: 0,
           maxCellSize: 1,
@@ -63,14 +63,14 @@ export default class ExampleStore {
       name: 'Neotropical mammal occurrences',
       speciesFile: '/bioregions2/data/mammals_neotropics.csv',
       treeFile: '/bioregions2/data/mammals_neotropics.nwk',
-      size: '2.8 Mb',
+      size: '2.8 MB',
       settings: {},
     });
 
     examples.push({
       name: 'Global mammal occurrences',
       speciesFile: '/bioregions2/data/mammals_global.tsv',
-      size: '56 Mb',
+      size: '56 MB',
       settings: {},
     });
 

@@ -19,14 +19,11 @@ interface BioregionsNetwork extends Required<BipartiteNetwork> {
   sumLinkWeight: number;
 }
 
-type RequiredArgs = Required<
-  Readonly<Pick<Arguments, 'silent' | 'output' | 'skipAdjustBipartiteFlow'>>
->;
+type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
 
 const defaultArgs: RequiredArgs = {
   silent: false,
   output: ['json', 'tree'],
-  skipAdjustBipartiteFlow: true,
 };
 
 export type Bioregion = {
@@ -54,6 +51,7 @@ export default class InfomapStore {
     regularizationStrength: 1,
     entropyCorrected: true,
     entropyCorrectionStrength: 1,
+    skipAdjustBipartiteFlow: true,
     ...defaultArgs,
   };
   network: BioregionsNetwork | null = null;
@@ -157,6 +155,10 @@ export default class InfomapStore {
 
   setNumTrials(numTrials: number) {
     this.args.numTrials = numTrials;
+  }
+
+  setSkipAdjustBipartiteFlow(value: boolean = true) {
+    this.args.skipAdjustBipartiteFlow = value;
   }
 
   setRegularized(value: boolean = true) {

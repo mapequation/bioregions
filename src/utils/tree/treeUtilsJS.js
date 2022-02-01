@@ -411,6 +411,7 @@ export function prepareTree(tree) {
     node.parent = parent;
     if (!parent) {
       node.rootDistance = 0;
+      node.time = 0;
     } else {
       node.rootDistance = parent.rootDistance + node.branchLength;
       node.time = node.rootDistance / tree.maxLeafDistance;

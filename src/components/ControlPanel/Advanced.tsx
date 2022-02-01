@@ -13,6 +13,11 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   Switch,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
+  Flex,
   Box,
   Collapse,
 } from '@chakra-ui/react';
@@ -68,7 +73,7 @@ export default observer(function Advanced() {
   const formatPercent = format('.1%');
 
   return (
-    <VStack align="stretch">
+    <VStack align="stretch" spacing={2}>
       <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="showAdvanced" mb="0">
           Show
@@ -82,89 +87,136 @@ export default observer(function Advanced() {
       </FormControl>
 
       <Collapse in={show} animateOpacity style={{ width: '100%' }}>
-        <VStack>
-          <Stat label="Levels">{infomapStore.numLevels}</Stat>
-          <Stat label="Codelength">
-            {formatCodelength(infomapStore.codelength)} bits
-          </Stat>
-          <Stat label="Codelength savings">
-            {formatPercent(infomapStore.relativeCodelengthSavings)}
-          </Stat>
-        </VStack>
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="entropyCorrected" mb="0">
-            Entropy correction
-          </FormLabel>
-          <Spacer />
-          <Switch
-            id="entropyCorrected"
-            isChecked={infomapStore.args.entropyCorrected}
-            onChange={() =>
-              infomapStore.setEntropyCorrected(
-                !infomapStore.args.entropyCorrected,
-              )
-            }
-          />
-        </FormControl>
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="render-data-on-zoom" mb="0">
-            Render data while zooming
-          </FormLabel>
-          <Spacer />
-          <Switch
-            id="render-data-on-zoom"
-            isChecked={mapStore.renderDataWhileZooming}
-            onChange={() =>
-              mapStore.setRenderDataWhileZooming(
-                !mapStore.renderDataWhileZooming,
-              )
-            }
-          />
-        </FormControl>
-        <FormControl
-          display="flex"
-          w="100%"
-          alignItems="center"
-          isDisabled={infomapStore.isRunning}
-        >
-          <FormLabel htmlFor="steps" mb="0">
-            <Button
-              size="sm"
-              isDisabled={
-                !speciesStore.loaded ||
-                !treeStore.loaded ||
-                infomapStore.isRunning
-              }
-              isLoading={isRunning}
-              onClick={paramSweep}
-            >
-              Run parameter sweep
-            </Button>
-          </FormLabel>
-          <Spacer />
-          <NumberInput
-            maxW="70px"
-            min={2}
-            size="xs"
-            value={steps}
-            onChange={(value) => setSteps(+value)}
-          >
-            <NumberInputField />
-            <NumberInputStepper>
-              <NumberIncrementStepper />
-              <NumberDecrementStepper />
-            </NumberInputStepper>
-          </NumberInput>
-        </FormControl>
-        {isRunning && (
-          <Progress
-            value={step}
-            max={steps}
-            size="xs"
+        <VStack align="stretch" spacing={2}>
+          <VStack>
+            <Stat label="Levels">{infomapStore.numLevels}</Stat>
+            <Stat label="Codelength">
+              {formatCodelength(infomapStore.codelength)} bits
+            </Stat>
+            <Stat label="Codelength savings">
+              {formatPercent(infomapStore.relativeCodelengthSavings)}
+            </Stat>
+          </VStack>
+
+          <Flex
             w="100%"
-            color="blue.500"
-          />
-        )}
+            mt={4}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box w="50%">Diversity order</Box>
+            <Slider
+              w="50%"
+              focusThumbOnChange={false}
+              value={infomapStore.diversityOrder}
+              onChange={(value) => infomapStore.setDiversityOrder(value)}
+              onChangeEnd={(value) =>
+                infomapStore.setDiversityOrder(value, true)
+              }
+              min={0}
+              max={3}
+              step={0.1}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" boxSize="32px">
+                {infomapStore.diversityOrder}
+              </SliderThumb>
+            </Slider>
+          </Flex>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="skipAdjustBipartiteFlow" mb="0">
+              Flow projection
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="skipAdjustBipartiteFlow"
+              isChecked={!infomapStore.args.skipAdjustBipartiteFlow}
+              onChange={() =>
+                infomapStore.setSkipAdjustBipartiteFlow(
+                  !infomapStore.args.skipAdjustBipartiteFlow,
+                )
+              }
+            />
+          </FormControl>
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="entropyCorrected" mb="0">
+              Entropy correction
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="entropyCorrected"
+              isChecked={infomapStore.args.entropyCorrected}
+              onChange={() =>
+                infomapStore.setEntropyCorrected(
+                  !infomapStore.args.entropyCorrected,
+                )
+              }
+            />
+          </FormControl>
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="render-data-on-zoom" mb="0">
+              Render data while zooming
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="render-data-on-zoom"
+              isChecked={mapStore.renderDataWhileZooming}
+              onChange={() =>
+                mapStore.setRenderDataWhileZooming(
+                  !mapStore.renderDataWhileZooming,
+                )
+              }
+            />
+          </FormControl>
+          <FormControl
+            display="flex"
+            w="100%"
+            alignItems="center"
+            isDisabled={infomapStore.isRunning}
+          >
+            <FormLabel htmlFor="steps" mb="0">
+              <Button
+                size="sm"
+                isDisabled={
+                  !speciesStore.loaded ||
+                  !treeStore.loaded ||
+                  infomapStore.isRunning
+                }
+                isLoading={isRunning}
+                onClick={paramSweep}
+              >
+                Run parameter sweep
+              </Button>
+            </FormLabel>
+            <Spacer />
+            <NumberInput
+              maxW="70px"
+              min={2}
+              size="xs"
+              value={steps}
+              onChange={(value) => setSteps(+value)}
+            >
+              <NumberInputField />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+          </FormControl>
+          {isRunning && (
+            <Progress
+              value={step}
+              max={steps}
+              size="xs"
+              w="100%"
+              color="blue.500"
+            />
+          )}
+        </VStack>
       </Collapse>
     </VStack>
   );

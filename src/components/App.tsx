@@ -9,10 +9,12 @@ import {
 import { observer } from 'mobx-react';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
-import Tree from './Tree';
+import PhylocanvasTree from './Tree';
 import { useStore } from '../store';
 import Statistics from './Statistics';
 import Logo from './ControlPanel/Logo';
+import Demo from './Demo';
+import Documentation from './Documentation';
 
 export default observer(function App() {
   const { treeStore } = useStore();
@@ -33,7 +35,7 @@ export default observer(function App() {
           <VStack flex={1}>
             <WorldMap />
             {treeStore.treeString != null && (
-              <Tree
+              <PhylocanvasTree
                 source={treeStore.treeString}
                 size={{ width: 600, height: 400 }}
                 showLabels
@@ -47,6 +49,7 @@ export default observer(function App() {
             <Statistics />
           </VStack>
         </HStack>
+        <Documentation />
       </Container>
     </Box>
   );

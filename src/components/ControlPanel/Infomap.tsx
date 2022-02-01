@@ -104,33 +104,7 @@ export default observer(function Infomap() {
   };
 
   return (
-    <VStack w="100%">
-      <Flex
-        w="100%"
-        mt={4}
-        gap={2}
-        alignItems="center"
-        style={{ display: 'none' }}
-      >
-        <Box w="50%">Diversity order</Box>
-        <Slider
-          w="50%"
-          focusThumbOnChange={false}
-          value={infomapStore.diversityOrder}
-          onChange={(value) => infomapStore.setDiversityOrder(value)}
-          onChangeEnd={(value) => infomapStore.setDiversityOrder(value, true)}
-          min={0}
-          max={3}
-          step={0.1}
-        >
-          <SliderTrack>
-            <SliderFilledTrack />
-          </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="32px">
-            {infomapStore.diversityOrder}
-          </SliderThumb>
-        </Slider>
-      </Flex>
+    <VStack w="100%" spacing={2}>
       <FormControl
         display="flex"
         w="100%"
