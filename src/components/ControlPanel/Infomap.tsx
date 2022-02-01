@@ -118,20 +118,22 @@ export default observer(function Infomap() {
         <Switch
           id="includeTree"
           isDisabled={infomapStore.isRunning}
-          isChecked={treeStore.includeTreeInNetwork}
+          isChecked={infomapStore.includeTreeInNetwork}
           onChange={() =>
-            treeStore.setIncludeTree(!treeStore.includeTreeInNetwork)
+            infomapStore.setIncludeTree(!infomapStore.includeTreeInNetwork)
           }
         />
       </FormControl>
       <TreeHistogram
-        isDisabled={!treeStore.includeTreeInNetwork || infomapStore.isRunning}
+        isDisabled={
+          !infomapStore.includeTreeInNetwork || infomapStore.isRunning
+        }
       />
       <FormControl
         display="flex"
         w="100%"
         alignItems="center"
-        isDisabled={!treeStore.includeTreeInNetwork}
+        isDisabled={!infomapStore.includeTreeInNetwork}
       >
         <FormLabel htmlFor="integrationTime" mb="0">
           Integration time
@@ -139,11 +141,11 @@ export default observer(function Infomap() {
         <Spacer />
         <Slider
           w="50%"
-          isDisabled={!treeStore.includeTreeInNetwork}
+          isDisabled={!infomapStore.includeTreeInNetwork}
           focusThumbOnChange={false}
-          value={treeStore.integrationTime}
-          onChange={(value) => treeStore.setIntegrationTime(value)}
-          onChangeEnd={(value) => treeStore.setIntegrationTime(value, true)}
+          value={infomapStore.integrationTime}
+          onChange={(value) => infomapStore.setIntegrationTime(value)}
+          onChangeEnd={(value) => infomapStore.setIntegrationTime(value, true)}
           min={0}
           max={1}
           step={0.01}
@@ -158,7 +160,7 @@ export default observer(function Infomap() {
         display="flex"
         w="100%"
         alignItems="center"
-        isDisabled={!treeStore.includeTreeInNetwork}
+        isDisabled={!infomapStore.includeTreeInNetwork}
       >
         <FormLabel htmlFor="treeWeight" mb="0">
           Tree weight
@@ -166,7 +168,7 @@ export default observer(function Infomap() {
         <Spacer />
         <Slider
           w="50%"
-          isDisabled={!treeStore.includeTreeInNetwork}
+          isDisabled={!infomapStore.includeTreeInNetwork}
           focusThumbOnChange={false}
           value={infomapStore.treeWeightBalance}
           onChange={(value) => infomapStore.setTreeWeightBalance(value)}
@@ -268,7 +270,7 @@ export default observer(function Infomap() {
           color="blue.500"
         />
       )}
-      {network != null && !treeStore.includeTreeInNetwork && (
+      {network != null && !infomapStore.includeTreeInNetwork && (
         <>
           <Stat label="Nodes">
             {(network.nodes.length - network.numTreeNodes).toLocaleString()}
@@ -278,7 +280,7 @@ export default observer(function Infomap() {
           </Stat>
         </>
       )}
-      {network != null && treeStore.includeTreeInNetwork && (
+      {network != null && infomapStore.includeTreeInNetwork && (
         <NodesLinksTable
           numNodes={network.nodes.length - network.numTreeNodes}
           numLinks={network.links.length - network.numTreeLinks}

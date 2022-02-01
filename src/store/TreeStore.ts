@@ -4,31 +4,13 @@ import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { Node as PhyloTree } from '../utils/tree';
-import { extent, range, map, zip } from 'd3';
-import { interpolateExp } from '../utils/math';
 
 export default class TreeStore {
   rootStore: RootStore;
   loaded: boolean = false;
   tree: PhyloTree | null = null;
   treeString: string | null = null;
-  includeTreeInNetwork: boolean = true;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
-
-  integrationTime: number = 1;
-  setIntegrationTime = action((value: number, updateNetwork = false) => {
-    this.integrationTime = value;
-    if (updateNetwork) {
-      this.rootStore.infomapStore.updateNetwork();
-    }
-  });
-  segregationTime: number = 0;
-  setSegregationTime = action((value: number, updateNetwork = false) => {
-    this.segregationTime = value;
-    if (updateNetwork) {
-      this.rootStore.infomapStore.updateNetwork();
-    }
-  });
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -37,14 +19,10 @@ export default class TreeStore {
       loaded: observable,
       tree: observable.ref,
       treeString: observable,
-      includeTreeInNetwork: observable,
       weightParameter: observable,
-      integrationTime: observable,
-      segregationTime: observable,
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
       setLoaded: action,
-      setIncludeTree: action,
       setTree: action,
       setTreeString: action,
     });
@@ -97,11 +75,6 @@ export default class TreeStore {
 
   setLoaded(loaded: boolean = true) {
     this.loaded = loaded;
-  }
-
-  setIncludeTree(value: boolean = true) {
-    this.includeTreeInNetwork = value;
-    this.rootStore.infomapStore.updateNetwork();
   }
 
   async load(file: File | string) {

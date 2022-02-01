@@ -57,6 +57,7 @@ export default class InfomapStore {
   network: BioregionsNetwork | null = null;
   tree: Tree | null = null;
   treeString: string | null = null;
+  includeTreeInNetwork: boolean = true;
   isRunning: boolean = false;
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
@@ -94,6 +95,9 @@ export default class InfomapStore {
       diversityOrder: observable,
       setDiversityOrder: action,
       treeWeightBalance: observable,
+      includeTreeInNetwork: observable,
+      integrationTime: observable,
+      segregationTime: observable,
       setTreeWeightBalance: action,
       numBioregions: computed,
       haveBioregions: computed,
@@ -192,6 +196,26 @@ export default class InfomapStore {
   setIsRunning(isRunning: boolean = true) {
     this.isRunning = isRunning;
   }
+
+  setIncludeTree = action((value: boolean = true) => {
+    this.includeTreeInNetwork = value;
+    this.rootStore.infomapStore.updateNetwork();
+  });
+
+  integrationTime: number = 1;
+  setIntegrationTime = action((value: number, updateNetwork = false) => {
+    this.integrationTime = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
+  });
+  segregationTime: number = 0;
+  setSegregationTime = action((value: number, updateNetwork = false) => {
+    this.segregationTime = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
+  });
 
   get cells() {
     return this.rootStore.speciesStore.binner.cells;
@@ -299,8 +323,7 @@ export default class InfomapStore {
   private _createNetwork(): BioregionsNetwork {
     console.time('createNetwork');
     const network =
-      this.rootStore.treeStore.loaded &&
-      this.rootStore.treeStore.includeTreeInNetwork
+      this.rootStore.treeStore.loaded && this.includeTreeInNetwork
         ? this.createNetworkWithTree()
         : this.createNetwork();
 
@@ -367,7 +390,7 @@ export default class InfomapStore {
     */
     const network = this.createNetwork();
     const tree = this.rootStore.treeStore.tree!;
-    const { integrationTime } = this.rootStore.treeStore;
+    const { integrationTime } = this;
     const { nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = network.nodes.length;

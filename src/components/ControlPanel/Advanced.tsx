@@ -40,7 +40,7 @@ export default observer(function Advanced() {
     try {
       const zip = new JSZip();
 
-      treeStore.setIncludeTree();
+      infomapStore.setIncludeTree();
 
       const times = range(steps).map((i) => i / (steps - 1));
       const f = format('.2f');
@@ -48,7 +48,7 @@ export default observer(function Advanced() {
       for (let i = 0; i < times.length; i++) {
         setStep(i);
         const t = times[i];
-        treeStore.setIntegrationTime(t);
+        infomapStore.setIntegrationTime(t);
 
         await infomapStore.run();
 
