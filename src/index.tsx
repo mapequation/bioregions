@@ -1,3 +1,5 @@
+import '@fontsource/open-sans/300.css';
+import '@fontsource/philosopher/700.css';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';

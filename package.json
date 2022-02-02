@@ -9,6 +9,8 @@
     "@craco/craco": "^6.4.3",
     "@emotion/react": "^11.7.1",
     "@emotion/styled": "^11.6.0",
+    "@fontsource/open-sans": "^4.5.3",
+    "@fontsource/philosopher": "^4.5.1",
     "@mapequation/c3": "^1.1.0",
     "@mapequation/infomap": "^2.0.0",
     "@phylocanvas/phylocanvas.gl": "^1.35.0",

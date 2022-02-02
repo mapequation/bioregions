@@ -54,6 +54,18 @@ const theme = extendTheme({
       },
     },
   },
+  fonts: {
+    heading: 'Open Sans',
+    // body: 'Raleway',
+  },
+  // styles: {
+  //   global: {
+  //     heading: {
+  //       fontFamily: 'heading',
+  //       fontWeight: 400,
+  //     },
+  //   },
+  // },
 });
 
 export default theme;
