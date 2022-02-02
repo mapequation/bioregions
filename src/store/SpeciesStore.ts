@@ -157,7 +157,20 @@ export default class SpeciesStore {
     return await Thread.terminate(dataWorker);
   }
 
-  loadString(data: string, { add }: { add?: boolean } = {}) {
+  loadString(
+    data: string,
+    {
+      add,
+      nameColumn = 'species',
+      longColumn = 'longitude',
+      latColumn = 'latitude',
+    }: {
+      add?: boolean;
+      nameColumn?: string;
+      longColumn?: string;
+      latColumn?: string;
+    } = {},
+  ) {
     if (!add) {
       this.binner.setTreeNeedUpdate();
       this.updatePointCollection(createPointCollection());
@@ -166,6 +179,27 @@ export default class SpeciesStore {
 
     const records = csvParse(data);
     console.log('Records:', records);
+
+    const mapper = createMapper<string | undefined>(
+      nameColumn,
+      longColumn,
+      latColumn,
+    );
+
+    for (let item of records) {
+      const mappedItem = mapper(item);
+      const pointFeature = createPointFeature(
+        [mappedItem.longitude, mappedItem.latitude],
+        { name: mappedItem.name },
+      );
+
+      this.pointCollection.features.push(pointFeature);
+      this.binner.addFeature(pointFeature);
+    }
+
+    this.updatePointCollection();
+    this.setLoaded(true);
+    this.setIsLoading(false);
   }
 
   async load(
@@ -231,14 +265,14 @@ export default class SpeciesStore {
   }
 }
 
-function createMapper(
+function createMapper<ItemType = string | number>(
   nameColumn: string,
   longColumn: string,
   latColumn: string,
 ) {
-  return (item: { [key: string]: string | number }) => ({
-    name: item[nameColumn].toString(),
-    longitude: +item[longColumn],
-    latitude: +item[latColumn],
+  return (item: { [key: string]: ItemType }) => ({
+    name: `${item[nameColumn]}`,
+    longitude: +item[longColumn]!,
+    latitude: +item[latColumn]!,
   });
 }

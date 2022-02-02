@@ -14,7 +14,7 @@ C,0.7,7.3
 C,0.5,6.8
 C,0.8,5.6
 D,0.4,4.5
-D,0.6,3.4
+D,0.6,4.4
 E,0.5,3.3
 E,0.4,2.8
 E,0.3,2.1
@@ -46,10 +46,10 @@ export default class DocumentationStore {
   }
 
   async loadData() {
-    const speciesFile = '/bioregions2/data/demo.csv';
+    // const speciesFile = '/bioregions2/data/demo.csv';
     // const treeFile = '/bioregions2/data/demo.nwk';
+    // await this.demoStore.speciesStore.load(speciesFile);
     await this.demoStore.treeStore.loadString(demoTree);
     await this.demoStore.speciesStore.loadString(demoRecords);
-    await this.demoStore.speciesStore.load(speciesFile);
   }
 }
