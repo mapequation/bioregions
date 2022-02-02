@@ -92,22 +92,22 @@ export function visitTreeDepthFirstPostOrder(
 export interface Branch {
   parent: Node;
   child: Node;
-  fractionParent: number;
+  childWeight: number;
 }
 export function getIntersectingBranches(tree: Node, time: number) {
   const branches: Branch[] = [];
   visitTreeDepthFirstPostOrder(tree, (node) => {
     const { parent } = node;
     const parentTime = parent?.time ?? 0;
-    const parentIsOlder = parent && parentTime < time;
-    const nodeIsYounger = node.time >= time || node.isLeaf; // TODO: Fix normalize time to 1, now 0.9998
-    const fractionParent = (time - parentTime) / (node.time - parentTime);
+    const parentIsOlder = parent && parentTime <= time;
+    const nodeIsYounger = node.time > time || node.isLeaf; // TODO: Fix normalize time to 1, now 0.9998
+    const childWeight = (time - parentTime) / (node.time - parentTime);
 
     if (parentIsOlder && nodeIsYounger) {
       branches.push({
         parent,
         child: node,
-        fractionParent,
+        childWeight,
       });
     }
   });

@@ -107,6 +107,10 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
     return [this.x1, this.y1, this.x2, this.y2];
   }
 
+  get center(): [number, number] {
+    return [(this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2];
+  }
+
   get size() {
     return this.x2 - this.x1;
   }

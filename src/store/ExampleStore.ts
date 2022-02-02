@@ -22,11 +22,11 @@ export default class ExampleStore {
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
-    if (process.env.NODE_ENV === 'development') {
-      setTimeout(() => {
-        this.loadExample(this.examples[0]);
-      }, 1000);
-    }
+    // if (process.env.NODE_ENV === 'development') {
+    //   setTimeout(() => {
+    //     this.loadExample(this.examples[0]);
+    //   }, 1000);
+    // }
   }
 
   initExamples() {

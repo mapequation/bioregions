@@ -2,6 +2,7 @@ import { action, makeObservable, observable, computed } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
+import { csvParse } from 'd3';
 import type RootStore from './RootStore';
 import type {
   Feature,
@@ -154,6 +155,17 @@ export default class SpeciesStore {
     yield dataWorker.load(file, args);
 
     return await Thread.terminate(dataWorker);
+  }
+
+  loadString(data: string, { add }: { add?: boolean } = {}) {
+    if (!add) {
+      this.binner.setTreeNeedUpdate();
+      this.updatePointCollection(createPointCollection());
+      this.rootStore.mapStore.render();
+    }
+
+    const records = csvParse(data);
+    console.log('Records:', records);
   }
 
   async load(

@@ -53,16 +53,39 @@ const theme = extendTheme({
         simpler: tableVariantSimpler,
       },
     },
+    Heading: {
+      letterSpacing: '40px',
+    },
   },
   fonts: {
+    brand: 'Philosopher',
     heading: 'Open Sans',
     // body: 'Raleway',
+  },
+  textStyles: {
+    h1: {
+      letterSpacing: '40px',
+    },
+    h2: {
+      letterSpacing: '40px',
+    },
+    h3: {
+      letterSpacing: '40px',
+    },
+    h4: {
+      letterSpacing: '40px',
+    },
+    h5: {
+      letterSpacing: '40px',
+    },
+    h6: {
+      letterSpacing: '40px',
+    },
   },
   // styles: {
   //   global: {
   //     heading: {
-  //       fontFamily: 'heading',
-  //       fontWeight: 400,
+  //       letterSpacing: '40px',
   //     },
   //   },
   // },

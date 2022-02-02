@@ -46,7 +46,8 @@ const Section = ({
         <Heading
           as="h5"
           size="xs"
-          fontWeight="semibold"
+          //fontWeight={700}
+          //letterSpacing="wide"
           textTransform="uppercase"
           pos="absolute"
           top="-6"

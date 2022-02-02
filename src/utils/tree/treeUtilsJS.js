@@ -389,12 +389,10 @@ export function prepareTree(tree) {
       node.numLeafs = 1;
       node.maxLeafDistance = node.branchLength;
       // Ensure leaf nodes has name, and replace underscores with spaces
-      node.name = node.name ? normalizeSpeciesName(node.name) : '';
+      node.name = node.name ? normalizeSpeciesName(node.name) : `${node.uid}`;
     } else {
       // no leaf
-      if (node.name) {
-        node.name = node.name.replace(/_/g, ' ');
-      }
+      node.name = node.name ? node.name.replace(/_/g, ' ') : `t${node.uid}`;
       let numLeafs = 0;
       let maxLeafDistance = 0;
       node.children.forEach((child) => {

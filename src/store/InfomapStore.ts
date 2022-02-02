@@ -10,7 +10,10 @@ import type { Tree, Result } from '@mapequation/infomap';
 import type { BipartiteNetwork } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
-import { visitTreeDepthFirstPostOrder } from '../utils/tree';
+import {
+  getIntersectingBranches,
+  visitTreeDepthFirstPostOrder,
+} from '../utils/tree';
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
@@ -331,7 +334,7 @@ export default class InfomapStore {
     return network;
   }
 
-  private createNetwork(): BioregionsNetwork {
+  public createNetwork(): BioregionsNetwork {
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added.
@@ -382,7 +385,7 @@ export default class InfomapStore {
     return network;
   }
 
-  private createNetworkWithTree(): BioregionsNetwork {
+  public createNetworkWithTree(): BioregionsNetwork {
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added (as in createNetwork).
@@ -394,6 +397,7 @@ export default class InfomapStore {
     const { nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = network.nodes.length;
+    const numSpecies = network.nodes.length;
 
     const sumNonTreeLinkWeights = network.sumLinkWeight;
 
@@ -421,51 +425,64 @@ export default class InfomapStore {
         node.speciesSet = new Set([node.name]);
       } else {
         node.speciesSet = new Set();
-        node.children.forEach((child) => {
-          if (child.speciesSet) {
-            for (const each of child.speciesSet) {
-              node.speciesSet?.add(each);
+        if (node.children.some((child) => child.time > integrationTime)) {
+          node.children.forEach((child) => {
+            if (child.speciesSet) {
+              for (const each of child.speciesSet) {
+                node.speciesSet?.add(each);
+              }
             }
-          }
-        });
+          });
+        }
       }
+    });
 
-      // const numSpecies = node.speciesSet.size;
+    const integratingBranches = getIntersectingBranches(tree, integrationTime);
 
-      const weight = 1; //weightFunction(node.rootDistance / tree.maxLeafDistance);
-      const parentIsOlder = node.parent && node.parent.time < integrationTime;
-      const nodeIsYounger = node.time >= integrationTime || node.isLeaf; // TODO: Fix normalize time to 1, now 0.9998
+    const nodeIdToName = new Map<number, string>();
 
-      if (!parentIsOlder || !nodeIsYounger) {
-        // Not on branch crossing integration time
-        return;
-      }
-
+    integratingBranches.forEach(({ parent, child, childWeight }) => {
       // TODO: Interpolate between node and parent links.
       // const outLinks = new Map<number, number>();
-
-      const source = node.isLeaf
-        ? network.nodeIdMap[node.name] ?? nodeId++
-        : nodeId++;
-
-      if (!links.has(source)) {
-        links.set(source, new Map<number, number>());
-      }
-      const outLinks = links.get(source)!;
-
-      for (const species of node.speciesSet!) {
-        if (!nameToCellIds[species]) {
-          missing.add(species);
-          continue;
+      // console.log(
+      //   `Branch parent: ${parent.name}, child: ${child.name}, childWeight: ${childWeight}`,
+      // );
+      for (const node of [child, parent]) {
+        const weight = node === parent ? 1 - childWeight : childWeight;
+        // TODO: Make sure internal tree nodes don't have same name as leaf nodes
+        const source = node.isLeaf
+          ? network.nodeIdMap[node.name] ?? nodeId++
+          : nodeId++;
+        if (!node.isLeaf) {
+          network.nodeIdMap[node.name] = source;
+          nodeIdToName.set(source, node.name);
         }
 
-        for (const cellId of nameToCellIds[species]) {
-          const target = network.nodeIdMap[cellId];
+        if (!links.has(source)) {
+          links.set(source, new Map<number, number>());
+        }
+        const outLinks = links.get(source)!;
 
-          // Aggregate weight
-          const currentWeight = outLinks.get(target) ?? 0;
-          outLinks.set(target, currentWeight + weight);
-          ++sumTreeLinkWeight;
+        // console.log(
+        //   `${node === parent ? 'parent:' : 'child:'}, time: ${
+        //     node.time
+        //   }, speciesSet: ${node.speciesSet?.size}`,
+        // );
+
+        for (const species of node.speciesSet!) {
+          if (!nameToCellIds[species]) {
+            missing.add(species);
+            continue;
+          }
+
+          for (const cellId of nameToCellIds[species]) {
+            const target = network.nodeIdMap[cellId];
+
+            // Aggregate weight
+            const currentWeight = outLinks.get(target) ?? 0;
+            outLinks.set(target, currentWeight + weight);
+            ++sumTreeLinkWeight;
+          }
         }
       }
     });
@@ -501,8 +518,10 @@ export default class InfomapStore {
     }
 
     for (const id of treeNodes) {
-      network.nodes.push({ id, name: id.toString() });
-      network.numTreeNodes++;
+      if (id >= numSpecies) {
+        network.nodes.push({ id, name: nodeIdToName.get(id) });
+        network.numTreeNodes++;
+      }
     }
 
     console.log('Nodes missing in network', Array.from(missing));

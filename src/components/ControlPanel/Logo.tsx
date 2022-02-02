@@ -1,5 +1,6 @@
 import {
   HStack,
+  Text,
   IconButton,
   useColorMode,
   useColorModeValue,
@@ -12,17 +13,6 @@ export default function Logo() {
   const version = useColorModeValue('hsl(0, 0%, 70%)', 'hsl(0, 0%, 30%)');
 
   const styles = {
-    base: {
-      fontFamily: 'Philosopher, serif',
-      fontWeight: 700,
-      fontSize: 30,
-    },
-    infomap: {
-      color,
-    },
-    bioregions: {
-      color: brand,
-    },
     version: {
       color: version,
       fontSize: 10,
@@ -46,10 +36,10 @@ export default function Logo() {
           </span>
         </div>
         <div>
-          <span style={styles.base}>
-            <span style={styles.infomap}>Infomap</span>{' '}
-            <span style={styles.bioregions}>Bioregions</span>
-          </span>
+          <Text fontFamily="brand" fontSize="29px" fontWeight={700}>
+            <span style={{ color }}>Infomap</span>{' '}
+            <span style={{ color: brand }}>Bioregions</span>
+          </Text>
         </div>
       </HStack>
       <IconButton

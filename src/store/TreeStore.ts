@@ -77,6 +77,12 @@ export default class TreeStore {
     this.loaded = loaded;
   }
 
+  loadString(tree: string) {
+    this.setTreeString(tree);
+    this.setTree(prepareTree(parseTree(tree)));
+    this.setLoaded();
+  }
+
   async load(file: File | string) {
     const tree = await loadText(file);
     this.setTreeString(tree);
