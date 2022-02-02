@@ -10,15 +10,18 @@ export default class DocumentationStore {
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
-    this.demoStore.infomapStore.setIntegrationTime(0.6);
-    this.demoStore.infomapStore.setSegregationTime(0.2);
+    const { infomapStore, speciesStore } = this.demoStore;
+
+    infomapStore.setIntegrationTime(0.6);
+    infomapStore.setSegregationTime(0.2);
+    speciesStore.binner.setCellCapacity(0, 100);
 
     this.loadData();
   }
 
   async loadData() {
-    const speciesFile = '/bioregions2/data/test.csv';
-    const treeFile = '/bioregions2/data/test.nwk';
+    const speciesFile = '/bioregions2/data/demo.csv';
+    const treeFile = '/bioregions2/data/demo.nwk';
     await this.demoStore.treeStore.load(treeFile);
     await this.demoStore.speciesStore.load(speciesFile);
   }

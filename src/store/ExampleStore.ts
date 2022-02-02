@@ -34,8 +34,8 @@ export default class ExampleStore {
     if (process.env.NODE_ENV === 'development') {
       examples.push({
         name: 'Demo',
-        speciesFile: '/bioregions2/data/test.csv',
-        treeFile: '/bioregions2/data/test.nwk',
+        speciesFile: '/bioregions2/data/demo.csv',
+        treeFile: '/bioregions2/data/demo.nwk',
         size: '140 B',
         settings: {
           minCellSize: 0,

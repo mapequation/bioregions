@@ -100,7 +100,6 @@ export default observer(() => {
   //   ],
   //   binner.cells[0] as any,
   // );
-  console.log('PROJECTION', projection);
   const geoPath = d3.geoPath(projection);
 
   return (
@@ -191,7 +190,7 @@ export default observer(() => {
 
         <g className="grid-cells">
           {binner.cells.map((cell, i) => (
-            <path key={i} d={geoPath(cell as any) as string} fill="red" />
+            <path key={i} d={geoPath(cell as any) as string} stroke="red" />
           ))}
         </g>
       </svg>
