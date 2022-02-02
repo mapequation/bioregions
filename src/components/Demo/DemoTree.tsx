@@ -1,7 +1,9 @@
+import { observer } from 'mobx-react';
 import { Box } from '@chakra-ui/react';
 import { getIntersectingBranches, Node } from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
+import { useDemoStore } from '../../store';
 
 export interface DemoTreeProps {
   tree: Node;
@@ -11,11 +13,19 @@ export interface DemoTreeProps {
 
 const layout = d3.tree<Node>();
 
-export default function DemoTree({
-  tree,
-  integrationTime,
-  segregationTime,
-}: DemoTreeProps) {
+export default observer(() => {
+  const demoStore = useDemoStore();
+  const { treeStore, infomapStore, speciesStore } = demoStore;
+  const { tree } = treeStore;
+
+  if (!tree || !speciesStore.loaded) {
+    return null;
+  }
+
+  const { integrationTime, segregationTime } = infomapStore;
+  const { binner } = speciesStore;
+  const { cells } = binner;
+
   const blue = 'hsl(213, 55%, 53%)';
   const red = 'hsl(4, 69%, 65%)';
   const purple = 'hsl(255, 45%, 69%)';
@@ -78,6 +88,21 @@ export default function DemoTree({
     node.y = x * 100;
   });
 
+  const projection = d3
+    .geoIdentity()
+    .scale(1)
+    .reflectY(true)
+    .fitSize([5, 5], cells[cells.length - 1]);
+  // projection.fitExtent(
+  //   [
+  //     [0, 0],
+  //     [100, 100],
+  //   ],
+  //   binner.cells[0] as any,
+  // );
+  console.log('PROJECTION', projection);
+  const geoPath = d3.geoPath(projection);
+
   return (
     <Box textAlign="center">
       <svg
@@ -86,82 +111,90 @@ export default function DemoTree({
         viewBox="-10 -10 125 125"
         style={{ color: '#666' }}
       >
-        {positionedTree.links().map((link) => (
-          <path
-            key={`${link.source.data.uid}-${link.target.data.uid}`}
-            d={`M${link.source.x},${link.source.y}L${link.source.x},${link.target.y}L${link.target.x},${link.target.y}`}
-            fill="none"
-            stroke={getLinkColor(link)}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            strokeWidth={0.5}
-          />
-        ))}
-
-        {positionedTree.descendants().map((node) => (
-          <g key={node.data.uid}>
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r={2}
-              fill={getFillColor(node.data)}
-              stroke={getStrokeColor(node.data)}
-              strokeWidth={strokeColorMap.has(node.data.uid) ? 0.8 : 0.5}
+        <g className="phylo-tree">
+          {positionedTree.links().map((link) => (
+            <path
+              key={`${link.source.data.uid}-${link.target.data.uid}`}
+              d={`M${link.source.x},${link.source.y}L${link.source.x},${link.target.y}L${link.target.x},${link.target.y}`}
+              fill="none"
+              stroke={getLinkColor(link)}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              strokeWidth={0.5}
             />
-            <text
-              x={node.x}
-              y={node.y}
-              dy={1.75}
-              dx={5}
-              fontSize={5}
-              fontWeight={500}
-              fill="currentColor"
-            >
-              {node.data.name}
-            </text>
-          </g>
-        ))}
+          ))}
+          {positionedTree.descendants().map((node) => (
+            <g key={node.data.uid}>
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r={2}
+                fill={getFillColor(node.data)}
+                stroke={getStrokeColor(node.data)}
+                strokeWidth={strokeColorMap.has(node.data.uid) ? 0.8 : 0.5}
+              />
+              <text
+                x={node.x}
+                y={node.y}
+                dy={1.75}
+                dx={5}
+                fontSize={5}
+                fontWeight={500}
+                fill="currentColor"
+              >
+                {node.data.name}
+              </text>
+            </g>
+          ))}
+        </g>
 
-        <path
-          d="M0,110 L2,109 M0,110 L2,111 M0,110 L100,110 M100,111 L100,109"
-          fill="none"
-          stroke="var(--chakra-colors-gray-500)"
-          strokeWidth={0.5}
-          strokeLinecap="round"
-        />
-        <text
-          x={0}
-          y={110}
-          dy={4}
-          dx={-2}
-          fill="var(--chakra-colors-gray-500)"
-          fontSize={3}
-          fontWeight={400}
-        >
-          Time
-        </text>
+        <g className="separating-lines">
+          <path
+            d="M0,110 L2,109 M0,110 L2,111 M0,110 L100,110 M100,111 L100,109"
+            fill="none"
+            stroke="var(--chakra-colors-gray-500)"
+            strokeWidth={0.5}
+            strokeLinecap="round"
+          />
+          <text
+            x={0}
+            y={110}
+            dy={4}
+            dx={-2}
+            fill="var(--chakra-colors-gray-500)"
+            fontSize={3}
+            fontWeight={400}
+          >
+            Time
+          </text>
+          <line
+            x1={100 * segregationTime}
+            y1={5}
+            x2={100 * segregationTime}
+            y2={109}
+            stroke={red}
+            strokeWidth={0.5}
+            strokeDasharray="1,2"
+            strokeLinecap="round"
+          />
+          <line
+            x1={100 * integrationTime}
+            y1={5}
+            x2={100 * integrationTime}
+            y2={109}
+            stroke={blue}
+            strokeWidth={0.5}
+            strokeDasharray="1,2"
+            strokeLinecap="round"
+          />
+        </g>
 
-        <line
-          x1={100 * segregationTime}
-          y1={5}
-          x2={100 * segregationTime}
-          y2={109}
-          stroke={red}
-          strokeWidth={0.5}
-          strokeDasharray="1,2"
-          strokeLinecap="round"
-        />
-        <line
-          x1={100 * integrationTime}
-          y1={5}
-          x2={100 * integrationTime}
-          y2={109}
-          stroke={blue}
-          strokeWidth={0.5}
-          strokeDasharray="1,2"
-          strokeLinecap="round"
-        />
+        <g className="grid-cells">
+          {binner.cells.map((cell, i) => (
+            <path key={i} d={geoPath(cell as any) as string} fill="red" />
+          ))}
+        </g>
       </svg>
     </Box>
   );
-}
+});

@@ -22,11 +22,7 @@ export default observer(() => {
 
   return (
     <Box w="100%">
-      <DemoTree
-        tree={tree}
-        segregationTime={segregationTime}
-        integrationTime={integrationTime}
-      />
+      <DemoTree />
       <Slider
         min={0}
         max={1}

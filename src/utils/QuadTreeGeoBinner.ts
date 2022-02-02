@@ -1,14 +1,20 @@
 import { action, makeObservable, observable, computed } from 'mobx';
 //import { GeoProjection } from 'd3';
-import { BBox, Feature, GeoJsonProperties, Polygon } from '../types/geojson';
+import { BBox, GeoJsonProperties, Polygon } from '../types/geojson';
 import { area } from './geomath';
 import type { PointFeature } from '../store/SpeciesStore';
 import type SpeciesStore from '../store/SpeciesStore';
 import { rangeArray, rangeArrayOneSignificant } from './range';
+import type { ExtendedFeature } from 'd3';
 
 type VisitCallback = (node: Node) => true | void;
 
-export class Node implements Feature<Polygon> {
+export type QuadtreeNodeProperties = GeoJsonProperties & {
+  numRecords: number;
+  features: PointFeature[];
+};
+
+export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
   x1: number; // west
   y1: number; // south
   x2: number; // east
@@ -63,7 +69,7 @@ export class Node implements Feature<Polygon> {
     return this.features.length;
   }
 
-  get properties(): GeoJsonProperties {
+  get properties(): QuadtreeNodeProperties {
     return {
       numRecords: this.features.length,
       features: this.features,
@@ -91,6 +97,10 @@ export class Node implements Feature<Polygon> {
         ],
       ],
     };
+  }
+
+  get geometries(): Polygon[] {
+    return [this.geometry];
   }
 
   get extent(): BBox {
