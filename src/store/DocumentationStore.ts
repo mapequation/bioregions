@@ -35,10 +35,11 @@ export default class DocumentationStore {
   async init() {
     const { infomapStore, speciesStore } = this.demoStore;
 
-    infomapStore.setIntegrationTime(1);
-    infomapStore.setSegregationTime(0);
     speciesStore.binner.setCellSizeLog2(0, 1);
     speciesStore.binner.setCellCapacity(0, 100);
+    infomapStore.setIntegrationTime(1);
+    infomapStore.setSegregationTime(0);
+    infomapStore.setNumTrials(5);
 
     await this.loadData();
 

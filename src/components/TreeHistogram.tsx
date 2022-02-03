@@ -1,22 +1,10 @@
-import {
-  Icon,
-  Flex,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
-} from '@chakra-ui/react';
+import { Flex } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
 import { useStore } from '../store';
 
-export default observer(function TreeWeight({
+export default observer(function TreeHistogram({
   isDisabled = false,
 }: {
   isDisabled?: boolean;

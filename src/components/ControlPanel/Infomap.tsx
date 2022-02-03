@@ -20,7 +20,9 @@ import {
   SliderThumb,
   Box,
   Flex,
+  HStack,
 } from '@chakra-ui/react';
+import { format } from 'd3-format';
 import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
 import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
@@ -129,61 +131,61 @@ export default observer(function Infomap() {
           !infomapStore.includeTreeInNetwork || infomapStore.isRunning
         }
       />
-      <FormControl
-        display="flex"
-        w="100%"
-        alignItems="center"
-        isDisabled={!infomapStore.includeTreeInNetwork}
-      >
+      <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
         <FormLabel htmlFor="integrationTime" mb="0">
           Integration time
         </FormLabel>
-        <Spacer />
-        <Slider
-          w="50%"
-          isDisabled={!infomapStore.includeTreeInNetwork}
-          focusThumbOnChange={false}
-          value={infomapStore.integrationTime}
-          onChange={(value) => infomapStore.setIntegrationTime(value)}
-          onChangeEnd={(value) => infomapStore.setIntegrationTime(value, true)}
-          min={0}
-          max={1}
-          step={0.01}
-        >
-          <SliderTrack>
-            <SliderFilledTrack />
-          </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-        </Slider>
+        <HStack>
+          <Slider
+            w={200}
+            isDisabled={!infomapStore.includeTreeInNetwork}
+            focusThumbOnChange={false}
+            value={infomapStore.integrationTime}
+            onChange={(value) => infomapStore.setIntegrationTime(value)}
+            onChangeEnd={(value) =>
+              infomapStore.setIntegrationTime(value, true)
+            }
+            min={0}
+            max={1}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="16px" />
+          </Slider>
+          <Spacer />
+          <Tag size="sm">{format('.2r')(infomapStore.integrationTime)}</Tag>
+        </HStack>
       </FormControl>
-      <FormControl
-        display="flex"
-        w="100%"
-        alignItems="center"
-        isDisabled={!infomapStore.includeTreeInNetwork}
-      >
+      <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
         <FormLabel htmlFor="treeWeight" mb="0">
           Tree weight
         </FormLabel>
-        <Spacer />
-        <Slider
-          w="50%"
-          isDisabled={!infomapStore.includeTreeInNetwork}
-          focusThumbOnChange={false}
-          value={infomapStore.treeWeightBalance}
-          onChange={(value) => infomapStore.setTreeWeightBalance(value)}
-          onChangeEnd={(value) =>
-            infomapStore.setTreeWeightBalance(value, true)
-          }
-          min={0}
-          max={1}
-          step={0.01}
-        >
-          <SliderTrack>
-            <SliderFilledTrack />
-          </SliderTrack>
-          <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-        </Slider>
+        <HStack>
+          <Slider
+            w={200}
+            isDisabled={!infomapStore.includeTreeInNetwork}
+            focusThumbOnChange={false}
+            value={infomapStore.treeWeightBalance}
+            onChange={(value) => infomapStore.setTreeWeightBalance(value)}
+            onChangeEnd={(value) =>
+              infomapStore.setTreeWeightBalance(value, true)
+            }
+            min={0}
+            max={1}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
+          </Slider>
+          <Spacer />
+          <Tag size="sm" ml={4}>
+            {format('.0%')(infomapStore.treeWeightBalance)}
+          </Tag>
+        </HStack>
       </FormControl>
       <FormControl
         display="flex"
