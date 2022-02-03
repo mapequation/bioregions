@@ -177,7 +177,7 @@ export default observer(() => {
 
             //console.log(`${treeNode?.data.name} - ${cell.id}`);
 
-            if (treeNode.data.isLeaf) {
+            if (treeNode.data.isLeaf && false) {
               return (
                 <line
                   key={i}

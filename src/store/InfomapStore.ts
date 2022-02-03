@@ -368,11 +368,11 @@ export default class InfomapStore {
       addNode(name);
     }
 
-    const { diversityOrder } = this;
+    const { diversityOrder, treeWeightBalance } = this;
     for (let [name, cells] of Object.entries(nameToCellIds)) {
       const source = network.nodeIdMap[name]!;
       for (let cell of cells.values()) {
-        const weight = 1 / cells.size ** diversityOrder;
+        const weight = (1 - treeWeightBalance) / cells.size ** diversityOrder;
         network.sumLinkWeight += weight;
         network.links.push({
           source,
@@ -398,8 +398,6 @@ export default class InfomapStore {
 
     let nodeId = network.nodes.length;
     const numSpecies = network.nodes.length;
-
-    const sumNonTreeLinkWeights = network.sumLinkWeight;
 
     /**
      * 1. Depth first search post order (from leafs):
@@ -488,20 +486,17 @@ export default class InfomapStore {
     });
 
     const { treeWeightBalance } = this;
+    const unscaledNonTreeStrength = network.links.length;
+    const totalTreeStrength = treeWeightBalance * unscaledNonTreeStrength;
 
-    // s * t = n
-
-    // st / (n + st) = b
-    // st = bn + bst
-    // s(t - bt) = bn
-    // s = bn / (t - bt) = bn/(t(1-b))
-    const s =
-      sumTreeLinkWeight > 0
-        ? (treeWeightBalance * sumNonTreeLinkWeights) /
-          (sumTreeLinkWeight * (1 - treeWeightBalance))
-        : 0;
+    // sumTreeLinkWeight * scale = totalTreeStrength
+    const scale = totalTreeStrength / sumTreeLinkWeight;
     console.log(
-      `Sum non-tree link weight: ${sumNonTreeLinkWeights}, tree link weight: ${sumTreeLinkWeight}, -> s: ${s}`,
+      `Sum non-tree link weight: ${
+        unscaledNonTreeStrength * (1 - treeWeightBalance)
+      }, tree link weight: ${sumTreeLinkWeight} -> ${
+        sumTreeLinkWeight * scale
+      }`,
     );
 
     const treeNodes = new Set<number>();
@@ -512,7 +507,7 @@ export default class InfomapStore {
       }
 
       for (const [target, weight] of outLinks.entries()) {
-        network.links.push({ source, target, weight: weight * s });
+        network.links.push({ source, target, weight: weight * scale });
         network.numTreeLinks++;
       }
     }
@@ -525,6 +520,7 @@ export default class InfomapStore {
     }
 
     console.log('Nodes missing in network', Array.from(missing));
+    console.log('Tree:', network);
 
     return network;
   }
