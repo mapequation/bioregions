@@ -79,8 +79,12 @@ export default observer(() => {
   };
 
   const getFillColor = (node: Node) => fillColorMap.get(node.uid) ?? 'white';
-  const getStrokeColor = (node: Node) =>
-    strokeColorMap.get(node.uid) ?? 'currentColor';
+  const getStrokeColor = (node: Node) => strokeColorMap.get(node.uid) ?? '#666';
+
+  const getTreeNodeBioregionColor = (node: Node) => {
+    const bioregionId = treeStore.treeNodeMap.get(node.name)?.bioregionId;
+    return bioregionId != null ? colorBioregion(bioregionId) : 'transparent';
+  };
 
   const positionedTreeDescendants = positionedTree.descendants();
   const nodeMap = new Map<Name, d3.HierarchyPointNode<Node>>();
@@ -230,19 +234,25 @@ export default observer(() => {
               x={100 * segregationTime}
               y={106}
               dx={2}
-              dy={Math.abs(segregationTime - integrationTime) < 0.28 ? -2 : 0}
+              dy={Math.abs(segregationTime - integrationTime) < 0.32 ? -2 : 0}
               fill={red}
             >
-              Segregation time
+              Segregation time{' '}
+              {segregationTime === 0 || segregationTime === 1
+                ? 1 - segregationTime
+                : (1 - segregationTime).toFixed(2)}
             </text>
             <text
               x={100 * integrationTime}
               y={106}
               dx={2}
-              dy={Math.abs(segregationTime - integrationTime) < 0.28 ? 2 : 0}
+              dy={Math.abs(segregationTime - integrationTime) < 0.32 ? 2 : 0}
               fill={blue}
             >
-              Integration time
+              Integration time{' '}
+              {integrationTime === 0 || integrationTime === 1
+                ? 1 - integrationTime
+                : (1 - integrationTime).toFixed(2)}
             </text>
           </g>
           <g
@@ -266,15 +276,13 @@ export default observer(() => {
           </g>
         </g>
 
-        <g className="phylo-tree">
+        <g className="phylo-tree" strokeLinejoin="round" strokeLinecap="round">
           {positionedTree.links().map((link) => (
             <path
               key={`${link.source.data.uid}-${link.target.data.uid}`}
               d={`M${link.source.x},${link.source.y}L${link.source.x},${link.target.y}L${link.target.x},${link.target.y}`}
               fill="none"
               stroke={getLinkColor(link)}
-              strokeLinejoin="round"
-              strokeLinecap="round"
               strokeWidth={0.5}
             />
           ))}
@@ -289,6 +297,15 @@ export default observer(() => {
                 stroke={getStrokeColor(node.data)}
                 strokeWidth={strokeColorMap.has(node.data.uid) ? 0.8 : 0.5}
               />
+              <circle
+                cx={node.x + 3.2}
+                cy={node.y - 3.2}
+                r={0.7}
+                fill={getTreeNodeBioregionColor(node.data)}
+                paintOrder={'stroke'}
+                strokeWidth={0.1}
+                stroke="white"
+              />
               <text
                 x={node.x}
                 y={node.y}
@@ -299,7 +316,6 @@ export default observer(() => {
                 textAnchor="middle"
                 paintOrder="stroke"
                 stroke="hsla(0, 0%, 100%, 0.8)"
-                strokeLinejoin="round"
                 strokeWidth={0.3}
                 fill="#333"
               >

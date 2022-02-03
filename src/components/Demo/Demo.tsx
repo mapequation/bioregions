@@ -89,9 +89,10 @@ export default observer(() => {
             focusThumbOnChange={false}
             value={infomapStore.treeWeightBalance}
             onChange={(value) => infomapStore.setTreeWeightBalance(value)}
-            onChangeEnd={(value) =>
-              infomapStore.setTreeWeightBalance(value, true)
-            }
+            onChangeEnd={(value) => {
+              infomapStore.setTreeWeightBalance(value, true);
+              infomapStore.run();
+            }}
             min={0}
             max={1}
             step={0.01}

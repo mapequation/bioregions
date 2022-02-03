@@ -5,12 +5,20 @@ import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { Node as PhyloTree } from '../utils/tree';
 
+export type TreeNode = {
+  data: PhyloTree;
+  bioregionId?: number;
+  // count: number;
+  // countPerRegion: Map<number, number>;
+};
+
 export default class TreeStore {
   rootStore: RootStore;
   loaded: boolean = false;
   tree: PhyloTree | null = null;
   treeString: string | null = null;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
+  treeNodeMap = new Map<string, TreeNode>();
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -18,6 +26,7 @@ export default class TreeStore {
     makeObservable(this, {
       loaded: observable,
       tree: observable.ref,
+      treeNodeMap: observable.ref,
       treeString: observable,
       weightParameter: observable,
       numNodesInTree: computed,
@@ -66,7 +75,7 @@ export default class TreeStore {
 
   setTree(tree: PhyloTree | null) {
     this.tree = tree;
-    // this.calculateTreeStats();
+    this.calculateTreeStats();
   }
 
   setTreeString(treeString: string) {
@@ -89,5 +98,16 @@ export default class TreeStore {
     // @ts-ignore
     this.setTree(prepareTree(parseTree(tree)));
     this.setLoaded();
+  }
+
+  calculateTreeStats() {
+    if (!this.tree) {
+      return;
+    }
+    visitTreeDepthFirstPreOrder(this.tree, (node) => {
+      this.treeNodeMap.set(node.name, {
+        data: node,
+      });
+    });
   }
 }

@@ -529,12 +529,22 @@ export default class InfomapStore {
     type Species = string;
     type BioregionId = number;
 
-    const { speciesStore } = this.rootStore;
+    const { speciesStore, treeStore } = this.rootStore;
     const { cells } = this;
 
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      if (node.id >= tree.bipartiteStartId!) return;
+      if (node.id >= tree.bipartiteStartId!) {
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = node.modules[0];
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = node.modules[0];
+        }
+        return;
+      }
 
       const cell = cells[node.id];
 

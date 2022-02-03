@@ -49,6 +49,7 @@ export const createMultiPointGeometryCollection = (
 
 export type Species = {
   name: string;
+  bioregionId?: number;
   count: number;
   countPerRegion: Map<number, number>;
 };
