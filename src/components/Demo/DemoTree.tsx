@@ -31,7 +31,7 @@ export default observer(() => {
   const { integrationTime, segregationTime, network } = infomapStore;
   const { binner } = speciesStore;
   const { cells } = binner;
-
+  const networkLinks = network ? network.links : [];
   const blue = 'hsl(213, 55%, 53%)';
   const red = 'hsl(4, 69%, 65%)';
   const purple = 'hsl(255, 45%, 69%)';
@@ -51,7 +51,7 @@ export default observer(() => {
 
   const interpolateBlue = d3.interpolateHsl(blue, 'hsl(213, 55%, 100%)');
 
-  const interpolateRed = d3.interpolateHsl(red, 'hsl(4, 69%, 0%)');
+  const interpolateRed = d3.interpolateHsl(red, 'hsl(4, 0%, 40%)');
 
   integratingBranches.forEach((branch: Branch) => {
     branchColorMap.set(getBranchId(branch), blue);
@@ -79,7 +79,8 @@ export default observer(() => {
   };
 
   const getFillColor = (node: Node) => fillColorMap.get(node.uid) ?? 'white';
-  const getStrokeColor = (node: Node) => strokeColorMap.get(node.uid) ?? '#666';
+  const getStrokeColor = (node: Node) =>
+    strokeColorMap.get(node.uid) ?? 'currentColor';
 
   const getTreeNodeBioregionColor = (node: Node) => {
     const bioregionId = treeStore.treeNodeMap.get(node.name)?.bioregionId;
@@ -114,7 +115,7 @@ export default observer(() => {
   const geoPath = d3.geoPath(projection);
 
   // const speciesNetwork = infomapStore.createNetwork();
-  const treeNetwork = infomapStore.createNetworkWithTree();
+  // const treeNetwork = infomapStore.createNetworkWithTree();
   // console.log('cells:', cells);
   // console.log('species network:', speciesNetwork);
   // console.log('tree network:', network);
@@ -166,10 +167,10 @@ export default observer(() => {
         </g> */}
 
         <g className="tree-links" stroke="#33c" strokeWidth={0.5} fill="none">
-          {treeNetwork.links.map((link, i) => {
+          {networkLinks.map((link, i) => {
             // source: tree node, target: grid cell
-            const treeNodeName = treeNetwork.nodes[link.source].name!;
-            const cellName = treeNetwork.nodes[link.target].name!;
+            const treeNodeName = network?.nodes[link.source].name!;
+            const cellName = network?.nodes[link.target].name!;
 
             const treeNode = nodeMap.get(treeNodeName)!;
             const cell = cellMap.get(cellName)!;

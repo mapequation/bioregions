@@ -11,6 +11,7 @@ import {
   FormLabel,
   Spacer,
   Tag,
+  Switch,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import DemoTree from './DemoTree';
@@ -121,6 +122,23 @@ export default observer(() => {
             </Stat>
           </VStack>
         </VStack>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="uniformTreeLinks" mb="0">
+            Uniform tree links
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="uniformTreeLinks"
+            isChecked={infomapStore.uniformTreeLinks}
+            onChange={() => {
+              infomapStore.setUniformTreeLinks(
+                !infomapStore.uniformTreeLinks,
+                true,
+              );
+              infomapStore.run();
+            }}
+          />
+        </FormControl>
       </VStack>
     </Box>
   );

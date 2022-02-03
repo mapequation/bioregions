@@ -14,11 +14,14 @@ import {
   getIntersectingBranches,
   visitTreeDepthFirstPostOrder,
 } from '../utils/tree';
+import type { PhyloNode } from './TreeStore';
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
   numTreeNodes: number;
   numTreeLinks: number;
+  numNonTreeLinks: number;
+  numNonTreeNodes: number;
   sumLinkWeight: number;
 }
 
@@ -84,6 +87,14 @@ export default class InfomapStore {
     }
   }
 
+  uniformTreeLinks: boolean = true;
+  setUniformTreeLinks(value: boolean, updateNetwork: boolean = false) {
+    this.uniformTreeLinks = value;
+    if (updateNetwork) {
+      this.rootStore.infomapStore.updateNetwork();
+    }
+  }
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -99,6 +110,7 @@ export default class InfomapStore {
       setDiversityOrder: action,
       treeWeightBalance: observable,
       includeTreeInNetwork: observable,
+      uniformTreeLinks: observable,
       integrationTime: observable,
       segregationTime: observable,
       setTreeWeightBalance: action,
@@ -318,19 +330,10 @@ export default class InfomapStore {
   };
 
   updateNetwork() {
-    const network = this._createNetwork();
-    this.setNetwork(network);
-    return network;
-  }
-
-  private _createNetwork(): BioregionsNetwork {
     console.time('createNetwork');
-    const network =
-      this.rootStore.treeStore.loaded && this.includeTreeInNetwork
-        ? this.createNetworkWithTree()
-        : this.createNetwork();
-
+    const network = this.createNetwork();
     console.timeEnd('createNetwork');
+    this.setNetwork(network);
     return network;
   }
 
@@ -347,56 +350,94 @@ export default class InfomapStore {
       numTreeNodes: 0,
       numTreeLinks: 0,
       sumLinkWeight: 0,
+      numNonTreeLinks: 0,
+      numNonTreeNodes: 0,
     };
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = 0;
 
     const addNode = (name: string) => {
-      const id = nodeId++;
+      let id = network.nodeIdMap[name];
+      if (id != null) {
+        return id;
+      }
+      id = nodeId++;
       network.nodeIdMap[name] = id;
       network.nodes.push({ id, name });
+      return id;
     };
 
+    const addLink = (
+      sourceName: string,
+      targetName: string,
+      weight: number,
+    ) => {
+      const source = addNode(sourceName);
+      const target = addNode(targetName);
+      network.links.push({ source, target, weight });
+    };
+
+    // Add all cells first
     for (let { id: cellId } of cells) {
       addNode(cellId);
     }
 
     network.bipartiteStartId = nodeId;
 
-    for (let name of Object.keys(nameToCellIds)) {
-      addNode(name);
-    }
+    // for (let name of Object.keys(nameToCellIds)) {
+    //   addNode(name);
+    // }
+
+    type NodeId = string;
+    type CellId = string;
+    type Weight = number;
+
+    const linkMap = new Map<NodeId, Map<NodeId, Weight>>();
 
     const { diversityOrder, treeWeightBalance } = this;
     for (let [name, cells] of Object.entries(nameToCellIds)) {
-      const source = network.nodeIdMap[name]!;
-      for (let cell of cells.values()) {
+      for (let cellId of cells.values()) {
         const weight = (1 - treeWeightBalance) / cells.size ** diversityOrder;
         network.sumLinkWeight += weight;
-        network.links.push({
-          source,
-          target: network.nodeIdMap[cell]!,
-          weight,
-        });
+        // TODO: No need to use the map here if not include tree, will not aggregate on species level
+        const outLinks = linkMap.has(name)
+          ? linkMap.get(name)!
+          : linkMap.set(name, new Map()).get(name)!;
+        if (!outLinks.has(cellId)) {
+          ++network.numNonTreeLinks;
+        }
+        outLinks.set(cellId, (outLinks.get(cellId) ?? 0) + weight);
       }
     }
 
-    return network;
-  }
+    network.numNonTreeNodes = network.nodes.length;
 
-  public createNetworkWithTree(): BioregionsNetwork {
+    const { tree } = this.rootStore.treeStore;
+    const includeTree =
+      this.includeTreeInNetwork &&
+      tree &&
+      this.integrationTime !== 1 &&
+      this.treeWeightBalance !== 0;
+
+    if (!includeTree) {
+      for (const [source, outLinks] of linkMap.entries()) {
+        for (const [target, weight] of outLinks.entries()) {
+          addLink(source, target, weight);
+        }
+      }
+
+      // If not including tree, we are done.
+      return network;
+    }
+
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added (as in createNetwork).
     First species (leaf) nodes, then the internal tree nodes.
     */
-    const network = this.createNetwork();
-    const tree = this.rootStore.treeStore.tree!;
-    const { integrationTime } = this;
-    const { nameToCellIds } = this.rootStore.speciesStore.binner;
 
-    let nodeId = network.nodes.length;
+    const { integrationTime } = this;
     const numSpecies = network.nodes.length;
 
     /**
@@ -413,7 +454,7 @@ export default class InfomapStore {
     const missing = new Set<string>();
 
     // source (tree node) -> target (grid cell) -> weight
-    const links = new Map<number, Map<number, number>>();
+    const treeLinks = new Map<NodeId, Map<CellId, Weight>>();
 
     let sumTreeLinkWeight = 0;
 
@@ -437,56 +478,69 @@ export default class InfomapStore {
 
     const integratingBranches = getIntersectingBranches(tree, integrationTime);
 
-    const nodeIdToName = new Map<number, string>();
+    const getLinksFromTreeNode = (node: PhyloNode) => {
+      const links = new Map<CellId, Weight>();
+      let numLinks = 0;
 
-    integratingBranches.forEach(({ parent, child, childWeight }) => {
-      // TODO: Interpolate between node and parent links.
-      // const outLinks = new Map<number, number>();
-      // console.log(
-      //   `Branch parent: ${parent.name}, child: ${child.name}, childWeight: ${childWeight}`,
-      // );
-      for (const node of [child, parent]) {
-        const weight = node === parent ? 1 - childWeight : childWeight;
-        // TODO: Make sure internal tree nodes don't have same name as leaf nodes
-        const source = node.isLeaf
-          ? network.nodeIdMap[node.name] ?? nodeId++
-          : nodeId++;
-        if (!node.isLeaf) {
-          network.nodeIdMap[node.name] = source;
-          nodeIdToName.set(source, node.name);
+      for (const species of node.speciesSet!) {
+        if (!nameToCellIds[species]) {
+          missing.add(species);
+          continue;
         }
 
-        if (!links.has(source)) {
-          links.set(source, new Map<number, number>());
-        }
-        const outLinks = links.get(source)!;
+        for (const cellId of nameToCellIds[species]) {
+          const currentCount = links.get(cellId) ?? 0;
 
-        // console.log(
-        //   `${node === parent ? 'parent:' : 'child:'}, time: ${
-        //     node.time
-        //   }, speciesSet: ${node.speciesSet?.size}`,
-        // );
-
-        for (const species of node.speciesSet!) {
-          if (!nameToCellIds[species]) {
-            missing.add(species);
-            continue;
-          }
-
-          for (const cellId of nameToCellIds[species]) {
-            const target = network.nodeIdMap[cellId];
-
-            // Aggregate weight
-            const currentWeight = outLinks.get(target) ?? 0;
-            outLinks.set(target, currentWeight + weight);
-            ++sumTreeLinkWeight;
+          if (currentCount === 0 || !this.uniformTreeLinks) {
+            links.set(cellId, currentCount + 1);
+            ++numLinks;
           }
         }
       }
+
+      return { links, numLinks };
+    };
+
+    integratingBranches.forEach(({ parent, child, childWeight }) => {
+      const parentLinks = getLinksFromTreeNode(parent);
+      const childLinks = getLinksFromTreeNode(child);
+
+      if (childLinks.numLinks === 0) {
+        console.warn('No links from child', child.name);
+      }
+
+      const degreeRatio = parentLinks.numLinks / childLinks.numLinks;
+      const relativeDegreeDifference = degreeRatio - 1;
+      const adjustedChildWeight =
+        (childWeight * degreeRatio) /
+        (1 + childWeight * relativeDegreeDifference);
+      const adjustedParentWeight = 1 - adjustedChildWeight;
+
+      const addLinks = (
+        node: PhyloNode,
+        links: Map<CellId, Weight>,
+        interpolationWeight: number,
+      ) => {
+        // TODO: Make sure internal tree nodes don't have same name as leaf nodes
+
+        const outLinks = treeLinks.has(node.name)
+          ? treeLinks.get(node.name)!
+          : treeLinks.set(node.name, new Map()).get(node.name)!;
+
+        for (const [cellId, count] of links.entries()) {
+          const weight = count * interpolationWeight;
+          // Aggregate weight
+          const currentWeight = outLinks.get(cellId) ?? 0;
+          outLinks.set(cellId, currentWeight + weight);
+          sumTreeLinkWeight += weight;
+        }
+      };
+
+      addLinks(parent, parentLinks.links, adjustedParentWeight);
+      addLinks(child, childLinks.links, adjustedChildWeight);
     });
 
-    const { treeWeightBalance } = this;
-    const unscaledNonTreeStrength = network.links.length;
+    const unscaledNonTreeStrength = network.numNonTreeLinks;
     const totalTreeStrength = treeWeightBalance * unscaledNonTreeStrength;
 
     // sumTreeLinkWeight * scale = totalTreeStrength
@@ -499,23 +553,27 @@ export default class InfomapStore {
       }`,
     );
 
-    const treeNodes = new Set<number>();
-
-    for (const [source, outLinks] of links.entries()) {
-      if (outLinks.size !== 0) {
-        treeNodes.add(source);
+    for (const [treeNodeName, treeOutLinks] of treeLinks.entries()) {
+      // Aggregate to link map
+      const outLinks = linkMap.get(treeNodeName) ?? new Map<string, number>();
+      if (outLinks.size === 0) {
+        network.numTreeNodes++;
+        linkMap.set(treeNodeName, outLinks);
       }
 
-      for (const [target, weight] of outLinks.entries()) {
-        network.links.push({ source, target, weight: weight * scale });
-        network.numTreeLinks++;
+      // Aggregate links from tree (overlaps on tree leaf nodes)
+      for (const [cellId, weight] of treeOutLinks.entries()) {
+        if (outLinks.size === 0) {
+          network.numTreeLinks++;
+        }
+        outLinks.set(cellId, (outLinks.get(cellId) ?? 0) + weight * scale);
       }
     }
 
-    for (const id of treeNodes) {
-      if (id >= numSpecies) {
-        network.nodes.push({ id, name: nodeIdToName.get(id) });
-        network.numTreeNodes++;
+    // Add links to network
+    for (const [treeNodeName, treeOutLinks] of linkMap.entries()) {
+      for (const [cellId, weight] of treeOutLinks.entries()) {
+        addLink(treeNodeName, cellId, weight);
       }
     }
 
@@ -531,6 +589,7 @@ export default class InfomapStore {
 
     const { speciesStore, treeStore } = this.rootStore;
     const { cells } = this;
+    treeStore.clearBioregions();
 
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {

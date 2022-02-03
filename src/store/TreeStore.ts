@@ -3,10 +3,11 @@ import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
-import type { Node as PhyloTree } from '../utils/tree';
+import type { Node as PhyloNode } from '../utils/tree';
+export type { Node as PhyloNode } from '../utils/tree';
 
 export type TreeNode = {
-  data: PhyloTree;
+  data: PhyloNode;
   bioregionId?: number;
   // count: number;
   // countPerRegion: Map<number, number>;
@@ -15,7 +16,7 @@ export type TreeNode = {
 export default class TreeStore {
   rootStore: RootStore;
   loaded: boolean = false;
-  tree: PhyloTree | null = null;
+  tree: PhyloNode | null = null;
   treeString: string | null = null;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
   treeNodeMap = new Map<string, TreeNode>();
@@ -73,7 +74,7 @@ export default class TreeStore {
     return numLeafs;
   }
 
-  setTree(tree: PhyloTree | null) {
+  setTree(tree: PhyloNode | null) {
     this.tree = tree;
     this.calculateTreeStats();
   }
@@ -100,6 +101,12 @@ export default class TreeStore {
     this.setLoaded();
   }
 
+  clearBioregions() {
+    this.treeNodeMap.forEach((node) => {
+      node.bioregionId = undefined;
+    });
+  }
+
   calculateTreeStats() {
     if (!this.tree) {
       return;
@@ -107,6 +114,7 @@ export default class TreeStore {
     visitTreeDepthFirstPreOrder(this.tree, (node) => {
       this.treeNodeMap.set(node.name, {
         data: node,
+        bioregionId: undefined,
       });
     });
   }
