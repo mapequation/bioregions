@@ -61,7 +61,8 @@
     "test": "craco test",
     "styleguide": "styleguidist server",
     "styleguide:build": "styleguidist build",
-    "deploy": "npm run build && scp -r build/* mapequation:/var/www/bioregions2"
+    "predeploy": "npm run build",
+    "deploy": "scp -r build/* mapequation:/var/www/bioregions2"
   },
   "eslintConfig": {
     "extends": [
