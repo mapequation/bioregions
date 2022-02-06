@@ -1,9 +1,15 @@
 //import _ from 'lodash';
 export { prepareTree } from './treeUtilsJS';
 
-export type Node = {
-  parent: Node | null;
-  children: Node[];
+export interface Branch {
+  parent: PhyloNode;
+  child: PhyloNode;
+  childWeight: number;
+}
+
+export type PhyloNode = {
+  parent: PhyloNode | null;
+  children: PhyloNode[];
   name: string;
   uid: number;
   originalChildIndex: number;
@@ -15,11 +21,12 @@ export type Node = {
   rootDistance: number;
   time: number; // Normalized root distance, 0 in root, 1 in youngest leafs
   speciesSet?: Set<string>;
+  memory?: Branch[];
 };
 
 export function visitTreeDepthFirstPreOrder(
-  node: Node,
-  callback: (node: Node) => void,
+  node: PhyloNode,
+  callback: (node: PhyloNode) => void,
 ) {
   callback(node);
   node.children.forEach((child) => {
@@ -28,8 +35,8 @@ export function visitTreeDepthFirstPreOrder(
 }
 
 export function visitTreeDepthFirstPostOrder(
-  node: Node,
-  callback: (node: Node) => void,
+  node: PhyloNode,
+  callback: (node: PhyloNode) => void,
 ) {
   node.children.forEach((child) => {
     visitTreeDepthFirstPostOrder(child, callback);
@@ -89,12 +96,7 @@ export function visitTreeDepthFirstPostOrder(
 //   })
 // }
 
-export interface Branch {
-  parent: Node;
-  child: Node;
-  childWeight: number;
-}
-export function getIntersectingBranches(tree: Node, time: number) {
+export function getIntersectingBranches(tree: PhyloNode, time: number) {
   const branches: Branch[] = [];
   visitTreeDepthFirstPostOrder(tree, (node) => {
     const { parent } = node;

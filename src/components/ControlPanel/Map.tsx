@@ -9,18 +9,10 @@ import {
   FormLabel,
   Switch,
   Spacer,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Box,
-  HStack,
 } from '@chakra-ui/react';
-import { useState } from 'react';
 import { useStore } from '../../store';
 import type { Projection, RenderType } from '../../store/MapStore';
 import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
-import { SchemeName } from '@mapequation/c3';
 import ColorSettings from './ColorSettings';
 
 const ProjectionSelect = observer(function ProjectionSelect() {
@@ -79,7 +71,7 @@ export default observer(function Map() {
           <Button
             onClick={setRenderType('bioregions')}
             isLoading={infomapStore.isRunning}
-            isDisabled={infomapStore.tree == null}
+            isDisabled={!infomapStore.haveBioregions}
             isActive={mapStore.renderType === 'bioregions'}
           >
             Bioregions

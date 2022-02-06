@@ -3,8 +3,7 @@ import type RootStore from './RootStore';
 import { prepareTree, parseTree } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
-import type { Node as PhyloNode } from '../utils/tree';
-export type { Node as PhyloNode } from '../utils/tree';
+import type { PhyloNode } from '../utils/tree';
 
 export type TreeNode = {
   data: PhyloNode;

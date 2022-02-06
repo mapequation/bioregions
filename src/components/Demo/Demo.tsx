@@ -6,7 +6,6 @@ import {
   SliderFilledTrack,
   SliderThumb,
   VStack,
-  SliderMark,
   FormControl,
   FormLabel,
   Spacer,
@@ -48,6 +47,10 @@ export default observer(() => {
             step={0.01}
             value={segregationTime}
             onChange={infomapStore.setSegregationTime}
+            onChangeEnd={(value) => {
+              infomapStore.setSegregationTime(value, true);
+              infomapStore.run();
+            }}
             colorScheme="red"
           >
             <SliderTrack>
@@ -114,6 +117,7 @@ export default observer(() => {
             <Stat label="Tree nodes">{numNodesFromTree}</Stat>
             <Stat label="Tree links">{numLinksFromTree}</Stat>
             <Stat label="Levels">{infomapStore.numLevels}</Stat>
+            <Stat label="Bioregions">{infomapStore.numBioregions}</Stat>
             <Stat label="Codelength">
               {formatCodelength(infomapStore.codelength)} bits
             </Stat>

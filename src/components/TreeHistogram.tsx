@@ -2,18 +2,18 @@ import { Flex } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
-import { useStore } from '../store';
+// import { useStore } from '../store';
 
 export default observer(function TreeHistogram({
   isDisabled = false,
 }: {
   isDisabled?: boolean;
 }) {
-  const { treeStore } = useStore();
+  // const { treeStore } = useStore();
   const width = 250;
   const height = 120;
 
-  const weight = treeStore.weightParameter;
+  // const weight = treeStore.weightParameter;
   // const { data, domain } = treeStore.weightCurve;
   const domain = [0, 1] as [number, number];
   const data = [
@@ -22,12 +22,12 @@ export default observer(function TreeHistogram({
     [1, 1],
   ] as [number, number][];
 
-  const inputProps = {
-    min: 0,
-    max: 1,
-    step: 0.01,
-    value: weight,
-  };
+  // const inputProps = {
+  //   min: 0,
+  //   max: 1,
+  //   step: 0.01,
+  //   value: weight,
+  // };
 
   const color = !isDisabled
     ? 'var(--chakra-colors-gray-800)'

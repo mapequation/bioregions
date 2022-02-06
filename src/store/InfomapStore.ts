@@ -6,15 +6,19 @@ import {
   runInAction,
 } from 'mobx';
 import Infomap from '@mapequation/infomap';
-import type { Tree, Result } from '@mapequation/infomap';
-import type { BipartiteNetwork } from '@mapequation/infomap/network';
+import type { Tree, StateTree, Result } from '@mapequation/infomap';
+import type {
+  BipartiteNetwork,
+  StateNetwork,
+} from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
 import {
   getIntersectingBranches,
+  visitTreeDepthFirstPreOrder,
   visitTreeDepthFirstPostOrder,
 } from '../utils/tree';
-import type { PhyloNode } from './TreeStore';
+import type { PhyloNode } from '../utils/tree';
 
 interface BioregionsNetwork extends Required<BipartiteNetwork> {
   nodeIdMap: { [name: string]: number };
@@ -23,6 +27,17 @@ interface BioregionsNetwork extends Required<BipartiteNetwork> {
   numNonTreeLinks: number;
   numNonTreeNodes: number;
   sumLinkWeight: number;
+  isDirected: boolean;
+}
+
+interface BioregionsStateNetwork extends Required<StateNetwork> {
+  nodeIdMap: { [name: string]: number };
+  numTreeNodes: number;
+  numTreeLinks: number;
+  numNonTreeLinks: number;
+  numNonTreeNodes: number;
+  sumLinkWeight: number;
+  isDirected: boolean;
 }
 
 type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
@@ -55,14 +70,15 @@ export default class InfomapStore {
     numTrials: process.env.NODE_ENV === 'production' ? 5 : 1,
     regularized: false,
     regularizationStrength: 1,
-    entropyCorrected: true,
+    entropyCorrected: false,
     entropyCorrectionStrength: 1,
     skipAdjustBipartiteFlow: true,
     ...defaultArgs,
   };
-  network: BioregionsNetwork | null = null;
-  tree: Tree | null = null;
-  treeString: string | null = null;
+  network: BioregionsNetwork | BioregionsStateNetwork | null = null;
+  tree: Tree | StateTree | null = null;
+  haveStateNodes: boolean = false;
+  treeString?: string;
   includeTreeInNetwork: boolean = true;
   isRunning: boolean = false;
   currentTrial: number = 0;
@@ -102,6 +118,7 @@ export default class InfomapStore {
       network: observable.ref,
       tree: observable.ref,
       treeString: observable,
+      haveStateNodes: observable,
       args: observable,
       currentTrial: observable,
       isRunning: observable,
@@ -142,11 +159,18 @@ export default class InfomapStore {
   clearData = action(() => {
     this.network = null;
     this.tree = null;
-    this.treeString = null;
+    this.treeString = undefined;
     this.isRunning = false;
     this.currentTrial = 0;
     this.bioregions = [];
+    this.clearBioregions();
   });
+
+  clearBioregions = () => {
+    this.cells.forEach((cell) => {
+      cell.overlappingBioregions.clear();
+    });
+  };
 
   get haveBioregions() {
     return this.numBioregions > 0;
@@ -196,17 +220,25 @@ export default class InfomapStore {
     this.args.entropyCorrectionStrength = strength;
   }
 
-  setTree(tree: Tree | null) {
+  setTree(tree: Tree | StateTree | null) {
     this.tree = tree;
   }
 
-  setTreeString(treeString: string | null) {
+  setTreeString(treeString?: string) {
     this.treeString = treeString;
   }
 
-  setNetwork(network: BioregionsNetwork | null) {
+  setNetwork(network: BioregionsNetwork | BioregionsStateNetwork | null) {
     this.network = network;
   }
+
+  setBioregions = action((bioregions: Bioregion[]) => {
+    this.bioregions = bioregions;
+  });
+
+  setStateBioregions = action((bioregions: Bioregion[]) => {
+    this.bioregions = bioregions;
+  });
 
   setIsRunning(isRunning: boolean = true) {
     this.isRunning = isRunning;
@@ -236,25 +268,30 @@ export default class InfomapStore {
     return this.rootStore.speciesStore.binner.cells;
   }
 
-  onInfomapFinished = (result: Result, id: number) => {
-    const { json: tree, tree: treeString } = result;
+  onInfomapFinished = action((result: Result, id: number) => {
+    const {
+      json: tree,
+      json_states: statesTree,
+      tree: treeString,
+      tree_states: treeStatesString,
+    } = result;
 
-    if (tree) {
-      const bioregions = this.createBioregions(tree);
-      this.setTree(tree);
-      runInAction(() => {
-        this.bioregions = bioregions;
-      });
-    }
+    this.clearBioregions();
 
-    if (treeString) {
-      this.setTreeString(treeString);
+    const haveStates = statesTree != null;
+    this.haveStateNodes = haveStates;
+    const infomapResult = haveStates ? statesTree : tree;
+
+    if (infomapResult) {
+      this.createBioregions(infomapResult, haveStates);
+      this.setTree(infomapResult);
+      this.setTreeString(haveStates ? treeStatesString : treeString);
     }
 
     console.timeEnd('infomap');
     this.setIsRunning(false);
     this.infomapId = null;
-  };
+  });
 
   onInfomapError = (error: string, id: number) => {
     console.error(error);
@@ -264,6 +301,7 @@ export default class InfomapStore {
 
   onInfomapOutput = (output: string, id: number) => {
     this.parseOutput(output);
+    console.log(output);
   };
 
   async run() {
@@ -282,6 +320,13 @@ export default class InfomapStore {
 
     const network = this.updateNetwork();
 
+    const args = { ...this.args };
+    // const isStateNetwork = 'states' in network;
+    if (network.isDirected) {
+      args.directed = true;
+      args.regularized = true;
+    }
+
     console.time('infomap');
 
     return new Promise<void>((resolve, reject) => {
@@ -296,7 +341,7 @@ export default class InfomapStore {
         })
         .run({
           network,
-          args: this.args,
+          args,
         });
     });
   }
@@ -310,7 +355,7 @@ export default class InfomapStore {
     this.infomapId = null;
     this.setIsRunning(false);
     this.setTree(null);
-    this.setTreeString(null);
+    this.setTreeString(undefined);
     this.setCurrentTrial(0);
 
     return true;
@@ -337,7 +382,10 @@ export default class InfomapStore {
     return network;
   }
 
-  public createNetwork(): BioregionsNetwork {
+  public createNetwork(): BioregionsNetwork | BioregionsStateNetwork {
+    if (this.segregationTime > 0 && this.rootStore.treeStore.tree) {
+      return this.createStateNetwork();
+    }
     /*
     Starts with cells as nodes up until the bipartiteStartId.
     Then the feature nodes are added.
@@ -352,6 +400,7 @@ export default class InfomapStore {
       sumLinkWeight: 0,
       numNonTreeLinks: 0,
       numNonTreeNodes: 0,
+      isDirected: false,
     };
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
@@ -438,7 +487,6 @@ export default class InfomapStore {
     */
 
     const { integrationTime } = this;
-    const numSpecies = network.nodes.length;
 
     /**
      * 1. Depth first search post order (from leafs):
@@ -578,39 +626,225 @@ export default class InfomapStore {
     }
 
     console.log('Nodes missing in network', Array.from(missing));
-    console.log('Tree:', network);
+    console.log('Network:', network);
 
     return network;
   }
 
-  createBioregions(tree: Tree) {
-    type Species = string;
-    type BioregionId = number;
+  public createStateNetwork(): BioregionsStateNetwork {
+    const isDirected = false;
+    /*
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added.
+    */
+    const network: BioregionsStateNetwork = {
+      nodes: [],
+      links: [],
+      states: [],
+      nodeIdMap: {}, // name -> id
+      numTreeNodes: 0,
+      numTreeLinks: 0,
+      sumLinkWeight: 0,
+      numNonTreeLinks: 0,
+      numNonTreeNodes: 0,
+      isDirected,
+    };
+    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+    const { tree } = this.rootStore.treeStore;
 
+    if (!tree) {
+      throw new Error("Can't create state network without a tree");
+    }
+
+    console.log('Create state network!');
+
+    // Clear existing memory
+    visitTreeDepthFirstPreOrder(tree, (node) => {
+      node.memory = [];
+    });
+
+    const segregationBranches = getIntersectingBranches(
+      tree,
+      this.segregationTime,
+    );
+    for (const branch of segregationBranches) {
+      visitTreeDepthFirstPreOrder(branch.child, (node) => {
+        node.memory?.push(branch);
+      });
+      if (this.integrationTime < this.segregationTime) {
+        // Nodes earlier than segregation nodes should use
+        // all descendant segregation nodes as memory
+        let parent: PhyloNode | null = branch.parent;
+        while (parent) {
+          parent.memory?.push(branch);
+          parent = parent.parent;
+        }
+      }
+    }
+    // let nodeId = 0;
+    // let stateNodeId = 0;
+
+    let physicalId = 0;
+    const nameToPhysicalId = new Map<string, number>();
+
+    // Create physical cell nodes
+    for (const cell of cells) {
+      const id = physicalId++;
+      nameToPhysicalId.set(cell.id, id);
+      network.nodes.push({ id, name: cell.id });
+    }
+
+    const { treeWeightBalance, diversityOrder } = this;
+    const { treeNodeMap } = this.rootStore.treeStore;
+
+    type StateNode = typeof network.states[number];
+    const cellStateNodes = new Map<string, StateNode>(); // stateName -> stateNode
+    const phyloStateNodes = new Map<string, StateNode>(); // name -> stateNode
+
+    const getCellStateName = (cellId: string, phyloNode: PhyloNode) =>
+      `${cellId}_${phyloNode.name}`;
+
+    let stateIdCounter = 0;
+    const addCellStateNode = (cellId: string, phyloNode: PhyloNode) => {
+      const cellPhysId = nameToPhysicalId.get(cellId)!;
+      const stateName = getCellStateName(cellId, phyloNode);
+      let stateNode = cellStateNodes.get(stateName);
+      if (stateNode == null) {
+        const stateId = stateIdCounter++;
+        stateNode = { id: cellPhysId, name: stateName, stateId };
+        cellStateNodes.set(stateName, stateNode);
+        network.nodeIdMap[stateName] = stateId;
+        network.states.push(stateNode);
+      }
+      return stateNode;
+    };
+
+    const addTaxonNode = (taxonName: string) => {
+      // Add physical node
+      let taxonId = nameToPhysicalId.get(taxonName);
+      if (taxonId == null) {
+        taxonId = physicalId++;
+        nameToPhysicalId.set(taxonName, taxonId);
+        network.nodes.push({ id: taxonId, name: taxonName });
+      }
+      // Add state node
+      let stateNode = phyloStateNodes.get(taxonName);
+      if (stateNode == null) {
+        const stateId = stateIdCounter++;
+        stateNode = { id: taxonId, name: taxonName, stateId };
+        phyloStateNodes.set(taxonName, stateNode);
+        network.nodeIdMap[taxonName] = stateId;
+        network.states.push(stateNode);
+      }
+      return stateNode;
+    };
+
+    const addStateLink = (
+      taxonName: string,
+      cellId: string,
+      memoryNode: PhyloNode,
+      weight: number,
+    ) => {
+      const cellStateNode = addCellStateNode(cellId, memoryNode);
+      const taxonNode = addTaxonNode(taxonName);
+      network.links.push({
+        source: taxonNode.stateId,
+        target: cellStateNode.stateId,
+        weight,
+      });
+      if (isDirected) {
+        // TODO: Uniform link weight back?
+        network.links.push({
+          target: taxonNode.stateId,
+          source: cellStateNode.stateId,
+          weight,
+        });
+      }
+      network.sumLinkWeight += weight;
+    };
+
+    for (let [name, cells] of Object.entries(nameToCellIds)) {
+      // Create physical species nodes
+      const id = physicalId++;
+      nameToPhysicalId.set(name, id);
+      network.nodes.push({ id, name });
+
+      // Create state cell nodes and links from species
+      const treeNode = treeNodeMap.get(name);
+      if (!treeNode) {
+        // TODO: Use root node as memory if species not part of tree?
+        continue;
+      }
+      const memory = treeNode.data.memory!;
+      console.log(
+        `Species ${name} -> memory: ${memory
+          .map((b) => `(${b.parent.name},${b.child.name})`)
+          .join(', ')}`,
+      );
+
+      const weight = (1 - treeWeightBalance) / cells.size ** diversityOrder;
+
+      for (const cellId of cells.values()) {
+        for (const stateBranch of memory) {
+          addStateLink(
+            name,
+            cellId,
+            stateBranch.parent,
+            weight * (1 - stateBranch.childWeight),
+          );
+          addStateLink(
+            name,
+            cellId,
+            stateBranch.child,
+            weight * stateBranch.childWeight,
+          );
+        }
+      }
+    }
+
+    console.log(network);
+    console.log(this.serializeNetwork(network));
+    return network;
+  }
+
+  serializeNetwork(
+    network?: BioregionsNetwork | BioregionsStateNetwork | null,
+  ): string | undefined {
+    if (!network) {
+      network = this.network;
+    }
+    if (!network) {
+      return;
+    }
+    const lines = ['*vertices'];
+    for (const node of network.nodes) {
+      lines.push(`${node.id} "${node.name}"`);
+    }
+    if ('states' in network) {
+      lines.push('*states');
+      for (const node of network.states) {
+        lines.push(`${node.stateId} ${node.id} "${node.name}"`);
+      }
+    }
+    lines.push('*links');
+    for (const link of network.links) {
+      lines.push(`${link.source} ${link.target} ${link.weight}`);
+    }
+    return lines.join('\n');
+  }
+
+  createBioregions(tree: Tree | StateTree, haveStates: boolean) {
+    if (haveStates) {
+      this.createStateBioregions(tree as StateTree);
+    } else {
+      this.createNonStateBioregions(tree as Tree);
+    }
+  }
+
+  createNonStateBioregions(tree: Tree) {
     const { speciesStore, treeStore } = this.rootStore;
     const { cells } = this;
     treeStore.clearBioregions();
-
-    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
-    tree.nodes.forEach((node) => {
-      if (node.id >= tree.bipartiteStartId!) {
-        const species = speciesStore.speciesMap.get(node.name);
-        if (species) {
-          species.bioregionId = node.modules[0];
-        }
-        const treeNode = treeStore.treeNodeMap.get(node.name);
-        if (treeNode) {
-          treeNode.bioregionId = node.modules[0];
-        }
-        return;
-      }
-
-      const cell = cells[node.id];
-
-      // set the bioregion id to the top mulitlevel module of the node
-      // different from the node path!
-      cell.bioregionId = node.modules[0];
-    });
 
     const bioregions: Bioregion[] = Array.from(
       { length: tree.numTopModules },
@@ -625,6 +859,7 @@ export default class InfomapStore {
       }),
     );
 
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
       const bioregionId = node.modules[0];
       const bioregion = bioregions[bioregionId - 1];
@@ -633,11 +868,27 @@ export default class InfomapStore {
 
       if (node.id >= tree.bipartiteStartId!) {
         bioregion.species.push(node.name);
-      } else {
-        ++bioregion.numGridCells;
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = node.modules[0];
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = node.modules[0];
+        }
+        return;
       }
+
+      ++bioregion.numGridCells;
+      const cell = cells[node.id];
+
+      // set the bioregion id to the top mulitlevel module of the node
+      // different from the node path!
+      cell.bioregionId = node.modules[0];
     });
 
+    type Species = string;
+    type BioregionId = number;
     const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
 
     for (const cell of cells) {
@@ -658,8 +909,6 @@ export default class InfomapStore {
     }
 
     // Update speciesStore.speciesMap with regions for each species
-    const speciesBioregionMap = new Map<Species, Map<BioregionId, number>>();
-
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
       for (const [name, count] of speciesCount.entries()) {
@@ -684,6 +933,118 @@ export default class InfomapStore {
       bioregion.mostIndicative.sort((a, b) => b.score - a.score);
     }
 
-    return bioregions;
+    this.setBioregions(bioregions);
+  }
+
+  createStateBioregions(tree: StateTree) {
+    const { speciesStore, treeStore } = this.rootStore;
+    const { cells } = this;
+    treeStore.clearBioregions();
+    console.log(tree);
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: tree.numTopModules },
+      () => ({
+        flow: 0,
+        bioregionId: 0,
+        numGridCells: 0,
+        numRecords: 0,
+        species: [],
+        mostCommon: [],
+        mostIndicative: [],
+      }),
+    );
+
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
+      // const bioregionId = node.modules[0];
+      const bioregionId = node.path[0];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      // Physical cell nodes are first
+      const isTaxon = node.id >= cells.length;
+      if (isTaxon) {
+        const species = speciesStore.speciesMap.get(node.name);
+        bioregion.species.push(node.name);
+        if (species) {
+          species.bioregionId = bioregionId;
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = bioregionId;
+        }
+        console.log(node.name, bioregionId, species, treeNode);
+        return;
+      }
+
+      ++bioregion.numGridCells;
+      const cell = cells[node.id];
+      // TODO: Add state name to Infomap output?
+      const stateName = (this.network as BioregionsStateNetwork).states[
+        node.stateId
+      ].name!;
+      const memTaxonName = stateName.split('_')[1]!;
+
+      cell.bioregionId = bioregionId;
+      cell.overlappingBioregions.addStateNode(
+        bioregionId,
+        node.flow,
+        memTaxonName,
+      );
+    });
+    for (const cell of cells) {
+      cell.overlappingBioregions.calcTopBioregions();
+    }
+
+    type Species = string;
+    type BioregionId = number;
+    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
+
+    for (const cell of cells) {
+      for (const { count, name } of cell.speciesTopList) {
+        const species = speciesStore.speciesMap.get(name)!;
+
+        const bioregionId = species.bioregionId!;
+        const bioregion = bioregions[bioregionId - 1];
+
+        if (!bioregionSpeciesCount.has(bioregionId)) {
+          bioregionSpeciesCount.set(bioregionId, new Map());
+        }
+        const speciesCount = bioregionSpeciesCount.get(bioregionId)!;
+
+        bioregion.numRecords += count;
+        speciesCount.set(name, (speciesCount.get(name) ?? 0) + count);
+      }
+    }
+
+    // Update speciesStore.speciesMap with regions for each species
+    for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
+      const bioregion = bioregions[bioregionId - 1];
+      for (const [name, count] of speciesCount.entries()) {
+        bioregion.mostCommon.push({ name, count });
+
+        // Most indicative
+        const tf = count / bioregion.numRecords;
+        const idf =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) /
+          speciesStore.numRecords;
+        const score = tf / idf;
+        bioregion.mostIndicative.push({ name, score });
+
+        const species = speciesStore.speciesMap.get(name)!;
+        species.countPerRegion.set(
+          bioregionId,
+          (species.countPerRegion.get(bioregionId) ?? 0) + count,
+        );
+      }
+
+      bioregion.mostCommon.sort((a, b) => b.count - a.count);
+      bioregion.mostIndicative.sort((a, b) => b.score - a.score);
+    }
+
+    this.setStateBioregions(bioregions);
   }
 }

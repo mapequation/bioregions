@@ -1,13 +1,13 @@
 import { observer } from 'mobx-react';
 import { Box } from '@chakra-ui/react';
-import { getIntersectingBranches, Node } from '../../utils/tree';
+import { getIntersectingBranches, PhyloNode } from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
 import { Node as Cell } from '../../utils/QuadTreeGeoBinner';
 
 export interface DemoTreeProps {
-  tree: Node;
+  tree: PhyloNode;
   integrationTime: number;
   segregationTime: number;
 }
@@ -15,7 +15,7 @@ export interface DemoTreeProps {
 type Name = string;
 type Pos = [number, number];
 
-const layout = d3.tree<Node>();
+const layout = d3.tree<PhyloNode>();
 
 export default observer(() => {
   const demoStore = useDemoStore();
@@ -28,7 +28,8 @@ export default observer(() => {
     return null;
   }
 
-  const { integrationTime, segregationTime, network } = infomapStore;
+  const { integrationTime, segregationTime, network, haveStateNodes } =
+    infomapStore;
   const { binner } = speciesStore;
   const { cells } = binner;
   const networkLinks = network ? network.links : [];
@@ -36,7 +37,7 @@ export default observer(() => {
   const red = 'hsl(4, 69%, 65%)';
   const purple = 'hsl(255, 45%, 69%)';
 
-  const hierTree = d3.hierarchy<Node>(tree);
+  const hierTree = d3.hierarchy<PhyloNode>(tree);
   const positionedTree = layout(hierTree);
 
   const integratingBranches = getIntersectingBranches(tree, integrationTime);
@@ -46,8 +47,13 @@ export default observer(() => {
   const fillColorMap = new Map<number, string>();
   const strokeColorMap = new Map<number, string>();
 
-  const getBranchId = ({ parent, child }: { parent: Node; child: Node }) =>
-    `${parent.uid}-${child.uid}`;
+  const getBranchId = ({
+    parent,
+    child,
+  }: {
+    parent: PhyloNode;
+    child: PhyloNode;
+  }) => `${parent.uid}-${child.uid}`;
 
   const interpolateBlue = d3.interpolateHsl(blue, 'hsl(213, 55%, 100%)');
 
@@ -70,7 +76,7 @@ export default observer(() => {
     );
   });
 
-  const getLinkColor = (link: d3.HierarchyPointLink<Node>) => {
+  const getLinkColor = (link: d3.HierarchyPointLink<PhyloNode>) => {
     const {
       source: { data: parent },
       target: { data: child },
@@ -78,17 +84,18 @@ export default observer(() => {
     return branchColorMap.get(getBranchId({ parent, child })) ?? 'currentColor';
   };
 
-  const getFillColor = (node: Node) => fillColorMap.get(node.uid) ?? 'white';
-  const getStrokeColor = (node: Node) =>
+  const getFillColor = (node: PhyloNode) =>
+    fillColorMap.get(node.uid) ?? 'white';
+  const getStrokeColor = (node: PhyloNode) =>
     strokeColorMap.get(node.uid) ?? 'currentColor';
 
-  const getTreeNodeBioregionColor = (node: Node) => {
+  const getTreeNodeBioregionColor = (node: PhyloNode) => {
     const bioregionId = treeStore.treeNodeMap.get(node.name)?.bioregionId;
     return bioregionId != null ? colorBioregion(bioregionId) : 'transparent';
   };
 
   const positionedTreeDescendants = positionedTree.descendants();
-  const nodeMap = new Map<Name, d3.HierarchyPointNode<Node>>();
+  const nodeMap = new Map<Name, d3.HierarchyPointNode<PhyloNode>>();
   positionedTreeDescendants.forEach((node) => {
     const { x } = node;
     node.x = node.data.time * 100;
@@ -103,6 +110,8 @@ export default observer(() => {
 
   const cellSize = 17;
   const firstCellPos: Pos = [120, 8];
+  const stateCellRadius = 1.5;
+
   const projection = d3
     .geoIdentity()
     .scale(1)
@@ -114,98 +123,255 @@ export default observer(() => {
 
   const geoPath = d3.geoPath(projection);
 
-  // const speciesNetwork = infomapStore.createNetwork();
-  // const treeNetwork = infomapStore.createNetworkWithTree();
-  // console.log('cells:', cells);
-  // console.log('species network:', speciesNetwork);
-  // console.log('tree network:', network);
-  // console.log('positioned tree:', positionedTree.descendants());
+  const getPhysName = (nodeId: number) => {
+    if (!network) {
+      return '';
+    }
+    const physId = 'states' in network ? network.states[nodeId].id : nodeId;
+    return network.nodes[physId].name!;
+  };
+
+  const getPhysLink = (link: typeof networkLinks[number]) => {
+    // source: tree node, target: grid cell
+    const taxonName = getPhysName(link.source);
+    const cellName = getPhysName(link.target);
+    const treeNode = nodeMap.get(taxonName)!;
+    const cell = cellMap.get(cellName)!;
+    return { treeNode, cell, weight: link.weight };
+  };
+
+  const physCellNodes = binner.cells.map((cell, i) => {
+    return {
+      key: i,
+      cell,
+      svgString: geoPath(cell) as string,
+      bioregionId: cell.bioregionId,
+    };
+  });
+
+  const numCells = cellMap.size;
+
+  type StateCell = {
+    cellStateName: string;
+    cellId: string;
+    memTaxonId: string;
+    memTreeNode: d3.HierarchyPointNode<PhyloNode>;
+    bioregionId: number;
+    cellPos: [number, number];
+    x: number;
+    y: number;
+  };
+  type StateLink = {
+    treeNode: d3.HierarchyPointNode<PhyloNode>;
+    weight: number;
+    stateCell: StateCell;
+  };
+
+  const cellIdToStates = new Map<string, StateCell[]>();
+  const stateLinks: StateLink[] = [];
+
+  if (network && 'states' in network) {
+    network.states
+      .filter(({ id }) => id < numCells)
+      .forEach(({ name: cellStateName }) => {
+        // const cellId = network.nodes[id].name!;
+        const [cellId, memTaxonId] = (cellStateName ?? '_').split('_');
+        const memTreeNode = nodeMap.get(memTaxonId)!;
+        const cell = cellMap.get(cellId)!;
+        const cellPos = projection(cell.center) ?? [0, 0];
+        const stateCells = cellIdToStates.get(cellId) ?? [];
+        if (stateCells.length === 0) {
+          cellIdToStates.set(cellId, stateCells);
+        }
+        const bioregionId =
+          cell.overlappingBioregions.memoryIdToBioregion.get(memTaxonId)!;
+        stateCells.push({
+          cellStateName: cellStateName ?? '',
+          cellId,
+          memTaxonId,
+          memTreeNode,
+          bioregionId,
+          cellPos,
+          x: cellPos[0] - 4,
+          y: cellPos[1],
+        });
+      });
+
+    // Sort cell state nodes on mem taxon position
+    cellIdToStates.forEach((stateCells) => {
+      stateCells.sort((a, b) => a.memTreeNode.y - b.memTreeNode.y);
+    });
+
+    network.links.forEach(({ source, target, weight }) => {
+      const treeNodeName = network.states[source].name!;
+      const treeNode = nodeMap.get(treeNodeName)!;
+      const cellStateName = network.states[target].name!;
+      const [cellId, memTaxonId] = (cellStateName ?? '_').split('_');
+      const stateCells = cellIdToStates.get(cellId)!;
+      const stateCell = stateCells.find(
+        (stateCell) => stateCell.memTaxonId === memTaxonId,
+      )!;
+      stateLinks.push({
+        treeNode,
+        stateCell,
+        weight: weight!,
+      });
+    });
+
+    // Set internal y pos based on memory taxon position
+    cellIdToStates.forEach((stateCells) => {
+      const numStates = stateCells.length;
+      const { cellPos } = stateCells[0]!;
+      const startY = cellPos[1] - cellSize / 2;
+      const dy = cellSize / (numStates + 1);
+      stateCells.forEach((stateCell, i) => {
+        stateCell.y = startY + (i + 1) * dy;
+      });
+    });
+  }
+  const stateCells = Array.from(cellIdToStates.values()).flatMap(
+    (stateCells) => stateCells,
+  );
+  // console.log('State cells:', stateCells);
+
+  const networkPhysLinks = networkLinks.map(getPhysLink);
+
+  const colorCell = (cell: Cell) => {
+    if (cell.overlappingBioregions.size === 0) {
+      return colorBioregion(cell.bioregionId);
+    }
+    // Add colors from all overlapping bioregions weighted on opacity
+    // Let final opacity be half-transparent to signal overlapping bioregions
+    const {
+      topBioregionId,
+      topBioregionProportion,
+      secondBioregionId,
+      secondBioregionProportion,
+    } = cell.overlappingBioregions;
+    const t =
+      topBioregionProportion /
+      (topBioregionProportion + secondBioregionProportion);
+    const firstColor = colorBioregion(topBioregionId);
+    const secondColor = colorBioregion(secondBioregionId);
+    const color = d3.color(d3.interpolateRgb(secondColor, firstColor)(t))!;
+    color.opacity = topBioregionProportion;
+    // console.log(
+    //   `cell ${cell.id}: top: ${topBioregionId} (${topBioregionProportion}), second: ${secondBioregionId} (${secondBioregionProportion})`,
+    // );
+    return color.toString();
+  };
 
   return (
     <Box textAlign="center">
       <svg
         width="100%"
         height="100%"
-        viewBox="-4 -4 140 140"
+        viewBox="-4 -4 144 144"
         style={{ color: '#666' }}
         preserveAspectRatio="xMidYMid meet"
       >
         <g className="grid-cells">
-          {binner.cells.map((cell, i) => (
+          {physCellNodes.map(({ key, cell, svgString, bioregionId }) => (
             <path
-              key={i}
-              d={geoPath(cell) as string}
+              key={key}
+              d={svgString}
               stroke="white"
-              fill={colorBioregion(cell.bioregionId) ?? '#888'}
+              fill={colorCell(cell)}
             />
           ))}
         </g>
+        {haveStateNodes && (
+          <g>
+            <g className="state-cells">
+              {stateCells.map((stateCell) => (
+                <g key={stateCell.cellStateName}>
+                  <circle
+                    r={stateCellRadius}
+                    cx={stateCell.x}
+                    cy={stateCell.y}
+                    strokeWidth={0.2}
+                    stroke="white"
+                    fill={colorBioregion(stateCell.bioregionId) ?? '#ccc'}
+                  />
+                  <text
+                    x={stateCell.x + stateCellRadius + 1}
+                    y={stateCell.y}
+                    fontSize={3}
+                    dy={1}
+                    fill="white"
+                  >
+                    {stateCell.memTaxonId}
+                  </text>
+                </g>
+              ))}
+            </g>
+            <g
+              className="state-tree-links"
+              stroke="#33c"
+              strokeWidth={0.5}
+              fill="none"
+            >
+              {stateLinks.map(({ treeNode, stateCell, weight }, i) => {
+                const cellX = stateCell.x - stateCellRadius;
+                const cellY = stateCell.y;
+                if (treeNode.data.isLeaf && false) {
+                  return (
+                    <line
+                      key={i}
+                      x1={treeNode.x}
+                      y1={treeNode.y}
+                      x2={stateCell.x}
+                      y2={stateCell.y}
+                      opacity={weight ?? 0}
+                    />
+                  );
+                }
+                const xMid = (treeNode.x + cellX) / 2;
+                const yMid = (treeNode.y + cellY) / 2;
+                const cp1 = [xMid, treeNode.y];
+                const cp2 = [xMid, yMid];
+                // prettier-ignore
+                const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
+                return <path key={i} d={d} opacity={weight ?? 0} />;
+              })}
+            </g>
+          </g>
+        )}
 
-        {/* <g className="links">
-          {speciesNetwork.links.map((link) => {
-            // source: tree node, target: grid cell
-            const treeNodeName = speciesNetwork.nodes[link.source].name!;
-            const cellName = speciesNetwork.nodes[link.target].name!;
+        {!haveStateNodes && (
+          <g className="tree-links" stroke="#33c" strokeWidth={0.5} fill="none">
+            {networkPhysLinks.map(({ treeNode, cell, weight }, i) => {
+              const cellPos = projection(cell.center) ?? [0, 0];
+              const cellX = cellPos[0] - cellSize / 2 + 0.5;
+              const cellY = cellPos[1];
 
-            const treeNode = nodeMap.get(treeNodeName)!;
-            const cell = cellMap.get(cellName)!;
+              //console.log(`${treeNode?.data.name} - ${cell.id}`);
 
-            const cellPos = projection(cell.center) ?? [0, 0];
+              if (treeNode.data.isLeaf && false) {
+                return (
+                  <line
+                    key={i}
+                    x1={treeNode.x}
+                    y1={treeNode.y}
+                    x2={cellX}
+                    y2={cellY}
+                    opacity={weight ?? 0}
+                  />
+                );
+              }
 
-            return (
-              <line
-                x1={treeNode.x}
-                y1={treeNode.y}
-                x2={cellPos[0]}
-                y2={cellPos[1]}
-                stroke="#333"
-                strokeWidth={0.5}
-                opacity={0.3}
-              />
-            );
-          })}
-        </g> */}
+              const xMid = (treeNode.x + cellX) / 2;
+              const yMid = (treeNode.y + cellY) / 2;
+              const cp1 = [xMid, treeNode.y];
+              const cp2 = [xMid, yMid];
 
-        <g className="tree-links" stroke="#33c" strokeWidth={0.5} fill="none">
-          {networkLinks.map((link, i) => {
-            // source: tree node, target: grid cell
-            const treeNodeName = network?.nodes[link.source].name!;
-            const cellName = network?.nodes[link.target].name!;
+              // prettier-ignore
+              const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
 
-            const treeNode = nodeMap.get(treeNodeName)!;
-            const cell = cellMap.get(cellName)!;
-            if (!treeNode) {
-              return null;
-            }
-
-            const cellPos = projection(cell.center) ?? [0, 0];
-
-            //console.log(`${treeNode?.data.name} - ${cell.id}`);
-
-            if (treeNode.data.isLeaf && false) {
-              return (
-                <line
-                  key={i}
-                  x1={treeNode.x}
-                  y1={treeNode.y}
-                  x2={cellPos[0]}
-                  y2={cellPos[1]}
-                  opacity={link.weight ?? 0}
-                />
-              );
-            }
-
-            const xMid = (treeNode.x + cellPos[0]) / 2;
-            const yMid = (treeNode.y + cellPos[1]) / 2;
-            const cp1 = [xMid, treeNode.y];
-            const cp2 = [xMid, yMid];
-
-            // prettier-ignore
-            const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellPos.join(' ')}`;
-
-            return <path key={i} d={d} opacity={link.weight ?? 0} />;
-          })}
-        </g>
+              return <path key={i} d={d} opacity={weight ?? 0} />;
+            })}
+          </g>
+        )}
 
         <g className="separating-lines">
           <g strokeLinecap="round" strokeWidth={0.5} fill="none">

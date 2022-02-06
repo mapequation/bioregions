@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { observer } from 'mobx-react';
 import { Button, Tag, Select, Icon } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
@@ -18,13 +18,6 @@ import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
 import type { Example } from '../../store/ExampleStore';
-
-interface LoadOptions {
-  minCellSize?: number;
-  maxCellSize?: number;
-  minCellCapacity?: number;
-  maxCellCapacity?: number;
-}
 
 export const LoadExample = observer(function LoadExample() {
   const store = useStore();

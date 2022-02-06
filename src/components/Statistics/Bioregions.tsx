@@ -16,7 +16,7 @@ import PieChart from './PieChart';
 
 const formatScore = format('.3r');
 // const formatNumber = format(',');
-const format2s = format('.2r');
+// const format2s = format('.2r');
 // const formatPercent = (value: number) => `${format2s(100 * value)}%`;
 
 export default observer(function Bioregions() {

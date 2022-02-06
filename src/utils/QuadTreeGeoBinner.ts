@@ -14,6 +14,63 @@ export type QuadtreeNodeProperties = GeoJsonProperties & {
   features: PointFeature[];
 };
 
+export class OverlappingBioregions {
+  bioregionIds: Map<number, number> = new Map(); // bioregionId -> flow
+  flow: number = 0.0; // total flow in cell
+  memoryIdToBioregion: Map<string, number> = new Map();
+  topBioregionId: number = 0;
+  topBioregionProportion: number = 0;
+  secondBioregionId: number = 0;
+  secondBioregionProportion: number = 0;
+
+  addStateNode(bioregionId: number, flow: number, memoryId: string) {
+    this.flow += flow;
+    this.bioregionIds.set(
+      bioregionId,
+      (this.bioregionIds.get(bioregionId) ?? 0) + flow,
+    );
+    this.memoryIdToBioregion.set(memoryId, bioregionId);
+  }
+
+  calcTopBioregions() {
+    // Calculate top
+    let topFlow = 0;
+    let topBioregionId = 0;
+    let secondFlow = 0;
+    let secondBioregionId = 0;
+    this.bioregionIds.forEach((flow, bioregionId) => {
+      if (flow > topFlow) {
+        secondFlow = topFlow;
+        secondBioregionId = topBioregionId;
+        topFlow = flow;
+        topBioregionId = bioregionId;
+      } else if (flow > secondFlow) {
+        secondFlow = flow;
+        secondBioregionId = bioregionId;
+      }
+    });
+    this.topBioregionId = topBioregionId;
+    this.topBioregionProportion = topFlow / this.flow;
+    this.secondBioregionId = secondBioregionId;
+    this.secondBioregionProportion = secondFlow / this.flow;
+
+    if (this.bioregionIds.size === 1) {
+      this.secondBioregionId = this.topBioregionId;
+      this.secondBioregionProportion = this.topBioregionProportion;
+    }
+  }
+
+  get size() {
+    return this.bioregionIds.size;
+  }
+
+  clear() {
+    this.bioregionIds = new Map();
+    this.flow = 0.0;
+    this.topBioregionId = 0;
+    this.memoryIdToBioregion = new Map();
+  }
+}
 export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
   x1: number; // west
   y1: number; // south
@@ -30,6 +87,7 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
     Node | undefined,
   ] = [undefined, undefined, undefined, undefined];
   bioregionId: number = 0;
+  overlappingBioregions: OverlappingBioregions = new OverlappingBioregions();
   path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc

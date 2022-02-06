@@ -1,7 +1,4 @@
 import RootStore from './RootStore';
-import { loadTree, prepareTree } from '../utils/tree';
-import type { Node as PhyloTree } from '../utils/tree';
-import { action } from 'mobx';
 
 const demoRecords = `species,longitude,latitude
 A,0.9,9.8
@@ -38,12 +35,16 @@ export default class DocumentationStore {
     speciesStore.binner.setCellSizeLog2(0, 1);
     speciesStore.binner.setCellCapacity(0, 100);
     infomapStore.setIntegrationTime(1);
-    infomapStore.setSegregationTime(0);
-    infomapStore.setNumTrials(5);
+    infomapStore.setSegregationTime(0.1);
+    infomapStore.setNumTrials(1);
 
     await this.loadData();
 
-    await infomapStore.run();
+    try {
+      await infomapStore.run();
+    } catch (err: any) {
+      console.error('Error running Infomap on demo:', err);
+    }
   }
 
   async loadData() {

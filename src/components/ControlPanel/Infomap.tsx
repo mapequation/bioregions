@@ -84,7 +84,7 @@ const NodesLinksTable = ({
 };
 
 export default observer(function Infomap() {
-  const { treeStore, speciesStore, infomapStore, mapStore } = useStore();
+  const { speciesStore, infomapStore, mapStore } = useStore();
   const { network, tree } = infomapStore;
 
   const runInfomap = async () => {

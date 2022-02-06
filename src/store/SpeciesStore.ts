@@ -179,7 +179,6 @@ export default class SpeciesStore {
     }
 
     const records = csvParse(data);
-    console.log('Records:', records);
 
     const mapper = createMapper<string | undefined>(
       nameColumn,
