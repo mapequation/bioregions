@@ -227,6 +227,10 @@ export default class MapStore {
     return (cell: Cell) => bioregionColors[cell.bioregionId - 1];
   }
 
+  private cellColor(): GetGridColor {
+    return this.rootStore.colorStore.colorCell;
+  }
+
   renderGrid() {
     if (this.context2d === null) {
       return;
@@ -238,7 +242,7 @@ export default class MapStore {
     const getGridColor =
       this.renderType === 'heatmap' || !tree
         ? MapStore._heatmapColor(cells)
-        : this._bioregionColor();
+        : this.cellColor();
 
     cells.forEach((cell: Cell) =>
       this._renderGridCell(cell, this.context2d!, getGridColor(cell)),

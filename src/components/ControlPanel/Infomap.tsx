@@ -159,6 +159,33 @@ export default observer(function Infomap() {
         </HStack>
       </FormControl>
       <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
+        <FormLabel htmlFor="segregationTime" mb="0">
+          Segregation time
+        </FormLabel>
+        <HStack>
+          <Slider
+            w={200}
+            isDisabled={!infomapStore.includeTreeInNetwork}
+            focusThumbOnChange={false}
+            value={infomapStore.segregationTime}
+            onChange={(value) => infomapStore.setSegregationTime(value)}
+            onChangeEnd={(value) =>
+              infomapStore.setSegregationTime(value, true)
+            }
+            min={0}
+            max={1}
+            step={0.01}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="16px" />
+          </Slider>
+          <Spacer />
+          <Tag size="sm">{format('.2r')(infomapStore.segregationTime)}</Tag>
+        </HStack>
+      </FormControl>
+      <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
         <FormLabel htmlFor="treeWeight" mb="0">
           Tree weight
         </FormLabel>

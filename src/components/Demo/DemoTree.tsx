@@ -22,7 +22,7 @@ export default observer(() => {
   const { treeStore, infomapStore, speciesStore, colorStore } = demoStore;
   const { tree } = treeStore;
   // const { bioregions } = infomapStore;
-  const { colorBioregion } = colorStore;
+  const { colorBioregion, colorCell } = colorStore;
 
   if (!tree || !speciesStore.loaded) {
     return null;
@@ -235,31 +235,6 @@ export default observer(() => {
   // console.log('State cells:', stateCells);
 
   const networkPhysLinks = networkLinks.map(getPhysLink);
-
-  const colorCell = (cell: Cell) => {
-    if (cell.overlappingBioregions.size === 0) {
-      return colorBioregion(cell.bioregionId);
-    }
-    // Add colors from all overlapping bioregions weighted on opacity
-    // Let final opacity be half-transparent to signal overlapping bioregions
-    const {
-      topBioregionId,
-      topBioregionProportion,
-      secondBioregionId,
-      secondBioregionProportion,
-    } = cell.overlappingBioregions;
-    const t =
-      topBioregionProportion /
-      (topBioregionProportion + secondBioregionProportion);
-    const firstColor = colorBioregion(topBioregionId);
-    const secondColor = colorBioregion(secondBioregionId);
-    const color = d3.color(d3.interpolateRgb(secondColor, firstColor)(t))!;
-    color.opacity = topBioregionProportion;
-    // console.log(
-    //   `cell ${cell.id}: top: ${topBioregionId} (${topBioregionProportion}), second: ${secondBioregionId} (${secondBioregionProportion})`,
-    // );
-    return color.toString();
-  };
 
   return (
     <Box textAlign="center">

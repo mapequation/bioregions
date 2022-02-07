@@ -2,6 +2,8 @@ import { makeObservable, observable, action, computed } from 'mobx';
 import * as c3 from '@mapequation/c3';
 import type { SchemeName } from '@mapequation/c3';
 import type RootStore from './RootStore';
+import { Cell } from '../utils/QuadTreeGeoBinner';
+import { color as Color, interpolateRgb } from 'd3';
 
 export default class ColorStore {
   rootStore: RootStore;
@@ -73,6 +75,31 @@ export default class ColorStore {
 
   get colorBioregion() {
     return (bioregionId: number) => this.bioregionColors[bioregionId - 1];
+  }
+
+  get colorCell() {
+    const { colorBioregion } = this;
+    return (cell: Cell) => {
+      if (cell.overlappingBioregions.size <= 1) {
+        return colorBioregion(cell.bioregionId);
+      }
+      // Add colors from all overlapping bioregions weighted on opacity
+      // Let final opacity be half-transparent to signal overlapping bioregions
+      const {
+        topBioregionId,
+        topBioregionProportion,
+        secondBioregionId,
+        secondBioregionProportion,
+      } = cell.overlappingBioregions;
+      const t =
+        topBioregionProportion /
+        (topBioregionProportion + secondBioregionProportion);
+      const firstColor = colorBioregion(topBioregionId);
+      const secondColor = colorBioregion(secondBioregionId);
+      const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+      color.opacity = topBioregionProportion;
+      return color.toString();
+    };
   }
 
   setScheme = (value: SchemeName) => {

@@ -22,6 +22,7 @@ export class OverlappingBioregions {
   topBioregionProportion: number = 0;
   secondBioregionId: number = 0;
   secondBioregionProportion: number = 0;
+  // color: string;
 
   addStateNode(bioregionId: number, flow: number, memoryId: string) {
     this.flow += flow;
