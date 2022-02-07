@@ -16,9 +16,11 @@ import { format } from 'd3-format';
 import DemoTree from './DemoTree';
 import { useDemoStore } from '../../store';
 import Stat from '../Stat';
+import { useState } from 'react';
 
 export default observer(() => {
   const demoStore = useDemoStore();
+  const [beta, setBeta] = useState(0.75);
   const { treeStore, infomapStore } = demoStore;
   const { tree } = treeStore;
 
@@ -34,14 +36,16 @@ export default observer(() => {
   const numNodesFromTree = network?.numTreeNodes;
   const numLinksFromTree = network?.numTreeLinks;
 
+  const showDeveloperStuff = false;
+
   return (
     <Box>
       <Box w="60%" pos="relative">
-        <DemoTree />
+        <DemoTree beta={beta} />
         <Box pos="relative" top={-20} mb={-20}>
           <Slider
-            w={`${100 * (100 / 140)}%`}
-            ml={`${400 / 140}%`}
+            w={`${100 * (100 / 144)}%`}
+            ml={`${400 / 144}%`}
             min={0}
             max={1}
             step={0.01}
@@ -59,8 +63,8 @@ export default observer(() => {
             <SliderThumb />
           </Slider>
           <Slider
-            w={`${100 * (100 / 140)}%`}
-            ml={`${400 / 140}%`}
+            w={`${100 * (100 / 144)}%`}
+            ml={`${400 / 144}%`}
             isReversed
             min={0}
             max={1}
@@ -82,12 +86,42 @@ export default observer(() => {
       </Box>
 
       <VStack mt={4} maxW={350} align="start">
+        {showDeveloperStuff && (
+          <>
+            <FormControl display="flex" w="100%" alignItems="center">
+              <FormLabel htmlFor="curveBundleBeta" mb="0">
+                Curve bundle strength
+              </FormLabel>
+              <Spacer />
+              <Slider
+                id="curveBundleBeta"
+                w="30%"
+                isDisabled={infomapStore.integrationTime === 1}
+                focusThumbOnChange={false}
+                value={beta}
+                onChange={setBeta}
+                min={0}
+                max={1}
+                step={0.01}
+              >
+                <SliderTrack>
+                  <SliderFilledTrack />
+                </SliderTrack>
+                <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
+              </Slider>
+              <Tag size="sm" ml={4}>
+                {beta}
+              </Tag>
+            </FormControl>
+          </>
+        )}
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="treeWeightBalance" mb="0">
             Relative tree strength
           </FormLabel>
           <Spacer />
           <Slider
+            id="treeWeightBalance"
             w="30%"
             isDisabled={!infomapStore.includeTreeInNetwork}
             focusThumbOnChange={false}

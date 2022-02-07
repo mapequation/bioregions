@@ -674,7 +674,7 @@ export default class InfomapStore {
       visitTreeDepthFirstPreOrder(branch.child, (node) => {
         node.memory?.push(branch);
       });
-      if (this.integrationTime < this.segregationTime) {
+      if (this.integrationTime < this.segregationTime || true) {
         // Nodes earlier than segregation nodes should use
         // all descendant segregation nodes as memory
         let parent: PhyloNode | null = branch.parent;
@@ -682,6 +682,8 @@ export default class InfomapStore {
           parent.memory?.push(branch);
           parent = parent.parent;
         }
+      } else {
+        branch.parent.memory?.push(branch);
       }
     }
     // let nodeId = 0;
@@ -810,11 +812,11 @@ export default class InfomapStore {
         continue;
       }
       const memory = treeNode.data.memory!;
-      console.log(
-        `Species ${name} -> memory: ${memory
-          .map((b) => `(${b.parent.name},${b.child.name})`)
-          .join(', ')}`,
-      );
+      // console.log(
+      //   `Species ${name} -> memory: ${memory
+      //     .map((b) => `(${b.parent.name},${b.child.name})`)
+      //     .join(', ')}`,
+      // );
 
       const unscaledWeight = 1 / cells.size ** diversityOrder;
       const weight = (1 - treeWeightBalance) * unscaledWeight;
@@ -921,11 +923,11 @@ export default class InfomapStore {
 
         for (const [cellId, count] of links.entries()) {
           const memory = treeNode.memory!;
-          console.log(
-            `Taxon ${taxonName} -> memory: ${memory
-              .map((b) => `(${b.parent.name},${b.child.name})`)
-              .join(', ')}`,
-          );
+          // console.log(
+          //   `Taxon ${taxonName} -> memory: ${memory
+          //     .map((b) => `(${b.parent.name},${b.child.name})`)
+          //     .join(', ')}`,
+          // );
 
           const weight =
             (count * interpolationWeight * treeWeightBalance) /
@@ -1168,7 +1170,6 @@ export default class InfomapStore {
         if (treeNode) {
           treeNode.bioregionId = bioregionId;
         }
-        console.log(node.name, bioregionId, species, treeNode);
         return;
       }
 

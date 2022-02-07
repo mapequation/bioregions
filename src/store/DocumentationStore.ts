@@ -34,8 +34,8 @@ export default class DocumentationStore {
 
     speciesStore.binner.setCellSizeLog2(0, 1);
     speciesStore.binner.setCellCapacity(0, 100);
-    infomapStore.setIntegrationTime(1);
-    infomapStore.setSegregationTime(0.1);
+    infomapStore.setIntegrationTime(0.8);
+    infomapStore.setSegregationTime(0);
     infomapStore.setNumTrials(1);
 
     await this.loadData();

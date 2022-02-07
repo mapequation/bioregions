@@ -1,15 +1,18 @@
 import { observer } from 'mobx-react';
 import { Box } from '@chakra-ui/react';
-import { getIntersectingBranches, PhyloNode } from '../../utils/tree';
+import {
+  getIntersectingBranches,
+  PhyloNode,
+  visitTreeDepthFirstPreOrder,
+} from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
 import { Cell } from '../../utils/QuadTreeGeoBinner';
+import { range } from '../../utils/range';
 
 export interface DemoTreeProps {
-  tree: PhyloNode;
-  integrationTime: number;
-  segregationTime: number;
+  beta?: number;
 }
 
 type Name = string;
@@ -17,7 +20,7 @@ type Pos = [number, number];
 
 const layout = d3.tree<PhyloNode>();
 
-export default observer(() => {
+export default observer(({ beta }: DemoTreeProps) => {
   const demoStore = useDemoStore();
   const { treeStore, infomapStore, speciesStore, colorStore } = demoStore;
   const { tree } = treeStore;
@@ -131,13 +134,16 @@ export default observer(() => {
     return network.nodes[physId].name!;
   };
 
+  const { nameToCellIds } = binner;
   const getPhysLink = (link: typeof networkLinks[number]) => {
     // source: tree node, target: grid cell
     const taxonName = getPhysName(link.source);
     const cellName = getPhysName(link.target);
     const treeNode = nodeMap.get(taxonName)!;
     const cell = cellMap.get(cellName)!;
-    return { treeNode, cell, weight: link.weight };
+    const weight = link.weight ?? 0;
+
+    return { treeNode, cell, weight };
   };
 
   const physCellNodes = binner.cells.map((cell, i) => {
@@ -236,6 +242,86 @@ export default observer(() => {
 
   const networkPhysLinks = networkLinks.map(getPhysLink);
 
+  const straightSpeciesToGridCellLinks = true;
+  const useBundledCurves = true;
+
+  const getControlPathways = (
+    treeNode: d3.HierarchyPointNode<PhyloNode>,
+    cellName: string,
+    cellLinkPoint: [number, number],
+  ) => {
+    if (treeNode.data.isLeaf) {
+      const dx = cellLinkPoint[0] - treeNode.x;
+      const controlPoints = [[treeNode.x, treeNode.y]];
+      if (!straightSpeciesToGridCellLinks) {
+        controlPoints.push([treeNode.x + dx / 3, treeNode.y]);
+      }
+      controlPoints.push(cellLinkPoint);
+      return [controlPoints];
+    }
+
+    const controlPathways: [number, number][][] = [];
+    let path: string[] = [];
+    let lastDepth = treeNode.data.depth - 1;
+    visitTreeDepthFirstPreOrder(treeNode.data, (node: PhyloNode) => {
+      if (node.depth <= lastDepth) {
+        for (const _ of range(lastDepth - node.depth + 1)) {
+          path.pop();
+        }
+      }
+      path.push(node.name);
+
+      if (node.isLeaf && nameToCellIds[node.name].has(cellName)) {
+        const points = path
+          .map((taxonName) => nodeMap.get(taxonName))
+          .map((node) => [node?.x ?? 0, node?.y ?? 0] as [number, number]);
+        points.push(cellLinkPoint);
+        controlPathways.push(points);
+      }
+      lastDepth = node.depth;
+    });
+    return controlPathways;
+  };
+
+  const networkPhysLinksBundle = !useBundledCurves
+    ? []
+    : networkPhysLinks
+        .map(({ treeNode, cell, weight }) => {
+          const cellLinkPoint = projection(cell.center) ?? [0, 0];
+          // cellLinkPoint[0] -= cellSize / 2 - 0.5;
+          const controlPathways = getControlPathways(
+            treeNode,
+            cell.id,
+            cellLinkPoint,
+          );
+          return controlPathways.map((controlPoints) => ({
+            treeNode,
+            cell,
+            weight: weight / controlPathways.length,
+            controlPoints,
+          }));
+        })
+        .flatMap((links) => links);
+
+  const stateTreeLinksBundle = !useBundledCurves
+    ? []
+    : stateLinks
+        .map(({ stateCell, treeNode, weight }) => {
+          const stateCellPos = [stateCell.x, stateCell.y] as [number, number];
+          const controlPathways = getControlPathways(
+            treeNode,
+            stateCell.cellId,
+            stateCellPos,
+          );
+          return controlPathways.map((controlPoints) => ({
+            treeNode,
+            stateCell,
+            weight: weight / controlPathways.length,
+            controlPoints,
+          }));
+        })
+        .flatMap((links) => links);
+
   return (
     <Box textAlign="center">
       <svg
@@ -245,18 +331,129 @@ export default observer(() => {
         style={{ color: '#666' }}
         preserveAspectRatio="xMidYMid meet"
       >
+        {!haveStateNodes && (
+          <g>
+            {!useBundledCurves && (
+              <g
+                className="tree-links"
+                stroke={blue}
+                strokeWidth={0.5}
+                fill="none"
+              >
+                {networkPhysLinks.map(({ treeNode, cell, weight }, i) => {
+                  const cellPos = projection(cell.center) ?? [0, 0];
+                  const cellX = cellPos[0] - cellSize / 2 + 0.5;
+                  const cellY = cellPos[1];
+                  //console.log(`${treeNode?.data.name} - ${cell.id}`);
+                  if (treeNode.data.isLeaf && straightSpeciesToGridCellLinks) {
+                    return (
+                      <line
+                        key={i}
+                        x1={treeNode.x}
+                        y1={treeNode.y}
+                        x2={cellX}
+                        y2={cellY}
+                        opacity={weight ?? 0}
+                      />
+                    );
+                  }
+                  const xMid = (treeNode.x + cellX) / 2;
+                  const yMid = (treeNode.y + cellY) / 2;
+                  const cp1 = [xMid, treeNode.y];
+                  const cp2 = [xMid, yMid];
+                  // prettier-ignore
+                  const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
+                  return <path key={i} d={d} opacity={weight ?? 0} />;
+                })}
+              </g>
+            )}
+            {useBundledCurves && (
+              <g
+                className="tree-bundle-links"
+                stroke={blue}
+                strokeWidth={0.5}
+                fill="none"
+              >
+                {networkPhysLinksBundle.map(({ weight, controlPoints }, i) => {
+                  const path = d3.path();
+                  const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(path);
+                  curveBundle.lineStart();
+                  for (const [x, y] of controlPoints) {
+                    curveBundle.point(x, y);
+                  }
+                  curveBundle.lineEnd();
+                  const d = path.toString();
+                  return <path key={i} d={d} opacity={weight ?? 0} />;
+                })}
+              </g>
+            )}
+          </g>
+        )}
         <g className="grid-cells">
-          {physCellNodes.map(({ key, cell, svgString, bioregionId }) => (
+          {physCellNodes.map(({ key, cell, svgString }) => (
             <path
               key={key}
               d={svgString}
               stroke="white"
+              strokeWidth={0.5}
               fill={colorCell(cell)}
             />
           ))}
         </g>
         {haveStateNodes && (
           <g>
+            {useBundledCurves && (
+              <g
+                className="state-tree-bundle-links"
+                stroke={blue}
+                strokeWidth={0.5}
+                fill="none"
+              >
+                {stateTreeLinksBundle.map(({ weight, controlPoints }, i) => {
+                  const path = d3.path();
+                  const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(path);
+                  curveBundle.lineStart();
+                  for (const [x, y] of controlPoints) {
+                    curveBundle.point(x, y);
+                  }
+                  curveBundle.lineEnd();
+                  const d = path.toString();
+                  return <path key={i} d={d} opacity={weight ?? 0} />;
+                })}
+              </g>
+            )}
+            {!useBundledCurves && (
+              <g
+                className="state-tree-links"
+                stroke={blue}
+                strokeWidth={0.5}
+                fill="none"
+              >
+                {stateLinks.map(({ treeNode, stateCell, weight }, i) => {
+                  const cellX = stateCell.x - stateCellRadius;
+                  const cellY = stateCell.y;
+                  if (treeNode.data.isLeaf && straightSpeciesToGridCellLinks) {
+                    return (
+                      <line
+                        key={i}
+                        x1={treeNode.x}
+                        y1={treeNode.y}
+                        x2={stateCell.x}
+                        y2={stateCell.y}
+                        opacity={weight ?? 0}
+                      />
+                    );
+                  }
+                  const xMid = (treeNode.x + cellX) / 2;
+                  const yMid = (treeNode.y + cellY) / 2;
+                  const cp1 = [xMid, treeNode.y];
+                  const cp2 = [xMid, yMid];
+                  // prettier-ignore
+                  const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
+                  return <path key={i} d={d} opacity={weight ?? 0} />;
+                })}
+              </g>
+            )}
             <g className="state-cells">
               {stateCells.map((stateCell) => (
                 <g key={stateCell.cellStateName}>
@@ -280,71 +477,6 @@ export default observer(() => {
                 </g>
               ))}
             </g>
-            <g
-              className="state-tree-links"
-              stroke="#33c"
-              strokeWidth={0.5}
-              fill="none"
-            >
-              {stateLinks.map(({ treeNode, stateCell, weight }, i) => {
-                const cellX = stateCell.x - stateCellRadius;
-                const cellY = stateCell.y;
-                if (treeNode.data.isLeaf && false) {
-                  return (
-                    <line
-                      key={i}
-                      x1={treeNode.x}
-                      y1={treeNode.y}
-                      x2={stateCell.x}
-                      y2={stateCell.y}
-                      opacity={weight ?? 0}
-                    />
-                  );
-                }
-                const xMid = (treeNode.x + cellX) / 2;
-                const yMid = (treeNode.y + cellY) / 2;
-                const cp1 = [xMid, treeNode.y];
-                const cp2 = [xMid, yMid];
-                // prettier-ignore
-                const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
-                return <path key={i} d={d} opacity={weight ?? 0} />;
-              })}
-            </g>
-          </g>
-        )}
-
-        {!haveStateNodes && (
-          <g className="tree-links" stroke="#33c" strokeWidth={0.5} fill="none">
-            {networkPhysLinks.map(({ treeNode, cell, weight }, i) => {
-              const cellPos = projection(cell.center) ?? [0, 0];
-              const cellX = cellPos[0] - cellSize / 2 + 0.5;
-              const cellY = cellPos[1];
-
-              //console.log(`${treeNode?.data.name} - ${cell.id}`);
-
-              if (treeNode.data.isLeaf && false) {
-                return (
-                  <line
-                    key={i}
-                    x1={treeNode.x}
-                    y1={treeNode.y}
-                    x2={cellX}
-                    y2={cellY}
-                    opacity={weight ?? 0}
-                  />
-                );
-              }
-
-              const xMid = (treeNode.x + cellX) / 2;
-              const yMid = (treeNode.y + cellY) / 2;
-              const cp1 = [xMid, treeNode.y];
-              const cp2 = [xMid, yMid];
-
-              // prettier-ignore
-              const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
-
-              return <path key={i} d={d} opacity={weight ?? 0} />;
-            })}
           </g>
         )}
 
