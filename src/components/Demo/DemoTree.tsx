@@ -257,7 +257,7 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
 
   const networkPhysLinks = networkLinks.map(getPhysLink);
 
-  const straightSpeciesToGridCellLinks = true;
+  const straightSpeciesToGridCellLinks = false;
   const useBundledCurves = true;
 
   const getControlPathways = (
@@ -521,7 +521,7 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
             <g strokeLinecap="round" strokeWidth={0.5} fill="none">
               <line
                 x1={100 * segregationTime}
-                y1={0}
+                y1={7}
                 x2={100 * segregationTime}
                 y2={122}
                 stroke={red}
@@ -529,7 +529,7 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
               />
               <line
                 x1={100 * integrationTime}
-                y1={0}
+                y1={7}
                 x2={100 * integrationTime}
                 y2={127}
                 stroke={blue}
