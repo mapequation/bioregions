@@ -1,8 +1,8 @@
 import { GeoProjection } from 'd3';
-import type { Node as QuadtreeNode } from './QuadTreeGeoBinner';
+import type { Cell } from './QuadTreeGeoBinner';
 
 export function getSVGRenderer(projection: GeoProjection) {
-  return (d: QuadtreeNode) =>
+  return (d: Cell) =>
     'M' +
     [
       [d.x1, d.y1],

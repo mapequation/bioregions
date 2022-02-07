@@ -7,7 +7,7 @@ import type SpeciesStore from '../store/SpeciesStore';
 import { rangeArray, rangeArrayOneSignificant } from './range';
 import type { ExtendedFeature } from 'd3';
 
-type VisitCallback = (node: Node) => true | void;
+type VisitCallback = (node: Cell) => true | void;
 
 export type QuadtreeNodeProperties = GeoJsonProperties & {
   numRecords: number;
@@ -71,7 +71,7 @@ export class OverlappingBioregions {
     this.memoryIdToBioregion = new Map();
   }
 }
-export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
+export class Cell implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
   x1: number; // west
   y1: number; // south
   x2: number; // east
@@ -79,12 +79,12 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
   visible: boolean;
   isLeaf: boolean = true;
   features: PointFeature[] = [];
-  parent: Node | null = null;
+  parent: Cell | null = null;
   private children: [
-    Node | undefined,
-    Node | undefined,
-    Node | undefined,
-    Node | undefined,
+    Cell | undefined,
+    Cell | undefined,
+    Cell | undefined,
+    Cell | undefined,
   ] = [undefined, undefined, undefined, undefined];
   bioregionId: number = 0;
   overlappingBioregions: OverlappingBioregions = new OverlappingBioregions();
@@ -260,7 +260,7 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
 
       const child =
         this.children[i] ??
-        (this.children[i] = new Node([x1, y1, x2, y2], maxCellSizeLog2));
+        (this.children[i] = new Cell([x1, y1, x2, y2], maxCellSizeLog2));
 
       child.parent = this;
       child.id = `${this.id}${i}`;
@@ -291,9 +291,9 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
       return this.features;
     }
 
-    const nonEmptyChildren: Node[] = this.children.filter(
+    const nonEmptyChildren: Cell[] = this.children.filter(
       (child) => child !== undefined,
-    ) as Node[];
+    ) as Cell[];
 
     const doPatch =
       this.sizeLog2 <= maxCellSizeLog2 &&
@@ -301,7 +301,7 @@ export class Node implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
       nonEmptyChildren.length < 4;
 
     const aggregatedFeatures: PointFeature[] = [];
-    nonEmptyChildren.forEach((child: Node) =>
+    nonEmptyChildren.forEach((child: Cell) =>
       child
         ?.patchPartiallyEmptyNodes(maxCellSizeLog2)
         ?.forEach((feature) => aggregatedFeatures.push(feature)),
@@ -378,9 +378,9 @@ export class QuadtreeGeoBinner {
   cellCapacityRange = rangeArrayOneSignificant(0, 6, { inclusive: true });
   maxCellCapacity: number = 100;
   minCellCapacity: number = 10;
-  root: Node | null = null;
+  root: Cell | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
-  _cells: Node[] = [];
+  _cells: Cell[] = [];
   private _speciesStore: SpeciesStore;
 
   cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
@@ -418,7 +418,7 @@ export class QuadtreeGeoBinner {
   }
 
   private _initRoot() {
-    this.root = new Node(this.extent, this.maxCellSizeLog2);
+    this.root = new Cell(this.extent, this.maxCellSizeLog2);
   }
 
   get scale() {
@@ -617,14 +617,14 @@ export class QuadtreeGeoBinner {
    * included. Default false.
    * @return Array of quadtree nodes
    */
-  generateCells(patchSparseNodes = true): Node[] {
+  generateCells(patchSparseNodes = true): Cell[] {
     console.time('generateCells');
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.minCellCapacity);
     }
 
-    const nodes: Node[] = [];
-    this.visitNonEmpty((node: Node) => {
+    const nodes: Cell[] = [];
+    this.visitNonEmpty((node: Cell) => {
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
       if (node.numFeatures < this.minCellCapacity) {
         return true;

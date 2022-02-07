@@ -4,7 +4,7 @@ import { getIntersectingBranches, PhyloNode } from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
-import { Node as Cell } from '../../utils/QuadTreeGeoBinner';
+import { Cell } from '../../utils/QuadTreeGeoBinner';
 
 export interface DemoTreeProps {
   tree: PhyloNode;

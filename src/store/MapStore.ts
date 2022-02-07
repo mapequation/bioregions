@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { action, makeObservable, observable } from 'mobx';
-import { Node } from '../utils/QuadTreeGeoBinner';
+import { Cell } from '../utils/QuadTreeGeoBinner';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
@@ -21,7 +21,7 @@ export interface IMapRenderer {}
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
-type GetGridColor = (cell: Node) => string;
+type GetGridColor = (cell: Cell) => string;
 
 export const PROJECTIONS = [
   'geoOrthographic',
@@ -179,7 +179,7 @@ export default class MapStore {
   }
 
   private _renderGridCell(
-    node: Node,
+    node: Cell,
     ctx: CanvasRenderingContext2D,
     color: string,
   ) {
@@ -190,9 +190,9 @@ export default class MapStore {
     ctx.fill();
   }
 
-  private static _heatmapColor(cells: Node[]): GetGridColor {
+  private static _heatmapColor(cells: Cell[]): GetGridColor {
     //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
-    const domainExtent = d3.extent(cells, (n: Node) => n.recordsPerArea) as [
+    const domainExtent = d3.extent(cells, (n: Cell) => n.recordsPerArea) as [
       number,
       number,
     ];
@@ -218,13 +218,13 @@ export default class MapStore {
       '#800026',
     ]; // Colorbrewer YlOrRd
 
-    return (cell: Node) =>
+    return (cell: Cell) =>
       colorRange[Math.floor(heatmapOpacityScale(cell.recordsPerArea))];
   }
 
   private _bioregionColor(): GetGridColor {
     const { bioregionColors } = this.rootStore.colorStore;
-    return (cell: Node) => bioregionColors[cell.bioregionId - 1];
+    return (cell: Cell) => bioregionColors[cell.bioregionId - 1];
   }
 
   renderGrid() {
@@ -240,7 +240,7 @@ export default class MapStore {
         ? MapStore._heatmapColor(cells)
         : this._bioregionColor();
 
-    cells.forEach((cell: Node) =>
+    cells.forEach((cell: Cell) =>
       this._renderGridCell(cell, this.context2d!, getGridColor(cell)),
     );
   }
