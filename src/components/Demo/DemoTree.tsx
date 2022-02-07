@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Box } from '@chakra-ui/react';
+import { Box, useColorModeValue } from '@chakra-ui/react';
 import {
   getIntersectingBranches,
   PhyloNode,
@@ -13,6 +13,7 @@ import { range } from '../../utils/range';
 
 export interface DemoTreeProps {
   beta?: number;
+  hideTree?: boolean;
 }
 
 type Name = string;
@@ -20,8 +21,11 @@ type Pos = [number, number];
 
 const layout = d3.tree<PhyloNode>();
 
-export default observer(({ beta }: DemoTreeProps) => {
+export default observer(({ beta, hideTree }: DemoTreeProps) => {
   const demoStore = useDemoStore();
+  const hiddenLinkColor = useColorModeValue('#eeeeee', '#333333');
+  const hiddenNodeFillColor = useColorModeValue('#ffffff', '#000000');
+  const hiddenNodeStrokeColor = useColorModeValue('#eeeeee', '#333333');
   const { treeStore, infomapStore, speciesStore, colorStore } = demoStore;
   const { tree } = treeStore;
   // const { bioregions } = infomapStore;
@@ -80,6 +84,9 @@ export default observer(({ beta }: DemoTreeProps) => {
   });
 
   const getLinkColor = (link: d3.HierarchyPointLink<PhyloNode>) => {
+    if (hideTree) {
+      return hiddenLinkColor;
+    }
     const {
       source: { data: parent },
       target: { data: child },
@@ -88,9 +95,15 @@ export default observer(({ beta }: DemoTreeProps) => {
   };
 
   const getFillColor = (node: PhyloNode) =>
-    fillColorMap.get(node.uid) ?? 'white';
+    hideTree
+      ? hiddenNodeFillColor
+      : fillColorMap.get(node.uid) ?? hiddenNodeFillColor;
   const getStrokeColor = (node: PhyloNode) =>
-    strokeColorMap.get(node.uid) ?? 'currentColor';
+    hideTree && !node.isLeaf
+      ? hiddenNodeStrokeColor
+      : strokeColorMap.get(node.uid) ?? 'currentColor';
+  const getNodeTextColor = (node: PhyloNode) =>
+    hideTree && !node.isLeaf ? hiddenNodeStrokeColor : 'currentColor';
 
   const getTreeNodeBioregionColor = (node: PhyloNode) => {
     const bioregionId = treeStore.treeNodeMap.get(node.name)?.bioregionId;
@@ -480,74 +493,80 @@ export default observer(({ beta }: DemoTreeProps) => {
           </g>
         )}
 
-        <g className="separating-lines">
-          <g strokeLinecap="round" strokeWidth={0.5} fill="none">
-            <path
-              d="M0,111 L0,109 M0,110 L100,110 M100,111 L100,109"
-              stroke="var(--chakra-colors-gray-500)"
-            />
-            <line
-              x1={100 * segregationTime}
-              y1={0}
-              x2={100 * segregationTime}
-              y2={122}
-              stroke={red}
-              strokeDasharray="1.1,2"
-            />
-            <line
-              x1={100 * integrationTime}
-              y1={0}
-              x2={100 * integrationTime}
-              y2={127}
-              stroke={blue}
-              strokeDasharray="0.4,1.3"
-            />
+        {!hideTree && (
+          <g className="separating-lines">
+            <g strokeLinecap="round" strokeWidth={0.5} fill="none">
+              <line
+                x1={100 * segregationTime}
+                y1={0}
+                x2={100 * segregationTime}
+                y2={122}
+                stroke={red}
+                strokeDasharray="1.1,2"
+              />
+              <line
+                x1={100 * integrationTime}
+                y1={0}
+                x2={100 * integrationTime}
+                y2={127}
+                stroke={blue}
+                strokeDasharray="0.4,1.3"
+              />
+            </g>
+
+            <g paintOrder="stroke" stroke="white" strokeWidth={1} fontSize={3}>
+              <text
+                x={100 * segregationTime}
+                y={106}
+                dx={2}
+                dy={Math.abs(segregationTime - integrationTime) < 0.32 ? -2 : 0}
+                fill={red}
+              >
+                Segregation time{' '}
+                {segregationTime === 0 || segregationTime === 1
+                  ? 1 - segregationTime
+                  : (1 - segregationTime).toFixed(2)}
+              </text>
+              <text
+                x={100 * integrationTime}
+                y={106}
+                dx={2}
+                dy={Math.abs(segregationTime - integrationTime) < 0.32 ? 2 : 0}
+                fill={blue}
+              >
+                Integration time{' '}
+                {integrationTime === 0 || integrationTime === 1
+                  ? 1 - integrationTime
+                  : (1 - integrationTime).toFixed(2)}
+              </text>
+            </g>
           </g>
-          <g paintOrder="stroke" stroke="white" strokeWidth={1} fontSize={3}>
-            <text
-              x={100 * segregationTime}
-              y={106}
-              dx={2}
-              dy={Math.abs(segregationTime - integrationTime) < 0.32 ? -2 : 0}
-              fill={red}
-            >
-              Segregation time{' '}
-              {segregationTime === 0 || segregationTime === 1
-                ? 1 - segregationTime
-                : (1 - segregationTime).toFixed(2)}
-            </text>
-            <text
-              x={100 * integrationTime}
-              y={106}
-              dx={2}
-              dy={Math.abs(segregationTime - integrationTime) < 0.32 ? 2 : 0}
-              fill={blue}
-            >
-              Integration time{' '}
-              {integrationTime === 0 || integrationTime === 1
-                ? 1 - integrationTime
-                : (1 - integrationTime).toFixed(2)}
-            </text>
-          </g>
-          <g
-            fill="var(--chakra-colors-gray-500)"
-            fontSize={3}
-            fontWeight={400}
-            textAnchor="middle"
-            paintOrder="stroke"
-            stroke="white"
-            strokeWidth={1}
-          >
-            <text x={50} y={110} dy={5} dx={0}>
-              Time
-            </text>
-            <text x={0} y={110} dy={5} dx={0}>
-              1
-            </text>
-            <text x={100} y={110} dy={5} dx={0}>
-              0
-            </text>
-          </g>
+        )}
+
+        <g strokeLinecap="round" strokeWidth={0.5} fill="none">
+          <path
+            d="M0,111 L0,109 M0,110 L100,110 M100,111 L100,109"
+            stroke="var(--chakra-colors-gray-500)"
+          />
+        </g>
+        <g
+          fill="var(--chakra-colors-gray-500)"
+          fontSize={3}
+          fontWeight={400}
+          textAnchor="middle"
+          paintOrder="stroke"
+          stroke="white"
+          strokeWidth={1}
+        >
+          <text x={50} y={110} dy={5} dx={0}>
+            Time
+          </text>
+          <text x={0} y={110} dy={5} dx={0}>
+            1
+          </text>
+          <text x={100} y={110} dy={5} dx={0}>
+            0
+          </text>
         </g>
 
         <g className="phylo-tree" strokeLinejoin="round" strokeLinecap="round">
@@ -569,7 +588,9 @@ export default observer(({ beta }: DemoTreeProps) => {
                 r={3}
                 fill={getFillColor(node.data)}
                 stroke={getStrokeColor(node.data)}
-                strokeWidth={strokeColorMap.has(node.data.uid) ? 0.8 : 0.5}
+                strokeWidth={
+                  !hideTree && strokeColorMap.has(node.data.uid) ? 0.8 : 0.5
+                }
               />
               <circle
                 cx={node.x + 3.2}
@@ -591,7 +612,7 @@ export default observer(({ beta }: DemoTreeProps) => {
                 paintOrder="stroke"
                 stroke="hsla(0, 0%, 100%, 0.8)"
                 strokeWidth={0.3}
-                fill="#333"
+                fill={getNodeTextColor(node.data)}
               >
                 {node.data.name}
               </text>

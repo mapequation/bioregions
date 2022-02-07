@@ -21,6 +21,7 @@ import { useState } from 'react';
 export default observer(() => {
   const demoStore = useDemoStore();
   const [beta, setBeta] = useState(0.75);
+  const [hideTree, setHideTree] = useState(false);
   const { treeStore, infomapStore } = demoStore;
   const { tree } = treeStore;
 
@@ -41,7 +42,7 @@ export default observer(() => {
   return (
     <Box>
       <Box w="60%" pos="relative">
-        <DemoTree beta={beta} />
+        <DemoTree beta={beta} hideTree={hideTree} />
         <Box pos="relative" top={-20} mb={-20}>
           <Slider
             w={`${100 * (100 / 144)}%`}
@@ -175,6 +176,17 @@ export default observer(() => {
               );
               infomapStore.run();
             }}
+          />
+        </FormControl>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="hideTree" mb="0">
+            Hide tree
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="hideTree"
+            isChecked={hideTree}
+            onChange={() => setHideTree(!hideTree)}
           />
         </FormControl>
       </VStack>
