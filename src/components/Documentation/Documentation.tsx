@@ -8,13 +8,7 @@ export default observer(function Documentation() {
   return (
     <Container maxW="container.xl" id="documentation">
       <Heading as="h2">Documentation</Heading>
-      <Container>
-        <Box>Lorem</Box>
-        Lorem ipsum dolor sit amet consectetur adipisicing elit. Explicabo nulla
-        laboriosam, recusandae harum quasi dolore corrupti vitae facere quia
-        cumque maiores fugit praesentium et quam aliquid? Quia minima numquam
-        necessitatibus!
-      </Container>
+      <Container></Container>
       <Algorithm />
     </Container>
   );

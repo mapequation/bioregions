@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Box, useColorModeValue } from '@chakra-ui/react';
+import { Box, useColorModeValue, Icon } from '@chakra-ui/react';
 import {
   getIntersectingBranches,
   PhyloNode,
@@ -10,6 +10,7 @@ import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
 import { Cell } from '../../utils/QuadTreeGeoBinner';
 import { range } from '../../utils/range';
+import { GrMap, GrBug } from 'react-icons/gr';
 
 export interface DemoTreeProps {
   beta?: number;
@@ -26,6 +27,7 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
   const hiddenLinkColor = useColorModeValue('#eeeeee', '#333333');
   const hiddenNodeFillColor = useColorModeValue('#ffffff', '#000000');
   const hiddenNodeStrokeColor = useColorModeValue('#eeeeee', '#333333');
+  const iconColor = useColorModeValue('#999999', '#666666');
   const { treeStore, infomapStore, speciesStore, colorStore } = demoStore;
   const { tree } = treeStore;
   // const { bioregions } = infomapStore;
@@ -335,8 +337,11 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
         })
         .flatMap((links) => links);
 
+  const speciesX = nodeMap.get('A')!.x;
+  const cellsX = projection(cells![0].center)![0];
+
   return (
-    <Box textAlign="center">
+    <Box textAlign="center" pt={4}>
       <svg
         width="100%"
         height="100%"
@@ -344,6 +349,24 @@ export default observer(({ beta, hideTree }: DemoTreeProps) => {
         style={{ color: '#666' }}
         preserveAspectRatio="xMidYMid meet"
       >
+        <g className="help" opacity={0.5}>
+          <g transform={`translate(${speciesX},-4)`}>
+            <g transform="translate(-3,0)">
+              <GrBug size={6} />
+            </g>
+            <text textAnchor="middle" dy={9} fontSize={3}>
+              Species
+            </text>
+          </g>
+          <g transform={`translate(${cellsX},-4)`}>
+            <g transform="translate(-3,0)">
+              <GrMap size={6} />
+            </g>
+            <text textAnchor="middle" dy={9} fontSize={3}>
+              Grid cells
+            </text>
+          </g>
+        </g>
         {!haveStateNodes && (
           <g>
             {!useBundledCurves && (
