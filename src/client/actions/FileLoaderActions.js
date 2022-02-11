@@ -15,8 +15,8 @@ import {
   ADD_PHYLO_TREE,
   REMOVE_PHYLO_TREE,
   REMOVE_SPECIES,
-} from '../constants/ActionTypes';
-import axios from 'axios'
+} from "../constants/ActionTypes";
+import axios from "axios";
 
 let exampleGeoJson = {
   type: "FeatureCollection",
@@ -24,88 +24,77 @@ let exampleGeoJson = {
     {
       geometry: {
         bbox: [
-          -49.25399999999996,
-          -19.004471974999944,
-          -47.92972222199996,
-          -13.499999999999943
+          -49.25399999999996, -19.004471974999944, -47.92972222199996,
+          -13.499999999999943,
         ],
         coordinates: [
           [
-            [
-              -48.31869687799997,
-              -18.960895088999962
-            ],
-            [
-              -48.361439693999955,
-              -19.004471974999944
-            ],
-            [
-              -48.407800917999964,
-              -18.992518556999983
-            ]
-          ]
+            [-48.31869687799997, -18.960895088999962],
+            [-48.361439693999955, -19.004471974999944],
+            [-48.407800917999964, -18.992518556999983],
+          ],
         ],
-        type: "Polygon"
+        type: "Polygon",
       },
       properties: {
         OBJECTID: 1,
-        Taxon: "Apostolepis albicorallis"
+        Taxon: "Apostolepis albicorallis",
       },
-      type: "Feature"
-    }
-  ]
+      type: "Feature",
+    },
+  ],
 };
 export function showFileUI(isShowingFileUI) {
   return {
     type: SHOW_FILE_UI,
-    isShowingFileUI
+    isShowingFileUI,
   };
 }
 
 export function loadFiles(files) {
   return {
     type: LOAD_FILES,
-    files
+    files,
   };
 }
 
 export function fetchFiles(urls) {
   return {
     type: FETCH_FILES,
-    urls
+    urls,
   };
 }
 
 export function fetchTree(url) {
   return {
     type: FETCH_TREE,
-    url
+    url,
   };
 }
 
 export function loadTree(file) {
   return {
     type: LOAD_TREE,
-    file
+    file,
   };
 }
 
 export function cancelFileActions() {
   return {
-    type: CANCEL_FILE_ACTIONS
-  }
+    type: CANCEL_FILE_ACTIONS,
+  };
 }
 
 /**
-* Create error action
-* @param error {Error|string}
-*/
+ * Create error action
+ * @param error {Error|string}
+ */
 export function setFileError(error, subMessage = "") {
   return {
     type: FILE_ERROR,
-    message: error.message? error.message : error.toString(),
-    subMessage
-  }
+    message: error.message ? error.message : error.toString(),
+    subMessage,
+  };
 }
 
 export function loadSampleFiles(urls) {
@@ -114,77 +103,103 @@ export function loadSampleFiles(urls) {
   return (dispatch, getState) => {
     dispatch(fetchFiles(urls));
 
-    return axios.all(urls.map(url => axios.get('data/' + url, {
-      responseType: 'blob'
-    })))
-      .then(responses => responses.map(response => response.data))
-      // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
-      .then(blobs => blobs.map((blob,i) => { blob.name = urls[i]; return blob; }))
-      .then(files => dispatch(loadFiles(files)))
-      .catch(response => {
-        console.log(`Error loading files ${urls.join(', ')}, response: ${JSON.stringify(response)}`);
-        const errorMessage = `Error loading files '${urls.join(', ')}': `;
-        const subMessage = (response.status && response.statusText) ?
-          `${response.status} ${response.statusText}` : (
-          response.message || response.data || response
-        );
-        return dispatch(setFileError(errorMessage, subMessage));
-      });
-  }
+    return (
+      axios
+        .all(
+          urls.map((url) =>
+            axios.get("data/" + url, {
+              responseType: "blob",
+            })
+          )
+        )
+        .then((responses) => responses.map((response) => response.data))
+        // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
+        .then((blobs) =>
+          blobs.map((blob, i) => {
+            blob.name = urls[i];
+            return blob;
+          })
+        )
+        .then((files) => dispatch(loadFiles(files)))
+        .catch((response) => {
+          console.log(
+            `Error loading files ${urls.join(", ")}, response: ${JSON.stringify(
+              response
+            )}`
+          );
+          const errorMessage = `Error loading files '${urls.join(", ")}': `;
+          const subMessage =
+            response.status && response.statusText
+              ? `${response.status} ${response.statusText}`
+              : response.message || response.data || response;
+          return dispatch(setFileError(errorMessage, subMessage));
+        })
+    );
+  };
 }
 
 export function loadSampleTreeFile(url) {
   return (dispatch, getState) => {
     dispatch(fetchTree(url));
 
-    return axios.get('data/' + url, {
-        responseType: 'blob'
-      })
-      .then(response => response.data)
-      // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
-      .then(blob => { blob.name = url; return blob; })
-      .then(file => dispatch(loadTree(file)))
-      .catch(response => {
-        console.log(`Error loading tree file ${url}, response: ${JSON.stringify(response)}`);
-        const errorMessage = `Error loading files '${urls.join(', ')}': `;
-        const subMessage = (response.status && response.statusText) ?
-          `${response.status} ${response.statusText}` : (
-          response.message || response.data || response
-        );
-        return dispatch(setFileError(errorMessage, subMessage));
-      });
-  }
+    return (
+      axios
+        .get("data/" + url, {
+          responseType: "blob",
+        })
+        .then((response) => response.data)
+        // .then(blobs => blobs.map((blob,i) => new File([blob], urls[i]))) // File constructor not available in Safari
+        .then((blob) => {
+          blob.name = url;
+          return blob;
+        })
+        .then((file) => dispatch(loadTree(file)))
+        .catch((response) => {
+          console.log(
+            `Error loading tree file ${url}, response: ${JSON.stringify(
+              response
+            )}`
+          );
+          const errorMessage = `Error loading files '${urls.join(", ")}': `;
+          const subMessage =
+            response.status && response.statusText
+              ? `${response.status} ${response.statusText}`
+              : response.message || response.data || response;
+          return dispatch(setFileError(errorMessage, subMessage));
+        })
+    );
+  };
 }
 
 /**
-* parsedHead is [[...columns], [...first row], [...second row], ...]
-*/
+ * parsedHead is [[...columns], [...first row], [...second row], ...]
+ */
 export function requestDSVColumnMapping(parsedHead) {
   return {
     type: REQUEST_DSV_COLUMN_MAPPING,
-    parsedHead
-  }
+    parsedHead,
+  };
 }
 
 export function requestGeoJSONNameField(parsedFeatureProperty) {
   return {
     type: REQUEST_GEOJSON_NAME_FIELD,
-    parsedFeatureProperty
-  }
+    parsedFeatureProperty,
+  };
 }
 
 export function setFieldsToColumnsMapping(fieldsToColumns) {
   return {
     type: SET_FIELDS_TO_COLUMNS_MAPPING,
-    fieldsToColumns
-  }
+    fieldsToColumns,
+  };
 }
 
 export function setFeatureNameField(featureNameField) {
   return {
     type: SET_FEATURE_NAME_FIELD,
-    featureNameField
-  }
+    featureNameField,
+  };
 }
 
 export function addSpeciesAndBins(species, bins, speciesToBins) {
@@ -199,18 +214,18 @@ export function addSpeciesAndBins(species, bins, speciesToBins) {
 export function addPhyloTree(phyloTree) {
   return {
     type: ADD_PHYLO_TREE,
-    phyloTree
-  }
+    phyloTree,
+  };
 }
 
 export function removePhyloTree() {
   return {
     type: REMOVE_PHYLO_TREE,
-  }
+  };
 }
 
 export function removeSpecies() {
   return {
     type: REMOVE_SPECIES,
-  }
+  };
 }

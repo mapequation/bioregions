@@ -1,0 +1,13 @@
+{
+  "presets": [[
+    "@babel/preset-env",
+    {
+      "forceAllTransforms": true
+    }
+   ], "stage-0", "react"],
+  "env": {
+    "development": {
+      "presets": ["react-hmre"]
+    }
+  }
+}

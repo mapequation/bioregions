@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+  <meta name="description" content="Infomap Bioregions - Interactive mapping of biogeographical regions from species distributions">
+  <meta name="author" content="">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Infomap Bioregions - Interactive mapping of biogeographical regions from species distributions">
+  <meta property="og:site_name" content="Infomap Bioregions">
+  <meta property="og:description" content="Infomap Bioregions is an interactive web app that applies network theory to simplify and highlight the underlying structure in species distributions data for data-driven generation of bioregion maps.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://bioregions.mapequation.org">
+  <meta property="og:image" content="https://www.mapequation.org/assets/img/bioregions-amphibians.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Infomap Bioregions - Interactive mapping of biogeographical regions from species distributions">
+  <!-- Twitter limits description to 200 characters -->
+  <meta name="twitter:description" content="Infomap Bioregions is an interactive web app that applies network theory to simplify and highlight the underlying structure in species distributions data for data-driven generation of bioregion maps.">
+  <meta name="twitter:url" content="https://bioregions.mapequation.org">
+  <meta name="twitter:image" content="https://www.mapequation.org/assets/img/bioregions-amphibians.png">
+
+  <title>Infomap Bioregions - Interactive mapping of biogeographical regions from species distributions</title>
+
+  <link href='https://fonts.googleapis.com/css?family=Lato:300,700,300italic,700italic|Philosopher:400,700' rel='stylesheet' type='text/css'>
+  <!-- <link href="semantic/dist/semantic.min.css" rel="stylesheet" type="text/css"> -->
+  <!-- <link href="https://unpkg.com/basscss@8.0.2/css/basscss.min.css" rel="stylesheet"> -->
+  <link href="semantic.min.css" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.12/semantic.min.css" type='text/css'></link>
+  <link href="index.css" rel="stylesheet" type="text/css">
+  <link href="static/app.css" rel="stylesheet" type="text/css">
+
+	<!-- Fav and touch icons -->
+	<link rel="shortcut icon" href="https://www.mapequation.org/assets/img/icons/favicon.ico">
+	<!-- Standard iPhone -->
+	<link rel="apple-touch-icon" sizes="57x57" href="https://www.mapequation.org/assets/img/icons/apple-touch-icon-57.png">
+	<!-- Standard iPad -->
+	<link rel="apple-touch-icon" sizes="72x72" href="https://www.mapequation.org/assets/img/icons/apple-touch-icon-72.png">
+	<!-- Retina iPhone -->
+	<link rel="apple-touch-icon" sizes="114x114" href="https://www.mapequation.org/assets/img/icons/apple-touch-icon-114.png">
+	<!-- Retina iPad -->
+	<link rel="apple-touch-icon" sizes="144x144" href="https://www.mapequation.org/assets/img/icons/apple-touch-icon-144.png">
+
+  <script>
+    (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+    (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+    m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+    })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+    ga('create', 'UA-27168379-1', 'auto');
+    ga('send', 'pageview');
+  </script>
+
+</head>
+<body>
+  <div style="background-color: antiquewhite; padding: 4px 8px; text-align: center;">
+    <strong>Notice</strong>: This app will soon be replaced by a new version, currently available <a href="https://www.mapequation.org/bioregions2/">here</a> for testing.
+  </div>
+  <header class="documentation">
+    <div class="ui container">
+      <div class="menu">
+        <div>
+          <h1 class="ui header">
+            <a href="https://www.mapequation.org">
+              <img class="mapequation-logo" src="https://www.mapequation.org/assets/img/twocolormapicon_whiteboarder.svg" alt="mapequation-icon" />
+            </a>
+            <div class="content">
+              <span class="brand">
+                <span class="brand-infomap">Infomap</span> <span class="brand-bioregions">Bioregions</span>
+              </span>
+              <div class="sub header">Interactive mapping of biogeographical regions from species distributions</div>
+            </div>
+          </h1>
+        </div>
+        <div>
+          <h1 class="ui header">
+            <a href="#documentation">Documentation</a>
+            <a href="https://github.com/mapequation/bioregions"><i class="github icon"></i></a>
+          </h1>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="app"></div>
+
+  <div id="documentation" class="ui container documentation">
+    <div class="ui stackable grid">
+      <div class="top aligned row">
+        <div class="eight wide column">
+          <div class="paper">
+            <h3 class="ui center aligned header">
+              <a href="https://www.mapequation.org/publications.html#Edler-Etal-2017-Bioregions" name="paper-bioregions">Infomap Bioregions: Interactive mapping of biogeographical regions from species distributions</a>
+              <div class="sub header">
+                <div class="paper-authors">
+                  Daniel Edler, Thaís Guedes, Alexander Zizka, Martin Rosvall, and Alexandre Antonelli
+                </div>
+              </div>
+              <div class="sub header">
+                <div class="paper-links">
+                  <a href="https://dx.doi.org/10.1093/sysbio/syw087">Syst. Biol. 66 (2): 197-204 (2017)</a>
+                  [<a href="https://www.mapequation.org/assets/publications/syw087.pdf">pdf</a>].
+                  [<a href="https://arxiv.org/abs/1512.00892">arXiv:1512.00892</a>]
+                </div>
+              </div>
+            </h3>
+
+						<a class="paper-thumbnail" title="Infomap Bioregions: Interactive mapping of biogeographical regions from species distributions" href="https://arxiv.org/abs/1512.00892"></a>
+						<div class="abstract">
+							Biogeographical regions reveal how species are spatially grouped and therefore are important units for conservation, historical biogeography, ecology and evolution. Several methods have been developed to identify bioregions based on species distribution data rather than expert opinion. One approach successfully applies network theory to simplify and highlight the underlying structure in species distributions data. However, there are no tools that make this methodology simple and efficient to use. Here we present Infomap Bioregions, an interactive web application that inputs species distribution data and generates bioregion maps. Species distributions may be provided as georeferenced point occurrences or range maps, and can be of local, regional or global scale. The application uses a novel adaptive resolution method to make best use of often incomplete species distribution data. The results can be downloaded as vector graphics, shapefiles or in table format. We validate the tool by processing large datasets of publicly available species distribution data of the world's amphibians using species ranges, and mammals using point occurrences. Potential applications include ancestral range reconstructions in historical biogeography and identification of indicator species for targeted conservation.
+						</div>
+					</div>
+        </div>
+        <div class="eight wide column">
+          <figure class="paper-figure">
+						<!-- <img class="ui image" src="https://www.mapequation.org/assets/img/bioregions-amphibians.png"> -->
+						<img class="ui image" src="https://www.mapequation.org/assets/img/infomapbioregions800.png">
+						<img class="ui image" src="https://www.mapequation.org/assets/img/infomapbioregionstable800.png">
+						<figcaption class="paper-figure-caption">
+						FIG. 1 <strong>Bioregion map of the world's amphibians generated with Infomap Bioregions</strong>, using the IUCN species range maps.
+						White areas have insufficient data and were excluded from the analysis. The inset shows a zoom-in of Central America, the West Indies and northwestern South America, depicting  many small bioregions that reflect high species turnover and narrow range distributions characteristic for the region.
+						</figcaption>
+					</figure>
+        </div>
+      </div>
+
+      <div id="how-to-cite" class="top aligned row">
+        <div class="three wide column"></div>
+        <div class="ten wide column">
+          <h1 class="ui header">
+            How to cite
+            <div class="sub header"></div>
+          </h1>
+
+          <p>
+            The original implementation is described in:<br>
+            <a href="https://www.mapequation.org/publications.html#Edler-Etal-2017-Bioregions">Edler, D., Guedes, T., Zizka, A. Rosvall, M. Antonelli, A. (2017) Infomap Bioregions: Interactive mapping of biogeographical regions from species distributions. Systematic Biology 66(2):197–204, doi: 10.1093/sysbio/syw087</a>
+          </p>
+
+          <p>
+            It is based on the method described in:<br>
+            <a href="https://www.nature.com/articles/ncomms7848">Vilhena, D., Antonelli, A. (2015) A network approach for identifying and delimiting biogeographical regions. Nature communications 6, 6848</a>
+          </p>
+
+          <p>
+            The original clustering algorithm is described in:<br>
+            <a href="https://www.mapequation.org/publications.html#Rosvall-Bergstrom-2008-Maps-of-information-flow">Rosvall, M. Bergstrom, C. (2008) Maps of information flow reveal community structure in complex networks, PNAS 105, 1118</a>
+          </p>
+
+          <p>If you are using Infomap Bioregions in one of your research articles or otherwise want to refer to it, please cite the relevant publication above or use the following format:</p>
+
+          <p>D. Edler, T. Guedes, A. Zizka, M. Rosvall, and A. Antonelli, Infomap Bioregions, available online at https://bioregions.mapequation.org.</p>
+        </div>
+        <div class="three wide column"></div>
+      </div>
+
+      <div id="feedback" class="top aligned row">
+        <div class="three wide column"></div>
+        <div class="ten wide column">
+          <h1 class="ui header">
+            Feedback
+            <div class="sub header"></div>
+          </h1>
+          <p>If you have any questions, suggestions or issues regarding the software, please add them to <a href="https://github.com/mapequation/bioregions/issues"><i class="github icon"></i>GitHub issues</a>.</p>
+        </div>
+        <div class="three wide column"></div>
+      </div>
+
+      <div id="step-by-step-explanation" class="top aligned row">
+        <div class="three wide column"></div>
+        <div class="ten wide column">
+          <h1 class="ui header">
+            Step-by-step explanation
+            <div class="sub header">From species distributions to bioregions</div>
+          </h1>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-wrap.svg" alt="Schematics - Input to output" />
+        </div>
+        <div class="three wide column"></div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+          <div class="ui blue message">
+            <div class="header">
+              Input quality?
+            </div>
+            <p>Tip: <strong><a href="https://github.com/azizka/sampbias">sampbias</a></strong> is an R package for cleaning erroneous geographical coordinates and assessing sampling biases in biological collection databases.</p>
+          </div>
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">1</div>
+            <div class="content">
+              Input
+              <div class="sub header">Load species distribution data</div>
+            </div>
+          </h2>
+          <p>As species distribution input, Infomap Bioregions supports both point occurrence data and species range maps.</p>
+
+          <h3 class="ui header">Point occurrences</h3>
+          <p>Point occurrences are specified in a text file with either comma-separated (CSV) or tab-separated (TSV) values. The application requires a header with the column names, and the user must identify which columns that should be parsed as name, latitude and longitude, respectively.</p>
+
+          <h4 class="ui header">Example input format:</h4>
+
+          <pre>Name, Lat, Long
+Sp1, -5.61, -53.43
+Sp1, -8.22, -48.90
+Sp2, -8.17, -50.06
+          </pre>
+
+          <h3 class="ui header">Range maps</h3>
+          <p>Range maps are specified in the <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format, which includes multiple files: a <code>.shp</code> file for species range polygons, a <code>.dbf</code> file for the attributes of each range polygon and, optionally, a <code>.prj</code> file for projection information. As for point occurrence data, the user must identify which attribute to parse as the name of the species.</p>
+
+          <h3 class="ui header">Phylogenetic tree</h3>
+          <p>Infomap Bioregions also supports loading a phylogenetic tree to show a phylogram and how it maps to the bioregions, if the names in the tree match with the names in the species distribution data. It supports the <a href="https://en.wikipedia.org/wiki/Nexus_file">NEXUS</a> and <a href="https://en.wikipedia.org/wiki/Newick_format">Newick</a> tree format.</p>
+
+          <h4 class="ui header">Example tree format:</h4>
+
+          <div id="example-phylogram">
+            <pre>(A:0.1,B:0.2,(C:0.3,D:0.4):0.5);</pre>
+
+            <p>The above example represents this tree:</p>
+
+            <img src="https://upload.wikimedia.org/wikipedia/commons/3/3f/NewickExample.svg" alt="Newick tree example" class="ui image">
+          </div>
+
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">2</div>
+            <div class="content">
+              Adaptive resolution
+              <div class="sub header">Discretize geographical space</div>
+            </div>
+          </h2>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-quadtree-mapping.svg" alt="Schematics - Quadtree mapping" />
+
+          <p>Infomap Bioregions bins the species records into quadratic grid cells. To allow for adaptive spatial resolution, each grid cell can be recursively subdivided into four cells. The adaptive binning generates a so-called quadtree with subdivided grid cells that satisfy the following user-specified criteria, with decreasing priority from 1 to 3:</p>
+
+          <div class="ui list">
+            <div class="item">1. Given in degrees, no grid cell is larger than the specified <div class="ui label">max cell size</div> or smaller than the specified <div class="ui label">min cell size</div>.</div>
+            <div class="item">2. Given as a natural number, no grid cell contains fewer records than the specified <div class="ui label">min cell capacity</div>.</div>
+            <div class="item">3. Given as a natural number, no grid cell contains more records than the specified <div class="ui label">max cell capacity</div>.</div>
+          </div>
+
+          <p>For point occurrence data, these criteria make the adaptive binning straightforward. For range maps, the application first adds a species record to each cell of minimum size that intersects with the corresponding species range polygon, and then proceeds with the adaptive binning to satisfy the user-specified criteria.</p>
+
+        </div>
+
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Quadtree
+            </div>
+            <p>A quadtree is a tree data structure in which each internal node has exactly four children. Quadtrees are most often used to partition a two-dimensional space by recursively subdividing it into four quadrants or regions.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">3</div>
+            <div class="content">
+              Bipartite occurrence network
+              <div class="sub header">Connect grid cells through common species</div>
+            </div>
+          </h2>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-network-mapping.svg" alt="Schematics - Network mapping" />
+
+          <p>Infomap Bioregions generates a bipartite network of species and grid cells. Each species is connected by an unweighted link to each grid cell in which it is present. The network is clustered with the <a href="mapequation.org/code.html">Infomap</a> clustering algorithm for bipartite networks. In that process, the geographical grid cells are merged into different clusters which become the resulting bioregions.</p>
+
+        </div>
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Bipartite network
+            </div>
+            <p>A bipartite network is network with two types of nodes, where the links always connect one type of nodes with the other.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">4</div>
+            <div class="content">
+              Clustering
+              <div class="sub header">Merge grid cells with similar species distribution</div>
+            </div>
+          </h2>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-network-clustering.svg" alt="Schematics - Network clustering" />
+
+          <p>The bipartite network of species and geographical grid cells is clustered with the Infomap clustering algorithm to find an optimal partition of the geographical space with respect to the <a href="https://www.mapequation.org/publications.html#Rosvall-Axelsson-Bergstrom-2009-Map-equation">map equation</a>.</p>
+
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">5</div>
+            <div class="content">
+              Bioregions
+              <div class="sub header">Map clusters to geographical space</div>
+            </div>
+          </h2>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-bioregions.svg" alt="Schematics - Bioregions" />
+
+          <p>Each cluster of grid cells is given a unique color and forms a bioregion.</p>
+
+        </div>
+        <div class="three wide column">
+          <div class="ui yellow message">
+            <div class="header">
+              Bioregion
+            </div>
+            <p>A bioregion, or biogeographical region, reveal how species are spatially grouped and therefore are important units for conservation, historical biogeography, ecology and evolution.</p>
+          </div>
+        </div>
+      </div>
+      <div class="top aligned row">
+        <div class="three wide column">
+        </div>
+        <div class="ten wide column">
+          <h2 class="ui header">
+            <div class="ui grey massive circular label">6</div>
+            <div class="content">
+              Output
+              <div class="sub header">Export bioregions map and statistics</div>
+            </div>
+          </h2>
+          <img class="ui image schematic-image" src="https://www.mapequation.org/assets/img/bioregions/schematics-exporting.svg" alt="Schematics - Bioregions" />
+
+          <p>The bioregions can be exported both as a visual map (<code>.png</code> or <code>.svg</code>) and as structured data for further analysis (in the <a href="https://en.wikipedia.org/wiki/GeoJSON">GeoJSON</a> or <a href="https://en.wikipedia.org/wiki/Shapefile">shapefile</a> format).</p>
+
+          <p>The application also identifies the most common and the most indicative species in each grid cell and bioregion, and shows the results as an interactive map together with supporting tables with information about the bioregions. These tables can be exported in the <code>.csv</code> format.</p>
+        </div>
+        <div class="three wide column">
+        </div>
+      </div>
+
+
+    <footer>
+    </footer>
+
+    <script
+      src="https://code.jquery.com/jquery-3.5.1.min.js"
+      integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0="
+      crossorigin="anonymous"></script>
+    <script src="static/bundle.js"></script>
+  </body>
+</html>
