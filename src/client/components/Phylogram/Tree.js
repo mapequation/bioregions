@@ -1,4 +1,5 @@
-import React, {Component, PropTypes} from 'react';
+import PropTypes from 'prop-types';
+import React, { Component } from 'react';
 import treeChart from './treeChart.js';
 import chroma from 'chroma-js';
 import treeUtils from '../../utils/treeUtils';

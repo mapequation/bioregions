@@ -1,5 +1,6 @@
-import React, {Component, PropTypes} from 'react';
+import React, { Component } from 'react';
 import shpWrite from "shp-write"
+import PropTypes from 'prop-types';
 import R from 'ramda';
 import d3 from 'd3';
 import _ from 'lodash';

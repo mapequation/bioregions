@@ -1,4 +1,4 @@
-import React, {Component, PropTypes} from 'react';
+import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { bindActionCreators } from 'redux';
 import { Button, Form } from 'semantic-ui-react';
@@ -7,6 +7,7 @@ import * as FilterActions from '../actions/FilterActions';
 import PieChart from '../components/PieChart';
 import Div from '../components/helpers/Div';
 import Tooltip from '../components/lib/Tooltip';
+import PropTypes from 'prop-types';
 import R from 'ramda';
 import _ from 'lodash';
 import {BY_SPECIES, BY_CLUSTER} from '../constants/Display';

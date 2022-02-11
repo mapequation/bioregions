@@ -1,5 +1,6 @@
-import React, {Component, PropTypes} from 'react';
+import React, { Component } from 'react';
 import _ from 'lodash';
+import PropTypes from 'prop-types';
 import R from 'ramda';
 import FileInput from '../helpers/FileInput'
 import {FILE_PROGRESS} from '../../constants/ActionTypes';
@@ -507,7 +508,7 @@ Dimmer.propTypes = {
   header: PropTypes.string.isRequired,
   subHeader: PropTypes.string.isRequired,
   onCancel: PropTypes.func.isRequired,
-  children: React.PropTypes.element.isRequired,
+  children: PropTypes.element.isRequired,
 }
 
 Dimmer.defaultProps = {

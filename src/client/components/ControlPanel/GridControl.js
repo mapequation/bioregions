@@ -1,4 +1,5 @@
-import React, {PropTypes} from 'react';
+import PropTypes from 'prop-types';
+import React from 'react';
 import Checkbox from '../helpers/Checkbox';
 import Tooltip from '../lib/Tooltip';
 import TangleInput from '../lib/TangleInput';

@@ -53,7 +53,7 @@ header {
 	vertical-align: middle;
 	width: 30px;
 	height: 30px;
-	background: url(../assets/img/twocolormapicon_whiteboarder.svg) no-repeat;
+	/* background: url(/twocolormapicon_whiteboarder.svg) no-repeat; */
 	background-size: 100%;
 	/*-webkit-filter: drop-shadow(1px 1px 0px white);*/
 }

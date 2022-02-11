@@ -1,4 +1,5 @@
-import React, {Component, PropTypes} from 'react';
+import PropTypes from 'prop-types';
+import React, { Component } from 'react';
 import { Checkbox as SemanticCheckbox } from 'semantic-ui-react';
 
 export default class Checkbox extends Component {

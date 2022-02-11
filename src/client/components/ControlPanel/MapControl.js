@@ -1,4 +1,5 @@
-import React, { PropTypes } from 'react'
+import PropTypes from 'prop-types';
+import React from 'react';
 import Tooltip from '../lib/Tooltip';
 import Div from '../helpers/Div';
 import Colors from './Colors';

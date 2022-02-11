@@ -1,4 +1,5 @@
-import React, { Component, PropTypes } from "react";
+import PropTypes from 'prop-types';
+import React, { Component } from "react";
 import classNames from "classnames";
 import { Form, Radio } from "semantic-ui-react";
 import TangleInput from "../lib/TangleInput";

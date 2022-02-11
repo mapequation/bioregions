@@ -1,4 +1,5 @@
-import React, {Component, PropTypes} from 'react';
+import PropTypes from 'prop-types';
+import React, { Component } from 'react';
 import classNames from 'classnames';
 import {BINNING_PROGRESS} from '../../constants/ActionTypes';
 import * as Binning from '../../constants/Binning';

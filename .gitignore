@@ -4,12 +4,11 @@ static/**
 node_modules/
 npm-debug.log
 semantic/dist
-data
-Infomap-worker.js*
-Infomap-worker.old.js
-maps/physical
-semantic.min.css
+/public/data
+/public/maps/physical
 esdoc
 .vscode
 .tmp
 /public/maps/physical
+/tmp
+/build

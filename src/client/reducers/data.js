@@ -68,6 +68,7 @@ function binning(state = getInitialBinningState(), action) {
 }
 
 var dataWorker = new DataWorker();
+// var dataWorker = new Worker(new URL("../workers/DataWorker", import.meta.url));
 var dataWorkerInitiated = false;
 var progressEmitter = new EventEmitter2({
   wildcard: false,

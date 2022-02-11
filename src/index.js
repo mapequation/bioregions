@@ -1,6 +1,6 @@
-import "babel-polyfill";
-import { polyfill } from "es6-promise";
-polyfill();
+// import "babel-polyfill";
+// import { polyfill } from "es6-promise";
+// polyfill();
 import React from "react";
 import { render } from "react-dom";
 import { Provider } from "react-redux";
@@ -8,6 +8,8 @@ import App from "./client/containers/App";
 import configureStore from "./client/store/configureStore";
 import ExamplePhylogram from "./client/examples/ExamplePhylogram";
 import HighlightStore from "./client/store/HighlightStore";
+import "semantic-ui-css/semantic.min.css";
+import "./index.css";
 
 const store = configureStore();
 
