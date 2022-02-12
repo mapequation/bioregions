@@ -451,13 +451,15 @@ export default observer(
           )}
           <g className="grid-cells">
             {physCellNodes.map(({ key, cell, svgString }) => (
-              <path
-                key={key}
-                d={svgString}
-                stroke="white"
-                strokeWidth={0.5}
-                fill={colorCell(cell)}
-              />
+              <g key={key}>
+                <title>Bioregion {cell.bioregionId}</title>
+                <path
+                  d={svgString}
+                  stroke="white"
+                  strokeWidth={0.5}
+                  fill={colorCell(cell)}
+                />
+              </g>
             ))}
           </g>
           {haveStateNodes && (
@@ -520,6 +522,7 @@ export default observer(
               <g className="state-cells">
                 {stateCells.map((stateCell) => (
                   <g key={stateCell.cellStateName}>
+                    <title>Bioegion: {stateCell.bioregionId}</title>
                     <circle
                       r={stateCellRadius}
                       cx={stateCell.x}
@@ -649,6 +652,9 @@ export default observer(
 
             {positionedTreeDescendants.map((node) => (
               <g key={node.data.uid}>
+                <title>{`Bioregion: ${
+                  treeStore.treeNodeMap.get(node.data.name)?.bioregionId
+                }`}</title>
                 <circle
                   cx={node.x}
                   cy={node.y}
