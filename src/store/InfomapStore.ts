@@ -84,6 +84,7 @@ export default class InfomapStore {
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
   infomapId: number | null = null;
+  infomapOutput: string = '';
   bioregions: Bioregion[] = [];
 
   // The link weight balance from no tree (0) to only tree (1)
@@ -118,6 +119,7 @@ export default class InfomapStore {
       network: observable.ref,
       tree: observable.ref,
       treeString: observable,
+      infomapOutput: observable,
       haveStateNodes: observable,
       args: observable,
       currentTrial: observable,
@@ -299,9 +301,10 @@ export default class InfomapStore {
     this.setIsRunning(false);
   };
 
-  onInfomapOutput = (output: string, id: number) => {
+  onInfomapOutput = action((output: string, id: number) => {
+    this.infomapOutput += output + '\n';
     this.parseOutput(output);
-  };
+  });
 
   async run() {
     if (this.infomapId !== null) {
@@ -443,10 +446,19 @@ export default class InfomapStore {
 
     const linkMap = new Map<NodeId, Map<CellId, Weight>>();
 
+    const { tree } = this.rootStore.treeStore;
+    const includeTree =
+      this.includeTreeInNetwork &&
+      tree &&
+      this.integrationTime !== 1 &&
+      this.treeWeightBalance !== 0;
+
     const { diversityOrder, treeWeightBalance } = this;
     for (let [name, cells] of Object.entries(nameToCellIds)) {
       for (let cellId of cells.values()) {
-        const weight = (1 - treeWeightBalance) / cells.size ** diversityOrder;
+        const weight =
+          (includeTree ? 1 - treeWeightBalance : 1) /
+          cells.size ** diversityOrder;
         network.sumLinkWeight += weight;
         // TODO: No need to use the map here if not include tree, will not aggregate on species level
         const outLinks = linkMap.has(name)
@@ -460,13 +472,6 @@ export default class InfomapStore {
     }
 
     network.numNonTreeNodes = network.nodes.length;
-
-    const { tree } = this.rootStore.treeStore;
-    const includeTree =
-      this.includeTreeInNetwork &&
-      tree &&
-      this.integrationTime !== 1 &&
-      this.treeWeightBalance !== 0;
 
     if (!includeTree) {
       for (const [source, outLinks] of linkMap.entries()) {
@@ -1055,7 +1060,7 @@ export default class InfomapStore {
 
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      const bioregionId = node.modules[0];
+      const bioregionId = node.path[0];
       const bioregion = bioregions[bioregionId - 1];
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;
@@ -1064,21 +1069,24 @@ export default class InfomapStore {
         bioregion.species.push(node.name);
         const species = speciesStore.speciesMap.get(node.name);
         if (species) {
-          species.bioregionId = node.modules[0];
+          species.bioregionId = bioregionId;
         }
         const treeNode = treeStore.treeNodeMap.get(node.name);
         if (treeNode) {
-          treeNode.bioregionId = node.modules[0];
+          treeNode.bioregionId = bioregionId;
         }
         return;
       }
 
       ++bioregion.numGridCells;
       const cell = cells[node.id];
+      if (!cell) {
+        console.warn(`Can't find cell for node ${node.id}`, node);
+      }
 
       // set the bioregion id to the top mulitlevel module of the node
       // different from the node path!
-      cell.bioregionId = node.modules[0];
+      cell.bioregionId = bioregionId;
     });
 
     type Species = string;
@@ -1179,6 +1187,7 @@ export default class InfomapStore {
       const stateName = (this.network as BioregionsStateNetwork).states[
         node.stateId
       ].name!;
+      node.name = stateName;
       const memTaxonName = stateName.split('_')[1]!;
 
       cell.bioregionId = bioregionId;
@@ -1201,7 +1210,15 @@ export default class InfomapStore {
         const species = speciesStore.speciesMap.get(name)!;
 
         const bioregionId = species.bioregionId!;
+        if (!bioregionId) {
+          console.warn(`No bioregion id for species ${name}: ${bioregionId}`);
+          continue;
+        }
         const bioregion = bioregions[bioregionId - 1];
+        if (!bioregion) {
+          console.warn(`No bioregion ${bioregionId} for species ${name}`);
+          continue;
+        }
 
         if (!bioregionSpeciesCount.has(bioregionId)) {
           bioregionSpeciesCount.set(bioregionId, new Map());

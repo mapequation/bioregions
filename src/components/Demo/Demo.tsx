@@ -22,6 +22,7 @@ export default observer(() => {
   const demoStore = useDemoStore();
   const [beta, setBeta] = useState(0.75);
   const [hideTree, setHideTree] = useState(false);
+  const [hideSegregation, setHideSegregation] = useState(false);
   const { treeStore, infomapStore } = demoStore;
   const { tree } = treeStore;
 
@@ -42,27 +43,12 @@ export default observer(() => {
   return (
     <Box>
       <Box w="60%" pos="relative">
-        <DemoTree beta={beta} hideTree={hideTree} />
-        <Box pos="relative" top={-20} mb={-20}>
-          <Slider
-            w={`${100 * (100 / 144)}%`}
-            ml={`${400 / 144}%`}
-            min={0}
-            max={1}
-            step={0.01}
-            value={segregationTime}
-            onChange={infomapStore.setSegregationTime}
-            onChangeEnd={(value) => {
-              infomapStore.setSegregationTime(value, true);
-              infomapStore.run();
-            }}
-            colorScheme="red"
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb />
-          </Slider>
+        <DemoTree
+          beta={beta}
+          hideTree={hideTree}
+          hideSegregation={hideSegregation}
+        />
+        <Box pos="relative" top={-24} mb={-24}>
           <Slider
             w={`${100 * (100 / 144)}%`}
             ml={`${400 / 144}%`}
@@ -83,6 +69,27 @@ export default observer(() => {
             </SliderTrack>
             <SliderThumb />
           </Slider>
+          {!hideSegregation && (
+            <Slider
+              w={`${100 * (100 / 144)}%`}
+              ml={`${400 / 144}%`}
+              min={0}
+              max={1}
+              step={0.01}
+              value={segregationTime}
+              onChange={infomapStore.setSegregationTime}
+              onChangeEnd={(value) => {
+                infomapStore.setSegregationTime(value, true);
+                infomapStore.run();
+              }}
+              colorScheme="red"
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb />
+            </Slider>
+          )}
         </Box>
       </Box>
 
@@ -187,6 +194,17 @@ export default observer(() => {
             id="hideTree"
             isChecked={hideTree}
             onChange={() => setHideTree(!hideTree)}
+          />
+        </FormControl>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="hideSegregation" mb="0">
+            Hide segregation
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="hideSegregation"
+            isChecked={hideSegregation}
+            onChange={() => setHideSegregation(!hideSegregation)}
           />
         </FormControl>
       </VStack>

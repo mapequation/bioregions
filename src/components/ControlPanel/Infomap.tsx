@@ -138,12 +138,13 @@ export default observer(function Infomap() {
         <HStack>
           <Slider
             w={200}
+            isReversed
             isDisabled={!infomapStore.includeTreeInNetwork}
             focusThumbOnChange={false}
-            value={infomapStore.integrationTime}
-            onChange={(value) => infomapStore.setIntegrationTime(value)}
+            value={1 - infomapStore.integrationTime}
+            onChange={(value) => infomapStore.setIntegrationTime(1 - value)}
             onChangeEnd={(value) =>
-              infomapStore.setIntegrationTime(value, true)
+              infomapStore.setIntegrationTime(1 - value, true)
             }
             min={0}
             max={1}

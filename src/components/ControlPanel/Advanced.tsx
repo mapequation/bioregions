@@ -20,17 +20,20 @@ import {
   Flex,
   Box,
   Collapse,
+  Text,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import Stat from '../Stat';
+import Modal from './Modal';
 
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState(5);
   const [step, setStep] = useState(0);
+  const [isInfomapOutputOpen, setIsInfomapOutputOpen] = useState(false);
   const [show, setShow] = useState(process.env.NODE_ENV === 'development');
   const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
 
@@ -56,8 +59,10 @@ export default observer(function Advanced() {
           mapStore.render();
         }
 
-        const filename = `${speciesStore.name}_time_${f(t)}.tree`;
-        zip.file(filename, infomapStore.treeString!);
+        // const filename = `${speciesStore.name}_integration_time_${f(t)}.tree`;
+        const filename = `Integration time ${f(1 - t)}.json`;
+        // zip.file(filename, infomapStore.treeString!);
+        zip.file(filename, JSON.stringify(infomapStore.tree)!);
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
@@ -88,6 +93,25 @@ export default observer(function Advanced() {
 
       <Collapse in={show} animateOpacity style={{ width: '100%' }}>
         <VStack align="stretch" spacing={2}>
+          <Button onClick={() => setIsInfomapOutputOpen(true)}>
+            Infomap console
+          </Button>
+          <Modal
+            header="Infomap output"
+            isOpen={isInfomapOutputOpen}
+            onClose={() => setIsInfomapOutputOpen(false)}
+            scrollBehavior="inside"
+            size="3xl"
+          >
+            <Box maxW="50%">
+              <Text fontSize="0.8rem">
+                <pre>
+                  {infomapStore.infomapOutput ||
+                    'Load data and run Infomap to see output here'}
+                </pre>
+              </Text>
+            </Box>
+          </Modal>
           <VStack>
             <Stat label="Levels">{infomapStore.numLevels}</Stat>
             <Stat label="Codelength">
