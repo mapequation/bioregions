@@ -1,13 +1,14 @@
 {
   "name": "infomap-bioregions",
-  "version": "0.1.0",
+  "version": "1.1.1",
   "homepage": "/bioregions",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test-watch": "npm run test -- --watch",
     "test-cli": "node_modules/.bin/mocha --opts mocha.opts",
-    "test-cli-watch": "npm run test-cli -- --watch"
+    "test-cli-watch": "npm run test-cli -- --watch",
+    "deploy": "scp -r build/* mapequation:/var/www/bioregions"
   },
   "dependencies": {
     "@mapequation/infomap": "^2.1.0",
@@ -62,6 +63,7 @@
     "babel-register": "^6.26.0",
     "chai": "^4.3.6",
     "chai-as-promised": "^7.1.1",
+    "react-error-overlay": "^6.0.9",
     "worker-loader": "^3.0.8"
   },
   "browserslist": {

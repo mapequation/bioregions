@@ -1,39 +1,45 @@
-import PropTypes from 'prop-types';
-import React, { Component } from 'react';
+import PropTypes from "prop-types";
+import React, { Component } from "react";
 
 /**
-* A button that triggers a hidden input element of type file.
-* props.loadFiles called with an array of File objects if props.multiple,
-* else with a single File object.
-*/
+ * A button that triggers a hidden input element of type file.
+ * props.loadFiles called with an array of File objects if props.multiple,
+ * else with a single File object.
+ */
 class WorldMapDimmer extends Component {
-
   static propTypes = {
     isShowingFileUI: PropTypes.bool.isRequired,
     showFileUI: PropTypes.func.isRequired,
-  }
+  };
 
   toggleShowFileUI = () => {
-    const {isShowingFileUI, showFileUI} = this.props;
+    const { isShowingFileUI, showFileUI } = this.props;
     showFileUI(!isShowingFileUI);
-  }
+  };
 
   render() {
-    const {isShowingFileUI} = this.props;
+    const { isShowingFileUI } = this.props;
     const dimmerStyle = {
       zIndex: 0,
-      opacity: isShowingFileUI? 0 : 1
+      opacity: isShowingFileUI ? 0 : 1,
     };
     return (
       <div className="ui raised dimmable dimmed segment">
-        <img className="ui image" src="https://www.mapequation.org/assets/img/bioregions-amphibians.png" alt="Bioregions example output map" />
+        <img
+          className="ui image"
+          src="https://www.mapequation.org/assets/img/bioregions-amphibians.png"
+          alt="Bioregions example output map"
+        />
         <div className="ui simple inverted dimmer" style={dimmerStyle}>
           <div className="content">
             <div className="center">
-              <button className="ui red button" onClick={this.toggleShowFileUI}>Load data...</button>
-              <div className="ui horizontal divider">
-                Or
+              <div style={{ color: "#999", marginBottom: 30 }}>
+                v{process.env.REACT_APP_VERSION}
               </div>
+              <button className="ui red button" onClick={this.toggleShowFileUI}>
+                Load data...
+              </button>
+              <div className="ui horizontal divider">Or</div>
               <div>
                 <h3 className="ui header">
                   <a href="#documentation">
@@ -48,7 +54,6 @@ class WorldMapDimmer extends Component {
       </div>
     );
   }
-
 }
 
 export default WorldMapDimmer;

@@ -308,7 +308,7 @@ export function getJaccardIndex(
   return jaccardIndex;
 }
 
-export function getBipartiteNetwork({ species, bins }) {
+export function getBipartiteNetwork({ species, bins, speciesToBins }) {
   console.log(
     `'Generating bipartite network with ${species.length} species and ${bins.length} grid cells...`
   );
@@ -332,25 +332,36 @@ export function getBipartiteNetwork({ species, bins }) {
     network.push(`*Bipartite ${bipartiteOffset}`);
   }
   let binCounter = 0;
-  bins.forEach((bin) => {
-    bin.features.forEach((feature) => {
-      if (useNewBipartiteFormat) {
-        network.push(
-          `${
-            speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
-          } ${binCounter}`
-        );
-      } else {
-        network.push(
-          `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
-        );
-      }
+  if (!bins[0].features) {
+    Object.entries(speciesToBins).forEach(([name, bins]) => {
+      const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
+      bins.bins.forEach((binId) => {
+        network.push(`${speciesId} ${binId}`);
+      });
     });
-    ++binCounter;
-  });
+  } else {
+    bins.forEach((bin) => {
+      bin.features.forEach((feature) => {
+        // TODO: Species not aggregated, will aggregate to weighted network in Infomap
+        if (useNewBipartiteFormat) {
+          network.push(
+            `${
+              speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
+            } ${binCounter}`
+          );
+        } else {
+          network.push(
+            `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
+          );
+        }
+      });
+      ++binCounter;
+    });
+  }
   console.log("First 10 links:", network.slice(0, 10));
-  // console.log('========== WHOLE NETWORK =========');
+  // console.log("========== WHOLE NETWORK =========");
   // console.log(network);
+  // console.log(network.join("\n"));
   return network.join("\n");
 }
 
