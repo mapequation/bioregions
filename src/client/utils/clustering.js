@@ -332,7 +332,7 @@ export function getBipartiteNetwork({ species, bins, speciesToBins }) {
     network.push(`*Bipartite ${bipartiteOffset}`);
   }
   let binCounter = 0;
-  if (!bins[0].features) {
+  if (speciesToBins) {
     Object.entries(speciesToBins).forEach(([name, bins]) => {
       const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
       bins.bins.forEach((binId) => {
