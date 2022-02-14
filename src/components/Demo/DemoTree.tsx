@@ -419,7 +419,14 @@ export default observer(
                     const cp2 = [xMid, yMid];
                     // prettier-ignore
                     const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
-                    return <path key={i} d={d} opacity={weight ?? 0} />;
+                    return (
+                      <g key={i}>
+                        <title>
+                          {treeNode.data.name} - {cell.id}, weight: {weight}
+                        </title>
+                        <path d={d} opacity={weight ?? 0} />
+                      </g>
+                    );
                   })}
                 </g>
               )}
@@ -431,7 +438,7 @@ export default observer(
                   fill="none"
                 >
                   {networkPhysLinksBundle.map(
-                    ({ weight, controlPoints }, i) => {
+                    ({ treeNode, cell, weight, controlPoints }, i) => {
                       const path = d3.path();
                       const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
                         path,
@@ -442,7 +449,14 @@ export default observer(
                       }
                       curveBundle.lineEnd();
                       const d = path.toString();
-                      return <path key={i} d={d} opacity={weight ?? 0} />;
+                      return (
+                        <g key={i}>
+                          <title>
+                            {treeNode.data.name} - {cell.id}, weight: {weight}
+                          </title>
+                          <path d={d} opacity={weight ?? 0} />
+                        </g>
+                      );
                     },
                   )}
                 </g>
@@ -471,17 +485,29 @@ export default observer(
                   strokeWidth={0.5}
                   fill="none"
                 >
-                  {stateTreeLinksBundle.map(({ weight, controlPoints }, i) => {
-                    const path = d3.path();
-                    const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(path);
-                    curveBundle.lineStart();
-                    for (const [x, y] of controlPoints) {
-                      curveBundle.point(x, y);
-                    }
-                    curveBundle.lineEnd();
-                    const d = path.toString();
-                    return <path key={i} d={d} opacity={weight ?? 0} />;
-                  })}
+                  {stateTreeLinksBundle.map(
+                    ({ treeNode, stateCell, weight, controlPoints }, i) => {
+                      const path = d3.path();
+                      const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
+                        path,
+                      );
+                      curveBundle.lineStart();
+                      for (const [x, y] of controlPoints) {
+                        curveBundle.point(x, y);
+                      }
+                      curveBundle.lineEnd();
+                      const d = path.toString();
+                      return (
+                        <g key={i}>
+                          <title>
+                            {treeNode.data.name} - {stateCell.cellId}_
+                            {stateCell.memTaxonId}, weight: {weight}
+                          </title>
+                          <path d={d} opacity={weight ?? 0} />
+                        </g>
+                      );
+                    },
+                  )}
                 </g>
               )}
               {!useBundledCurves && (
@@ -652,9 +678,10 @@ export default observer(
 
             {positionedTreeDescendants.map((node) => (
               <g key={node.data.uid}>
-                <title>{`Bioregion: ${
-                  treeStore.treeNodeMap.get(node.data.name)?.bioregionId
-                }`}</title>
+                <title>
+                  Bioregion:{' '}
+                  {treeStore.treeNodeMap.get(node.data.name)?.bioregionId}
+                </title>
                 <circle
                   cx={node.x}
                   cy={node.y}
@@ -688,6 +715,24 @@ export default observer(
                   fill={getNodeTextColor(node.data)}
                 >
                   {node.data.name}
+                </text>
+                <text
+                  x={node.x}
+                  y={node.y}
+                  dy={5}
+                  dx={0}
+                  fontSize={2}
+                  fontWeight={400}
+                  // textAnchor="middle"
+                  paintOrder="stroke"
+                  stroke="hsla(0, 0%, 100%, 0.8)"
+                  strokeWidth={0.3}
+                  fill={getNodeTextColor(node.data)}
+                >
+                  {node.data.memory &&
+                    `${node.data.memory.parent.name}, ${d3.format('.2f')(
+                      node.data.memory.childWeight,
+                    )}, ${node.data.memory.child.name}`}
                 </text>
               </g>
             ))}

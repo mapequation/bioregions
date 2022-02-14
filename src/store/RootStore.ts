@@ -41,4 +41,10 @@ export default class RootStore {
     this.speciesStore.clearData();
     this.treeStore.clearData();
   }
+
+  clearBioregions() {
+    this.infomapStore.clearBioregions();
+    this.treeStore.clearBioregions();
+    this.speciesStore.clearBioregions();
+  }
 }

@@ -21,7 +21,7 @@ export type PhyloNode = {
   rootDistance: number;
   time: number; // Normalized root distance, 0 in root, 1 in youngest leafs
   speciesSet?: Set<string>;
-  memory?: Branch[];
+  memory?: Branch;
 };
 
 export function visitTreeDepthFirstPreOrder(

@@ -27,6 +27,7 @@ import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
 import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
 import { useStore } from '../../store';
+import { gray } from 'd3';
 
 const NodesLinksTable = ({
   numNodes,
@@ -100,9 +101,14 @@ export default observer(function Infomap() {
     }
   };
 
-  const tagColorScheme = (numTopModules: number) => {
-    const colors = ['red', 'red', 'gray'];
-    return colors[Math.min(numTopModules, colors.length - 1)];
+  const tagColorScheme = (numBioregions: number) => {
+    switch (numBioregions) {
+      case 1:
+      case 2:
+        return 'red';
+      default:
+        return 'gray';
+    }
   };
 
   return (
@@ -318,14 +324,13 @@ export default observer(function Infomap() {
           numTreeLinks={network.numTreeLinks}
         />
       )}
-      {tree != null && !infomapStore.isRunning && (
-        <Stat
-          label="Bioregions"
-          colorScheme={tagColorScheme(tree.numTopModules)}
-        >
-          {tree.numTopModules.toLocaleString()}
-        </Stat>
-      )}
+      <Stat
+        label="Bioregions"
+        disabled={infomapStore.isRunning || infomapStore.numBioregions === 0}
+        colorScheme={tagColorScheme(infomapStore.numBioregions)}
+      >
+        {infomapStore.numBioregions.toLocaleString()}
+      </Stat>
     </VStack>
   );
 });

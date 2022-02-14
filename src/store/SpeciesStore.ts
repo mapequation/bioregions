@@ -93,6 +93,16 @@ export default class SpeciesStore {
     this.speciesMap = new Map<string, Species>();
   });
 
+  clearBioregions = () => {
+    this.binner.cells.forEach((cell) => {
+      cell.bioregionId = 0;
+      cell.overlappingBioregions.clear();
+    });
+    this.speciesMap.forEach((species) => {
+      species.bioregionId = undefined;
+    });
+  };
+
   get numPoints() {
     return this.pointCollection.features.length;
   }

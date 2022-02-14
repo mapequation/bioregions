@@ -12,8 +12,12 @@ export function clamp(value: number, min?: number, max?: number) {
   return min !== undefined && value < min
     ? min
     : max !== undefined && value > max
-      ? max
-      : value;
+    ? max
+    : value;
+}
+
+export function isEqual(a: number, b: number, threshold: number = 1e-6) {
+  return Math.abs(b - a) <= threshold;
 }
 
 /**

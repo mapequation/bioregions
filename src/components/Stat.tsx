@@ -1,11 +1,32 @@
-import { Flex, Spacer, Tag, TagProps } from '@chakra-ui/react';
+import {
+  Flex,
+  FormControl,
+  FormLabel,
+  Heading,
+  Spacer,
+  Tag,
+  TagProps,
+  Text,
+} from '@chakra-ui/react';
 
 type StatProps = {
   label: string;
+  disabled?: boolean;
 } & TagProps;
 
-export default function Stat({ label, children, ...props }: StatProps) {
-  return (<Flex fontSize="sm" w="100%">
-    {label}<Spacer /><Tag size="sm" {...props}>{children}</Tag>
-  </Flex>);
+export default function Stat({
+  label,
+  disabled,
+  children,
+  ...props
+}: StatProps) {
+  return (
+    <FormControl w="100%" isDisabled={disabled} as={Flex} alignItems="center">
+      <FormLabel fontSize="sm">{label}</FormLabel>
+      <Spacer />
+      <Tag size="sm" {...props}>
+        {children}
+      </Tag>
+    </FormControl>
+  );
 }
