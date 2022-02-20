@@ -17,6 +17,7 @@ import DemoTree from './DemoTree';
 import { useDemoStore } from '../../store';
 import Stat from '../Stat';
 import { useState } from 'react';
+import TreeHistogram from '../TreeHistogram';
 
 export default observer(() => {
   const demoStore = useDemoStore();
@@ -43,6 +44,10 @@ export default observer(() => {
   return (
     <Box>
       <Box w="60%" pos="relative">
+        {/* <TreeHistogram
+          data={treeStore.histogram}
+          formatTime={treeStore.timeFormatter}
+        /> */}
         <DemoTree
           beta={beta}
           hideTree={hideTree}

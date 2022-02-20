@@ -1,9 +1,11 @@
 import { makeObservable, observable, action, computed } from 'mobx';
 import type RootStore from './RootStore';
-import { prepareTree, parseTree } from '../utils/tree';
+import { prepareTree, parseTree, getTreeHistogram } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
+import { format } from 'd3-format';
+import { scaleLinear } from 'd3-scale';
 
 export type TreeNode = {
   data: PhyloNode;
@@ -31,6 +33,8 @@ export default class TreeStore {
       weightParameter: observable,
       numNodesInTree: computed,
       numLeafNodesInTree: computed,
+      histogram: computed,
+      timeFormatter: computed,
       setLoaded: action,
       setTree: action,
       setTreeString: action,
@@ -71,6 +75,26 @@ export default class TreeStore {
     });
 
     return numLeafs;
+  }
+
+  get histogram() {
+    if (this.tree === null) {
+      return [];
+    }
+    return getTreeHistogram(this.tree);
+  }
+
+  /**
+   * Return a function that takes a value from the `time` variable and outputs an
+   * SI-formatted time before youngest leaf based on the branch lengths in the tree.
+   */
+  get timeFormatter() {
+    if (!this.tree) {
+      return (t: number) => format('.1s')(1 - t);
+    }
+    const scale = scaleLinear().range([this.tree.maxLeafDistance, 0]);
+    const f = format('.2s');
+    return (time: number) => (time === 1 ? '0' : f(scale(time)));
   }
 
   setTree(tree: PhyloNode | null) {

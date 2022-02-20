@@ -1,24 +1,25 @@
 import { SVGProps } from 'react';
-import { scaleLinear } from 'd3';
+import { scaleLinear, scaleLog } from 'd3';
 
 type CurveProps = {
   data: [number, number][];
-  width: number;
-  height: number;
+  xRange: [number, number];
+  yRange: [number, number];
   xDomain: [number, number];
   yDomain: [number, number];
 };
 
 export default function Curve({
   data,
-  width,
-  height,
+  xRange,
+  yRange,
   xDomain,
   yDomain,
   ...props
 }: CurveProps & SVGProps<SVGPathElement>) {
-  const xScale = scaleLinear().domain(xDomain).range([0, width]);
-  const yScale = scaleLinear().domain(yDomain).range([height, 0]);
+  const xScale = scaleLinear().domain(xDomain).range(xRange);
+  // const yScale = scaleLinear().domain(yDomain).range(yRange);
+  const yScale = scaleLog().domain(yDomain).range(yRange);
 
   return (
     <path

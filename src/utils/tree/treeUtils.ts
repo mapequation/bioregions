@@ -89,13 +89,6 @@ export function visitTreeDepthFirstPostOrder(
 //   return _visitTreeDepthFirst(opts, root, callback, 0, 0);
 // }
 
-// export function getTreeHistogram(tree: Node, { minTime }: { minTime: number} = {}) {
-
-//   visitTreeDepthFirstPreOrder(tree, (node) => {
-
-//   })
-// }
-
 export function getIntersectingBranches(tree: PhyloNode, time: number) {
   const branches: Branch[] = [];
   visitTreeDepthFirstPostOrder(tree, (node) => {
@@ -114,4 +107,46 @@ export function getIntersectingBranches(tree: PhyloNode, time: number) {
     }
   });
   return branches;
+}
+
+export type HistogramDataPoint = {
+  t: number;
+  numBranches: number;
+};
+export function getTreeHistogram(
+  tree: PhyloNode,
+  { minTime = 0.01 }: { minTime?: number } = {},
+) {
+  const timePoints: number[] = [];
+  visitTreeDepthFirstPreOrder(tree, (node) => {
+    if (!node.isLeaf) {
+      timePoints.push(node.time);
+    }
+  });
+  // Sort on time
+  timePoints.sort((a, b) => a - b);
+  const histogram: HistogramDataPoint[] = [];
+  let numBranches = 1;
+  let previousTime = 0;
+  let numSkippedPoints = 0;
+  for (let i = 0; i < timePoints.length; ++i) {
+    const t = timePoints[i];
+    if (i > 0 && t - previousTime < minTime) {
+      ++numBranches;
+      ++numSkippedPoints;
+      continue;
+    }
+    previousTime = t;
+    if (numSkippedPoints > 0) {
+      ++numBranches;
+      histogram.push({ t, numBranches });
+      numSkippedPoints = 0;
+    } else {
+      histogram.push({ t, numBranches });
+      ++numBranches;
+      histogram.push({ t, numBranches });
+    }
+  }
+  histogram.push({ t: 1, numBranches });
+  return histogram;
 }

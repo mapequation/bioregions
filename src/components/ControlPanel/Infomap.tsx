@@ -85,8 +85,8 @@ const NodesLinksTable = ({
 };
 
 export default observer(function Infomap() {
-  const { speciesStore, infomapStore, mapStore } = useStore();
-  const { network, tree } = infomapStore;
+  const { speciesStore, infomapStore, treeStore, mapStore } = useStore();
+  const { network } = infomapStore;
 
   const runInfomap = async () => {
     if (infomapStore.isRunning) {
@@ -133,6 +133,8 @@ export default observer(function Infomap() {
         />
       </FormControl>
       <TreeHistogram
+        data={treeStore.histogram}
+        formatTime={treeStore.timeFormatter}
         isDisabled={
           !infomapStore.includeTreeInNetwork || infomapStore.isRunning
         }

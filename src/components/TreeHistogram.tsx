@@ -1,71 +1,80 @@
-import { Flex } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import type { HistogramDataPoint } from '../utils/tree';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
 // import { useStore } from '../store';
 
-export default observer(function TreeHistogram({
-  isDisabled = false,
-}: {
+type TreeHistogramProps = {
+  data: HistogramDataPoint[];
   isDisabled?: boolean;
-}) {
-  // const { treeStore } = useStore();
-  const width = 250;
-  const height = 120;
+  formatTime?: (time: number) => string;
+};
 
-  // const weight = treeStore.weightParameter;
-  // const { data, domain } = treeStore.weightCurve;
-  const domain = [0, 1] as [number, number];
-  const data = [
-    [0, 0],
-    [0.5, 0.2],
-    [1, 1],
-  ] as [number, number][];
+export default observer(function TreeHistogram({
+  data,
+  isDisabled,
+  formatTime,
+}: TreeHistogramProps) {
+  const xDomain = [0, 1] as [number, number];
 
-  // const inputProps = {
-  //   min: 0,
-  //   max: 1,
-  //   step: 0.01,
-  //   value: weight,
-  // };
+  const maxNumBranches =
+    data.length > 0 ? data[data.length - 1].numBranches : 1;
+  const yDomain = [1, maxNumBranches] as [number, number];
+
+  const d = data.map((d) => [d.t, d.numBranches] as [number, number]);
 
   const color = !isDisabled
     ? 'var(--chakra-colors-gray-800)'
     : 'var(--chakra-colors-gray-300)';
 
+  const width = 130;
+  const height = 100;
+  const margin = { top: 10, right: 10, bottom: 20, left: 20 };
+  const yRange = [height - margin.bottom, margin.top] as [number, number];
+  const xRange = [margin.left, width - margin.right] as [number, number];
+
   return (
-    <Flex w="100%" flexDirection="column" p={4}>
+    <Box textAlign="center" pt={4} h={300}>
       <svg
-        style={{ color, stroke: color }}
         xmlns="http://www.w3.org/2000/svg"
-        viewBox={`-40 -20 ${width + 70} ${height + 70}`}
-        width={width}
-        height={height}
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ color, stroke: color }}
+        preserveAspectRatio="xMidYMid meet"
       >
-        <text x={50} y={50} stroke="#eeeeee">
-          To be added
+        <text
+          fill="#999999"
+          strokeWidth={0}
+          dx={margin.left}
+          fontSize="8px"
+          // textAnchor="middle"
+        >
+          Branch count
         </text>
-        <AxisLeft domain={[0, 1]} range={[0, height]} label="Branch count" />
+        <AxisLeft domain={yDomain} xRange={xRange} yRange={yRange} label="" />
         <AxisBottom
-          height={height}
-          domain={domain}
-          range={[0, width]}
+          domain={xDomain}
+          xRange={xRange}
+          yRange={yRange}
           label="Time"
+          tickFormat={formatTime}
         />
         <Curve
-          data={data}
-          xDomain={domain}
-          yDomain={[0, 1]}
-          width={width}
-          height={height}
-          strokeWidth="2"
+          data={d}
+          xDomain={xDomain}
+          yDomain={yDomain}
+          xRange={xRange}
+          yRange={yRange}
+          strokeWidth="1"
           stroke={
-            !isDisabled && false
+            !isDisabled
               ? 'var(--chakra-colors-blue-500)'
               : 'var(--chakra-colors-gray-100)'
           }
         />
       </svg>
-    </Flex>
+    </Box>
   );
 });
