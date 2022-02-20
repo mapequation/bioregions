@@ -7,6 +7,7 @@ type CurveProps = {
   yRange: [number, number];
   xDomain: [number, number];
   yDomain: [number, number];
+  yLog?: boolean;
 };
 
 export default function Curve({
@@ -15,11 +16,12 @@ export default function Curve({
   yRange,
   xDomain,
   yDomain,
+  yLog,
   ...props
 }: CurveProps & SVGProps<SVGPathElement>) {
   const xScale = scaleLinear().domain(xDomain).range(xRange);
-  // const yScale = scaleLinear().domain(yDomain).range(yRange);
-  const yScale = scaleLog().domain(yDomain).range(yRange);
+  const _yScale = yLog ? scaleLog : scaleLinear;
+  const yScale = _yScale().domain(yDomain).range(yRange);
 
   return (
     <path

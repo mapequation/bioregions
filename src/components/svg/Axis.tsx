@@ -5,6 +5,7 @@ type AxisProps = {
   domain: [number, number];
   xRange: [number, number];
   yRange: [number, number];
+  yLog?: boolean;
   label?: string;
   tickFormat?: (value: number) => string;
 };
@@ -72,20 +73,21 @@ export function AxisLeft({
   domain = [0, 100],
   xRange = [10, 290],
   yRange = [90, 10],
+  yLog,
   label,
   tickFormat,
 }: AxisProps): JSX.Element {
   const ticks = useMemo(() => {
-    // const scale = scaleLinear().domain(domain).range(yRange);
-    const scale = scaleLog().domain(domain).range(yRange);
-    const height = yRange[1] - yRange[0];
-    const pixelsPerTick = 30;
+    const _scale = yLog ? scaleLog : scaleLinear;
+    const scale = _scale().domain(domain).range(yRange);
+    const height = Math.abs(yRange[0] - yRange[1]);
+    const pixelsPerTick = 20;
     const numberOfTicksTarget = Math.max(1, Math.floor(height / pixelsPerTick));
     return scale.ticks(numberOfTicksTarget).map((value) => ({
       value: tickFormat ? tickFormat(value) : `${value}`,
       offset: scale(value),
     }));
-  }, [domain, yRange, tickFormat]);
+  }, [domain, yRange, tickFormat, yLog]);
 
   const [y0, y1] = yRange;
   const yMid = (y0 + y1) / 2;
@@ -107,8 +109,8 @@ export function AxisLeft({
             strokeWidth={0}
             dy="2px"
             fontSize="5px"
-            textAnchor="middle"
-            transform="translate(-10, 0)"
+            textAnchor="end"
+            transform="translate(-5, 0)"
           >
             {value}
           </text>

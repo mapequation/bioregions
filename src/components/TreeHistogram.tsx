@@ -1,5 +1,6 @@
 import { Box } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import { format } from 'd3-format';
 import type { HistogramDataPoint } from '../utils/tree';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
@@ -30,9 +31,11 @@ export default observer(function TreeHistogram({
 
   const width = 130;
   const height = 100;
-  const margin = { top: 10, right: 10, bottom: 20, left: 20 };
+  const margin = { top: 10, right: 10, bottom: 20, left: 15 };
   const yRange = [height - margin.bottom, margin.top] as [number, number];
   const xRange = [margin.left, width - margin.right] as [number, number];
+
+  const yTickFormat = format('.1s');
 
   return (
     <Box textAlign="center" pt={4} h={300}>
@@ -53,7 +56,14 @@ export default observer(function TreeHistogram({
         >
           Branch count
         </text>
-        <AxisLeft domain={yDomain} xRange={xRange} yRange={yRange} label="" />
+        <AxisLeft
+          domain={yDomain}
+          xRange={xRange}
+          yRange={yRange}
+          label=""
+          yLog
+          tickFormat={yTickFormat}
+        />
         <AxisBottom
           domain={xDomain}
           xRange={xRange}
@@ -67,6 +77,7 @@ export default observer(function TreeHistogram({
           yDomain={yDomain}
           xRange={xRange}
           yRange={yRange}
+          yLog
           strokeWidth="1"
           stroke={
             !isDisabled
