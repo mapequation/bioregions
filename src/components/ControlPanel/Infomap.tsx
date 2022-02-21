@@ -135,9 +135,7 @@ export default observer(function Infomap() {
       <TreeHistogram
         data={treeStore.histogram}
         formatTime={treeStore.timeFormatter}
-        isDisabled={
-          !infomapStore.includeTreeInNetwork || infomapStore.isRunning
-        }
+        isDisabled={!infomapStore.includeTreeInNetwork}
       />
       <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
         <FormLabel htmlFor="integrationTime" mb="0">

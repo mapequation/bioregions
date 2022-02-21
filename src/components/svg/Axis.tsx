@@ -46,7 +46,7 @@ export function AxisBottom({
           <text
             fill="currentColor"
             strokeWidth={0}
-            fontSize="5px"
+            fontSize="4px"
             textAnchor="middle"
             transform="translate(0, 10)"
           >
@@ -60,7 +60,7 @@ export function AxisBottom({
           fill="currentColor"
           strokeWidth={0}
           transform={`translate(${xMid}, 18)`}
-          fontSize="8"
+          fontSize="6px"
         >
           {label}
         </text>
@@ -95,7 +95,8 @@ export function AxisLeft({
   return (
     <g transform={`translate(${xRange[0]}, 0)`} style={{ color: '#999999' }}>
       <path
-        d={['M', -3, y0, 'h', 3, 'V', y1, 'h', -3].join(' ')}
+        // d={['M', -3, y0, 'h', 3, 'V', y1, 'h', -3].join(' ')}
+        d={['M', -3, y0, 'h', 3, 'V', y1].join(' ')}
         fill="none"
         stroke="currentColor"
         // display="none"
@@ -108,7 +109,7 @@ export function AxisLeft({
             fill="currentColor"
             strokeWidth={0}
             dy="2px"
-            fontSize="5px"
+            fontSize="4px"
             textAnchor="end"
             transform="translate(-5, 0)"
           >
@@ -122,7 +123,7 @@ export function AxisLeft({
           strokeWidth={0}
           transform={`translate(-15, ${yMid}) rotate(-90)`}
           textAnchor="middle"
-          fontSize="8"
+          fontSize="6px"
         >
           {label}
         </text>

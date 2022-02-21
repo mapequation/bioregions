@@ -1,3 +1,5 @@
+import { isEqual } from '../math';
+
 //import _ from 'lodash';
 export { prepareTree } from './treeUtilsJS';
 
@@ -117,33 +119,35 @@ export function getTreeHistogram(
   tree: PhyloNode,
   { minTime = 0.01 }: { minTime?: number } = {},
 ) {
-  const timePoints: number[] = [];
+  const timePoints: { t: number; isBranching: boolean }[] = [];
   visitTreeDepthFirstPreOrder(tree, (node) => {
-    if (!node.isLeaf) {
-      timePoints.push(node.time);
+    if (node.isLeaf && isEqual(node.time, 1, minTime / 10)) {
+      return;
     }
+    const isBranching = !node.isLeaf;
+    timePoints.push({ t: node.time, isBranching });
   });
   // Sort on time
-  timePoints.sort((a, b) => a - b);
+  timePoints.sort((a, b) => a.t - b.t);
   const histogram: HistogramDataPoint[] = [];
   let numBranches = 1;
   let previousTime = 0;
   let numSkippedPoints = 0;
   for (let i = 0; i < timePoints.length; ++i) {
-    const t = timePoints[i];
+    const { t, isBranching } = timePoints[i];
     if (i > 0 && t - previousTime < minTime) {
-      ++numBranches;
+      numBranches += isBranching ? 1 : -1;
       ++numSkippedPoints;
       continue;
     }
     previousTime = t;
     if (numSkippedPoints > 0) {
-      ++numBranches;
+      numBranches += isBranching ? 1 : -1;
       histogram.push({ t, numBranches });
       numSkippedPoints = 0;
     } else {
       histogram.push({ t, numBranches });
-      ++numBranches;
+      numBranches += isBranching ? 1 : -1;
       histogram.push({ t, numBranches });
     }
   }

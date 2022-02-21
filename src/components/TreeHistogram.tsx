@@ -1,6 +1,7 @@
 import { Box } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { format } from 'd3-format';
+import { max } from 'd3-array';
 import type { HistogramDataPoint } from '../utils/tree';
 import { AxisLeft, AxisBottom } from './svg/Axis';
 import Curve from './svg/Curve';
@@ -19,8 +20,11 @@ export default observer(function TreeHistogram({
 }: TreeHistogramProps) {
   const xDomain = [0, 1] as [number, number];
 
-  const maxNumBranches =
-    data.length > 0 ? data[data.length - 1].numBranches : 1;
+  const maxNumBranches = max(
+    data ?? [{ numBranches: 1 }],
+    (d) => d.numBranches,
+  );
+  // data.length > 0 ? data[data.length - 1].numBranches : 1;
   const yDomain = [1, maxNumBranches] as [number, number];
 
   const d = data.map((d) => [d.t, d.numBranches] as [number, number]);
@@ -29,7 +33,7 @@ export default observer(function TreeHistogram({
     ? 'var(--chakra-colors-gray-800)'
     : 'var(--chakra-colors-gray-300)';
 
-  const width = 130;
+  const width = 100;
   const height = 100;
   const margin = { top: 10, right: 10, bottom: 20, left: 15 };
   const yRange = [height - margin.bottom, margin.top] as [number, number];
@@ -50,8 +54,9 @@ export default observer(function TreeHistogram({
         <text
           fill="#999999"
           strokeWidth={0}
-          dx={margin.left}
-          fontSize="8px"
+          x={margin.left}
+          y={margin.top - 5}
+          fontSize="6px"
           // textAnchor="middle"
         >
           Branch count

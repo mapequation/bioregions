@@ -20,8 +20,10 @@ export default function Curve({
   ...props
 }: CurveProps & SVGProps<SVGPathElement>) {
   const xScale = scaleLinear().domain(xDomain).range(xRange);
+  // const _xScale = scaleLog().domain([0.01, 1]).range(xRange).clamp(true);
+  // const xScale = (x: number) => xRange[0] + xRange[1] - _xScale(1 - x);
   const _yScale = yLog ? scaleLog : scaleLinear;
-  const yScale = _yScale().domain(yDomain).range(yRange);
+  const yScale = _yScale().domain(yDomain).range(yRange); //.nice();
 
   return (
     <path
