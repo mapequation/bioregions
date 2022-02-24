@@ -98,7 +98,10 @@ export function getIntersectingBranches(tree: PhyloNode, time: number) {
     const parentTime = parent?.time ?? 0;
     const parentIsOlder = parent && parentTime <= time;
     const nodeIsYounger = node.time > time || node.isLeaf; // TODO: Fix normalize time to 1, now 0.9998
-    const childWeight = (time - parentTime) / (node.time - parentTime);
+    const childWeight = Math.min(
+      1,
+      (time - parentTime) / (node.time - parentTime),
+    );
 
     if (parentIsOlder && nodeIsYounger) {
       branches.push({
