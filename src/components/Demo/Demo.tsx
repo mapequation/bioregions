@@ -11,6 +11,7 @@ import {
   Spacer,
   Tag,
   Switch,
+  Button,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import DemoTree from './DemoTree';
@@ -18,6 +19,7 @@ import { useDemoStore } from '../../store';
 import Stat from '../Stat';
 import { useState } from 'react';
 import NetworkSize from '../ControlPanel/NetworkSize';
+import Modal from '../ControlPanel/Modal';
 // import TreeHistogram from '../TreeHistogram';
 
 export default observer(() => {
@@ -25,6 +27,7 @@ export default observer(() => {
   const [beta, setBeta] = useState(0.75);
   const [hideTree, setHideTree] = useState(false);
   const [hideSegregation, setHideSegregation] = useState(false);
+  const [isInfomapOutputOpen, setIsInfomapOutputOpen] = useState(false);
   const { treeStore, infomapStore } = demoStore;
   const { tree } = treeStore;
 
@@ -175,11 +178,12 @@ export default observer(() => {
           <Switch
             id="alwaysUseStateNetwork"
             isChecked={infomapStore.alwaysUseStateNetwork}
-            onChange={() =>
+            onChange={() => {
               infomapStore.setAlwaysUseStateNetwork(
                 !infomapStore.alwaysUseStateNetwork,
-              )
-            }
+              );
+              infomapStore.run();
+            }}
           />
         </FormControl>
         <FormControl display="flex" w="100%" alignItems="center">
@@ -221,6 +225,23 @@ export default observer(() => {
             onChange={() => setHideSegregation(!hideSegregation)}
           />
         </FormControl>
+        <Button onClick={() => setIsInfomapOutputOpen(true)}>
+          Infomap console
+        </Button>
+        <Modal
+          header="Infomap output"
+          isOpen={isInfomapOutputOpen}
+          onClose={() => setIsInfomapOutputOpen(false)}
+          scrollBehavior="inside"
+          size="3xl"
+        >
+          <Box maxW="50%" fontSize="0.8rem">
+            <pre>
+              {infomapStore.infomapOutput ||
+                'Load data and run Infomap to see output here'}
+            </pre>
+          </Box>
+        </Modal>
       </VStack>
     </Box>
   );

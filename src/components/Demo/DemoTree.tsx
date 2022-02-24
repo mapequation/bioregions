@@ -718,24 +718,6 @@ export default observer(
                 >
                   {node.data.name}
                 </text>
-                <text
-                  x={node.x}
-                  y={node.y}
-                  dy={5}
-                  dx={0}
-                  fontSize={2}
-                  fontWeight={400}
-                  // textAnchor="middle"
-                  paintOrder="stroke"
-                  stroke="hsla(0, 0%, 100%, 0.8)"
-                  strokeWidth={0.3}
-                  fill={getNodeTextColor(node.data)}
-                >
-                  {node.data.memory &&
-                    `${node.data.memory.parent.name}, ${d3.format('.2f')(
-                      node.data.memory.childWeight,
-                    )}, ${node.data.memory.child.name}`}
-                </text>
               </g>
             ))}
           </g>

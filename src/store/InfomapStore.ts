@@ -80,7 +80,7 @@ export default class InfomapStore {
   haveStateNodes: boolean = false;
   treeString?: string;
   includeTreeInNetwork: boolean = true;
-  alwaysUseStateNetwork: boolean = true; //false
+  alwaysUseStateNetwork: boolean = false;
   isRunning: boolean = false;
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
@@ -146,6 +146,7 @@ export default class InfomapStore {
       integrationTime: observable,
       segregationTime: observable,
       setTreeWeightBalance: action,
+      haveStateNetwork: computed,
       numBioregions: computed,
       haveBioregions: computed,
       codelength: computed,
@@ -182,6 +183,13 @@ export default class InfomapStore {
   });
 
   clearBioregions = () => {};
+
+  get haveStateNetwork() {
+    return (
+      this.rootStore.treeStore.tree &&
+      (this.segregationTime > 0 || this.alwaysUseStateNetwork)
+    );
+  }
 
   get haveBioregions() {
     return this.numBioregions > 0;
@@ -401,10 +409,7 @@ export default class InfomapStore {
   }
 
   public createNetwork(): BioregionsNetwork | BioregionsStateNetwork {
-    if (
-      (this.segregationTime > 0 || this.alwaysUseStateNetwork) &&
-      this.rootStore.treeStore.tree
-    ) {
+    if (this.haveStateNetwork) {
       return this.createStateNetwork();
     }
 
