@@ -95,7 +95,7 @@ function Slider({
 
   return (
     <HStack w="100%" fontSize="0.875rem">
-      <Box minW="4ch">{valueFormat(values[limits[0]])}</Box>
+      <Box minW="5ch">{valueFormat(values[limits[0]])}</Box>
       <RangeSlider
         mx={2}
         min={0}

@@ -373,7 +373,7 @@ export class Cell implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
  */
 export class QuadtreeGeoBinner {
   private _extent: BBox = [-256, -256, 256, 256]; // power of 2 to get 1x1 degree grid cells
-  cellSizeLog2Range = rangeArray(-3, 6, 1, { inclusive: true });
+  cellSizeLog2Range = rangeArray(-7, 6, 1, { inclusive: true });
   maxCellSizeLog2: number = 2;
   minCellSizeLog2: number = 0;
   cellCapacityRange = rangeArrayOneSignificant(0, 6, { inclusive: true });

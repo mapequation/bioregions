@@ -8,7 +8,7 @@ export default function zoom(
     scale = projection._scale === undefined
       ? (projection._scale = projection.scale())
       : projection._scale,
-    scaleExtent = [0.8, 8],
+    scaleExtent = [0.8, 1000],
   } = {},
 ) {
   let v0, q0, r0, a0, tl;
