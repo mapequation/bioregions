@@ -189,47 +189,6 @@ export default observer(function Infomap() {
           </NumberInputStepper>
         </NumberInput>
       </FormControl>
-      <FormControl display="none" w="100%" alignItems="center">
-        <FormLabel htmlFor="regularized" mb="0">
-          Regularized
-        </FormLabel>
-        <Spacer />
-        <Switch
-          id="regularized"
-          isChecked={infomapStore.args.regularized}
-          onChange={() =>
-            infomapStore.setRegularized(!infomapStore.args.regularized)
-          }
-        />
-      </FormControl>
-      <Collapse
-        in={infomapStore.args.regularized}
-        animateOpacity
-        style={{ width: '100%' }}
-      >
-        <Flex w="100%" pl={2} py={2}>
-          <Box w="50%" fontSize="0.9rem">
-            Strength
-          </Box>
-          <Slider
-            w="50%"
-            isDisabled={!infomapStore.args.regularized}
-            focusThumbOnChange={false}
-            value={infomapStore.args.regularizationStrength}
-            onChange={(value) => infomapStore.setRegularizationStrength(value)}
-            min={0}
-            max={5}
-            step={0.01}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="32px">
-              {infomapStore.args.regularizationStrength}
-            </SliderThumb>
-          </Slider>
-        </Flex>
-      </Collapse>
       <Button
         size="sm"
         w="100%"

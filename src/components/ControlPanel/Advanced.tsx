@@ -36,7 +36,7 @@ export default observer(function Advanced() {
   const [show, setShow] = useState(process.env.NODE_ENV === 'development');
   const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
 
-  const paramSweep = async () => {
+  const paramSweepIntegrationTime = async () => {
     setIsRunning(true);
 
     try {
@@ -61,6 +61,38 @@ export default observer(function Advanced() {
         // const filename = `${speciesStore.name}_integration_time_${f(t)}.tree`;
         const filename = `Integration time ${f(1 - t)}.json`;
         // zip.file(filename, infomapStore.treeString!);
+        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+      }
+
+      const zipFile = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipFile, 'sweep.zip');
+    } catch (err) {
+      console.error('Error in parameter sweep:', err);
+    }
+
+    setIsRunning(false);
+  };
+
+  const paramSweepNumIterations = async () => {
+    setIsRunning(true);
+
+    try {
+      const zip = new JSZip();
+
+      const numIterations = range(steps).map((i) => i);
+
+      for (let i = 0; i < numIterations.length; i++) {
+        setStep(i);
+        const N = numIterations[i] + 1;
+        infomapStore.setNumTrials(N);
+
+        await infomapStore.run();
+
+        if (mapStore.renderType === 'bioregions') {
+          mapStore.render();
+        }
+
+        const filename = `N ${N}.json`;
         zip.file(filename, JSON.stringify(infomapStore.tree)!);
       }
 
@@ -204,6 +236,51 @@ export default observer(function Advanced() {
               }
             />
           </FormControl>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="regularized" mb="0">
+              Regularized
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="regularized"
+              isChecked={infomapStore.args.regularized}
+              onChange={() =>
+                infomapStore.setRegularized(!infomapStore.args.regularized)
+              }
+            />
+          </FormControl>
+          <Collapse
+            in={infomapStore.args.regularized}
+            animateOpacity
+            style={{ width: '100%' }}
+          >
+            <Flex w="100%" pl={2} py={2}>
+              <Box w="50%" fontSize="0.9rem">
+                Strength
+              </Box>
+              <Slider
+                w="50%"
+                isDisabled={!infomapStore.args.regularized}
+                focusThumbOnChange={false}
+                value={infomapStore.args.regularizationStrength}
+                onChange={(value) =>
+                  infomapStore.setRegularizationStrength(value)
+                }
+                min={0}
+                max={5}
+                step={0.01}
+              >
+                <SliderTrack>
+                  <SliderFilledTrack />
+                </SliderTrack>
+                <SliderThumb fontSize="sm" boxSize="32px">
+                  {infomapStore.args.regularizationStrength}
+                </SliderThumb>
+              </Slider>
+            </Flex>
+          </Collapse>
+
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="render-data-on-zoom" mb="0">
               Render data while zooming
@@ -225,20 +302,7 @@ export default observer(function Advanced() {
             alignItems="center"
             isDisabled={infomapStore.isRunning}
           >
-            <FormLabel htmlFor="steps" mb="0">
-              <Button
-                size="sm"
-                isDisabled={
-                  !speciesStore.loaded ||
-                  !treeStore.loaded ||
-                  infomapStore.isRunning
-                }
-                isLoading={isRunning}
-                onClick={paramSweep}
-              >
-                Run parameter sweep
-              </Button>
-            </FormLabel>
+            <FormLabel mb="0">Parameter sweep</FormLabel>
             <Spacer />
             <NumberInput
               maxW="70px"
@@ -254,6 +318,33 @@ export default observer(function Advanced() {
               </NumberInputStepper>
             </NumberInput>
           </FormControl>
+          <VStack>
+            <Button
+              size="sm"
+              isDisabled={
+                !speciesStore.loaded ||
+                !treeStore.loaded ||
+                infomapStore.isRunning
+              }
+              isLoading={isRunning}
+              onClick={paramSweepIntegrationTime}
+            >
+              Integration time
+            </Button>
+            <Button
+              size="sm"
+              isDisabled={
+                !speciesStore.loaded ||
+                !treeStore.loaded ||
+                infomapStore.isRunning
+              }
+              isLoading={isRunning}
+              // onClick={paramSweepIntegrationTime}
+              onClick={paramSweepNumIterations}
+            >
+              Num trials
+            </Button>
+          </VStack>
           {isRunning && (
             <Progress
               value={step}
