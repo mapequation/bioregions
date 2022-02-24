@@ -100,28 +100,32 @@ export default class InfomapStore {
 
   // The link weight balance from no tree (0) to only tree (1)
   treeWeightBalance: number = 0.5;
-  setTreeWeightBalance(value: number, updateNetwork = false) {
+  setTreeWeightBalance = action((value: number, updateNetwork = false) => {
     this.treeWeightBalance = value;
     if (updateNetwork) {
       this.updateNetwork();
     }
-  }
+  });
 
   diversityOrder: number = 0;
-  setDiversityOrder(value: number, updateNetwork: boolean = false) {
-    this.diversityOrder = value;
-    if (updateNetwork) {
-      this.updateNetwork();
-    }
-  }
+  setDiversityOrder = action(
+    (value: number, updateNetwork: boolean = false) => {
+      this.diversityOrder = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
 
   uniformTreeLinks: boolean = true;
-  setUniformTreeLinks(value: boolean, updateNetwork: boolean = false) {
-    this.uniformTreeLinks = value;
-    if (updateNetwork) {
-      this.updateNetwork();
-    }
-  }
+  setUniformTreeLinks = action(
+    (value: boolean, updateNetwork: boolean = false) => {
+      this.uniformTreeLinks = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -138,27 +142,18 @@ export default class InfomapStore {
       isRunning: observable,
       bioregions: observable.ref,
       diversityOrder: observable,
-      setDiversityOrder: action,
       treeWeightBalance: observable,
       includeTreeInNetwork: observable,
       alwaysUseStateNetwork: observable,
       uniformTreeLinks: observable,
       integrationTime: observable,
       segregationTime: observable,
-      setTreeWeightBalance: action,
       haveStateNetwork: computed,
       numBioregions: computed,
       haveBioregions: computed,
       codelength: computed,
       numLevels: computed,
       relativeCodelengthSavings: computed,
-      setTree: action,
-      setTreeString: action,
-      updateNetwork: action,
-      setNetwork: action,
-      setIsRunning: action,
-      setNumTrials: action,
-      setCurrentTrial: action,
       run: action,
     });
 
@@ -211,52 +206,56 @@ export default class InfomapStore {
     return this.tree?.relativeCodelengthSavings ?? 0;
   }
 
-  setCurrentTrial(trial: number) {
+  setCurrentTrial = action((trial: number) => {
     this.currentTrial = trial;
-  }
+  });
 
-  setNumTrials(numTrials: number) {
+  setNumTrials = action((numTrials: number) => {
     this.args.numTrials = numTrials;
-  }
+  });
 
-  setSkipAdjustBipartiteFlow(value: boolean = true) {
+  setSkipAdjustBipartiteFlow = action((value: boolean = true) => {
     this.args.skipAdjustBipartiteFlow = value;
-  }
+  });
 
-  setRegularized(value: boolean = true) {
+  setRegularized = action((value: boolean = true) => {
     this.args.regularized = value;
-  }
+  });
 
-  setRegularizationStrength(strength: number) {
+  setRegularizationStrength = action((strength: number) => {
     this.args.regularizationStrength = strength;
-  }
+  });
 
-  setEntropyCorrected(value: boolean = true) {
+  setEntropyCorrected = action((value: boolean = true) => {
     this.args.entropyCorrected = value;
-  }
+  });
 
-  setEntropyCorrectionStrength(strength: number) {
+  setEntropyCorrectionStrength = action((strength: number) => {
     this.args.entropyCorrectionStrength = strength;
-  }
+  });
 
-  setAlwaysUseStateNetwork(value: boolean, updateNetwork: boolean = true) {
-    this.alwaysUseStateNetwork = value;
-    if (updateNetwork) {
-      this.updateNetwork();
-    }
-  }
+  setAlwaysUseStateNetwork = action(
+    (value: boolean, updateNetwork: boolean = true) => {
+      this.alwaysUseStateNetwork = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
 
-  setTree(tree: Tree | StateTree | null) {
+  setTree = action((tree: Tree | StateTree | null) => {
     this.tree = tree;
-  }
+  });
 
-  setTreeString(treeString?: string) {
+  setTreeString = action((treeString?: string) => {
     this.treeString = treeString;
-  }
+  });
 
-  setNetwork(network: BioregionsNetwork | BioregionsStateNetwork | null) {
-    this.network = network;
-  }
+  setNetwork = action(
+    (network: BioregionsNetwork | BioregionsStateNetwork | null) => {
+      this.network = network;
+    },
+  );
 
   setBioregions = action((bioregions: Bioregion[]) => {
     this.bioregions = bioregions;
@@ -266,9 +265,9 @@ export default class InfomapStore {
     this.bioregions = bioregions;
   });
 
-  setIsRunning(isRunning: boolean = true) {
+  setIsRunning = action((isRunning: boolean = true) => {
     this.isRunning = isRunning;
-  }
+  });
 
   setIncludeTree = action((value: boolean = true) => {
     this.includeTreeInNetwork = value;
@@ -400,13 +399,13 @@ export default class InfomapStore {
     }
   };
 
-  updateNetwork() {
+  updateNetwork = action(() => {
     console.time('createNetwork');
     const network = this.createNetwork();
     console.timeEnd('createNetwork');
     this.setNetwork(network);
     return network;
-  }
+  });
 
   public createNetwork(): BioregionsNetwork | BioregionsStateNetwork {
     if (this.haveStateNetwork) {
