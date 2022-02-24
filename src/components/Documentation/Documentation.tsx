@@ -1,10 +1,10 @@
-import { Box, Container, Heading } from '@chakra-ui/react';
+import { Container, Heading } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import Demo from '../Demo';
 
 export default observer(function Documentation() {
-  const { documentationStore } = useStore();
+  // const { documentationStore } = useStore();
   return (
     <Container maxW="container.xl" id="documentation">
       <Heading as="h2">Documentation</Heading>

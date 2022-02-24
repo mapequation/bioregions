@@ -19,7 +19,8 @@ F,0.2,0.8
 F,0.1,0.4
 `;
 
-const demoTree = `((A:0.6,B:0.6)n2:0.2,((C:0.2,D:0.2)n4:0.2,(E:0.1,F:0.1)n5:0.3)n3:0.4)n1;`;
+// const demoTree = `((A:0.6,B:0.6)n2:0.2,((C:0.2,D:0.2)n4:0.2,(E:0.1,F:0.1)n5:0.3)n3:0.4)n1;`;
+const demoTree = `((A:0.6,B:0.6):0.2,((C:0.2,D:0.2):0.2,(E:0.1,F:0.1):0.3):0.4);`;
 export default class DocumentationStore {
   rootStore: RootStore;
   demoStore = new RootStore(true);
@@ -36,6 +37,7 @@ export default class DocumentationStore {
     speciesStore.binner.setCellCapacity(0, 100);
     infomapStore.setIntegrationTime(0.8);
     infomapStore.setSegregationTime(0);
+    infomapStore.setTreeWeightBalance(0.75);
     infomapStore.setNumTrials(1);
 
     await this.loadData();

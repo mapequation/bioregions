@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Box, useColorModeValue, Icon } from '@chakra-ui/react';
+import { Box, useColorModeValue } from '@chakra-ui/react';
 import {
   getIntersectingBranches,
   PhyloNode,
@@ -41,11 +41,12 @@ export default observer(
 
     const {
       integrationTime,
-      segregationTime: st,
+      segregationTime: _segTime,
       network,
-      haveStateNodes,
+      // haveStateNodes,
     } = infomapStore;
-    const segregationTime = hideSegregation ? 0 : st;
+    const haveStateNodes = network && 'states' in network;
+    const segregationTime = hideSegregation ? 0 : _segTime;
     const { binner } = speciesStore;
     const { cells } = binner;
     const networkLinks = network ? network.links : [];
@@ -297,6 +298,7 @@ export default observer(
       let lastDepth = treeNode.data.depth - 1;
       visitTreeDepthFirstPreOrder(treeNode.data, (node: PhyloNode) => {
         if (node.depth <= lastDepth) {
+          // eslint-disable-next-line  @typescript-eslint/no-unused-vars
           for (const _ of range(lastDepth - node.depth + 1)) {
             path.pop();
           }

@@ -20,7 +20,6 @@ import {
   Flex,
   Box,
   Collapse,
-  Text,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
@@ -75,7 +74,16 @@ export default observer(function Advanced() {
   };
 
   const formatCodelength = format('.4f');
-  const formatPercent = format('.1%');
+  const format2r = format('.2r');
+  const formatPercent = (value: number) => `${format2r(value * 100)}%`;
+
+  const actualTreeWeightBalance = !infomapStore.network
+    ? ''
+    : `${(
+        (100 * infomapStore.network.sumInternalTaxonLinkWeight) /
+        (infomapStore.network.sumInternalTaxonLinkWeight +
+          infomapStore.network.sumLeafTaxonLinkWeight)
+      ).toPrecision(2)}%`;
 
   return (
     <VStack align="stretch" spacing={2}>
@@ -103,13 +111,11 @@ export default observer(function Advanced() {
             scrollBehavior="inside"
             size="3xl"
           >
-            <Box maxW="50%">
-              <Text fontSize="0.8rem">
-                <pre>
-                  {infomapStore.infomapOutput ||
-                    'Load data and run Infomap to see output here'}
-                </pre>
-              </Text>
+            <Box maxW="50%" fontSize="0.8rem">
+              <pre>
+                {infomapStore.infomapOutput ||
+                  'Load data and run Infomap to see output here'}
+              </pre>
             </Box>
           </Modal>
           <VStack>
@@ -120,6 +126,7 @@ export default observer(function Advanced() {
             <Stat label="Codelength savings">
               {formatPercent(infomapStore.relativeCodelengthSavings)}
             </Stat>
+            <Stat label="Actual tree weight">{actualTreeWeightBalance}</Stat>
           </VStack>
 
           <Flex
@@ -150,6 +157,22 @@ export default observer(function Advanced() {
               </SliderThumb>
             </Slider>
           </Flex>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="alwaysUseStateNetwork" mb="0">
+              Always use state network
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="alwaysUseStateNetwork"
+              isChecked={infomapStore.alwaysUseStateNetwork}
+              onChange={() =>
+                infomapStore.setAlwaysUseStateNetwork(
+                  !infomapStore.alwaysUseStateNetwork,
+                )
+              }
+            />
+          </FormControl>
 
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="skipAdjustBipartiteFlow" mb="0">

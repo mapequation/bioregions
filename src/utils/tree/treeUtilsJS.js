@@ -374,10 +374,9 @@ export function normalizeNames(tree) {
  */
 export function prepareTree(tree) {
   // Traverse from leaf nodes to root to define and aggregate some properties
-  let uid = 0;
+
   tree.branchLength = 0; // Don't use default length 1 on root.
   visitTreeDepthFirst({ postOrder: true }, tree, (node, depth, childIndex) => {
-    node.uid = ++uid;
     node.originalChildIndex = childIndex;
     node.isLeaf = node.children.length === 0;
     node.depth = depth;
@@ -388,11 +387,8 @@ export function prepareTree(tree) {
     if (node.isLeaf) {
       node.numLeafs = 1;
       node.maxLeafDistance = node.branchLength;
-      // Ensure leaf nodes has name, and replace underscores with spaces
-      node.name = node.name ? normalizeSpeciesName(node.name) : `${node.uid}`;
     } else {
       // no leaf
-      node.name = node.name ? node.name.replace(/_/g, ' ') : `t${node.uid}`;
       let numLeafs = 0;
       let maxLeafDistance = 0;
       node.children.forEach((child) => {
@@ -415,6 +411,24 @@ export function prepareTree(tree) {
       node.time = node.rootDistance / tree.maxLeafDistance;
     }
   });
+
+  // Add uid sorted on time
+  let uid = 0;
+  const nodes = [];
+  visitTreeDepthFirst({}, tree, (node) => {
+    nodes.push(node);
+  });
+  // Sort on time
+  nodes.sort((a, b) => a.time - b.time);
+  for (const node of nodes) {
+    node.uid = uid++;
+    if (node.isLeaf) {
+      // Ensure leaf nodes has name, and replace underscores with spaces
+      node.name = node.name ? normalizeSpeciesName(node.name) : `${node.uid}`;
+    } else {
+      node.name = node.name ? node.name.replace(/_/g, ' ') : `t${node.uid}`;
+    }
+  }
 
   return tree;
 }

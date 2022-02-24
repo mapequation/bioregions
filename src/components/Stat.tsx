@@ -2,11 +2,9 @@ import {
   Flex,
   FormControl,
   FormLabel,
-  Heading,
   Spacer,
   Tag,
   TagProps,
-  Text,
 } from '@chakra-ui/react';
 
 type StatProps = {

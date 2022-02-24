@@ -23,66 +23,10 @@ import {
   HStack,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
-import { Table, Thead, Tbody, Tr, Td, Tfoot } from '@chakra-ui/react';
 import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
+import NetworkSize from './NetworkSize';
 import { useStore } from '../../store';
-import { gray } from 'd3';
-
-const NodesLinksTable = ({
-  numNodes,
-  numLinks,
-  numTreeNodes,
-  numTreeLinks,
-}: {
-  numNodes: number;
-  numLinks: number;
-  numTreeNodes: number;
-  numTreeLinks: number;
-}) => {
-  return (
-    <Table width="100%" size="sm" variant="simpler">
-      <Thead>
-        <Tr>
-          <Td></Td>
-          <Td>Nodes</Td>
-          <Td>Links</Td>
-        </Tr>
-      </Thead>
-      <Tbody>
-        <Tr>
-          <Td>Network</Td>
-          <Td isNumeric>
-            <Tag size="sm">{numNodes.toLocaleString()}</Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">{numLinks.toLocaleString()}</Tag>
-          </Td>
-        </Tr>
-        <Tr>
-          <Td>Tree</Td>
-          <Td isNumeric>
-            <Tag size="sm">{numTreeNodes.toLocaleString()}</Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">{numTreeLinks.toLocaleString()}</Tag>
-          </Td>
-        </Tr>
-      </Tbody>
-      <Tfoot>
-        <Tr>
-          <Td>Total</Td>
-          <Td isNumeric>
-            <Tag size="sm">{(numNodes + numTreeNodes).toLocaleString()}</Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">{(numLinks + numTreeLinks).toLocaleString()}</Tag>
-          </Td>
-        </Tr>
-      </Tfoot>
-    </Table>
-  );
-};
 
 export default observer(function Infomap() {
   const { speciesStore, infomapStore, treeStore, mapStore } = useStore();
@@ -306,24 +250,7 @@ export default observer(function Infomap() {
           color="blue.500"
         />
       )}
-      {network != null && !infomapStore.includeTreeInNetwork && (
-        <>
-          <Stat label="Nodes">
-            {(network.nodes.length - network.numTreeNodes).toLocaleString()}
-          </Stat>
-          <Stat label="Links">
-            {(network.links.length - network.numTreeLinks).toLocaleString()}
-          </Stat>
-        </>
-      )}
-      {network != null && infomapStore.includeTreeInNetwork && (
-        <NodesLinksTable
-          numNodes={network.nodes.length - network.numTreeNodes}
-          numLinks={network.links.length - network.numTreeLinks}
-          numTreeNodes={network.numTreeNodes}
-          numTreeLinks={network.numTreeLinks}
-        />
-      )}
+      <NetworkSize network={network} />
       <Stat
         label="Bioregions"
         disabled={infomapStore.isRunning || infomapStore.numBioregions === 0}

@@ -17,7 +17,8 @@ import DemoTree from './DemoTree';
 import { useDemoStore } from '../../store';
 import Stat from '../Stat';
 import { useState } from 'react';
-import TreeHistogram from '../TreeHistogram';
+import NetworkSize from '../ControlPanel/NetworkSize';
+// import TreeHistogram from '../TreeHistogram';
 
 export default observer(() => {
   const demoStore = useDemoStore();
@@ -34,10 +35,6 @@ export default observer(() => {
   const { integrationTime, segregationTime, network } = infomapStore;
   const formatCodelength = format('.4f');
   const formatPercent = format('.1%');
-  const numNodes = network?.nodes.length;
-  const numLinks = network?.links.length;
-  const numNodesFromTree = network?.numTreeNodes;
-  const numLinksFromTree = network?.numTreeLinks;
 
   const showDeveloperStuff = false;
 
@@ -159,10 +156,7 @@ export default observer(() => {
         </FormControl>
         <VStack w="100%" align="stretch" spacing={2}>
           <VStack w="100%" align="stretch">
-            <Stat label="Nodes">{numNodes}</Stat>
-            <Stat label="Links">{numLinks}</Stat>
-            <Stat label="Tree nodes">{numNodesFromTree}</Stat>
-            <Stat label="Tree links">{numLinksFromTree}</Stat>
+            <NetworkSize network={network} />
             <Stat label="Levels">{infomapStore.numLevels}</Stat>
             <Stat label="Bioregions">{infomapStore.numBioregions}</Stat>
             <Stat label="Codelength">
@@ -173,6 +167,21 @@ export default observer(() => {
             </Stat>
           </VStack>
         </VStack>
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="alwaysUseStateNetwork" mb="0">
+            Always use state network
+          </FormLabel>
+          <Spacer />
+          <Switch
+            id="alwaysUseStateNetwork"
+            isChecked={infomapStore.alwaysUseStateNetwork}
+            onChange={() =>
+              infomapStore.setAlwaysUseStateNetwork(
+                !infomapStore.alwaysUseStateNetwork,
+              )
+            }
+          />
+        </FormControl>
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="uniformTreeLinks" mb="0">
             Uniform tree links
