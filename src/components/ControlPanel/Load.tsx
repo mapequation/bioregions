@@ -105,7 +105,7 @@ export const LoadData = observer(function LoadData() {
 
       if (['csv', 'tsv'].includes(fileExt) && occurrenceData === null) {
         occurrenceData = file;
-      } else if (fileExt === 'nwk') {
+      } else if (['nwk', 'tre'].includes(fileExt)) {
         tree = file;
       }
     }
@@ -174,7 +174,7 @@ export const LoadData = observer(function LoadData() {
       <input
         type="file"
         id="file-input"
-        accept=".csv,.tsv,.nwk"
+        accept=".csv,.tsv,.nwk,.tre"
         multiple
         style={{ visibility: 'hidden', display: 'none' }}
         onChange={onChange}

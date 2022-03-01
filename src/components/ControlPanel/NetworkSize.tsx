@@ -11,14 +11,6 @@ export default function NetworkSize({
   network: BioregionsNetwork | BioregionsStateNetwork | null;
 }) {
   if (!network) return null;
-  if (!network.includeTree) {
-    return (
-      <>
-        <Stat label="Nodes">{network.nodes.length.toLocaleString()}</Stat>
-        <Stat label="Links">{network.links.length.toLocaleString()}</Stat>
-      </>
-    );
-  }
   const haveStates = 'numStateGridCellNodes' in network;
   const gridLabel = haveStates ? 'Grid cells (states)' : 'Grid cells';
   const numGridCells = haveStates

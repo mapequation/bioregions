@@ -58,14 +58,12 @@ export default observer(function Advanced() {
           mapStore.render();
         }
 
-        // const filename = `${speciesStore.name}_integration_time_${f(t)}.tree`;
-        const filename = `Integration time ${f(1 - t)}.json`;
-        // zip.file(filename, infomapStore.treeString!);
+        const filename = `it-${f(1 - t)}.json`;
         zip.file(filename, JSON.stringify(infomapStore.tree)!);
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipFile, 'sweep.zip');
+      saveAs(zipFile, 'sweep integration time.zip');
     } catch (err) {
       console.error('Error in parameter sweep:', err);
     }
@@ -295,6 +293,28 @@ export default observer(function Advanced() {
                 )
               }
             />
+          </FormControl>
+          <FormControl
+            display="flex"
+            w="100%"
+            alignItems="center"
+            isDisabled={infomapStore.isRunning}
+          >
+            <FormLabel mb="0">Seed</FormLabel>
+            <Spacer />
+            <NumberInput
+              maxW="70px"
+              min={2}
+              size="xs"
+              value={infomapStore.args.seed}
+              onChange={(value) => infomapStore.setSeed(+value)}
+            >
+              <NumberInputField />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
           </FormControl>
           <FormControl
             display="flex"

@@ -196,7 +196,7 @@ export default observer(function Infomap() {
         variant={infomapStore.isRunning ? 'outline' : 'solid'}
         onClick={runInfomap}
         //isLoading={infomapStore.isRunning}
-        disabled={!speciesStore.loaded}
+        disabled={!infomapStore.network}
       >
         {!infomapStore.isRunning ? 'Run Infomap' : 'Abort'}
       </Button>

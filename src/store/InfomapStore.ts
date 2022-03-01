@@ -73,6 +73,7 @@ export default class InfomapStore {
     entropyCorrected: false,
     entropyCorrectionStrength: 1,
     skipAdjustBipartiteFlow: true,
+    seed: 123,
     ...defaultArgs,
   };
   network: BioregionsNetwork | BioregionsStateNetwork | null = null;
@@ -212,6 +213,10 @@ export default class InfomapStore {
 
   setNumTrials = action((numTrials: number) => {
     this.args.numTrials = numTrials;
+  });
+
+  setSeed = action((seed: number) => {
+    this.args.seed = seed;
   });
 
   setSkipAdjustBipartiteFlow = action((value: boolean = true) => {
