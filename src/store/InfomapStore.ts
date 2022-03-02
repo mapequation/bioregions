@@ -4,6 +4,7 @@ import type { Tree, StateTree, Result } from '@mapequation/infomap';
 import type {
   BipartiteNetwork,
   StateNetwork,
+  MultilayerIntraInterNetwork,
 } from '@mapequation/infomap/network';
 import type { Arguments } from '@mapequation/infomap/arguments';
 import type RootStore from './RootStore';
@@ -14,6 +15,8 @@ import {
 } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
 import { isEqual } from '../utils/math';
+import { range } from '../utils/range';
+import MaxMap from '../utils/MaxMap';
 
 export interface BioregionsNetworkData {
   nodeIdMap: { [name: string]: number };
@@ -40,6 +43,10 @@ export interface BioregionsStateNetwork
   extends Required<StateNetwork>,
     BioregionsStateNetworkData {}
 
+export interface BioregionsMultilayerNetwork
+  extends MultilayerIntraInterNetwork,
+    BioregionsNetworkData {}
+
 type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
 
 const defaultArgs: RequiredArgs = {
@@ -56,9 +63,11 @@ export type Bioregion = {
   mostCommon: {
     name: string;
     count: number;
+    score: number;
   }[];
   mostIndicative: {
     name: string;
+    count: number;
     score: number;
   }[];
 };
@@ -77,6 +86,7 @@ export default class InfomapStore {
     ...defaultArgs,
   };
   network: BioregionsNetwork | BioregionsStateNetwork | null = null;
+  multilayerNetwork: BioregionsMultilayerNetwork | null = null;
   tree: Tree | StateTree | null = null;
   haveStateNodes: boolean = false;
   treeString?: string;
@@ -416,7 +426,10 @@ export default class InfomapStore {
     if (this.haveStateNetwork) {
       return this.createStateNetwork();
     }
+    return this.createStandardNetwork();
+  }
 
+  public createStandardNetwork(): BioregionsNetwork {
     const { tree } = this.rootStore.treeStore;
     const includeTree =
       this.includeTreeInNetwork &&
@@ -698,6 +711,35 @@ export default class InfomapStore {
 
     console.log('Nodes missing in network', Array.from(missing));
     console.log('Network:', network);
+
+    return network;
+  }
+
+  public createMultilayerNetwork(): BioregionsMultilayerNetwork {
+    const numLayers = 10;
+    const integrationTimes = Array.from(range(numLayers)).map(
+      (n) => (n + 1) / numLayers,
+    );
+    const networks = integrationTimes.map((t) => this.createStandardNetwork());
+    const network: BioregionsMultilayerNetwork = {
+      nodes: [],
+      intra: [],
+      nodeIdMap: {}, // name -> id
+      numLeafTaxonNodes: 0,
+      numInternalTaxonNodes: 0,
+      numGridCellNodes: 0,
+      numLeafTaxonLinks: 0,
+      numInternalTaxonLinks: 0,
+      sumLeafTaxonLinkWeight: 0,
+      sumInternalTaxonLinkWeight: 0,
+      sumLinkWeight: 0,
+      isDirected: false,
+      includeTree: true,
+    };
+
+    for (const net of networks) {
+      // network.intra.push()
+    }
 
     return network;
   }
@@ -1198,7 +1240,7 @@ export default class InfomapStore {
 
     type Species = string;
     type BioregionId = number;
-    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
+    const bioregionSpeciesCount = new Map<BioregionId, MaxMap<Species>>();
 
     for (const cell of cells) {
       if (!cell.isLeaf) {
@@ -1208,7 +1250,7 @@ export default class InfomapStore {
       const bioregion = bioregions[cell.bioregionId - 1];
 
       if (!bioregionSpeciesCount.has(bioregion.bioregionId)) {
-        bioregionSpeciesCount.set(bioregion.bioregionId, new Map());
+        bioregionSpeciesCount.set(bioregion.bioregionId, new MaxMap());
       }
       const speciesCount = bioregionSpeciesCount.get(bioregion.bioregionId)!;
 
@@ -1221,19 +1263,25 @@ export default class InfomapStore {
       }
     }
 
+    const maxSpeciesCount = speciesStore.speciesTopList[0]!.count;
     // Update speciesStore.speciesMap with regions for each species
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
+      const maxSpeciesCountInBioregion = speciesCount.maxValue;
       for (const [name, count] of speciesCount.entries()) {
-        bioregion.mostCommon.push({ name, count });
-
         // Most indicative
-        const tf = count / bioregion.numRecords;
-        const idf =
-          (speciesStore.speciesMap.get(name)?.count ?? 0) /
-          speciesStore.numRecords;
-        const score = tf / idf;
-        bioregion.mostIndicative.push({ name, score });
+        // const tf = count / bioregion.numRecords;
+        // const idf =
+        //   (speciesStore.speciesMap.get(name)?.count ?? 0) /
+        //   speciesStore.numRecords;
+        // const score = tf / idf;
+        // Old bioregions way - same order within bioregions
+        const localScore = count / maxSpeciesCountInBioregion;
+        const globalScore =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) / maxSpeciesCount;
+        const score = localScore / globalScore;
+        bioregion.mostIndicative.push({ name, score, count });
+        bioregion.mostCommon.push({ name, score, count });
 
         const species = speciesStore.speciesMap.get(name)!;
         species.countPerRegion.set(
@@ -1243,7 +1291,9 @@ export default class InfomapStore {
       }
 
       bioregion.mostCommon.sort((a, b) => b.count - a.count);
-      bioregion.mostIndicative.sort((a, b) => b.score - a.score);
+      bioregion.mostIndicative.sort((a, b) =>
+        isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
+      );
     }
 
     this.setBioregions(bioregions);
@@ -1320,7 +1370,7 @@ export default class InfomapStore {
 
     type Species = string;
     type BioregionId = number;
-    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
+    const bioregionSpeciesCount = new Map<BioregionId, MaxMap<Species>>();
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of cells) {
@@ -1344,7 +1394,7 @@ export default class InfomapStore {
         // }
 
         if (!bioregionSpeciesCount.has(bioregionId)) {
-          bioregionSpeciesCount.set(bioregionId, new Map());
+          bioregionSpeciesCount.set(bioregionId, new MaxMap());
         }
         const speciesCount = bioregionSpeciesCount.get(bioregionId)!;
 
@@ -1357,19 +1407,25 @@ export default class InfomapStore {
       console.log(`${numSpeciesWithoutBioregions} species without bioregions.`);
     }
 
+    const maxSpeciesCount = speciesStore.speciesTopList[0]!.count;
     // Update speciesStore.speciesMap with regions for each species
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
+      const maxSpeciesCountInBioregion = speciesCount.maxValue;
       for (const [name, count] of speciesCount.entries()) {
-        bioregion.mostCommon.push({ name, count });
-
         // Most indicative
-        const tf = count / bioregion.numRecords;
-        const idf =
-          (speciesStore.speciesMap.get(name)?.count ?? 0) /
-          speciesStore.numRecords;
-        const score = tf / idf;
-        bioregion.mostIndicative.push({ name, score });
+        // const tf = count / bioregion.numRecords;
+        // const idf =
+        //   (speciesStore.speciesMap.get(name)?.count ?? 0) /
+        //   speciesStore.numRecords;
+        // const score = tf / idf;
+        // Old bioregions way - same order within bioregions
+        const localScore = count / maxSpeciesCountInBioregion;
+        const globalScore =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) / maxSpeciesCount;
+        const score = localScore / globalScore;
+        bioregion.mostIndicative.push({ name, score, count });
+        bioregion.mostCommon.push({ name, score, count });
 
         const species = speciesStore.speciesMap.get(name)!;
         species.countPerRegion.set(
