@@ -11,16 +11,26 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import { useState } from 'react';
 import { useStore } from '../../store';
 import PieChart from './PieChart';
 
 export default observer(function SpeciesList() {
+  const [filter, setFilter] = useState('');
   const { speciesStore } = useStore();
   const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 
   if (speciesStore.numSpecies === 0) {
     return null;
   }
+
+  const match = filter ? new RegExp(filter) : null;
+
+  let items = speciesStore.speciesTopList;
+  if (match) {
+    items = items.filter(({ name }) => match.test(name));
+  }
+  items = items.slice(0, 100);
 
   return (
     <Box
@@ -35,7 +45,11 @@ export default observer(function SpeciesList() {
         <Thead>
           <Tr>
             <Th colSpan={2}>
-              <Input placeholder="Filter..." />
+              <Input
+                placeholder="Filter species..."
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+              />
             </Th>
             <Th textAlign="start">{speciesStore.numSpecies}</Th>
           </Tr>
@@ -46,7 +60,7 @@ export default observer(function SpeciesList() {
           </Tr>
         </Thead>
         <Tbody>
-          {speciesStore.speciesTopList.slice(0, 100).map((species) => {
+          {items.map((species) => {
             return (
               <Tr key={species.name} w="100%">
                 <Td>
