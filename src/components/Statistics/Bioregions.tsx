@@ -93,38 +93,47 @@ const BioregionInfo = observer(function Bioregion({
           <Tr>
             <Th>Name</Th>
             <Th isNumeric>Count</Th>
+            <Th isNumeric>Score</Th>
             <Th textAlign="center">Regions</Th>
             <Th>Name</Th>
+            <Th isNumeric>Count</Th>
             <Th isNumeric>Score</Th>
             <Th textAlign="center">Regions</Th>
           </Tr>
         </Thead>
         <Tbody>
-          {mostCommon.map((commonSpecies: any, index: number) => {
-            const indicativeSpecies = mostIndicative[index];
-            return (
-              <Tr key={index} w="100%">
-                <Td>{commonSpecies.name}</Td>
-                <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
-                <Td>
-                  <PieChart
-                    values={speciesStore.speciesMap
-                      .get(commonSpecies.name)!
-                      .countPerRegion.entries()}
-                  />
-                </Td>
-                <Td>{indicativeSpecies?.name}</Td>
-                <Td isNumeric>{formatScore(indicativeSpecies?.score)}</Td>
-                <Td>
-                  <PieChart
-                    values={speciesStore.speciesMap
-                      .get(indicativeSpecies?.name)!
-                      .countPerRegion.entries()}
-                  />
-                </Td>
-              </Tr>
-            );
-          })}
+          {mostCommon.map(
+            (
+              commonSpecies: { name: string; count: number; score: number },
+              index: number,
+            ) => {
+              const indicativeSpecies = mostIndicative[index]!;
+              return (
+                <Tr key={index} w="100%">
+                  <Td>{commonSpecies.name}</Td>
+                  <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
+                  <Td isNumeric>{formatScore(commonSpecies.score)}</Td>
+                  <Td>
+                    <PieChart
+                      values={speciesStore.speciesMap
+                        .get(commonSpecies.name)!
+                        .countPerRegion.entries()}
+                    />
+                  </Td>
+                  <Td>{indicativeSpecies.name}</Td>
+                  <Td isNumeric>{indicativeSpecies.count}</Td>
+                  <Td isNumeric>{formatScore(indicativeSpecies.score)}</Td>
+                  <Td>
+                    <PieChart
+                      values={speciesStore.speciesMap
+                        .get(indicativeSpecies?.name)!
+                        .countPerRegion.entries()}
+                    />
+                  </Td>
+                </Tr>
+              );
+            },
+          )}
         </Tbody>
       </Table>
     </Box>
