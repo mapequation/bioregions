@@ -151,6 +151,8 @@ export const LoadData = observer(function LoadData() {
 
     setIsOpen(false);
     await speciesStore.load(file, nameColumn, longColumn, latColumn);
+    mapStore.setRenderType('heatmap');
+    mapStore.render();
     await infomapStore.run();
     mapStore.setRenderType('bioregions');
     mapStore.render();

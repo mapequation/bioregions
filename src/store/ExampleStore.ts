@@ -99,6 +99,10 @@ export default class ExampleStore {
       await treeStore.load(example.treeFile);
     }
     await speciesStore.load(example.speciesFile);
+
+    mapStore.setRenderType('heatmap');
+    mapStore.render();
+
     await infomapStore.run();
 
     mapStore.setRenderType('bioregions');
