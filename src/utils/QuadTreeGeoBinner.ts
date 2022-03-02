@@ -383,6 +383,7 @@ export class QuadtreeGeoBinner {
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   _cells: Cell[] = [];
   private _speciesStore: SpeciesStore;
+  patchSparseCells = true;
 
   cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
   treeNeedUpdate: boolean = true; // Revisit data to regenerate tree if dirty
@@ -397,10 +398,9 @@ export class QuadtreeGeoBinner {
       minCellCapacity: observable,
       cellSizeLog2: computed,
       cellCapacity: computed,
+      patchSparseCells: observable,
       cellsNeedUpdate: observable,
       treeNeedUpdate: observable,
-      setCellsNeedUpdate: action,
-      generateCells: action,
       _cells: observable.ref,
       cells: computed,
     });
@@ -529,9 +529,24 @@ export class QuadtreeGeoBinner {
     return [this.minCellCapacity, this.maxCellCapacity];
   }
 
-  setCellsNeedUpdate(value: boolean = true) {
+  setPatchSparseCells = action((value: boolean = true) => {
+    if (value !== this.patchSparseCells) {
+      this.patchSparseCells = value;
+      if (!value) {
+        // Remove previous patches
+        this.visitNonEmpty((node: Cell) => {
+          if (!node.isLeaf) {
+            node.features = [];
+          }
+        });
+      }
+      this.setCellsNeedUpdate();
+    }
+  });
+
+  setCellsNeedUpdate = action((value: boolean = true) => {
     this.cellsNeedUpdate = value;
-  }
+  });
 
   setTreeNeedUpdate(value: boolean = true) {
     this.treeNeedUpdate = value;
@@ -568,7 +583,7 @@ export class QuadtreeGeoBinner {
       this.generateTree();
     }
     if (this.cellsNeedUpdate) {
-      this.generateCells();
+      this.generateCells(this.patchSparseCells);
     }
     return this._cells;
   }
@@ -618,7 +633,7 @@ export class QuadtreeGeoBinner {
    * included. Default false.
    * @return Array of quadtree nodes
    */
-  generateCells(patchSparseNodes = true): Cell[] {
+  generateCells = action((patchSparseNodes = true): Cell[] => {
     console.time('generateCells');
     if (patchSparseNodes) {
       this.root?.patchSparseNodes(this.maxSizeLog2, this.minCellCapacity);
@@ -637,7 +652,7 @@ export class QuadtreeGeoBinner {
     this.setCellsNeedUpdate(false);
     console.timeEnd('generateCells');
     return nodes;
-  }
+  });
 
   // visitWithinThresholds(callback: VisitCallback) {
   //   this.visitNonEmpty((node: Node) => {

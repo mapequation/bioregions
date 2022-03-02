@@ -205,6 +205,28 @@ export default observer(function Advanced() {
           </FormControl>
 
           <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="patchSparseCells" mb="0">
+              Patch sparse cells
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="patchSparseCells"
+              isChecked={speciesStore.binner.patchSparseCells}
+              onChange={() => {
+                speciesStore.binner.setPatchSparseCells(
+                  !speciesStore.binner.patchSparseCells,
+                );
+                if (mapStore.renderType === 'bioregions') {
+                  mapStore.setRenderType('heatmap');
+                }
+                infomapStore.rootStore.clearBioregions();
+                infomapStore.updateNetwork();
+                mapStore.render();
+              }}
+            />
+          </FormControl>
+
+          <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="skipAdjustBipartiteFlow" mb="0">
               Flow projection
             </FormLabel>
