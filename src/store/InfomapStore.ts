@@ -1201,6 +1201,10 @@ export default class InfomapStore {
     const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
 
     for (const cell of cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
       const bioregion = bioregions[cell.bioregionId - 1];
 
       if (!bioregionSpeciesCount.has(bioregion.bioregionId)) {
@@ -1320,6 +1324,10 @@ export default class InfomapStore {
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
       for (const { count, name } of cell.speciesTopList) {
         const species = speciesStore.speciesMap.get(name)!;
 
