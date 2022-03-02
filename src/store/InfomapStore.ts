@@ -1240,7 +1240,7 @@ export default class InfomapStore {
 
     type Species = string;
     type BioregionId = number;
-    const bioregionSpeciesCount = new Map<BioregionId, MaxMap<Species>>();
+    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
 
     for (const cell of cells) {
       if (!cell.isLeaf) {
@@ -1250,7 +1250,7 @@ export default class InfomapStore {
       const bioregion = bioregions[cell.bioregionId - 1];
 
       if (!bioregionSpeciesCount.has(bioregion.bioregionId)) {
-        bioregionSpeciesCount.set(bioregion.bioregionId, new MaxMap());
+        bioregionSpeciesCount.set(bioregion.bioregionId, new Map());
       }
       const speciesCount = bioregionSpeciesCount.get(bioregion.bioregionId)!;
 
@@ -1263,23 +1263,16 @@ export default class InfomapStore {
       }
     }
 
-    const maxSpeciesCount = speciesStore.speciesTopList[0]!.count;
     // Update speciesStore.speciesMap with regions for each species
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
-      const maxSpeciesCountInBioregion = speciesCount.maxValue;
       for (const [name, count] of speciesCount.entries()) {
         // Most indicative
-        // const tf = count / bioregion.numRecords;
-        // const idf =
-        //   (speciesStore.speciesMap.get(name)?.count ?? 0) /
-        //   speciesStore.numRecords;
-        // const score = tf / idf;
-        // Old bioregions way - same order within bioregions
-        const localScore = count / maxSpeciesCountInBioregion;
-        const globalScore =
-          (speciesStore.speciesMap.get(name)?.count ?? 0) / maxSpeciesCount;
-        const score = localScore / globalScore;
+        const tf = count / bioregion.numRecords;
+        const idf =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) /
+          speciesStore.numRecords;
+        const score = tf / idf;
         bioregion.mostIndicative.push({ name, score, count });
         bioregion.mostCommon.push({ name, score, count });
 
@@ -1370,7 +1363,7 @@ export default class InfomapStore {
 
     type Species = string;
     type BioregionId = number;
-    const bioregionSpeciesCount = new Map<BioregionId, MaxMap<Species>>();
+    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of cells) {
@@ -1394,7 +1387,7 @@ export default class InfomapStore {
         // }
 
         if (!bioregionSpeciesCount.has(bioregionId)) {
-          bioregionSpeciesCount.set(bioregionId, new MaxMap());
+          bioregionSpeciesCount.set(bioregionId, new Map());
         }
         const speciesCount = bioregionSpeciesCount.get(bioregionId)!;
 
@@ -1407,23 +1400,16 @@ export default class InfomapStore {
       console.log(`${numSpeciesWithoutBioregions} species without bioregions.`);
     }
 
-    const maxSpeciesCount = speciesStore.speciesTopList[0]!.count;
     // Update speciesStore.speciesMap with regions for each species
     for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
       const bioregion = bioregions[bioregionId - 1];
-      const maxSpeciesCountInBioregion = speciesCount.maxValue;
       for (const [name, count] of speciesCount.entries()) {
         // Most indicative
-        // const tf = count / bioregion.numRecords;
-        // const idf =
-        //   (speciesStore.speciesMap.get(name)?.count ?? 0) /
-        //   speciesStore.numRecords;
-        // const score = tf / idf;
-        // Old bioregions way - same order within bioregions
-        const localScore = count / maxSpeciesCountInBioregion;
-        const globalScore =
-          (speciesStore.speciesMap.get(name)?.count ?? 0) / maxSpeciesCount;
-        const score = localScore / globalScore;
+        const tf = count / bioregion.numRecords;
+        const idf =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) /
+          speciesStore.numRecords;
+        const score = tf / idf;
         bioregion.mostIndicative.push({ name, score, count });
         bioregion.mostCommon.push({ name, score, count });
 
