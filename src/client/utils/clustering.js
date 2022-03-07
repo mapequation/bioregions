@@ -183,6 +183,7 @@ export function getClusterStatistics(
     );
   });
 
+  console.log("Clusters:", clusters);
   return { clusters, clustersPerSpecies };
 }
 
@@ -309,16 +310,20 @@ export function getJaccardIndex(
 }
 
 export function getBipartiteNetwork({ species, bins, speciesToBins }) {
-  console.log(
-    `'Generating bipartite network with ${species.length} species and ${bins.length} grid cells...`
+  const spToBins = Object.entries(speciesToBins).filter(
+    ([_, bins]) => bins.bins.size > 0
   );
+  const numSpecies = spToBins.length; // Not all species have a grid cell, due to min capacity?
   const numBins = bins.length;
+  console.log(
+    `'Generating bipartite network with ${numSpecies} species and ${numBins} grid cells...`
+  );
   const bipartiteOffset = numBins;
   lastBipartiteOffset = numBins;
   // Map names to index
   var speciesNameToIndex = new Map();
   var speciesCounter = 0;
-  species.forEach(({ name }) => {
+  spToBins.forEach(([name, _]) => {
     speciesNameToIndex.set(name, speciesCounter);
     ++speciesCounter;
   });
@@ -331,33 +336,35 @@ export function getBipartiteNetwork({ species, bins, speciesToBins }) {
   if (useNewBipartiteFormat) {
     network.push(`*Bipartite ${bipartiteOffset}`);
   }
-  let binCounter = 0;
-  if (speciesToBins) {
-    Object.entries(speciesToBins).forEach(([name, bins]) => {
-      const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
-      bins.bins.forEach((binId) => {
-        network.push(`${speciesId} ${binId}`);
-      });
+  // let binCounter = 0;
+  spToBins.forEach(([name, bins]) => {
+    const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
+    if (speciesId === 858) {
+      console.log(`Species 858 bins:`, bins);
+    }
+    bins.bins.forEach((binId) => {
+      network.push(`${speciesId} ${binId}`);
     });
-  } else {
-    bins.forEach((bin) => {
-      bin.features.forEach((feature) => {
-        // TODO: Species not aggregated, will aggregate to weighted network in Infomap
-        if (useNewBipartiteFormat) {
-          network.push(
-            `${
-              speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
-            } ${binCounter}`
-          );
-        } else {
-          network.push(
-            `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
-          );
-        }
-      });
-      ++binCounter;
-    });
-  }
+  });
+  // } else {
+  //   bins.forEach((bin) => {
+  //     bin.features.forEach((feature) => {
+  //       // TODO: Species not aggregated, will aggregate to weighted network in Infomap
+  //       if (useNewBipartiteFormat) {
+  //         network.push(
+  //           `${
+  //             speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
+  //           } ${binCounter}`
+  //         );
+  //       } else {
+  //         network.push(
+  //           `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
+  //         );
+  //       }
+  //     });
+  //     ++binCounter;
+  //   });
+  // }
   console.log("First 10 links:", network.slice(0, 10));
   // console.log("========== WHOLE NETWORK =========");
   // console.log(network);
@@ -531,34 +538,74 @@ export function getBipartitePhyloNetwork({
 }
 
 export function getPajekNetwork(species, speciesToBins, bins) {
-  console.log(
-    `Generate bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")...`
+  const spToBins = Object.entries(speciesToBins).filter(
+    ([_, bins]) => bins.bins.size > 0
   );
-  const network = [];
+  const numSpecies = spToBins.length;
+  const numBins = bins.length;
+  console.log(
+    `'Generating bipartite network with ${numSpecies} (out of ${species.length}) species and ${numBins} grid cells...`
+  );
+  const bipartiteOffset = numBins;
+  lastBipartiteOffset = numBins;
+  // Map names to index
+  var speciesNameToIndex = new Map();
+  var speciesCounter = 0;
+  spToBins.forEach(([name, _]) => {
+    speciesNameToIndex.set(name, speciesCounter);
+    ++speciesCounter;
+  });
+  // console.log('==================\nSpecies name to index:');
+  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
+
+  // Create network with links from species to bins
+  var network = [];
   network.push(
     `# Bipartite network between ${species.length} species and ${bins.length} grid cells ("grid-size long lat")`
   );
   network.push(`*Vertices ${species.length + bins.length}`);
-  // Map names to index
-  species.forEach(({ name }, index) => {
-    network.push(`${index + 1} "${name}"`);
-  });
-  console.log("First 10 species nodes:", network.slice(0, 12));
-  // console.log('==================\nSpecies name to index:');
-  // console.log(Array.from(speciesNameToIndex.entries()).join('\n'));
-
   bins.forEach((bin, i) => {
-    network.push(`${i + 1 + species.length} "${bin.size} ${bin.x1} ${bin.y1}"`);
+    network.push(`${i} "${bin.size} ${bin.x1} ${bin.y1}"`);
   });
-  console.log("Last 10 grid cell nodes:", network.slice(-10));
-  // Add links from species to bins
-  network.push("*Edges");
-  _.each(speciesToBins, ({ speciesId, bins: linkedBins }) => {
-    linkedBins.forEach((binId) => {
-      network.push(`${speciesId + 1} ${binId + 1 + species.length}`);
+  // Map names to index
+  spToBins.forEach(([name, _]) => {
+    network.push(`${speciesNameToIndex.get(name) + bipartiteOffset} "${name}"`);
+  });
+  if (useNewBipartiteFormat) {
+    network.push(`*Bipartite ${bipartiteOffset}`);
+  }
+  network.push("# speciesId binId [speciesCount]");
+  let binCounter = 0;
+  if (speciesToBins) {
+    Object.entries(speciesToBins).forEach(([name, bins]) => {
+      const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
+      bins.bins.forEach((binId) => {
+        network.push(`${speciesId} ${binId}`);
+      });
     });
-  });
-
+  } else {
+    bins.forEach((bin) => {
+      bin.features.forEach((feature) => {
+        // TODO: Species not aggregated, will aggregate to weighted network in Infomap
+        if (useNewBipartiteFormat) {
+          network.push(
+            `${
+              speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
+            } ${binCounter}`
+          );
+        } else {
+          network.push(
+            `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
+          );
+        }
+      });
+      ++binCounter;
+    });
+  }
+  console.log("First 10 links:", network.slice(0, 10));
+  // console.log("========== WHOLE NETWORK =========");
+  // console.log(network);
+  // console.log(network.join("\n"));
   return network.join("\n");
 }
 
@@ -606,9 +653,21 @@ export function calculateInfomapClusters(
 
     const clusterIds = new Array(json.nodes.length);
 
-    // Used clu ids before which range from 0 to num_clusters - 1,
-    // but now they are from 1 to num_clusters, so we subtract 1.
-    json.nodes.forEach(({ id, path }) => (clusterIds[id] = path[0] - 1));
+    // There may be modules with only a species node, so
+    // adjust to consequitive module ids (assume species nodes hidden)
+    let moduleOffset = 0;
+    let lastModule = 0;
+    json.nodes.forEach(({ id, path }) => {
+      const module = path[0] - 1;
+      if (module - lastModule > 1) {
+        moduleOffset += module - lastModule - 1;
+      }
+      clusterIds[id] = module - moduleOffset;
+      lastModule = module;
+    });
+    if (moduleOffset > 0) {
+      console.warn(`${moduleOffset} modules without any grid cells.`);
+    }
 
     callback(null, clusterIds);
   };
