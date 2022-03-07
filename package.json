@@ -11,7 +11,7 @@
     "deploy": "scp -r build/* mapequation:/var/www/bioregions"
   },
   "dependencies": {
-    "@mapequation/infomap": "^2.1.0",
+    "@mapequation/infomap": "^2.2.0",
     "axios": "^0.25.0",
     "babel-polyfill": "^6.26.0",
     "chroma-js": "^2.4.2",
