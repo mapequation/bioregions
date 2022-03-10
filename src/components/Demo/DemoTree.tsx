@@ -468,13 +468,28 @@ export default observer(
           <g className="grid-cells">
             {physCellNodes.map(({ key, cell, svgString }) => (
               <g key={key}>
-                <title>Bioregion {cell.bioregionId}</title>
+                <title>
+                  Cell: {cell.id}, bioregion {cell.bioregionId}
+                </title>
                 <path
                   d={svgString}
                   stroke="white"
+                  strokeDashoffset={0}
+                  strokeDasharray={infomapStore.isRunning ? 2 : 0}
                   strokeWidth={0.5}
                   fill={colorCell(cell)}
-                />
+                >
+                  {infomapStore.isRunning && (
+                    <>
+                      <animate
+                        attributeName="stroke-dashoffset"
+                        values="0;40;0"
+                        dur="5s"
+                        repeatCount="indefinite"
+                      />
+                    </>
+                  )}
+                </path>
               </g>
             ))}
           </g>
@@ -550,7 +565,10 @@ export default observer(
               <g className="state-cells">
                 {stateCells.map((stateCell) => (
                   <g key={stateCell.cellStateName}>
-                    <title>Bioegion: {stateCell.bioregionId}</title>
+                    <title>
+                      Cell: {stateCell.cellStateName}, bioegion:{' '}
+                      {stateCell.bioregionId}
+                    </title>
                     <circle
                       r={stateCellRadius}
                       cx={stateCell.x}
@@ -702,7 +720,16 @@ export default observer(
                   paintOrder={'stroke'}
                   strokeWidth={0.1}
                   stroke="white"
-                />
+                >
+                  {infomapStore.isRunning && (
+                    <animate
+                      attributeName="opacity"
+                      values="1;0.4;1"
+                      dur="1s"
+                      repeatCount="indefinite"
+                    />
+                  )}
+                </circle>
                 <text
                   x={node.x}
                   y={node.y}
