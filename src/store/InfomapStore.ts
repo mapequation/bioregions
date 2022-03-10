@@ -45,7 +45,9 @@ export interface BioregionsStateNetwork
 
 export interface BioregionsMultilayerNetwork
   extends MultilayerIntraInterNetwork,
-    BioregionsNetworkData {}
+    BioregionsNetworkData {
+  layers: { id: number; name: string }[];
+}
 
 type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
 
@@ -87,6 +89,8 @@ export default class InfomapStore {
   };
   network: BioregionsNetwork | BioregionsStateNetwork | null = null;
   multilayerNetwork: BioregionsMultilayerNetwork | null = null;
+  numLayers: number = 5;
+  multilayerLogTime: boolean = false;
   tree: Tree | StateTree | null = null;
   haveStateNodes: boolean = false;
   treeString?: string;
@@ -144,6 +148,9 @@ export default class InfomapStore {
     makeObservable(this, {
       error: observable,
       network: observable.ref,
+      multilayerNetwork: observable.ref,
+      numLayers: observable,
+      multilayerLogTime: observable,
       tree: observable.ref,
       treeString: observable,
       infomapOutput: observable,
@@ -272,6 +279,20 @@ export default class InfomapStore {
     },
   );
 
+  setMultilayerNetwork = action(
+    (network: BioregionsMultilayerNetwork | null) => {
+      this.multilayerNetwork = network;
+    },
+  );
+
+  setNumLayers = action((numLayers: number) => {
+    this.numLayers = numLayers;
+  });
+
+  setMultilayerLogTime = action((multilayerLogTime: boolean) => {
+    this.multilayerLogTime = multilayerLogTime;
+  });
+
   setBioregions = action((bioregions: Bioregion[]) => {
     this.bioregions = bioregions;
   });
@@ -364,7 +385,52 @@ export default class InfomapStore {
     // const isStateNetwork = 'states' in network;
     if (network.isDirected) {
       args.directed = true;
-      args.regularized = true;
+      // args.regularized = true;
+    }
+
+    console.time('infomap');
+
+    return new Promise<void>((resolve, reject) => {
+      this.infomapId = this.infomap
+        .on('finished', (result, id) => {
+          this.onInfomapFinished(result, id);
+          resolve();
+        })
+        .on('error', (err, id) => {
+          this.onInfomapError(err, id);
+          reject();
+        })
+        .run({
+          network,
+          args,
+        });
+    });
+  }
+
+  async runMultilayer() {
+    if (this.infomapId !== null) {
+      this.abort();
+    }
+    const { cells } = this;
+
+    if (cells.length === 0) {
+      console.error('No cells in binner!');
+      return;
+    }
+
+    this.setIsRunning();
+    this.setCurrentTrial(0);
+
+    const network = this.createMultilayerNetwork();
+    this.setMultilayerNetwork(network);
+
+    const args = {
+      ...this.args,
+      multilayerRelaxLimit: 1,
+      multilayerRelaxRate: 0.15,
+    };
+    if (network.isDirected) {
+      args.directed = true;
     }
 
     console.time('infomap');
@@ -429,7 +495,7 @@ export default class InfomapStore {
     return this.createStandardNetwork();
   }
 
-  public createStandardNetwork(): BioregionsNetwork {
+  public createStandardNetwork(_integrationTime?: number): BioregionsNetwork {
     const { tree } = this.rootStore.treeStore;
     const includeTree =
       this.includeTreeInNetwork &&
@@ -555,7 +621,7 @@ export default class InfomapStore {
     First species (leaf) nodes, then the internal tree nodes.
     */
 
-    const { integrationTime } = this;
+    const integrationTime = _integrationTime ?? this.integrationTime;
 
     /**
      * 1. Depth first search post order (from leafs):
@@ -649,7 +715,10 @@ export default class InfomapStore {
       const childLinks = getLinksFromTreeNode(child);
 
       if (childLinks.numLinks === 0) {
-        console.warn('No links from child', child.name);
+        // console.warn('No links from child', child.name);
+        // Happens when integration time is more than leaf time
+        // TODO: Adjust tree times to reach 1.0 at leafs if close?
+        return addLinks(parent, parentLinks.links, 1);
       }
 
       const degreeRatio = parentLinks.numLinks / childLinks.numLinks;
@@ -716,12 +785,38 @@ export default class InfomapStore {
   }
 
   public createMultilayerNetwork(): BioregionsMultilayerNetwork {
-    const numLayers = 10;
-    const integrationTimes = Array.from(range(numLayers)).map(
-      (n) => (n + 1) / numLayers,
-    );
-    const networks = integrationTimes.map((t) => this.createStandardNetwork());
-    const network: BioregionsMultilayerNetwork = {
+    console.log('Generate multilayer network...');
+    console.time('createMultilayerNetwork');
+
+    const { numLayers } = this;
+    const layerIds = Array.from(range(numLayers));
+    // const integrationTimes = layerIds.map(
+    //   (n) => (n + 1) / numLayers,
+    // );
+    const integrationTimes: number[] = [];
+    if (this.multilayerLogTime) {
+      let t = 0;
+      let dt = 0.5;
+      layerIds.forEach(() => {
+        t += dt;
+        dt /= 2;
+        integrationTimes.push(t);
+      });
+    } else {
+      let t = 0;
+      let dt = 1 / numLayers;
+      layerIds.forEach(() => {
+        t += dt;
+        integrationTimes.push(t);
+      });
+    }
+    const { timeFormatter } = this.rootStore.treeStore;
+    const layers = integrationTimes.map((t, id) => ({
+      id,
+      name: timeFormatter(t),
+    }));
+
+    const multilayerNetwork: BioregionsMultilayerNetwork = {
       nodes: [],
       intra: [],
       nodeIdMap: {}, // name -> id
@@ -735,13 +830,47 @@ export default class InfomapStore {
       sumLinkWeight: 0,
       isDirected: false,
       includeTree: true,
+      layers,
     };
 
-    for (const net of networks) {
-      // network.intra.push()
-    }
+    // const integrationTimes = [0.5, 0.7, 0.8, 0.9, 1];
+    console.log('Multilayer integration times:', integrationTimes);
+    let nodeIdCounter = 0;
 
-    return network;
+    integrationTimes.forEach((t, layerId) => {
+      const network = this.createStandardNetwork(t);
+      network.nodes.forEach((node) => {
+        if (multilayerNetwork.nodeIdMap[node.name!] === undefined) {
+          const id = nodeIdCounter++;
+          multilayerNetwork.nodeIdMap[node.name!] = id;
+          multilayerNetwork.nodes!.push({ id, name: node.name! });
+        }
+      });
+      network.links.forEach((link) => {
+        const sourceName = network.nodes[link.source].name!;
+        const targetName = network.nodes[link.target].name!;
+        multilayerNetwork.intra.push({
+          layerId,
+          source: multilayerNetwork.nodeIdMap[sourceName],
+          target: multilayerNetwork.nodeIdMap[targetName],
+          weight: link.weight!,
+        });
+      });
+      multilayerNetwork.numLeafTaxonNodes += network.numLeafTaxonNodes;
+      multilayerNetwork.numInternalTaxonNodes += network.numInternalTaxonNodes;
+      multilayerNetwork.numGridCellNodes += network.numGridCellNodes;
+      multilayerNetwork.numLeafTaxonLinks += network.numLeafTaxonLinks;
+      multilayerNetwork.numInternalTaxonLinks += network.numInternalTaxonLinks;
+      multilayerNetwork.sumLeafTaxonLinkWeight +=
+        network.sumLeafTaxonLinkWeight;
+      multilayerNetwork.sumInternalTaxonLinkWeight +=
+        network.sumInternalTaxonLinkWeight;
+      multilayerNetwork.sumLinkWeight += network.sumLinkWeight;
+    });
+
+    console.timeEnd('createMultilayerNetwork');
+    console.log('Multilayer network:', multilayerNetwork);
+    return multilayerNetwork;
   }
 
   public createStateNetwork(): BioregionsStateNetwork {
@@ -1175,6 +1304,28 @@ export default class InfomapStore {
     return lines.join('\n');
   }
 
+  serializeMultilayerNetwork(
+    network?: BioregionsMultilayerNetwork | null,
+  ): string | undefined {
+    if (!network) {
+      network = this.multilayerNetwork;
+    }
+    if (!network) {
+      return;
+    }
+    const lines = ['*vertices'];
+    for (const node of network.nodes!) {
+      lines.push(`${node.id} "${node.name}"`);
+    }
+    lines.push('*intra');
+    for (const link of network.intra) {
+      lines.push(
+        `${link.layerId} ${link.source} ${link.target} ${link.weight}`,
+      );
+    }
+    return lines.join('\n');
+  }
+
   createBioregions(tree: Tree | StateTree, haveStates: boolean) {
     if (haveStates) {
       this.createStateBioregions(tree as StateTree);
@@ -1293,6 +1444,10 @@ export default class InfomapStore {
   }
 
   createStateBioregions(tree: StateTree) {
+    if (tree.args.includes('multilayer-relax-limit')) {
+      this.createMultilayerBioregions(tree);
+      return;
+    }
     const { speciesStore, treeStore } = this.rootStore;
     const { cells } = this;
     this.rootStore.clearBioregions();
@@ -1349,6 +1504,142 @@ export default class InfomapStore {
       ].name!;
       node.name = stateName;
       const memTaxonName = stateName.split('_')[1]!;
+
+      cell.bioregionId = bioregionId;
+      cell.overlappingBioregions.addStateNode(
+        bioregionId,
+        node.flow,
+        memTaxonName,
+      );
+    });
+    for (const cell of cells) {
+      cell.overlappingBioregions.calcTopBioregions();
+    }
+
+    type Species = string;
+    type BioregionId = number;
+    const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
+
+    let numSpeciesWithoutBioregions = 0;
+    for (const cell of cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      for (const { count, name } of cell.speciesTopList) {
+        const species = speciesStore.speciesMap.get(name)!;
+
+        const bioregionId = species.bioregionId!;
+        if (!bioregionId) {
+          // console.warn(`No bioregion id for species ${name}: ${bioregionId}`);
+          ++numSpeciesWithoutBioregions;
+          continue;
+        }
+        const bioregion = bioregions[bioregionId - 1];
+        // if (!bioregion) {
+        //   console.warn(`No bioregion ${bioregionId} for species ${name}`);
+        //   continue;
+        // }
+
+        if (!bioregionSpeciesCount.has(bioregionId)) {
+          bioregionSpeciesCount.set(bioregionId, new Map());
+        }
+        const speciesCount = bioregionSpeciesCount.get(bioregionId)!;
+
+        bioregion.numRecords += count;
+        speciesCount.set(name, (speciesCount.get(name) ?? 0) + count);
+      }
+    }
+    if (numSpeciesWithoutBioregions > 0) {
+      // May happen if 100% tree weight
+      console.log(`${numSpeciesWithoutBioregions} species without bioregions.`);
+    }
+
+    // Update speciesStore.speciesMap with regions for each species
+    for (const [bioregionId, speciesCount] of bioregionSpeciesCount.entries()) {
+      const bioregion = bioregions[bioregionId - 1];
+      for (const [name, count] of speciesCount.entries()) {
+        // Most indicative
+        const tf = count / bioregion.numRecords;
+        const idf =
+          (speciesStore.speciesMap.get(name)?.count ?? 0) /
+          speciesStore.numRecords;
+        const score = tf / idf;
+        bioregion.mostIndicative.push({ name, score, count });
+        bioregion.mostCommon.push({ name, score, count });
+
+        const species = speciesStore.speciesMap.get(name)!;
+        species.countPerRegion.set(
+          bioregionId,
+          (species.countPerRegion.get(bioregionId) ?? 0) + count,
+        );
+      }
+
+      bioregion.mostCommon.sort((a, b) => b.count - a.count);
+      bioregion.mostIndicative.sort((a, b) => b.score - a.score);
+    }
+
+    this.setStateBioregions(bioregions);
+  }
+
+  createMultilayerBioregions(tree: StateTree) {
+    const { speciesStore, treeStore } = this.rootStore;
+    const { cells } = this;
+    this.rootStore.clearBioregions();
+    console.log(
+      'Create multilayer bioregions... network:',
+      this.multilayerNetwork,
+    );
+    // @ts-ignore
+    tree.layers = this.multilayerNetwork!.layers;
+    console.log(tree);
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: tree.numTopModules },
+      () => ({
+        flow: 0,
+        bioregionId: 0,
+        numGridCells: 0,
+        numRecords: 0,
+        species: [],
+        mostCommon: [],
+        mostIndicative: [],
+      }),
+    );
+
+    if (!tree.nodes) {
+      console.error('No nodes!');
+      console.log(tree);
+      this.addError(`Infomap output error, please report.`);
+      return;
+    }
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
+      // const bioregionId = node.modules[0];
+      const bioregionId = node.path[0];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      // Physical cell nodes are first
+      const isTaxon = node.id >= cells.length;
+      if (isTaxon) {
+        bioregion.species.push(node.name);
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = bioregionId;
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = bioregionId;
+        }
+        return;
+      }
+
+      ++bioregion.numGridCells;
+      const cell = cells[node.id];
+      const memTaxonName = `layer-${node.layerId}`;
 
       cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(

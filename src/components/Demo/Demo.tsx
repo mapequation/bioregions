@@ -12,6 +12,11 @@ import {
   Tag,
   Switch,
   Button,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import DemoTree from './DemoTree';
@@ -20,6 +25,7 @@ import Stat from '../Stat';
 import { useState } from 'react';
 import NetworkSize from '../ControlPanel/NetworkSize';
 import Modal from '../ControlPanel/Modal';
+import Export from '../ControlPanel/Export';
 // import TreeHistogram from '../TreeHistogram';
 
 export default observer(() => {
@@ -34,6 +40,27 @@ export default observer(() => {
   if (!tree) {
     return null;
   }
+
+  const runMultilayerInfomap = async () => {
+    if (infomapStore.isRunning) {
+      infomapStore.abort();
+      return;
+    }
+
+    await infomapStore.runMultilayer();
+    console.log('Multilayer network:');
+    const net = infomapStore.multilayerNetwork!;
+    const treeNodesByLayer: Map<number, string[]> = new Map();
+    net.intra.forEach(({ layerId, source, target }) => {
+      const nodes = treeNodesByLayer.get(layerId) ?? [];
+      if (nodes.length === 0) {
+        treeNodesByLayer.set(layerId, nodes);
+      }
+      const sourceName = net.nodes![source].name;
+      const targetName = net.nodes![target].name;
+      console.log(`Layer ${layerId}: ${sourceName} - ${targetName}`);
+    });
+  };
 
   const { integrationTime, segregationTime, network } = infomapStore;
   const formatCodelength = format('.4f');
@@ -228,6 +255,41 @@ export default observer(() => {
         <Button onClick={() => setIsInfomapOutputOpen(true)}>
           Infomap console
         </Button>
+
+        <FormControl
+          display="flex"
+          w="100%"
+          alignItems="center"
+          isDisabled={infomapStore.isRunning}
+        >
+          <FormLabel mb="0">
+            <Button
+              size="sm"
+              w="100%"
+              colorScheme={infomapStore.isRunning ? 'red' : 'gray'}
+              variant={infomapStore.isRunning ? 'outline' : 'solid'}
+              onClick={runMultilayerInfomap}
+              disabled={!infomapStore.network}
+            >
+              {!infomapStore.isRunning ? 'Run multilayer' : 'Abort'}
+            </Button>
+          </FormLabel>
+          <Spacer />
+          <NumberInput
+            maxW="70px"
+            min={2}
+            size="xs"
+            value={infomapStore.numLayers}
+            onChange={(value) => infomapStore.setNumLayers(+value)}
+          >
+            <NumberInputField />
+            <NumberInputStepper>
+              <NumberIncrementStepper />
+              <NumberDecrementStepper />
+            </NumberInputStepper>
+          </NumberInput>
+        </FormControl>
+
         <Modal
           header="Infomap output"
           isOpen={isInfomapOutputOpen}
@@ -242,6 +304,8 @@ export default observer(() => {
             </pre>
           </Box>
         </Modal>
+
+        <Export rootStore={demoStore} />
       </VStack>
     </Box>
   );

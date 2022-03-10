@@ -59,7 +59,7 @@ export default observer(function TreeHistogram({
           fontSize="6px"
           // textAnchor="middle"
         >
-          Branch count
+          Lineages through time
         </text>
         <AxisLeft
           domain={yDomain}

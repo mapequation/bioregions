@@ -45,7 +45,7 @@ export default observer(function Advanced() {
       infomapStore.setIncludeTree();
 
       const times = range(steps).map((i) => i / (steps - 1));
-      const f = format('.2f');
+      const { timeFormatter } = treeStore;
 
       for (let i = 0; i < times.length; i++) {
         setStep(i);
@@ -58,7 +58,7 @@ export default observer(function Advanced() {
           mapStore.render();
         }
 
-        const filename = `it-${f(1 - t)}.json`;
+        const filename = `${timeFormatter(t)} Ma.json`;
         zip.file(filename, JSON.stringify(infomapStore.tree)!);
       }
 
@@ -95,12 +95,57 @@ export default observer(function Advanced() {
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
-      saveAs(zipFile, 'sweep.zip');
+      saveAs(zipFile, 'sweep num trials.zip');
     } catch (err) {
       console.error('Error in parameter sweep:', err);
     }
 
     setIsRunning(false);
+  };
+
+  const paramSweepSeed = async () => {
+    setIsRunning(true);
+
+    try {
+      const zip = new JSZip();
+
+      const seeds = range(steps).map((i) => i);
+
+      for (let i = 0; i < seeds.length; i++) {
+        setStep(i);
+        const seed = seeds[i] + 1;
+        infomapStore.setSeed(seed);
+
+        await infomapStore.run();
+
+        if (mapStore.renderType === 'bioregions') {
+          mapStore.render();
+        }
+
+        const filename = `${seed}.json`;
+        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+      }
+
+      const zipFile = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipFile, 'sweep seeds.zip');
+    } catch (err) {
+      console.error('Error in parameter sweep:', err);
+    }
+
+    setIsRunning(false);
+  };
+
+  const runMultilayerInfomap = async () => {
+    if (infomapStore.isRunning) {
+      infomapStore.abort();
+      return;
+    }
+
+    await infomapStore.runMultilayer();
+
+    if (mapStore.renderType === 'bioregions') {
+      mapStore.render();
+    }
   };
 
   const formatCodelength = format('.4f');
@@ -338,6 +383,42 @@ export default observer(function Advanced() {
               </NumberInputStepper>
             </NumberInput>
           </FormControl>
+
+          <FormControl
+            display="flex"
+            w="100%"
+            alignItems="center"
+            isDisabled={infomapStore.isRunning}
+          >
+            <FormLabel mb="0">
+              <Button
+                size="sm"
+                w="100%"
+                colorScheme={infomapStore.isRunning ? 'red' : 'gray'}
+                variant={infomapStore.isRunning ? 'outline' : 'solid'}
+                onClick={runMultilayerInfomap}
+                //isLoading={infomapStore.isRunning}
+                disabled={!infomapStore.network}
+              >
+                {!infomapStore.isRunning ? 'Run multilayer' : 'Abort'}
+              </Button>
+            </FormLabel>
+            <Spacer />
+            <NumberInput
+              maxW="70px"
+              min={2}
+              size="xs"
+              value={infomapStore.numLayers}
+              onChange={(value) => infomapStore.setNumLayers(+value)}
+            >
+              <NumberInputField />
+              <NumberInputStepper>
+                <NumberIncrementStepper />
+                <NumberDecrementStepper />
+              </NumberInputStepper>
+            </NumberInput>
+          </FormControl>
+
           <FormControl
             display="flex"
             w="100%"
@@ -381,10 +462,21 @@ export default observer(function Advanced() {
                 infomapStore.isRunning
               }
               isLoading={isRunning}
-              // onClick={paramSweepIntegrationTime}
               onClick={paramSweepNumIterations}
             >
               Num trials
+            </Button>
+            <Button
+              size="sm"
+              isDisabled={
+                !speciesStore.loaded ||
+                !treeStore.loaded ||
+                infomapStore.isRunning
+              }
+              isLoading={isRunning}
+              onClick={paramSweepSeed}
+            >
+              Seeds
             </Button>
           </VStack>
           {isRunning && (

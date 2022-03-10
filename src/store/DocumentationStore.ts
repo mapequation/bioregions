@@ -39,6 +39,7 @@ export default class DocumentationStore {
     infomapStore.setSegregationTime(0);
     infomapStore.setTreeWeightBalance(0.75);
     infomapStore.setNumTrials(1);
+    infomapStore.setMultilayerLogTime(false);
 
     await this.loadData();
 

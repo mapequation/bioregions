@@ -29,7 +29,7 @@ import NetworkSize from './NetworkSize';
 import { useStore } from '../../store';
 
 export default observer(function Infomap() {
-  const { speciesStore, infomapStore, treeStore, mapStore } = useStore();
+  const { infomapStore, treeStore, mapStore } = useStore();
   const { network } = infomapStore;
 
   const runInfomap = async () => {
