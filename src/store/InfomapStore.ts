@@ -355,6 +355,7 @@ export default class InfomapStore {
   });
 
   onInfomapError = (error: string, id: number) => {
+    this.infomapId = null;
     console.error(error);
     console.timeEnd('infomap');
     this.setIsRunning(false);
@@ -367,7 +368,7 @@ export default class InfomapStore {
 
   async run() {
     if (this.infomapId !== null) {
-      this.abort();
+      await this.abort();
     }
     const { cells } = this;
 
@@ -398,7 +399,7 @@ export default class InfomapStore {
         })
         .on('error', (err, id) => {
           this.onInfomapError(err, id);
-          reject();
+          //reject();
         })
         .run({
           network,
@@ -409,7 +410,7 @@ export default class InfomapStore {
 
   async runMultilayer() {
     if (this.infomapId !== null) {
-      this.abort();
+      await this.abort();
     }
     const { cells } = this;
 
@@ -443,7 +444,7 @@ export default class InfomapStore {
         })
         .on('error', (err, id) => {
           this.onInfomapError(err, id);
-          reject();
+          //reject();
         })
         .run({
           network,
@@ -452,12 +453,16 @@ export default class InfomapStore {
     });
   }
 
-  abort() {
+  async abort() {
     if (this.infomapId === null) {
       return false;
     }
 
-    this.infomap.terminate(this.infomapId, 0);
+    try {
+      await this.infomap.terminate(this.infomapId, 0);
+    } catch (e: any) {
+      console.error('Worker error', e);
+    }
     this.infomapId = null;
     this.setIsRunning(false);
     this.setTree(null);
