@@ -13,11 +13,15 @@ import {
   Tfoot,
   TableCaption,
 } from '@chakra-ui/react';
+import * as shapefile from 'shapefile';
+import jszip from 'jszip';
 import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
 import type { Example } from '../../store/ExampleStore';
+
+const shpExtensions: string[] = ['shp', 'shx', 'dbf', 'prj'];
 
 export const LoadExample = observer(function LoadExample() {
   const store = useStore();
@@ -99,6 +103,8 @@ export const LoadData = observer(function LoadData() {
 
     let occurrenceData: File | null = null;
     let tree: File | null = null;
+    let shpFiles: File[] = [];
+    let zipFile: File | null = null;
 
     for (let file of files) {
       const fileExt = extension(file.name);
@@ -107,6 +113,10 @@ export const LoadData = observer(function LoadData() {
         occurrenceData = file;
       } else if (['nwk', 'tre'].includes(fileExt)) {
         tree = file;
+      } else if (shpExtensions.includes(fileExt)) {
+        shpFiles.push(file);
+      } else if (fileExt === 'zip') {
+        zipFile = file;
       }
     }
 
@@ -130,6 +140,12 @@ export const LoadData = observer(function LoadData() {
       }
     } else {
       // error
+    }
+
+    if (zipFile) {
+      await speciesStore.loadShapefile(zipFile);
+    } else if (shpFiles.length > 0) {
+      await speciesStore.loadShapeFiles(shpFiles);
     }
   };
 
@@ -176,7 +192,9 @@ export const LoadData = observer(function LoadData() {
       <input
         type="file"
         id="file-input"
-        accept=".csv,.tsv,.nwk,.tre"
+        accept={`.csv,.tsv,.nwk,.tre,.zip,${shpExtensions
+          .map((ext) => `.${ext}`)
+          .join(',')}`}
         multiple
         style={{ visibility: 'hidden', display: 'none' }}
         onChange={onChange}

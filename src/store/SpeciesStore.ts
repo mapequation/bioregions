@@ -10,20 +10,35 @@ import type {
   Point,
   MultiPoint,
   GeometryCollection,
+  Geometry,
+  GeoJsonProperties,
 } from '../types/geojson';
-import { getName } from '../utils/filename';
+import { getName, extension } from '../utils/filename';
+import jszip from 'jszip';
+import * as shapefile from 'shapefile';
 
-export interface PointProperties {
+// export type FeatureProperties = GeoJsonProperties & {
+//   name: string;
+// };
+export interface FeatureProperties {
   name: string;
   [key: string]: any;
 }
 
-export type PointFeature = Feature<Point, PointProperties>;
-export type PointFeatureCollection = FeatureCollection<Point, PointProperties>;
+export type PointFeature = Feature<Point, FeatureProperties>;
+export type ShapeFeature = Feature<Geometry, FeatureProperties>;
+export type PointFeatureCollection = FeatureCollection<
+  Point,
+  FeatureProperties
+>;
+export type ShapeFeatureCollection = FeatureCollection<
+  Geometry,
+  FeatureProperties
+>;
 
 export const createPointFeature = (
   coordinates: [longitude: number, latitude: number],
-  properties: PointProperties,
+  properties: FeatureProperties,
 ): PointFeature => ({
   type: 'Feature',
   geometry: {
@@ -36,6 +51,13 @@ export const createPointFeature = (
 export const createPointCollection = (
   features: PointFeature[] = [],
 ): PointFeatureCollection => ({
+  type: 'FeatureCollection',
+  features,
+});
+
+export const createShapeFeatureCollection = (
+  features: ShapeFeature[] = [],
+): ShapeFeatureCollection => ({
   type: 'FeatureCollection',
   features,
 });
@@ -62,6 +84,7 @@ export default class SpeciesStore {
   pointCollection: PointFeatureCollection = createPointCollection();
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
+  shapes: ShapeFeatureCollection = createShapeFeatureCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
   speciesMap = new Map<string, Species>();
 
@@ -227,7 +250,12 @@ export default class SpeciesStore {
       this.rootStore.mapStore.render();
     }
 
-    this.name = getName(typeof file === 'string' ? file : file.name);
+    const filename = typeof file === 'string' ? file : file.name;
+    this.name = getName(filename);
+
+    if (filename.endsWith('.zip')) {
+      return this.loadShapefile(file);
+    }
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
@@ -272,6 +300,90 @@ export default class SpeciesStore {
     this.updatePointCollection();
     this.setLoaded(true);
     this.setIsLoading(false);
+  }
+
+  async loadShapefile(file: string | File) {
+    console.log('Load shapefile:', file);
+    if (typeof file === 'string') {
+      if (!file.endsWith('.zip')) {
+        throw new Error(
+          `Error trying to load shapefile from string path, but not a .zip filename: '${file}'`,
+        );
+      }
+      const blob = await fetch(file).then((res) => res.blob());
+      file = new File([blob], file, { type: 'application/zip' });
+    }
+
+    if (file.type !== 'application/zip') {
+      throw new Error(
+        `Error trying to load shapefile, but not a .zip file: '${file.name}'`,
+      );
+    }
+
+    // const shpExtensions: string[] = ['shp', 'shx', 'dbf', 'prj'];
+    // TODO: shapefile doesn't support prj, load separately?
+    const shpExtensions: string[] = ['shp', 'dbf'];
+    const shpFiles: File[] = [];
+
+    const zipFile = await jszip.loadAsync(file);
+    for (const [name, compressedFile] of Object.entries(zipFile.files)) {
+      const ext = extension(name);
+      if (!shpExtensions.includes(ext)) {
+        continue;
+      }
+
+      const uncompressedFile = await compressedFile.async('blob');
+      const file = new File([uncompressedFile], name);
+      console.log(name, file);
+      shpFiles.push(file);
+    }
+
+    return await this.loadShapeFiles(shpFiles);
+  }
+
+  async loadShapeFiles(files: File[], nameKey?: string) {
+    const shpFile = files.find((file) => extension(file.name) === 'shp');
+    if (!shpFile) {
+      throw new Error('Error loading shapefile: No .shp file provided');
+    }
+
+    const dbfFile = files.find((file) => extension(file.name) === 'dbf');
+    const shpStream = shpFile.stream() as unknown as ReadableStream;
+    const dbfStream = dbfFile?.stream() as unknown as ReadableStream;
+
+    const getNameKey = (properties: any): string => {
+      const keys = Object.keys(properties ?? {});
+      const keysToTest = ['binomial', 'species', 'name', 'id'];
+      return keysToTest.find((key) => keys.includes(key)) ?? '';
+    };
+
+    try {
+      const source = await shapefile.open(shpStream, dbfStream);
+      console.log(`Loading shapefile with bbox '${source.bbox}'...`);
+
+      let result = await source.read();
+      while (!result.done) {
+        console.log('Got shape:', result.value);
+        const shp = result.value;
+
+        const key = nameKey ?? getNameKey(shp.properties);
+
+        if (!shp.properties || !key) {
+          throw new Error(
+            `Can't deduce name key in shapefile from properties: ${JSON.stringify(
+              shp.properties,
+            )}`,
+          );
+        }
+
+        Object.assign(shp.properties, { name: shp.properties![key] });
+        this.shapes.features.push(shp as ShapeFeature);
+
+        result = await source.read();
+      }
+    } catch (error: any) {
+      console.error('!! shp error:', error);
+    }
   }
 }
 

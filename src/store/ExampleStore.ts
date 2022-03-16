@@ -57,6 +57,18 @@ export default class ExampleStore {
           maxCellCapacity: 100,
         },
       });
+
+      examples.push({
+        name: 'Birches',
+        speciesFile: '/bioregions2/data/BIRCHES.zip',
+        size: '2.3 MB',
+        settings: {
+          minCellSize: 0,
+          maxCellSize: 1,
+          minCellCapacity: 0,
+          maxCellCapacity: 100,
+        },
+      });
     }
 
     examples.push({
