@@ -347,6 +347,8 @@ export default class SpeciesStore {
       throw new Error('Error loading shapefile: No .shp file provided');
     }
 
+    const { mapStore } = this.rootStore;
+
     const dbfFile = files.find((file) => extension(file.name) === 'dbf');
     const shpStream = shpFile.stream() as unknown as ReadableStream;
     const dbfStream = dbfFile?.stream() as unknown as ReadableStream;
@@ -378,6 +380,7 @@ export default class SpeciesStore {
 
         Object.assign(shp.properties, { name: shp.properties![key] });
         this.shapes.features.push(shp as ShapeFeature);
+        mapStore.renderShape(shp as ShapeFeature);
 
         result = await source.read();
       }

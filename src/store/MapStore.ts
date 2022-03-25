@@ -6,6 +6,7 @@ import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
 import zoom from '../utils/zoom';
 import { MultiPoint } from '../types/geojson';
+import { ShapeFeature } from './SpeciesStore';
 // import * as c3 from '@mapequation/c3';
 // import type { SchemeName } from '@mapequation/c3';
 
@@ -121,6 +122,22 @@ export default class MapStore {
     if (clip) {
       ctx.clip();
     }
+  }
+
+  private _renderShape(shape: ShapeFeature, ctx: CanvasRenderingContext2D) {
+    const path = this.geoPath!;
+    ctx.beginPath();
+    path(shape);
+    ctx.fillStyle = 'red';
+    ctx.fill();
+  }
+
+  renderShape(shape: ShapeFeature) {
+    if (this.context2d === null) {
+      return;
+    }
+
+    this._renderShape(shape, this.context2d);
   }
 
   private _renderMultiPoint(point: MultiPoint, ctx: CanvasRenderingContext2D) {
