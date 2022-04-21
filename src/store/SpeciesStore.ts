@@ -1,7 +1,7 @@
 import { action, makeObservable, observable, computed } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
-import { QuadtreeGeoBinner } from '../utils/QuadTreeGeoBinner';
+import QuadtreeGeoBinner from '../utils/QuadTree';
 import { csvParse } from 'd3';
 import type RootStore from './RootStore';
 import type {
@@ -12,6 +12,7 @@ import type {
   GeometryCollection,
   Geometry,
   GeoJsonProperties,
+  Polygon,
 } from '../types/geojson';
 import { getName, extension } from '../utils/filename';
 import jszip from 'jszip';
@@ -26,7 +27,9 @@ export interface FeatureProperties {
 }
 
 export type PointFeature = Feature<Point, FeatureProperties>;
-export type ShapeFeature = Feature<Geometry, FeatureProperties>;
+export type GeometryFeature = Feature<Geometry, FeatureProperties>;
+export type PolygonFeature = Feature<Polygon, FeatureProperties>;
+export type GeoFeature = PointFeature | GeometryFeature;
 export type PointFeatureCollection = FeatureCollection<
   Point,
   FeatureProperties
@@ -56,7 +59,7 @@ export const createPointCollection = (
 });
 
 export const createShapeFeatureCollection = (
-  features: ShapeFeature[] = [],
+  features: GeometryFeature[] = [],
 ): ShapeFeatureCollection => ({
   type: 'FeatureCollection',
   features,
@@ -384,8 +387,10 @@ export default class SpeciesStore {
         }
 
         Object.assign(shp.properties, { name: shp.properties![key] });
-        this.shapes.features.push(shp as ShapeFeature);
-        mapStore.renderShape(shp as ShapeFeature);
+        this.shapes.features.push(shp as GeometryFeature);
+        mapStore.renderShape(shp as GeometryFeature);
+
+        this.binner.addFeature(shp as GeoFeature);
 
         result = await source.read();
       }

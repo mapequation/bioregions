@@ -8,7 +8,7 @@ import {
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
-import { Cell } from '../../utils/QuadTreeGeoBinner';
+import { Cell } from '../../utils/QuadTree';
 import { range } from '../../utils/range';
 import { GrMap as GridCellIcon } from 'react-icons/gr';
 import { ImLeaf as SpeciesIcon } from 'react-icons/im';

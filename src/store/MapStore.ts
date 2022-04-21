@@ -1,12 +1,12 @@
 import * as d3 from 'd3';
 import { action, makeObservable, observable } from 'mobx';
-import { Cell } from '../utils/QuadTreeGeoBinner';
+import { Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
 import zoom from '../utils/zoom';
 import { MultiPoint } from '../types/geojson';
-import { ShapeFeature } from './SpeciesStore';
+import { GeometryFeature } from './SpeciesStore';
 // import * as c3 from '@mapequation/c3';
 // import type { SchemeName } from '@mapequation/c3';
 
@@ -124,7 +124,7 @@ export default class MapStore {
     }
   }
 
-  private _renderShape(shape: ShapeFeature, ctx: CanvasRenderingContext2D) {
+  private _renderShape(shape: GeometryFeature, ctx: CanvasRenderingContext2D) {
     const path = this.geoPath!;
     ctx.beginPath();
     path(shape);
@@ -132,7 +132,7 @@ export default class MapStore {
     ctx.fill();
   }
 
-  renderShape(shape: ShapeFeature) {
+  renderShape(shape: GeometryFeature) {
     if (this.context2d === null) {
       return;
     }

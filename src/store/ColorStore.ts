@@ -2,7 +2,7 @@ import { makeObservable, observable, action, computed } from 'mobx';
 import * as c3 from '@mapequation/c3';
 import type { SchemeName } from '@mapequation/c3';
 import type RootStore from './RootStore';
-import { Cell } from '../utils/QuadTreeGeoBinner';
+import { Cell } from '../utils/QuadTree';
 import { color as Color, interpolateRgb } from 'd3';
 
 export default class ColorStore {

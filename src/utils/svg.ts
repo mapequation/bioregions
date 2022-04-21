@@ -1,5 +1,5 @@
 import { GeoProjection } from 'd3';
-import type { Cell } from './QuadTreeGeoBinner';
+import type Cell from './QuadTree/Cell';
 
 export function getSVGRenderer(projection: GeoProjection) {
   return (d: Cell) =>
