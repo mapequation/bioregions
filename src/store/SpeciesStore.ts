@@ -182,7 +182,12 @@ export default class SpeciesStore {
     getItems: (items: { [key: string]: string | number }[]) => void,
     args: ParseConfig = {},
   ) {
-    const dataWorker = await spawn(new Worker('../workers/DataWorker.ts'));
+    const dataWorker = await spawn(
+      new Worker(
+        //@ts-ignore
+        new URL('../workers/DataWorker.ts', import.meta.url),
+      ),
+    );
 
     dataWorker.stream().subscribe(getItems);
 
