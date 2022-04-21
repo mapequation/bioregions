@@ -10,7 +10,8 @@ import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
 import { Cell } from '../../utils/QuadTreeGeoBinner';
 import { range } from '../../utils/range';
-import { GrMap, GrBug } from 'react-icons/gr';
+import { GrMap as GridCellIcon } from 'react-icons/gr';
+import { ImLeaf as SpeciesIcon } from 'react-icons/im';
 
 export interface DemoTreeProps {
   beta?: number;
@@ -371,7 +372,7 @@ export default observer(
           <g className="help" opacity={0.5}>
             <g transform={`translate(${speciesX},-4)`}>
               <g transform="translate(-3,0)">
-                <GrBug size={6} />
+                <SpeciesIcon size={6} />
               </g>
               <text textAnchor="middle" dy={9} fontSize={3}>
                 Species
@@ -379,7 +380,7 @@ export default observer(
             </g>
             <g transform={`translate(${cellsX},-4)`}>
               <g transform="translate(-3,0)">
-                <GrMap size={6} />
+                <GridCellIcon size={6} />
               </g>
               <text textAnchor="middle" dy={9} fontSize={3}>
                 Grid cells
