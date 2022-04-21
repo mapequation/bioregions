@@ -1,6 +1,6 @@
 import { action, makeObservable, observable, computed } from 'mobx';
 import { BBox, GeoJsonProperties } from '../../types/geojson';
-import type { PointFeature, GeoFeature } from '../../store/SpeciesStore';
+import type { GeoFeature } from '../../store/SpeciesStore';
 import type SpeciesStore from '../../store/SpeciesStore';
 import { rangeArray, rangeArrayOneSignificant } from '../range';
 import Cell from './Cell';
@@ -9,7 +9,7 @@ export type VisitCallback = (node: Cell) => true | void;
 
 export type QuadtreeNodeProperties = GeoJsonProperties & {
   numRecords: number;
-  features: PointFeature[];
+  features: GeoFeature[];
 };
 
 /**
@@ -23,7 +23,7 @@ export default class QuadtreeGeoBinner {
   minCellSizeLog2: number = 0;
   cellCapacityRange = rangeArrayOneSignificant(0, 6, { inclusive: true });
   maxCellCapacity: number = 100;
-  minCellCapacity: number = 10;
+  minCellCapacity: number = 1;
   root: Cell | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   _cells: Cell[] = [];
@@ -286,6 +286,7 @@ export default class QuadtreeGeoBinner {
 
     const nodes: Cell[] = [];
     this.visitNonEmpty((node: Cell) => {
+      console.log(`Cell ${node.id}: ${node.numFeatures}`);
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
       if (node.numFeatures < this.minCellCapacity) {
         return true;

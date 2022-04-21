@@ -11,7 +11,6 @@ import type {
   MultiPoint,
   GeometryCollection,
   Geometry,
-  GeoJsonProperties,
   Polygon,
 } from '../types/geojson';
 import { getName, extension } from '../utils/filename';
@@ -361,10 +360,10 @@ export default class SpeciesStore {
     const shpStream = shpFile.stream() as unknown as ReadableStream;
     const dbfStream = dbfFile?.stream() as unknown as ReadableStream;
 
-    const getNameKey = (properties: any): string => {
+    const getNameKey = (properties: any) => {
       const keys = Object.keys(properties ?? {});
-      const keysToTest = ['binomial', 'species', 'name', 'id'];
-      return keysToTest.find((key) => keys.includes(key)) ?? '';
+      const keysToTest = ['binomial', 'species', 'name', 'id'] as const;
+      return keysToTest.find((key) => keys.includes(key));
     };
 
     try {

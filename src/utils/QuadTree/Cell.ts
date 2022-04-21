@@ -1,4 +1,4 @@
-import { BBox, Polygon } from '../../types/geojson';
+import { BBox, Polygon, Position } from '../../types/geojson';
 import { area } from '../geomath';
 import type {
   PointFeature,
@@ -7,7 +7,12 @@ import type {
 } from '../../store/SpeciesStore';
 import type { ExtendedFeature } from 'd3';
 import OverlappingBioregions from './OverlappingBioregions';
-import type { QuadtreeNodeProperties, VisitCallback } from './QuadTreeGeoBinner';
+import type {
+  QuadtreeNodeProperties,
+  VisitCallback,
+} from './QuadTreeGeoBinner';
+import * as turf from '@turf/turf';
+import booleanIntersects from '@turf/boolean-intersects';
 
 export default class Cell
   implements ExtendedFeature<Polygon, QuadtreeNodeProperties>
@@ -18,7 +23,7 @@ export default class Cell
   y2: number; // north
   visible: boolean;
   isLeaf: boolean = true;
-  features: PointFeature[] = [];
+  features: GeoFeature[] = [];
   parent: Cell | null = null;
   private children: [
     Cell | undefined,
@@ -85,16 +90,20 @@ export default class Cell
     */
     return {
       type: 'Polygon',
-      coordinates: [
-        [
-          [this.x1, this.y1],
-          [this.x1, this.y2],
-          [this.x2, this.y2],
-          [this.x2, this.y1],
-          [this.x1, this.y1],
-        ],
-      ],
+      coordinates: this.coordinates,
     };
+  }
+
+  get coordinates(): Position[][] {
+    return [
+      [
+        [this.x1, this.y1],
+        [this.x1, this.y2],
+        [this.x2, this.y2],
+        [this.x2, this.y1],
+        [this.x1, this.y1],
+      ],
+    ];
   }
 
   get geometries(): Polygon[] {
@@ -124,12 +133,14 @@ export default class Cell
     return this._speciesTopList;
   }
 
-  addPoint(
-    feature: PointFeature,
+  add(
+    feature: GeoFeature,
     maxCellSizeLog2: number,
     minCellSizeLog2: number,
     nodeCapacity: number,
   ) {
+    this._recalcStats = true;
+
     if (!this.isLeaf) {
       return this.addChild(
         feature,
@@ -151,6 +162,7 @@ export default class Cell
 
     // Allow no more children
     if (this.sizeLog2 <= minCellSizeLog2) {
+      console.log(`Add ${feature.properties.name} to ${this.id}`);
       return this.features.push(feature);
     }
 
@@ -165,7 +177,87 @@ export default class Cell
     }
   }
 
-  addPolygon(
+  // Recursively inserts the specified point or polygon into descendants of
+  // this node.
+  private addChild(
+    feature: GeoFeature,
+    maxCellSizeLog2: number,
+    minCellSizeLog2: number,
+    nodeCapacity: number,
+  ) {
+    if (feature.geometry.type === 'Point') {
+      this.addChildPoint(
+        feature as PointFeature,
+        maxCellSizeLog2,
+        minCellSizeLog2,
+        nodeCapacity,
+      );
+    } else if (feature.geometry.type === 'Polygon') {
+      this.addChildPolygon(
+        feature as PolygonFeature,
+        maxCellSizeLog2,
+        minCellSizeLog2,
+        nodeCapacity,
+      );
+    } else if (feature.geometry.type === 'MultiPolygon') {
+      feature.geometry.coordinates.forEach((coordinates) => {
+        const feat = {
+          geometry: {
+            type: 'Polygon',
+            coordinates,
+          },
+          properties: feature.properties,
+        } as PolygonFeature;
+        this.addChildPolygon(
+          feat,
+          maxCellSizeLog2,
+          minCellSizeLog2,
+          nodeCapacity,
+        );
+      });
+    } else {
+      throw new Error(`Unsupported geometry type: ${feature.geometry.type}`);
+    }
+  }
+
+  private addChildPoint(
+    feature: PointFeature,
+    maxCellSizeLog2: number,
+    minCellSizeLog2: number,
+    nodeCapacity: number,
+  ) {
+    // Compute the split point, and the quadrant in which to insert the point.
+    let { x1, x2, y1, y2 } = this;
+    const xMid = (x1 + x2) * 0.5;
+    const yMid = (y1 + y2) * 0.5;
+
+    // Recursively insert into the child node.
+    this.isLeaf = false;
+    const geom = feature.geometry;
+
+    const [x, y] = geom.coordinates;
+    const isRight = x >= xMid;
+    const isBelow = y >= yMid;
+    const i = (Number(isBelow) << 1) | Number(isRight);
+
+    // Update the bounds as we recurse.
+    if (isRight) x1 = xMid;
+    else x2 = xMid;
+
+    if (isBelow) y1 = yMid;
+    else y2 = yMid;
+
+    const child =
+      this.children[i] ??
+      (this.children[i] = new Cell([x1, y1, x2, y2], maxCellSizeLog2));
+
+    child.parent = this;
+    child.id = `${this.id}${i}`;
+
+    child.add(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
+  }
+
+  addChildPolygon(
     feature: PolygonFeature,
     maxCellSizeLog2: number,
     minCellSizeLog2: number,
@@ -181,77 +273,83 @@ export default class Cell
      *    if overlap is all, add overlap all to all children
      *    else check if polygon overlap is all, partial or none
      */
-
-  }
-
-  add(
-    feature: GeoFeature,
-    maxCellSizeLog2: number,
-    minCellSizeLog2: number,
-    nodeCapacity: number,
-  ) {
-    this._recalcStats = true;
-
-    if (feature.geometry.type === 'Point') {
-      this.addPoint(
-        feature as PointFeature,
-        maxCellSizeLog2,
-        minCellSizeLog2,
-        nodeCapacity,
-      );
-    } else if (feature.geometry.type === 'Polygon') {
-      this.addPolygon(
-        feature as PolygonFeature,
-        maxCellSizeLog2,
-        minCellSizeLog2,
-        nodeCapacity,
-      );
-    } else {
-      throw new Error(`Unsupported geometry type: ${feature.geometry.type}`);
+    if (!feature.bbox) {
+      feature.bbox = turf.bbox(feature.geometry);
     }
-  }
 
-  // Recursively inserts the specified point or polygon into descendants of
-  // this node.
-  private addChild(
-    feature: PointFeature,
-    maxCellSizeLog2: number,
-    minCellSizeLog2: number,
-    nodeCapacity: number,
-  ) {
-    // Compute the split point, and the quadrant in which to insert the point.
-    let { x1, x2, y1, y2 } = this;
-    const xMid = (x1 + x2) * 0.5;
-    const yMid = (y1 + y2) * 0.5;
+    const { x1, y1, x2, y2 } = this;
+    const xm = (x1 + x2) * 0.5;
+    const ym = (y1 + y2) * 0.5;
 
-    // Recursively insert into the child node.
-    this.isLeaf = false;
-    const geom = feature.geometry;
+    const topLeft = turf.polygon([
+      [
+        [x1, ym],
+        [xm, ym],
+        [xm, y2],
+        [x1, y2],
+        [x1, ym],
+      ],
+    ]);
+    const topRight = turf.polygon([
+      [
+        [xm, ym],
+        [x2, ym],
+        [x2, y2],
+        [xm, y2],
+        [xm, ym],
+      ],
+    ]);
+    const lowerLeft = turf.polygon([
+      [
+        [x1, y1],
+        [xm, y1],
+        [xm, ym],
+        [x1, ym],
+        [x1, y1],
+      ],
+    ]);
+    const lowerRight = turf.polygon([
+      [
+        [xm, y1],
+        [x2, y1],
+        [x2, ym],
+        [xm, ym],
+        [xm, y1],
+      ],
+    ]);
+    const subPolygons = [topLeft, topRight, lowerLeft, lowerRight];
 
-    if (geom.type === 'Point') {
-      const [x, y] = geom.coordinates;
-      const isRight = x >= xMid;
-      const isBelow = y >= yMid;
-      // @ts-ignore
-      const i = (isBelow << 1) | isRight;
+    const getChild = (i: number) => {
+      let child = this.children[i];
+      if (!child) {
+        const points = subPolygons[i].geometry.coordinates[0];
+        const [x1, y1, x2, y2] = [
+          points[0][0],
+          points[0][1],
+          points[2][0],
+          points[2][1],
+        ];
+        child = new Cell([x1, y1, x2, y2], maxCellSizeLog2);
+      }
+      return child;
+    };
 
-      // Update the bounds as we recurse.
-      if (isRight) x1 = xMid;
-      else x2 = xMid;
-
-      if (isBelow) y1 = yMid;
-      else y2 = yMid;
-
-      const child =
-        this.children[i] ??
-        (this.children[i] = new Cell([x1, y1, x2, y2], maxCellSizeLog2));
-
+    const addChild = (i: number, child: Cell) => {
+      this.children[i] = child;
       child.parent = this;
       child.id = `${this.id}${i}`;
+    };
 
-      child.add(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
-    } else {
-      console.error(`Binning geometry of type ${geom.type} not implemented`);
+    for (let i = 0; i < 4; ++i) {
+      const child = getChild(i);
+
+      if (booleanIntersects(child.geometry, feature.geometry)) {
+        if (!this.children[i]) {
+          addChild(i, child);
+        }
+        console.log(feature.properties.name, 'intersects with', child.id);
+        child.add(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
+      }
     }
   }
 
@@ -284,7 +382,7 @@ export default class Cell
       this.features.length === 0 &&
       nonEmptyChildren.length < 4;
 
-    const aggregatedFeatures: PointFeature[] = [];
+    const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
     nonEmptyChildren.forEach((child: Cell) =>
       child
         ?.patchPartiallyEmptyNodes(maxCellSizeLog2)
@@ -318,7 +416,7 @@ export default class Cell
       this.sizeLog2 <= maxCellSizeLog2 &&
       (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
 
-    const aggregatedFeatures: PointFeature[] = [];
+    const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
     nonEmptyChildren.forEach((child) =>
       child
         ?.patchSparseNodes(maxCellSizeLog2, lowerThreshold)
