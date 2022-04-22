@@ -16,6 +16,7 @@ import type {
 import { getName, extension } from '../utils/filename';
 import jszip from 'jszip';
 import * as shapefile from 'shapefile';
+import * as turf from '@turf/turf';
 
 // export type FeatureProperties = GeoJsonProperties & {
 //   name: string;
@@ -33,7 +34,7 @@ export type PointFeatureCollection = FeatureCollection<
   Point,
   FeatureProperties
 >;
-export type ShapeFeatureCollection = FeatureCollection<
+export type GeometryFeatureCollection = FeatureCollection<
   Geometry,
   FeatureProperties
 >;
@@ -50,16 +51,9 @@ export const createPointFeature = (
   properties,
 });
 
-export const createPointCollection = (
-  features: PointFeature[] = [],
-): PointFeatureCollection => ({
-  type: 'FeatureCollection',
-  features,
-});
-
-export const createShapeFeatureCollection = (
+export const createFeatureCollection = (
   features: GeometryFeature[] = [],
-): ShapeFeatureCollection => ({
+): GeometryFeatureCollection => ({
   type: 'FeatureCollection',
   features,
 });
@@ -83,10 +77,11 @@ export default class SpeciesStore {
   name: string = 'data';
   loaded: boolean = false;
   isLoading: boolean = false;
-  pointCollection: PointFeatureCollection = createPointCollection();
+  numPoints: number = 0;
+  havePolygons: boolean = false;
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
-  shapes: ShapeFeatureCollection = createShapeFeatureCollection();
+  collection: GeometryFeatureCollection = createFeatureCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
   speciesMap = new Map<string, Species>();
 
@@ -97,13 +92,14 @@ export default class SpeciesStore {
       name: observable,
       loaded: observable,
       isLoading: observable,
-      numPoints: computed,
-      pointCollection: observable.ref,
+      numPoints: observable,
+      havePolygons: observable,
+      collection: observable.ref,
       speciesMap: observable.ref,
       speciesTopList: computed,
       numSpecies: computed,
       numRecords: computed,
-      setPointCollection: action,
+      setCollection: action,
       setLoaded: action,
       setIsLoading: action,
     });
@@ -112,8 +108,8 @@ export default class SpeciesStore {
   clearData = action(() => {
     this.loaded = false;
     this.isLoading = false;
-    this.pointCollection = createPointCollection();
     this.multiPointCollection = createMultiPointGeometryCollection();
+    this.collection = createFeatureCollection();
     this.binner = new QuadtreeGeoBinner(this);
     this.speciesMap = new Map<string, Species>();
   });
@@ -128,12 +124,8 @@ export default class SpeciesStore {
     });
   };
 
-  get numPoints() {
-    return this.pointCollection.features.length;
-  }
-
   get numRecords() {
-    return this.numPoints;
+    return this.collection.features.length;
   }
 
   get numSpecies() {
@@ -154,19 +146,19 @@ export default class SpeciesStore {
     this.isLoading = isLoading;
   }
 
-  setPointCollection(pointCollection: PointFeatureCollection) {
-    this.pointCollection = pointCollection;
+  setCollection(collection: GeometryFeatureCollection) {
+    this.collection = collection;
     this.updateSpeciesMap();
   }
 
-  updatePointCollection(pointCollection = this.pointCollection) {
-    this.setPointCollection(createPointCollection(pointCollection.features));
+  updateCollection(collection = this.collection) {
+    this.setCollection(collection);
   }
 
   updateSpeciesMap() {
     type Name = string;
     const speciesMap = new Map<Name, Species>();
-    this.pointCollection.features.forEach((feature) => {
+    this.collection.features.forEach((feature) => {
       const { name } = feature.properties;
       const species = speciesMap.get(name) ?? {
         name,
@@ -214,7 +206,7 @@ export default class SpeciesStore {
   ) {
     if (!add) {
       this.binner.setTreeNeedUpdate();
-      this.updatePointCollection(createPointCollection());
+      this.updateCollection(createFeatureCollection());
       this.rootStore.mapStore.render();
     }
 
@@ -233,11 +225,12 @@ export default class SpeciesStore {
         { name: mappedItem.name },
       );
 
-      this.pointCollection.features.push(pointFeature);
+      this.collection.features.push(pointFeature);
+      ++this.numPoints;
       this.binner.addFeature(pointFeature);
     }
 
-    this.updatePointCollection();
+    this.updateCollection();
     this.setLoaded(true);
     this.setIsLoading(false);
   }
@@ -253,7 +246,7 @@ export default class SpeciesStore {
 
     if (clear) {
       this.binner.setTreeNeedUpdate();
-      this.updatePointCollection(createPointCollection());
+      this.updateCollection(createFeatureCollection());
       this.rootStore.mapStore.render();
     }
 
@@ -290,7 +283,9 @@ export default class SpeciesStore {
 
         countName(mappedItem.name);
 
-        this.pointCollection.features.push(pointFeature);
+        // this.pointCollection.features.push(pointFeature);
+        this.collection.features.push(pointFeature);
+        ++this.numPoints;
 
         multiPoint.coordinates.push(pointFeature.geometry.coordinates);
 
@@ -304,7 +299,7 @@ export default class SpeciesStore {
     await loader.next();
     console.timeEnd('load');
 
-    this.updatePointCollection();
+    this.updateCollection();
     this.setLoaded(true);
     this.setIsLoading(false);
   }
@@ -354,6 +349,8 @@ export default class SpeciesStore {
       throw new Error('Error loading shapefile: No .shp file provided');
     }
 
+    console.time('load');
+
     const { mapStore } = this.rootStore;
 
     const dbfFile = files.find((file) => extension(file.name) === 'dbf');
@@ -372,7 +369,6 @@ export default class SpeciesStore {
 
       let result = await source.read();
       while (!result.done) {
-        console.log('Got shape:', result.value);
         const shp = result.value;
 
         const key = nameKey ?? getNameKey(shp.properties);
@@ -386,16 +382,48 @@ export default class SpeciesStore {
         }
 
         Object.assign(shp.properties, { name: shp.properties![key] });
-        this.shapes.features.push(shp as GeometryFeature);
         mapStore.renderShape(shp as GeometryFeature);
 
-        this.binner.addFeature(shp as GeoFeature);
+        if (shp.geometry.type === 'Polygon') {
+          this.havePolygons = true;
+          const polygon = shp as PolygonFeature;
+          this.collection.features.push(polygon);
+          this.binner.addFeature(polygon);
+        } else if (shp.geometry.type === 'MultiPolygon') {
+          this.havePolygons = true;
+          shp.geometry.coordinates.forEach((coords) => {
+            const polygon = turf.polygon(
+              coords,
+              shp.properties,
+            ) as PolygonFeature;
+            this.collection.features.push(polygon);
+            this.binner.addFeature(polygon);
+          });
+        } else if (shp.geometry.type === 'Point') {
+          const point = shp as PointFeature;
+          this.collection.features.push(point);
+          this.binner.addFeature(point);
+        } else if (shp.geometry.type === 'MultiPoint') {
+          shp.geometry.coordinates.forEach((coords) => {
+            const point = turf.point(coords, shp.properties) as PointFeature;
+            this.collection.features.push(point);
+            this.binner.addFeature(point);
+          });
+        } else {
+          throw new Error(`Unsupported geometry: '${shp.geometry.type}'`);
+        }
 
         result = await source.read();
       }
     } catch (error: any) {
       console.error('!! shp error:', error);
     }
+
+    console.timeEnd('load');
+
+    this.updateCollection();
+    this.setLoaded(true);
+    this.setIsLoading(false);
   }
 }
 

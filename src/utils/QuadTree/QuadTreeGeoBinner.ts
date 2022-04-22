@@ -193,12 +193,12 @@ export default class QuadtreeGeoBinner {
     this.cellsNeedUpdate = value;
   });
 
-  setTreeNeedUpdate(value: boolean = true) {
+  setTreeNeedUpdate = action((value: boolean = true) => {
     this.treeNeedUpdate = value;
     if (value) {
       this.cellsNeedUpdate = true;
     }
-  }
+  });
 
   addFeature(feature: GeoFeature) {
     this.root?.add(
@@ -266,7 +266,7 @@ export default class QuadtreeGeoBinner {
     console.time('generateTree');
     this._initExtent();
     this._initRoot();
-    this.addFeatures(this._speciesStore.pointCollection.features);
+    this.addFeatures(this._speciesStore.collection.features);
     this.setTreeNeedUpdate(false);
     console.timeEnd('generateTree');
   }
@@ -286,7 +286,6 @@ export default class QuadtreeGeoBinner {
 
     const nodes: Cell[] = [];
     this.visitNonEmpty((node: Cell) => {
-      console.log(`Cell ${node.id}: ${node.numFeatures}`);
       // Skip biggest non-empty nodes if its number of features are below the lower threshold
       if (node.numFeatures < this.minCellCapacity) {
         return true;

@@ -59,6 +59,10 @@ export default class Cell
     this.area = area(this.extent);
   }
 
+  get _children() {
+    return this.children;
+  }
+
   getModule(level: number): string {
     const min = Math.min(level, this.path.length - 1);
     return this.path.slice(0, min).join(':');
@@ -162,7 +166,6 @@ export default class Cell
 
     // Allow no more children
     if (this.sizeLog2 <= minCellSizeLog2) {
-      console.log(`Add ${feature.properties.name} to ${this.id}`);
       return this.features.push(feature);
     }
 
@@ -347,7 +350,6 @@ export default class Cell
         if (!this.children[i]) {
           addChild(i, child);
         }
-        console.log(feature.properties.name, 'intersects with', child.id);
         child.add(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
       }
     }
