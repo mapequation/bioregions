@@ -89,6 +89,8 @@ export const LoadData = observer(function LoadData() {
   const [latColumn, setLatColumn] = useState<string>('');
 
   const setColumn = [setNameColumn, setLongColumn, setLatColumn];
+  const values = [nameColumn, longColumn, latColumn];
+  console.log(`name: ${nameColumn}, long: ${longColumn}, lat: ${latColumn}`);
 
   const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
@@ -251,11 +253,11 @@ export const LoadData = observer(function LoadData() {
                 <Td>
                   <Select
                     size="sm"
-                    value={i}
-                    onChange={(e) => setColumn[i](header[+e.target.value])}
+                    value={values[i]}
+                    onChange={(e) => setColumn[i](e.target.value)}
                   >
                     {header.map((cell, j) => (
-                      <option value={j} key={j}>
+                      <option value={cell} key={j}>
                         {cell}
                       </option>
                     ))}
