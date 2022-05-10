@@ -16,7 +16,6 @@ import {
 import type { PhyloNode } from '../utils/tree';
 import { isEqual } from '../utils/math';
 import { range } from '../utils/range';
-import MaxMap from '../utils/MaxMap';
 
 export interface BioregionsNetworkData {
   nodeIdMap: { [name: string]: number };
@@ -77,7 +76,7 @@ export type Bioregion = {
 export default class InfomapStore {
   rootStore: RootStore;
   args: RequiredArgs & Arguments = {
-    twoLevel: true,
+    twoLevel: false,
     numTrials: process.env.NODE_ENV === 'production' ? 5 : 1,
     regularized: false,
     regularizationStrength: 1,

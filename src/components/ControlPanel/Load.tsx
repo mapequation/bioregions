@@ -13,8 +13,6 @@ import {
   Tfoot,
   TableCaption,
 } from '@chakra-ui/react';
-import * as shapefile from 'shapefile';
-import jszip from 'jszip';
 import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
@@ -144,10 +142,8 @@ export const LoadData = observer(function LoadData() {
       // error
     }
 
-    if (zipFile) {
-      await speciesStore.loadShapefile(zipFile);
-    } else if (shpFiles.length > 0) {
-      await speciesStore.loadShapeFiles(shpFiles);
+    if (zipFile || shpFiles.length > 0) {
+      await speciesStore.loadShapefile(zipFile ?? shpFiles);
     }
   };
 

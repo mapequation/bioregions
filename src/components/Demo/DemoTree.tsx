@@ -33,10 +33,12 @@ export default observer(
     // const iconColor = useColorModeValue('#999999', '#666666');
     const { treeStore, infomapStore, speciesStore, colorStore } = demoStore;
     const { tree } = treeStore;
+    const { binner } = speciesStore;
+    const { cells } = binner;
     // const { bioregions } = infomapStore;
     const { colorBioregion, colorCell } = colorStore;
 
-    if (!tree || !speciesStore.loaded) {
+    if (!tree || !speciesStore.loaded || cells.length === 0) {
       return null;
     }
 
@@ -48,8 +50,6 @@ export default observer(
     } = infomapStore;
     const haveStateNodes = network && 'states' in network;
     const segregationTime = hideSegregation ? 0 : _segTime;
-    const { binner } = speciesStore;
-    const { cells } = binner;
     const networkLinks = network ? network.links : [];
     const blue = 'hsl(213, 55%, 53%)';
     const red = 'hsl(4, 69%, 65%)';

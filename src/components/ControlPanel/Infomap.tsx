@@ -2,7 +2,6 @@ import { observer } from 'mobx-react';
 import {
   Tag,
   Button,
-  Collapse,
   VStack,
   FormControl,
   FormLabel,
@@ -18,8 +17,6 @@ import {
   SliderTrack,
   SliderFilledTrack,
   SliderThumb,
-  Box,
-  Flex,
   HStack,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';

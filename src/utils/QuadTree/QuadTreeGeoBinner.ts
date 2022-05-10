@@ -31,7 +31,7 @@ export default class QuadtreeGeoBinner {
   patchSparseCells = true;
 
   cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
-  treeNeedUpdate: boolean = true; // Revisit data to regenerate tree if dirty
+  treeNeedUpdate: boolean = false; // Revisit data to regenerate tree if dirty
 
   constructor(speciesStore: SpeciesStore) {
     this._speciesStore = speciesStore;

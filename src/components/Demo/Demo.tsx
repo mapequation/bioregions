@@ -34,10 +34,10 @@ export default observer(() => {
   const [hideTree, setHideTree] = useState(false);
   const [hideSegregation, setHideSegregation] = useState(false);
   const [isInfomapOutputOpen, setIsInfomapOutputOpen] = useState(false);
-  const { treeStore, infomapStore } = demoStore;
+  const { treeStore, infomapStore, speciesStore } = demoStore;
   const { tree } = treeStore;
 
-  if (!tree) {
+  if (!tree || !speciesStore.loaded) {
     return null;
   }
 

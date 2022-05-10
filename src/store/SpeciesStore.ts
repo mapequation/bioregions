@@ -13,10 +13,10 @@ import type {
   Geometry,
   Polygon,
 } from '../types/geojson';
-import { getName, extension } from '../utils/filename';
-import jszip from 'jszip';
-import * as shapefile from 'shapefile';
-import * as turf from '@turf/turf';
+import { getName } from '../utils/filename';
+import { nextAnimationFrame, Timer } from '../utils/time';
+import throttle from 'lodash/throttle';
+import { normalizeSpeciesName } from '../utils/names';
 
 // export type FeatureProperties = GeoJsonProperties & {
 //   name: string;
@@ -78,12 +78,17 @@ export default class SpeciesStore {
   loaded: boolean = false;
   isLoading: boolean = false;
   numPoints: number = 0;
-  havePolygons: boolean = false;
+  numPointsDebounced: number = 0;
+  numPolygons: number = 0;
+  numPolygonsDebounced: number = 0;
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
   collection: GeometryFeatureCollection = createFeatureCollection();
   binner: QuadtreeGeoBinner = new QuadtreeGeoBinner(this);
   speciesMap = new Map<string, Species>();
+  timer = new Timer();
+  speed: number = 0;
+  seconds: number = 0;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -92,10 +97,13 @@ export default class SpeciesStore {
       name: observable,
       loaded: observable,
       isLoading: observable,
-      numPoints: observable,
-      havePolygons: observable,
+      numPointsDebounced: observable,
+      numPolygonsDebounced: observable,
+      speed: observable,
+      seconds: observable,
       collection: observable.ref,
       speciesMap: observable.ref,
+      havePolygons: computed,
       speciesTopList: computed,
       numSpecies: computed,
       numRecords: computed,
@@ -109,9 +117,10 @@ export default class SpeciesStore {
     this.loaded = false;
     this.isLoading = false;
     this.multiPointCollection = createMultiPointGeometryCollection();
-    this.collection = createFeatureCollection();
-    this.binner = new QuadtreeGeoBinner(this);
+    this.updateCollection(createFeatureCollection());
+    this.binner.setTreeNeedUpdate();
     this.speciesMap = new Map<string, Species>();
+    this.rootStore.mapStore.render();
   });
 
   clearBioregions = () => {
@@ -124,8 +133,44 @@ export default class SpeciesStore {
     });
   };
 
+  setNumPointsDebounced = throttle(
+    action((value: number) => {
+      this.numPointsDebounced = value;
+    }),
+    200,
+    { leading: true, trailing: true },
+  );
+
+  setNumPolygonsDebounced = throttle(
+    action((value: number) => {
+      this.numPolygonsDebounced = value;
+    }),
+    200,
+    { leading: true, trailing: true },
+  );
+
+  setSpeed = throttle(
+    action((value: number) => {
+      this.speed = value;
+    }),
+    200,
+    { leading: true, trailing: true },
+  );
+
+  setSeconds = throttle(
+    action((value: number) => {
+      this.seconds = value;
+    }),
+    200,
+    { leading: true, trailing: true },
+  );
+
+  get havePolygons() {
+    return this.numPolygons > 0;
+  }
+
   get numRecords() {
-    return this.collection.features.length;
+    return this.numPointsDebounced + this.numPolygonsDebounced;
   }
 
   get numSpecies() {
@@ -171,6 +216,28 @@ export default class SpeciesStore {
     this.speciesMap = speciesMap;
   }
 
+  addFeature = action((feature: GeometryFeature) => {
+    this.collection.features.push(feature);
+    if (feature.geometry.type === 'Point') {
+      this.binner.addFeature(feature);
+      ++this.numPoints;
+      this.setNumPointsDebounced(this.numPoints);
+      this.setSpeed(this.timer.speed(this.numPoints));
+    } else {
+      this.rootStore.mapStore.renderShape(feature);
+      ++this.numPolygons;
+      this.setNumPolygonsDebounced(this.numPolygons);
+      this.setSpeed(this.timer.speed(this.numPolygons));
+    }
+
+    this.setSeconds(this.timer.elapsedSecondsTotal);
+    // const { elapsed } = this.timer;
+    // if (elapsed > 1000 / 60) {
+    //   await nextAnimationFrame();
+    //   this.timer.lap();
+    // }
+  });
+
   private async *loadData(
     file: string | File,
     getItems: (items: { [key: string]: string | number }[]) => void,
@@ -190,7 +257,35 @@ export default class SpeciesStore {
     return await Thread.terminate(dataWorker);
   }
 
-  loadString(
+  private async *loadShapefileInWorker(
+    file: string | File | File[],
+    onFeatures: (features: GeometryFeature[]) => void,
+    nameKey?: string,
+  ) {
+    const dataWorker = await spawn(
+      new Worker(
+        //@ts-ignore
+        new URL('../workers/DataWorker.ts', import.meta.url),
+      ),
+    );
+
+    dataWorker.stream().subscribe(onFeatures);
+
+    yield dataWorker.loadShapefile(file, nameKey);
+
+    return await Thread.terminate(dataWorker);
+  }
+
+  loadStart = action(() => {
+    console.time('load');
+    this.timer.start();
+  });
+
+  loadEnd = action(() => {
+    console.timeEnd('load');
+  });
+
+  async loadString(
     data: string,
     {
       add,
@@ -205,9 +300,7 @@ export default class SpeciesStore {
     } = {},
   ) {
     if (!add) {
-      this.binner.setTreeNeedUpdate();
-      this.updateCollection(createFeatureCollection());
-      this.rootStore.mapStore.render();
+      this.clearData();
     }
 
     const records = csvParse(data);
@@ -222,12 +315,10 @@ export default class SpeciesStore {
       const mappedItem = mapper(item);
       const pointFeature = createPointFeature(
         [mappedItem.longitude, mappedItem.latitude],
-        { name: mappedItem.name },
+        { name: normalizeSpeciesName(mappedItem.name) },
       );
 
-      this.collection.features.push(pointFeature);
-      ++this.numPoints;
-      this.binner.addFeature(pointFeature);
+      this.addFeature(pointFeature);
     }
 
     this.updateCollection();
@@ -245,9 +336,7 @@ export default class SpeciesStore {
     this.setIsLoading();
 
     if (clear) {
-      this.binner.setTreeNeedUpdate();
-      this.updateCollection(createFeatureCollection());
-      this.rootStore.mapStore.render();
+      this.clearData();
     }
 
     const filename = typeof file === 'string' ? file : file.name;
@@ -269,7 +358,7 @@ export default class SpeciesStore {
       nameHistogram[name]++;
     };
 
-    console.time('load');
+    this.loadStart();
 
     const loader = this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
@@ -278,18 +367,14 @@ export default class SpeciesStore {
         const mappedItem = mapper(item);
         const pointFeature = createPointFeature(
           [mappedItem.longitude, mappedItem.latitude],
-          { name: mappedItem.name },
+          { name: normalizeSpeciesName(mappedItem.name) },
         );
 
         countName(mappedItem.name);
 
-        // this.pointCollection.features.push(pointFeature);
-        this.collection.features.push(pointFeature);
-        ++this.numPoints;
+        this.addFeature(pointFeature);
 
         multiPoint.coordinates.push(pointFeature.geometry.coordinates);
-
-        this.binner.addFeature(pointFeature);
       }
       this.multiPointCollection.geometries.push(multiPoint);
 
@@ -297,129 +382,24 @@ export default class SpeciesStore {
     });
 
     await loader.next();
-    console.timeEnd('load');
+    this.loadEnd();
 
     this.updateCollection();
     this.setLoaded(true);
     this.setIsLoading(false);
   }
 
-  async loadShapefile(file: string | File) {
-    console.log('Load shapefile:', file);
-    if (typeof file === 'string') {
-      if (!file.endsWith('.zip')) {
-        throw new Error(
-          `Error trying to load shapefile from string path, but not a .zip filename: '${file}'`,
-        );
-      }
-      const blob = await fetch(file).then((res) => res.blob());
-      file = new File([blob], file, { type: 'application/zip' });
-    }
+  onFeatures = action((features: GeometryFeature[]) => {
+    features.forEach(this.addFeature);
+  });
 
-    if (file.type !== 'application/zip') {
-      throw new Error(
-        `Error trying to load shapefile, but not a .zip file: '${file.name}'`,
-      );
-    }
+  async loadShapefile(file: string | File | File[], nameKey?: string) {
+    this.loadStart();
 
-    // const shpExtensions: string[] = ['shp', 'shx', 'dbf', 'prj'];
-    // TODO: shapefile doesn't support prj, load separately?
-    const shpExtensions: string[] = ['shp', 'dbf'];
-    const shpFiles: File[] = [];
+    const loader = this.loadShapefileInWorker(file, this.onFeatures, nameKey);
 
-    const zipFile = await jszip.loadAsync(file);
-    for (const [name, compressedFile] of Object.entries(zipFile.files)) {
-      const ext = extension(name);
-      if (!shpExtensions.includes(ext)) {
-        continue;
-      }
-
-      const uncompressedFile = await compressedFile.async('blob');
-      const file = new File([uncompressedFile], name);
-      console.log(name, file);
-      shpFiles.push(file);
-    }
-
-    return await this.loadShapeFiles(shpFiles);
-  }
-
-  async loadShapeFiles(files: File[], nameKey?: string) {
-    const shpFile = files.find((file) => extension(file.name) === 'shp');
-    if (!shpFile) {
-      throw new Error('Error loading shapefile: No .shp file provided');
-    }
-
-    console.time('load');
-
-    const { mapStore } = this.rootStore;
-
-    const dbfFile = files.find((file) => extension(file.name) === 'dbf');
-    const shpStream = shpFile.stream() as unknown as ReadableStream;
-    const dbfStream = dbfFile?.stream() as unknown as ReadableStream;
-
-    const getNameKey = (properties: any) => {
-      const keys = Object.keys(properties ?? {});
-      const keysToTest = ['binomial', 'species', 'name', 'id'] as const;
-      return keysToTest.find((key) => keys.includes(key));
-    };
-
-    try {
-      const source = await shapefile.open(shpStream, dbfStream);
-      console.log(`Loading shapefile with bbox '${source.bbox}'...`);
-
-      let result = await source.read();
-      while (!result.done) {
-        const shp = result.value;
-
-        const key = nameKey ?? getNameKey(shp.properties);
-
-        if (!shp.properties || !key) {
-          throw new Error(
-            `Can't deduce name key in shapefile from properties: ${JSON.stringify(
-              shp.properties,
-            )}`,
-          );
-        }
-
-        Object.assign(shp.properties, { name: shp.properties![key] });
-        mapStore.renderShape(shp as GeometryFeature);
-
-        if (shp.geometry.type === 'Polygon') {
-          this.havePolygons = true;
-          const polygon = shp as PolygonFeature;
-          this.collection.features.push(polygon);
-          this.binner.addFeature(polygon);
-        } else if (shp.geometry.type === 'MultiPolygon') {
-          this.havePolygons = true;
-          shp.geometry.coordinates.forEach((coords) => {
-            const polygon = turf.polygon(
-              coords,
-              shp.properties,
-            ) as PolygonFeature;
-            this.collection.features.push(polygon);
-            this.binner.addFeature(polygon);
-          });
-        } else if (shp.geometry.type === 'Point') {
-          const point = shp as PointFeature;
-          this.collection.features.push(point);
-          this.binner.addFeature(point);
-        } else if (shp.geometry.type === 'MultiPoint') {
-          shp.geometry.coordinates.forEach((coords) => {
-            const point = turf.point(coords, shp.properties) as PointFeature;
-            this.collection.features.push(point);
-            this.binner.addFeature(point);
-          });
-        } else {
-          throw new Error(`Unsupported geometry: '${shp.geometry.type}'`);
-        }
-
-        result = await source.read();
-      }
-    } catch (error: any) {
-      console.error('!! shp error:', error);
-    }
-
-    console.timeEnd('load');
+    await loader.next();
+    this.loadEnd();
 
     this.updateCollection();
     this.setLoaded(true);

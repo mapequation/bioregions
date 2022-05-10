@@ -1,5 +1,4 @@
 import { Table, Thead, Tbody, Tr, Td, Tfoot, Tag } from '@chakra-ui/react';
-import Stat from '../Stat';
 import type {
   BioregionsNetwork,
   BioregionsStateNetwork,
