@@ -8,37 +8,38 @@ import {
   INFOMAP_MARKOV_TIME,
   PHYLOREGIONS_USE,
   CHANGE_TREE_WEIGHT_MODEL,
-} from '../constants/ActionTypes';
+  CHANGE_WEIGHT_ON_ABUNDANCE,
+} from "../constants/ActionTypes";
 
 /**
-* Add the bioregions clusters
-* @param clusterIds An array of cluster indexes for the corresponding spatial bins array
-*/
+ * Add the bioregions clusters
+ * @param clusterIds An array of cluster indexes for the corresponding spatial bins array
+ */
 export function addClusters(clusterIds) {
   return {
     type: ADD_CLUSTERS,
-    clusterIds
-  }
+    clusterIds,
+  };
 }
 
 /**
-* Add the bioregions clusters
-* @param clusterIds An array of cluster indexes for the corresponding spatial bins array
-*/
+ * Add the bioregions clusters
+ * @param clusterIds An array of cluster indexes for the corresponding spatial bins array
+ */
 export function addClustersAndStatistics(clusterIds, clusterStatistics) {
   return {
     type: ADD_CLUSTERS_AND_STATISTICS,
     clusterIds,
-    clusterStatistics
-  }
+    clusterStatistics,
+  };
 }
 
 export function getClusters(infomapArgs = "-v", networkData = null) {
   return {
     type: GET_CLUSTERS,
     infomapArgs,
-    networkData
-  }
+    networkData,
+  };
 }
 
 export function calculateClusters(networkData, infomapArgs = "-v") {
@@ -48,27 +49,27 @@ export function calculateClusters(networkData, infomapArgs = "-v") {
       networkData, // Nest big payload to not have the big string rendered in redux state monitor
     },
     infomapArgs,
-  }
+  };
 }
 
 export function showInfomapUI(isShowingInfomapUI) {
   return {
     type: SHOW_INFOMAP_UI,
-    isShowingInfomapUI
+    isShowingInfomapUI,
   };
 }
 
 export function setInfomapNumTrials(numTrials) {
   return {
     type: INFOMAP_NUM_TRIALS,
-    numTrials
+    numTrials,
   };
 }
 
 export function setInfomapMarkovTime(markovTime) {
   return {
     type: INFOMAP_MARKOV_TIME,
-    markovTime
+    markovTime,
   };
 }
 
@@ -83,5 +84,12 @@ export function setTreeWeightModel(treeWeightModelIndex) {
   return {
     type: CHANGE_TREE_WEIGHT_MODEL,
     treeWeightModelIndex,
+  };
+}
+
+export function setWeightOnAbundance(weightOnAbundance) {
+  return {
+    type: CHANGE_WEIGHT_ON_ABUNDANCE,
+    weightOnAbundance,
   };
 }

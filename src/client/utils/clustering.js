@@ -309,7 +309,12 @@ export function getJaccardIndex(
   return jaccardIndex;
 }
 
-export function getBipartiteNetwork({ species, bins, speciesToBins }) {
+export function getBipartiteNetwork({
+  species,
+  bins,
+  speciesToBins,
+  weightOnAbundance,
+}) {
   const spToBins = Object.entries(speciesToBins).filter(
     ([_, bins]) => bins.bins.size > 0
   );
@@ -336,35 +341,25 @@ export function getBipartiteNetwork({ species, bins, speciesToBins }) {
   if (useNewBipartiteFormat) {
     network.push(`*Bipartite ${bipartiteOffset}`);
   }
-  // let binCounter = 0;
-  spToBins.forEach(([name, bins]) => {
-    const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
-    if (speciesId === 858) {
-      console.log(`Species 858 bins:`, bins);
-    }
-    bins.bins.forEach((binId) => {
-      network.push(`${speciesId} ${binId}`);
+  if (!weightOnAbundance) {
+    spToBins.forEach(([name, bins]) => {
+      const speciesId = speciesNameToIndex.get(name) + bipartiteOffset;
+      bins.bins.forEach((binId) => {
+        network.push(`${speciesId} ${binId}`);
+      });
     });
-  });
-  // } else {
-  //   bins.forEach((bin) => {
-  //     bin.features.forEach((feature) => {
-  //       // TODO: Species not aggregated, will aggregate to weighted network in Infomap
-  //       if (useNewBipartiteFormat) {
-  //         network.push(
-  //           `${
-  //             speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
-  //           } ${binCounter}`
-  //         );
-  //       } else {
-  //         network.push(
-  //           `f${speciesNameToIndex.get(feature.properties.name)} n${binCounter}`
-  //         );
-  //       }
-  //     });
-  //     ++binCounter;
-  //   });
-  // }
+  } else {
+    bins.forEach((bin) => {
+      bin.features.forEach((feature) => {
+        // Note: Species not aggregated, will aggregate to weighted network in Infomap
+        network.push(
+          `${
+            speciesNameToIndex.get(feature.properties.name) + bipartiteOffset
+          } ${bin.binId}`
+        );
+      });
+    });
+  }
   console.log("First 10 links:", network.slice(0, 10));
   // console.log("========== WHOLE NETWORK =========");
   // console.log(network);

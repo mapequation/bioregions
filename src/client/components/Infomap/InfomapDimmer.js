@@ -1,8 +1,9 @@
-import PropTypes from 'prop-types';
+import PropTypes from "prop-types";
 import React, { Component } from "react";
 import classNames from "classnames";
 import { Form, Radio } from "semantic-ui-react";
 import TangleInput from "../lib/TangleInput";
+import Checkbox from "../helpers/Checkbox";
 import Tooltip from "../lib/Tooltip";
 import { CLUSTERING_PROGRESS } from "../../constants/ActionTypes";
 
@@ -99,6 +100,10 @@ class InfomapDimmer extends Component {
 
   handleChangeMarkovTime = (value) => {
     this.props.setInfomapMarkovTime(Math.round(value * 100) / 100);
+  };
+
+  handleChangeWeightOnAbundance = () => {
+    this.props.setWeightOnAbundance(!this.props.weightOnAbundance);
   };
 
   handleClickCluster = () => {
@@ -257,6 +262,16 @@ class InfomapDimmer extends Component {
                             clusters. (Default 1.0)
                           </td>
                         </tr>
+                        <tr>
+                          <td>
+                            <strong>Weight on abundance</strong>
+                          </td>
+                          <td>
+                            Weight links on the number of occurrences of a
+                            species in each grid cell to highlight patterns of
+                            abundant species. (Default false)
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
@@ -267,7 +282,7 @@ class InfomapDimmer extends Component {
               <tbody>
                 <tr>
                   <td className="">Number of trials</td>
-                  <td className="" className="">
+                  <td className="">
                     <TangleInput
                       className="ui orange label"
                       value={infomap.numTrials}
@@ -281,7 +296,7 @@ class InfomapDimmer extends Component {
 
                 <tr>
                   <td className="">Number of cluster cost</td>
-                  <td className="" className="">
+                  <td className="">
                     <TangleInput
                       className="ui orange label"
                       value={infomap.markovTime}
@@ -290,6 +305,17 @@ class InfomapDimmer extends Component {
                       step={0.01}
                       speed={0.5}
                       onChange={this.handleChangeMarkovTime}
+                    />
+                  </td>
+                </tr>
+
+                <tr>
+                  <td className="">Weight on abundance</td>
+                  <td className="">
+                    <Checkbox
+                      label=""
+                      checked={this.props.weightOnAbundance}
+                      onChange={this.handleChangeWeightOnAbundance}
                     />
                   </td>
                 </tr>

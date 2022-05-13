@@ -15,6 +15,7 @@ import {
   BINNING_PATCH_SPARSE_NODES,
   CANCEL_FILE_ACTIONS,
   CHANGE_TREE_WEIGHT_MODEL,
+  CHANGE_WEIGHT_ON_ABUNDANCE,
   REMOVE_SPECIES,
 } from "../constants/ActionTypes";
 import * as Binning from "../constants/Binning";
@@ -89,6 +90,7 @@ const getInitialState = () => {
     simplifyGeometry: true, // Simplify during load to reduce memory usage
     tree: {}, // Parsed newick tree
     treeWeightModelIndex: 0,
+    weightOnAbundance: false,
   };
 };
 
@@ -1051,6 +1053,9 @@ onmessage = function (event) {
         break;
       case CHANGE_TREE_WEIGHT_MODEL:
         state.treeWeightModelIndex = event.data.treeWeightModelIndex;
+        break;
+      case CHANGE_WEIGHT_ON_ABUNDANCE:
+        state.weightOnAbundance = event.data.weightOnAbundance;
         break;
       default:
         console.log("[DataWorker]: Unrecognised message type:", type);

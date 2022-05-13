@@ -100,6 +100,7 @@ const getInitialState = () => {
     },
     treeWeightModels: TREE_WEIGHT_MODELS,
     treeWeightModelIndex: 0,
+    weightOnAbundance: false,
     clusterFractionLimit: 0.1, // For cluster pie charts //TODO: Not used in DataWorker
     infomap: {
       numTrials: 1,
@@ -236,6 +237,12 @@ export default function data(state = getInitialState(), action) {
       return {
         ...state,
         treeWeightModelIndex: action.treeWeightModelIndex,
+      };
+    case ActionTypes.CHANGE_WEIGHT_ON_ABUNDANCE:
+      state.dataWorker.postMessage(action);
+      return {
+        ...state,
+        weightOnAbundance: action.weightOnAbundance,
       };
     case ActionTypes.GET_CLUSTERS:
       // Forward to data worker

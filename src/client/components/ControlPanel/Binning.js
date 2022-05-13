@@ -1,14 +1,13 @@
-import PropTypes from 'prop-types';
-import React, { Component } from 'react';
-import classNames from 'classnames';
-import {BINNING_PROGRESS} from '../../constants/ActionTypes';
-import * as Binning from '../../constants/Binning';
-import TangleInput from '../lib/TangleInput';
-import Tooltip from '../lib/Tooltip';
-import Checkbox from '../helpers/Checkbox';
+import PropTypes from "prop-types";
+import React, { Component } from "react";
+import classNames from "classnames";
+import { BINNING_PROGRESS } from "../../constants/ActionTypes";
+import * as Binning from "../../constants/Binning";
+import TangleInput from "../lib/TangleInput";
+import Tooltip from "../lib/Tooltip";
+import Checkbox from "../helpers/Checkbox";
 
 class BinningComponent extends Component {
-
   static propTypes = {
     binnerType: PropTypes.string.isRequired,
     binnerTypes: PropTypes.array.isRequired,
@@ -28,20 +27,20 @@ class BinningComponent extends Component {
     changePatchSparseNodes: PropTypes.func.isRequired,
     binningLoading: PropTypes.bool.isRequired,
     progressEmitter: PropTypes.object.isRequired,
-  }
+  };
 
   state = {
     percentLoaded: null,
-  }
+  };
 
   componentDidMount() {
-    const {progressEmitter} = this.props;
+    const { progressEmitter } = this.props;
     progressEmitter.on(BINNING_PROGRESS, (action) => {
-      const {type, activity, mode, amount, meta} = action;
+      const { type, activity, mode, amount, meta } = action;
       this.setState({
         activity,
         amount,
-        total: meta.total
+        total: meta.total,
       });
     });
   }
@@ -51,21 +50,20 @@ class BinningComponent extends Component {
     //   <option value="">option1</option>
     //   <option value="">option2</option>
     // </select>
-    return (
-      <span>{this.props.binnerType}</span>
-    )
+    return <span>{this.props.binnerType}</span>;
   }
 
   renderTypesSelection() {
-    if (this.props.binnerTypes.length === 1)
-      return (<tr></tr>);
+    if (this.props.binnerTypes.length === 1) return <tr></tr>;
     return (
       <tr>
         <td>Type</td>
         <td>
           <select className="ui dropdown">
-            {this.props.binnerTypes.map(binner => (
-              <option key={binner} value={binner}>{binner}</option>
+            {this.props.binnerTypes.map((binner) => (
+              <option key={binner} value={binner}>
+                {binner}
+              </option>
             ))}
           </select>
         </td>
@@ -78,11 +76,16 @@ class BinningComponent extends Component {
       <tr>
         <td>Unit</td>
         <td>
-          <select className="ui compact dropdown" onChange={(event) => {
-            this.props.changeBinnerUnit(event.target.value);
-          }}>
-            {this.props.binnerUnits.map(unit => (
-              <option key={unit} value={unit}>{unit}</option>
+          <select
+            className="ui compact dropdown"
+            onChange={(event) => {
+              this.props.changeBinnerUnit(event.target.value);
+            }}
+          >
+            {this.props.binnerUnits.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}
+              </option>
             ))}
           </select>
         </td>
@@ -91,7 +94,9 @@ class BinningComponent extends Component {
   }
 
   formatBinSize(sizeLog2) {
-    return sizeLog2 < 0? `1/${Math.pow(2, -sizeLog2)}` : `${Math.pow(2, sizeLog2)}`;
+    return sizeLog2 < 0
+      ? `1/${Math.pow(2, -sizeLog2)}`
+      : `${Math.pow(2, sizeLog2)}`;
   }
 
   render() {
@@ -99,57 +104,89 @@ class BinningComponent extends Component {
       yellow: this.props.binningLoading,
       green: !this.props.binningLoading,
     });
-    const {amount, total} = this.state;
-    const percentLoaded = total? `${Math.round(amount*100/total)}%` : "100%";
+    const { amount, total } = this.state;
+    const percentLoaded = total
+      ? `${Math.round((amount * 100) / total)}%`
+      : "100%";
     return (
-      <div className="ui segment" style={{padding: 0}}>
+      <div className="ui segment" style={{ padding: 0 }}>
         <div className="ui top attached progress">
-          <div className="bar" style={{width: percentLoaded}}></div>
+          <div className="bar" style={{ width: percentLoaded }}></div>
         </div>
-        <div className="ui basic segment" style={{paddingBottom: 0, paddingTop: 0}}>
+        <div
+          className="ui basic segment"
+          style={{ paddingBottom: 0, paddingTop: 0 }}
+        >
           <div className="ui text menu">
             <div className="item">
               <h4 className="ui header">Resolution</h4>
             </div>
             <div className="right item">
               <Tooltip>
-                <i className="help icon" style={{color: '#ccc'}}></i>
+                <i className="help icon" style={{ color: "#ccc" }}></i>
                 <div className="ui floating segment">
-                  <table className="ui very basic celled table" style={{
+                  <table
+                    className="ui very basic celled table"
+                    style={{
                       backgroundColor: "white",
                       width: "400px",
                       fontWeight: 300,
-                    }}>
+                    }}
+                  >
                     <tbody>
                       <tr>
-                        <td><strong>Unit</strong></td>
+                        <td>
+                          <strong>Unit</strong>
+                        </td>
                         <td>Choose degree or minute resolution</td>
                       </tr>
                       <tr>
-                        <td><strong>Max cell size</strong></td>
+                        <td>
+                          <strong>Max cell size</strong>
+                        </td>
                         <td>Maximum grid cell size to accumulate records.</td>
                       </tr>
                       <tr>
-                        <td><strong>Min cell size</strong></td>
+                        <td>
+                          <strong>Min cell size</strong>
+                        </td>
                         <td>Minimum grid cell size to accumulate records.</td>
                       </tr>
                       <tr>
-                        <td><strong>Max cell capacity</strong></td>
-                        <td>The number of records in a grid cell before it splits to four sub-cells, if allowed by the min cell size.</td>
+                        <td>
+                          <strong>Max cell capacity</strong>
+                        </td>
+                        <td>
+                          The number of records in a grid cell before it splits
+                          to four sub-cells, if allowed by the min cell size.
+                        </td>
                       </tr>
                       <tr>
-                        <td><strong>Min cell capacity</strong></td>
-                        <td>The minimum number of records in a grid cell to include it in the map and analysis. If less, the records will be included in a parent grid cell if available, else ignored.</td>
+                        <td>
+                          <strong>Min cell capacity</strong>
+                        </td>
+                        <td>
+                          The minimum number of records in a grid cell to
+                          include it in the map and analysis. If less, the
+                          records will be included in a parent grid cell if
+                          available, else ignored.
+                        </td>
                       </tr>
                       <tr>
-                        <td><strong>Patch sparse grid cells</strong></td>
-                        <td>Keep parent cell behind sub-cells if some but not all four sub-cells get the minimum number of records to be included.</td>
+                        <td>
+                          <strong>Patch sparse grid cells</strong>
+                        </td>
+                        <td>
+                          Keep parent cell behind sub-cells if some but not all
+                          four sub-cells get the minimum number of records to be
+                          included.
+                        </td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </Tooltip>
-              {this.props.binningLoading? (
+              {this.props.binningLoading ? (
                 <div className="ui active small inline loader"></div>
               ) : (
                 <span></span>
@@ -164,61 +201,73 @@ class BinningComponent extends Component {
             <tr>
               <td>Max cell size</td>
               <td className="">
-                <TangleInput className="ui label"
-                  suffix={this.props.unit === Binning.DEGREE ? '˚' : '′'}
+                <TangleInput
+                  className="ui label"
+                  suffix={this.props.unit === Binning.DEGREE ? "˚" : "′"}
                   value={this.props.maxNodeSizeLog2}
                   min={this.props.minNodeSizeLog2}
                   max={6}
                   format={this.formatBinSize}
                   speed={0.2}
-                  onChange={(value) => this.props.changeMaxBinSize(value)} />
+                  onChange={(value) => this.props.changeMaxBinSize(value)}
+                />
               </td>
             </tr>
 
             <tr>
               <td>Min cell size</td>
               <td className="">
-                <TangleInput className="ui label"
-                  suffix={this.props.unit === Binning.DEGREE ? '˚' : '′'}
+                <TangleInput
+                  className="ui label"
+                  suffix={this.props.unit === Binning.DEGREE ? "˚" : "′"}
                   value={this.props.minNodeSizeLog2}
                   min={-3}
                   max={this.props.maxNodeSizeLog2}
                   format={this.formatBinSize}
                   speed={0.2}
-                  onChange={(value) => this.props.changeMinBinSize(value)} />
+                  onChange={(value) => this.props.changeMinBinSize(value)}
+                />
               </td>
             </tr>
 
             <tr>
               <td>Max cell capacity</td>
               <td className="">
-                <TangleInput className="ui label"
+                <TangleInput
+                  className="ui label"
                   value={this.props.nodeCapacity}
                   min={5}
                   max={1000000}
                   logStep={1}
                   speed={0.2}
-                  onChange={(value) => this.props.changeNodeCapacity(value)} />
+                  onChange={(value) => this.props.changeNodeCapacity(value)}
+                />
               </td>
             </tr>
 
             <tr>
               <td>Min cell capacity</td>
               <td className="">
-                <TangleInput className="ui label"
+                <TangleInput
+                  className="ui label"
                   value={this.props.lowerThreshold}
                   min={0}
                   max={1000000}
                   logStep={1}
                   speed={0.2}
-                  onChange={(value) => this.props.changeLowerThreshold(value)} />
+                  onChange={(value) => this.props.changeLowerThreshold(value)}
+                />
               </td>
             </tr>
 
             <tr>
               <td>Patch sparse grid cells</td>
               <td className="">
-                <Checkbox label="" checked={this.props.patchSparseNodes} onChange={this.props.changePatchSparseNodes}/>
+                <Checkbox
+                  label=""
+                  checked={this.props.patchSparseNodes}
+                  onChange={this.props.changePatchSparseNodes}
+                />
               </td>
             </tr>
           </tbody>
