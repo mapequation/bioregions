@@ -286,6 +286,21 @@ export default observer(function Advanced() {
               }
             />
           </FormControl>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="twoLevel" mb="0">
+              One level of bioregions
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="twoLevel"
+              isChecked={infomapStore.args.twoLevel}
+              onChange={() => {
+                infomapStore.setTwoLevel(!infomapStore.args.twoLevel);
+              }}
+            />
+          </FormControl>
+
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="entropyCorrected" mb="0">
               Entropy correction
@@ -361,6 +376,7 @@ export default observer(function Advanced() {
               }
             />
           </FormControl>
+
           <FormControl
             display="flex"
             w="100%"

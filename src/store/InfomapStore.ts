@@ -239,6 +239,10 @@ export default class InfomapStore {
     this.args.skipAdjustBipartiteFlow = value;
   });
 
+  setTwoLevel = action((value: boolean = true) => {
+    this.args.twoLevel = value;
+  });
+
   setRegularized = action((value: boolean = true) => {
     this.args.regularized = value;
   });
