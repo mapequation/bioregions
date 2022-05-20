@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { VStack } from '@chakra-ui/react';
+import { Button, VStack } from '@chakra-ui/react';
 import { LoadData, LoadExample } from './Load';
 import { useStore } from '../../store';
 import Stat from '../Stat';
@@ -11,8 +11,18 @@ export default observer(function Data() {
       <LoadData />
       <LoadExample />
 
+      {speciesStore.isLoading && (
+        <Button
+          colorScheme="red"
+          variant="outline"
+          onClick={() => speciesStore.cancelLoad()}
+        >
+          Cancel
+        </Button>
+      )}
+
       {speciesStore.numRecords > 0 && (
-        <Stat label="Time">{speciesStore.seconds.toLocaleString()}</Stat>
+        <Stat label="Time">{speciesStore.seconds.toLocaleString()} s</Stat>
       )}
 
       {speciesStore.numRecords > 0 && (

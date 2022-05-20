@@ -14,7 +14,7 @@ export default observer(function ControlPanel() {
 
   return (
     <Box>
-      <Section label="Data" isLoading={speciesStore.isLoading}>
+      <Section label="Data">
         <Data />
       </Section>
       <Section label="Resolution" isLoading={speciesStore.isLoading}>

@@ -14,7 +14,7 @@ import type {
   Polygon,
 } from '../types/geojson';
 import { getName } from '../utils/filename';
-import { nextAnimationFrame, Timer } from '../utils/time';
+import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
 import { normalizeSpeciesName } from '../utils/names';
 
@@ -89,6 +89,7 @@ export default class SpeciesStore {
   timer = new Timer();
   speed: number = 0;
   seconds: number = 0;
+  dataWorker: any = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -249,12 +250,15 @@ export default class SpeciesStore {
         new URL('../workers/DataWorker.ts', import.meta.url),
       ),
     );
+    this.dataWorker = dataWorker;
 
     dataWorker.stream().subscribe(getItems);
 
     yield dataWorker.load(file, args);
 
-    return await Thread.terminate(dataWorker);
+    const res = await Thread.terminate(dataWorker);
+    this.dataWorker = null;
+    return res;
   }
 
   private async *loadShapefileInWorker(
@@ -333,11 +337,11 @@ export default class SpeciesStore {
     latColumn = 'latitude',
     clear = true,
   ) {
-    this.setIsLoading();
-
     if (clear) {
       this.clearData();
     }
+
+    this.setIsLoading();
 
     const filename = typeof file === 'string' ? file : file.name;
     this.name = getName(filename);
@@ -359,15 +363,21 @@ export default class SpeciesStore {
     };
 
     this.loadStart();
+    const ignoredRows: any[] = [];
 
     const loader = this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
 
       for (let item of items) {
         const mappedItem = mapper(item);
+        const name = normalizeSpeciesName(mappedItem.name);
+        if (!name || name === 'NA') {
+          ignoredRows.push(item);
+          continue;
+        }
         const pointFeature = createPointFeature(
           [mappedItem.longitude, mappedItem.latitude],
-          { name: normalizeSpeciesName(mappedItem.name) },
+          { name },
         );
 
         countName(mappedItem.name);
@@ -383,6 +393,10 @@ export default class SpeciesStore {
 
     await loader.next();
     this.loadEnd();
+    console.log(
+      `Ignored ${ignoredRows.length} rows due to no name:`,
+      ignoredRows,
+    );
 
     this.updateCollection();
     this.setLoaded(true);
@@ -405,6 +419,18 @@ export default class SpeciesStore {
     this.setLoaded(true);
     this.setIsLoading(false);
   }
+
+  cancelLoad = action(async () => {
+    if (this.dataWorker) {
+      await Thread.terminate(this.dataWorker);
+      this.dataWorker = null;
+    }
+    this.loadEnd();
+
+    this.updateCollection();
+    this.setLoaded(true);
+    this.setIsLoading(false);
+  });
 }
 
 function createMapper<ItemType = string | number>(
