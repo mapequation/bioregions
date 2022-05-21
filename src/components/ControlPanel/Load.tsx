@@ -21,6 +21,40 @@ import type { Example } from '../../store/ExampleStore';
 
 const shpExtensions: string[] = ['shp', 'shx', 'dbf', 'prj'];
 
+const guessColumnNames = (cols: string[]) => {
+  const reName = /species|binomial|name/i;
+  const reLat = /lat/i;
+  const reLong = /lng|long/i;
+  let name = '';
+  let lat = '';
+  let long = '';
+  for (const col of cols) {
+    console.log(col, name, !name, reName.test(col));
+    if (!name && reName.test(col)) {
+      name = col;
+      continue;
+    }
+    if (!lat && reLat.test(col)) {
+      lat = col;
+      continue;
+    }
+    if (!long && reLong.test(col)) {
+      long = col;
+      continue;
+    }
+  }
+  if (name === '') {
+    name = cols[0];
+  }
+  if (lat === '') {
+    lat = cols[1];
+  }
+  if (long === '') {
+    long = cols[2];
+  }
+  return { name, lat, long };
+};
+
 export const LoadExample = observer(function LoadExample() {
   const store = useStore();
   const [isOpen, setIsOpen] = useState(false);
@@ -76,19 +110,19 @@ export const LoadExample = observer(function LoadExample() {
 });
 
 export const LoadData = observer(function LoadData() {
-  const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
+  const { speciesStore, treeStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
   const [lines, setLines] = useState<any[]>([]);
 
   const [nameColumn, setNameColumn] = useState<string>('');
-  const [longColumn, setLongColumn] = useState<string>('');
   const [latColumn, setLatColumn] = useState<string>('');
+  const [longColumn, setLongColumn] = useState<string>('');
 
-  const setColumn = [setNameColumn, setLongColumn, setLatColumn];
-  const values = [nameColumn, longColumn, latColumn];
-  console.log(`name: ${nameColumn}, long: ${longColumn}, lat: ${latColumn}`);
+  const setColumn = [setNameColumn, setLatColumn, setLongColumn];
+  const values = [nameColumn, latColumn, longColumn];
+  console.log(`name: ${nameColumn}, lat: ${latColumn}, long: ${longColumn}`);
 
   const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const { files } = event.target;
@@ -128,9 +162,10 @@ export const LoadData = observer(function LoadData() {
         const { data, header } = await loadPreview(occurrenceData);
         setFile(occurrenceData);
         setHeader(header);
-        setNameColumn(header[0]);
-        setLongColumn(header[1]);
-        setLatColumn(header[2]);
+        const { name, lat, long } = guessColumnNames(header);
+        setNameColumn(name);
+        setLatColumn(lat);
+        setLongColumn(long);
         setLines(data);
       } catch (e) {
         console.error(e);
@@ -148,8 +183,8 @@ export const LoadData = observer(function LoadData() {
     setIsOpen(false);
     setFile(undefined);
     setNameColumn('');
-    setLongColumn('');
     setLatColumn('');
+    setLongColumn('');
     setHeader([]);
     setLines([]);
   };
@@ -165,7 +200,7 @@ export const LoadData = observer(function LoadData() {
     onClose(); // cleanup state
   };
 
-  const columns = ['name', 'longitude', 'latitude'] as const;
+  const columns = ['name', 'latitude', 'longitude'] as const;
   const visibleRows = 5;
 
   return (
@@ -194,6 +229,8 @@ export const LoadData = observer(function LoadData() {
         header="Load data"
         isOpen={isOpen}
         onClose={onClose}
+        scrollBehavior="inside"
+        size="4xl"
         footer={<Button children={'Finish'} onClick={onSubmit} />}
       >
         <Table size="sm" variant="simple">
