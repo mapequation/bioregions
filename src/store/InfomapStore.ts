@@ -1217,8 +1217,11 @@ export default class InfomapStore {
       const parentLinks = getMemLinksFromTreeNode(parent);
       const childLinks = getMemLinksFromTreeNode(child);
 
-      if (childLinks.sumWeight === 0) {
-        console.warn('No links from child', child.name);
+      if (isEqual(childLinks.sumWeight, 0)) {
+        // console.warn('No links from child', child.name);
+        // Happens when integration time is more than leaf time
+        // TODO: Adjust tree times to reach 1.0 at leafs if close?
+        return addLinks(parent, parentLinks.links, 1);
       }
 
       const degreeRatio = isEqual(parentLinks.sumWeight, 0)
