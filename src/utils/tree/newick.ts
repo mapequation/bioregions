@@ -61,151 +61,155 @@
 const regMatchQuoted = new RegExp(/[['"]*['"]([^']+?)'/g);
 
 export interface ITree {
-    name: string;
-    branchLength: number | null;
-    bs?: number;
-    children: ITree[];
+  name: string;
+  branchLength: number | null;
+  bs?: number;
+  children: ITree[];
 }
 
 function makeid(length: number): string {
-    let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    const charactersLength = characters.length;
-    for (let i = 0; i < length; i++) {
-        result += characters.charAt(Math.floor(Math.random() * charactersLength));
-    }
-    return result;
+  let result = '';
+  const characters =
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const charactersLength = characters.length;
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
 }
 
 function read(newickString: string) {
-    const emptyAncestor: ITree = {
-        branchLength: null,
-        children: [],
-        name: '',
-    };
-    const ancestors: ITree[] = [emptyAncestor];
-    let tree: ITree = {
-        branchLength: null,
-        children: [],
-        name: '',
-    };
+  const emptyAncestor: ITree = {
+    branchLength: null,
+    children: [],
+    name: '',
+  };
+  const ancestors: ITree[] = [emptyAncestor];
+  let tree: ITree = {
+    branchLength: null,
+    children: [],
+    name: '',
+  };
 
-    const testString = newickString.split('(');
+  const testString = newickString.split('(');
 
-    const exceptionHashTable: { [name: string]: string } = {};
-    const parts = testString.length;
-    for (let i = 0; i < parts; i++) {
-        let copyNewickString = testString[i];
+  const exceptionHashTable: { [name: string]: string } = {};
+  const parts = testString.length;
+  for (let i = 0; i < parts; i++) {
+    let copyNewickString = testString[i];
 
-        while (copyNewickString.match(regMatchQuoted)) {
-            const matches = copyNewickString.match(regMatchQuoted);
-            if (matches) {
-                const id = makeid(10);
-                exceptionHashTable[id] = matches[0].replace(/'/g, '');
-                copyNewickString = copyNewickString.replace(matches[0], id);
+    while (copyNewickString.match(regMatchQuoted)) {
+      const matches = copyNewickString.match(regMatchQuoted);
+      if (matches) {
+        const id = makeid(10);
+        exceptionHashTable[id] = matches[0].replace(/'/g, '');
+        copyNewickString = copyNewickString.replace(matches[0], id);
+      }
+    }
+    testString[i] = copyNewickString;
+  }
+  const fullString = testString.join('(');
+  const tokens = fullString.split(/\s*(;|\(|\)|,|:)\s*/);
+  for (let i = 0; i < tokens.length; i++) {
+    const token: string = tokens[i];
+    switch (token) {
+      case '(':
+        const newChildren: ITree = {
+          branchLength: null,
+          children: [],
+          name: '',
+        };
+        tree.children = [newChildren];
+        ancestors.push(tree);
+        tree = newChildren;
+        break;
+      case ',':
+        const anotherBranch: ITree = {
+          branchLength: null,
+          children: [],
+          name: '',
+        };
+        const children = ancestors[ancestors.length - 1].children;
+        if (children) {
+          children.push(anotherBranch);
+          tree = anotherBranch;
+        }
+        break;
+      case ')': // optional name next
+        const lastAncestor = ancestors.pop();
+        if (lastAncestor) {
+          tree = lastAncestor;
+        }
+        break;
+      case ':': // optional length next
+        break;
+      default:
+        const x: string = tokens[i - 1];
+        if (x === ')' || x === '(' || x === ',') {
+          if (exceptionHashTable.hasOwnProperty(token)) {
+            const [str1, str2] = exceptionHashTable[token].split(':');
+            if (str2) {
+              tree.name = str2;
+              tree.bs = parseFloat(str1);
+            } else {
+              tree.name = '';
+              tree.bs = parseFloat(str1);
             }
-        }
-        testString[i] = copyNewickString;
-    }
-    const fullString = testString.join('(');
-    const tokens = fullString.split(/\s*(;|\(|\)|,|:)\s*/);
-    for (let i = 0; i < tokens.length; i++) {
-        const token: string = tokens[i];
-        switch (token) {
-            case '(':
-                const newChildren: ITree = {
-                    branchLength: null,
-                    children: [],
-                    name: '',
-                };
-                tree.children = [newChildren];
-                ancestors.push(tree);
-                tree = newChildren;
-                break;
-            case ',':
-                const anotherBranch: ITree = {
-                    branchLength: null,
-                    children: [],
-                    name: '',
-                };
-                const children = ancestors[ancestors.length - 1].children;
-                if (children) {
-                    children.push(anotherBranch);
-                    tree = anotherBranch;
-                }
-                break;
-            case ')': // optional name next
-                const lastAncestor = ancestors.pop();
-                if (lastAncestor) {
-                    tree = lastAncestor;
-                }
-                break;
-            case ':': // optional length next
-                break;
-            default:
-                const x: string = tokens[i - 1];
-                if (x === ')' || x === '(' || x === ',') {
-                    if (exceptionHashTable.hasOwnProperty(token)) {
-                        const [str1, str2] = exceptionHashTable[token].split(':');
-                        if (str2) {
-                            tree.name = str2;
-                            tree.bs = parseFloat(str1);
-                        } else {
-                            tree.name = '';
-                            tree.bs = parseFloat(str1);
-                        }
-                    } else {
-                        if (token.match(/[a-zA-Z]/)) {
-                            tree.name = token;
-                        } else {
-                            tree.name = '';
-                            if (!isNaN(parseFloat(token))) {
-                                tree.bs = parseFloat(token);
-                            }
-                        }
-                    }
-                } else if (x === ':') {
-                    tree.branchLength = parseFloat(token);
-                }
+          } else {
+            if (token.match(/[a-zA-Z]/)) {
+              tree.name = token;
+            } else {
+              tree.name = '';
+              if (!isNaN(parseFloat(token))) {
+                tree.bs = parseFloat(token);
+              }
+            }
+          }
+          if (tree.name === 'NA') {
+            tree.name = '';
+          }
+        } else if (x === ':') {
+          tree.branchLength = parseFloat(token);
         }
     }
-    return tree;
+  }
+  return tree;
 }
 
 function write(json: ITree) {
-    function nested(nest: ITree) {
-        let subtree: string = '';
-        if (nest.children.length) {
-            const newChildren: string[] = [];
-            const nestedChildren = nest.children;
-            if (nestedChildren) {
-                nestedChildren.forEach(child => {
-                    const subsubtree = nested(child);
-                    newChildren.push(subsubtree);
-                });
-            }
-            const substring = newChildren.join();
-            if (nest.hasOwnProperty('name')) {
-                subtree = '(' + substring + ')' + nest.name;
-            }
-            if (nest.hasOwnProperty('branchLength')) {
-                if (nest.branchLength) {
-                    subtree = subtree + ':' + nest.branchLength;
-                }
-            }
-        } else {
-            let leaf: string = '';
-            if (nest.hasOwnProperty('name') && nest.name) {
-                leaf = nest.name;
-            }
-            if (nest.hasOwnProperty('branchLength') && nest.branchLength) {
-                leaf = `${leaf}:${nest.branchLength}`;
-            }
-            subtree = subtree + leaf;
+  function nested(nest: ITree) {
+    let subtree: string = '';
+    if (nest.children.length) {
+      const newChildren: string[] = [];
+      const nestedChildren = nest.children;
+      if (nestedChildren) {
+        nestedChildren.forEach((child) => {
+          const subsubtree = nested(child);
+          newChildren.push(subsubtree);
+        });
+      }
+      const substring = newChildren.join();
+      if (nest.hasOwnProperty('name')) {
+        subtree = '(' + substring + ')' + nest.name;
+      }
+      if (nest.hasOwnProperty('branchLength')) {
+        if (nest.branchLength) {
+          subtree = subtree + ':' + nest.branchLength;
         }
-        return subtree;
+      }
+    } else {
+      let leaf: string = '';
+      if (nest.hasOwnProperty('name') && nest.name) {
+        leaf = nest.name;
+      }
+      if (nest.hasOwnProperty('branchLength') && nest.branchLength) {
+        leaf = `${leaf}:${nest.branchLength}`;
+      }
+      subtree = subtree + leaf;
     }
-    return `${nested(json)};`;
+    return subtree;
+  }
+  return `${nested(json)};`;
 }
 
 export { read, write };
