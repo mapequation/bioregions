@@ -16,9 +16,11 @@ export type TreeNode = {
 
 export default class TreeStore {
   rootStore: RootStore;
-  loaded: boolean = false;
+  isLoading: boolean = false;
+  isLoaded: boolean = false;
   tree: PhyloNode | null = null;
   treeString: string | null = null;
+  numLeafNodes: number = 0;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
   treeNodeMap = new Map<string, TreeNode>();
 
@@ -26,55 +28,27 @@ export default class TreeStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
-      loaded: observable,
+      isLoading: observable,
+      isLoaded: observable,
       tree: observable.ref,
       treeNodeMap: observable.ref,
       treeString: observable,
       weightParameter: observable,
-      numNodesInTree: computed,
-      numLeafNodesInTree: computed,
+      numLeafNodes: observable,
+      numNodes: computed,
       histogram: computed,
       timeFormatter: computed,
-      setLoaded: action,
-      setTree: action,
-      setTreeString: action,
     });
   }
 
   clearData = action(() => {
-    this.loaded = false;
+    this.isLoaded = false;
     this.tree = null;
     this.treeString = null;
   });
 
-  get numNodesInTree() {
-    if (this.tree === null) {
-      return 0;
-    }
-
-    let numNodes = 0;
-
-    visitTreeDepthFirstPreOrder(this.tree, () => {
-      ++numNodes;
-    });
-
-    return numNodes;
-  }
-
-  get numLeafNodesInTree() {
-    if (this.tree === null) {
-      return 0;
-    }
-
-    let numLeafs = 0;
-
-    visitTreeDepthFirstPreOrder(this.tree, (node) => {
-      if (node.isLeaf) {
-        ++numLeafs;
-      }
-    });
-
-    return numLeafs;
+  get numNodes() {
+    return this.treeNodeMap.size;
   }
 
   get histogram() {
@@ -97,31 +71,38 @@ export default class TreeStore {
     return (time: number) => (time === 1 ? '0' : f(scale(time)));
   }
 
-  setTree(tree: PhyloNode | null) {
+  setTree = action((tree: PhyloNode | null) => {
     this.tree = tree;
     this.calculateTreeStats();
-  }
+  });
 
-  setTreeString(treeString: string) {
+  setTreeString = action((treeString: string) => {
     this.treeString = treeString;
-  }
+  });
 
-  setLoaded(loaded: boolean = true) {
-    this.loaded = loaded;
-  }
+  setIsLoading = action((isLoading: boolean = true) => {
+    this.isLoading = isLoading;
+  });
+
+  setIsLoaded = action((isLoaded: boolean = true) => {
+    this.isLoading = false;
+    this.isLoaded = isLoaded;
+  });
 
   loadString(tree: string) {
+    this.setIsLoading();
     this.setTreeString(tree);
     this.setTree(prepareTree(parseTree(tree)));
-    this.setLoaded();
+    this.setIsLoaded();
   }
 
   async load(file: File | string) {
+    this.setIsLoading();
     const tree = await loadText(file);
     this.setTreeString(tree);
     // @ts-ignore
     this.setTree(prepareTree(parseTree(tree)));
-    this.setLoaded();
+    this.setIsLoaded();
   }
 
   clearBioregions() {
@@ -130,15 +111,22 @@ export default class TreeStore {
     });
   }
 
-  calculateTreeStats() {
+  calculateTreeStats = action(() => {
     if (!this.tree) {
       return;
     }
+    const treeNodeMap = new Map<string, TreeNode>();
+    let numLeafNodes: number = 0;
     visitTreeDepthFirstPreOrder(this.tree, (node) => {
-      this.treeNodeMap.set(node.name, {
+      treeNodeMap.set(node.name, {
         data: node,
         bioregionId: undefined,
       });
+      if (node.isLeaf) {
+        ++numLeafNodes;
+      }
     });
-  }
+    this.treeNodeMap = treeNodeMap;
+    this.numLeafNodes = numLeafNodes;
+  });
 }

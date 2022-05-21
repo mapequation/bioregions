@@ -462,7 +462,7 @@ export default observer(function Advanced() {
               size="sm"
               isDisabled={
                 !speciesStore.loaded ||
-                !treeStore.loaded ||
+                !treeStore.isLoaded ||
                 infomapStore.isRunning
               }
               isLoading={isRunning}
@@ -474,7 +474,7 @@ export default observer(function Advanced() {
               size="sm"
               isDisabled={
                 !speciesStore.loaded ||
-                !treeStore.loaded ||
+                !treeStore.isLoaded ||
                 infomapStore.isRunning
               }
               isLoading={isRunning}
@@ -486,7 +486,7 @@ export default observer(function Advanced() {
               size="sm"
               isDisabled={
                 !speciesStore.loaded ||
-                !treeStore.loaded ||
+                !treeStore.isLoaded ||
                 infomapStore.isRunning
               }
               isLoading={isRunning}

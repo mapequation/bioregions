@@ -164,10 +164,15 @@ async function loadShapefiles(files: File[], nameKey?: string) {
   dataStream = new Subject();
 }
 
+async function cancelLoad() {
+  // TODO: Create and store an abort function for all load functions
+}
+
 expose({
   load,
   loadShapefile,
   stream() {
     return Observable.from(dataStream);
   },
+  cancelLoad,
 });

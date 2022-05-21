@@ -109,7 +109,7 @@ export default class SpeciesStore {
       numSpecies: computed,
       numRecords: computed,
       setCollection: action,
-      setLoaded: action,
+      setIsLoaded: action,
       setIsLoading: action,
     });
   }
@@ -184,7 +184,8 @@ export default class SpeciesStore {
     );
   }
 
-  setLoaded(loaded: boolean) {
+  setIsLoaded(loaded: boolean = true) {
+    this.isLoading = false;
     this.loaded = loaded;
   }
 
@@ -307,6 +308,8 @@ export default class SpeciesStore {
       this.clearData();
     }
 
+    this.preLoad();
+
     const records = csvParse(data);
 
     const mapper = createMapper<string | undefined>(
@@ -325,9 +328,7 @@ export default class SpeciesStore {
       this.addFeature(pointFeature);
     }
 
-    this.updateCollection();
-    this.setLoaded(true);
-    this.setIsLoading(false);
+    this.postLoad();
   }
 
   async load(
@@ -341,14 +342,14 @@ export default class SpeciesStore {
       this.clearData();
     }
 
-    this.setIsLoading();
-
     const filename = typeof file === 'string' ? file : file.name;
     this.name = getName(filename);
 
     if (filename.endsWith('.zip')) {
       return this.loadShapefile(file);
     }
+
+    this.preLoad();
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
@@ -362,7 +363,6 @@ export default class SpeciesStore {
       nameHistogram[name]++;
     };
 
-    this.loadStart();
     const ignoredRows: any[] = [];
 
     const loader = this.loadData(file, (items) => {
@@ -398,9 +398,7 @@ export default class SpeciesStore {
       ignoredRows,
     );
 
-    this.updateCollection();
-    this.setLoaded(true);
-    this.setIsLoading(false);
+    await this.postLoad();
   }
 
   onFeatures = action((features: GeometryFeature[]) => {
@@ -408,16 +406,13 @@ export default class SpeciesStore {
   });
 
   async loadShapefile(file: string | File | File[], nameKey?: string) {
-    this.loadStart();
+    this.preLoad();
 
     const loader = this.loadShapefileInWorker(file, this.onFeatures, nameKey);
 
     await loader.next();
-    this.loadEnd();
 
-    this.updateCollection();
-    this.setLoaded(true);
-    this.setIsLoading(false);
+    await this.postLoad();
   }
 
   cancelLoad = action(async () => {
@@ -425,11 +420,25 @@ export default class SpeciesStore {
       await Thread.terminate(this.dataWorker);
       this.dataWorker = null;
     }
-    this.loadEnd();
+    await this.postLoad();
+  });
 
+  preLoad = action(() => {
+    this.setIsLoading();
+    this.loadStart();
+  });
+
+  postLoad = action(async () => {
+    this.loadEnd();
     this.updateCollection();
-    this.setLoaded(true);
-    this.setIsLoading(false);
+    this.setIsLoaded();
+
+    const { mapStore, infomapStore } = this.rootStore;
+    mapStore.setRenderType('heatmap');
+    mapStore.render();
+    await infomapStore.run();
+    mapStore.setRenderType('bioregions');
+    mapStore.render();
   });
 }
 

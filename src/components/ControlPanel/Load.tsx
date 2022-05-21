@@ -96,9 +96,6 @@ export const LoadData = observer(function LoadData() {
       return;
     }
 
-    speciesStore.setLoaded(false);
-    treeStore.setLoaded(false);
-    treeStore.setTree(null);
     infomapStore.setTree(null);
 
     let occurrenceData: File | null = null;
@@ -165,11 +162,6 @@ export const LoadData = observer(function LoadData() {
 
     setIsOpen(false);
     await speciesStore.load(file, nameColumn, longColumn, latColumn);
-    mapStore.setRenderType('heatmap');
-    mapStore.render();
-    await infomapStore.run();
-    mapStore.setRenderType('bioregions');
-    mapStore.render();
     onClose(); // cleanup state
   };
 

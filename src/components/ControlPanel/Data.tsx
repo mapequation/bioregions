@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Button, VStack } from '@chakra-ui/react';
+import { Button, Progress, VStack } from '@chakra-ui/react';
 import { LoadData, LoadExample } from './Load';
 import { useStore } from '../../store';
 import Stat from '../Stat';
@@ -10,6 +10,10 @@ export default observer(function Data() {
     <VStack align="stretch">
       <LoadData />
       <LoadExample />
+
+      {(treeStore.isLoading || speciesStore.isLoading) && (
+        <Progress size="xs" isIndeterminate />
+      )}
 
       {speciesStore.isLoading && (
         <Button
@@ -43,9 +47,9 @@ export default observer(function Data() {
         </Stat>
       )}
 
-      {treeStore.loaded && (
-        <Stat label="Tree nodes">
-          {treeStore.numNodesInTree.toLocaleString()}
+      {treeStore.isLoaded && (
+        <Stat label="Species in tree">
+          {treeStore.numLeafNodes.toLocaleString()}
         </Stat>
       )}
     </VStack>
