@@ -82,6 +82,7 @@ export default class InfomapStore {
     regularizationStrength: 1,
     entropyCorrected: false,
     entropyCorrectionStrength: 1,
+    markovTime: 1,
     skipAdjustBipartiteFlow: true,
     seed: 123,
     ...defaultArgs,
@@ -257,6 +258,10 @@ export default class InfomapStore {
 
   setEntropyCorrectionStrength = action((strength: number) => {
     this.args.entropyCorrectionStrength = strength;
+  });
+
+  setMarkovTime = action((value: number) => {
+    this.args.markovTime = value;
   });
 
   setAlwaysUseStateNetwork = action(

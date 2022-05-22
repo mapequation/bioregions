@@ -233,6 +233,33 @@ export default observer(function Advanced() {
             </Slider>
           </Flex>
 
+          <Flex
+            w="100%"
+            mt={4}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box w="50%">Markov time</Box>
+            <Slider
+              w="50%"
+              focusThumbOnChange={false}
+              value={infomapStore.args.markovTime}
+              onChange={(value) => infomapStore.setMarkovTime(value)}
+              onChangeEnd={(value) => infomapStore.setMarkovTime(value)}
+              min={0}
+              max={3}
+              step={0.01}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" boxSize="32px">
+                {infomapStore.args.markovTime}
+              </SliderThumb>
+            </Slider>
+          </Flex>
+
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="alwaysUseStateNetwork" mb="0">
               Always use state network
