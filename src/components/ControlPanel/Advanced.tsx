@@ -27,6 +27,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import Stat from '../Stat';
 import Modal from './Modal';
+import { saveCanvas } from '../../utils/exporter';
 
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
@@ -58,7 +59,12 @@ export default observer(function Advanced() {
           mapStore.render();
         }
 
-        const filename = `${timeFormatter(t)} Ma.json`;
+        const name = `${timeFormatter(t)} Ma`;
+
+        await saveCanvas(mapStore.canvas!, `${name}.png`);
+        //@ts-ignore
+        infomapStore.tree!.name = name;
+        const filename = `${name}.json`;
         zip.file(filename, JSON.stringify(infomapStore.tree)!);
       }
 

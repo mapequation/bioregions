@@ -8,3 +8,17 @@ export function saveString(
   const blob = new Blob([content], { type });
   saveAs(blob, filename);
 }
+
+export async function saveCanvas(canvas: HTMLCanvasElement, filename?: string) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob: Blob | null) => {
+      if (blob == null) {
+        return reject(`Can't save canvas to image`);
+      }
+      if (filename) {
+        saveAs(blob, filename);
+      }
+      resolve(blob);
+    });
+  });
+}
