@@ -116,44 +116,93 @@ export function getIntersectingBranches(tree: PhyloNode, time: number) {
 
 export type HistogramDataPoint = {
   t: number;
-  numBranches: number;
+  value: number;
+  count: number;
 };
-export function getTreeHistogram(
+
+type AccumulatedTreeDataOptions = {
+  getNodeData: (n: PhyloNode) => number;
+  initialValue: number;
+  minTime?: number;
+}
+
+export function getAccumulatedTreeData(
   tree: PhyloNode,
-  { minTime = 0.01 }: { minTime?: number } = {},
+  {
+    getNodeData,
+    initialValue,
+    minTime = 0.01,
+  }: AccumulatedTreeDataOptions,
 ) {
-  const timePoints: { t: number; isBranching: boolean }[] = [];
+  const timePoints: HistogramDataPoint[] = [];
   visitTreeDepthFirstPreOrder(tree, (node) => {
-    if (node.isLeaf && isEqual(node.time, 1, minTime / 10)) {
-      return;
-    }
-    const isBranching = !node.isLeaf;
-    timePoints.push({ t: node.time, isBranching });
+    // if (node.isLeaf && isEqual(node.time, 1, minTime / 10)) {
+    //   return;
+    // }
+    timePoints.push({ t: node.time, value: getNodeData(node), count: 1 });
   });
   // Sort on time
   timePoints.sort((a, b) => a.t - b.t);
+  // Sparsify
   const histogram: HistogramDataPoint[] = [];
-  let numBranches = 1;
+  let value = initialValue;
+  histogram.push({ t: 0, value: initialValue, count: 1 });
   let previousTime = 0;
-  let numSkippedPoints = 0;
+  let count = 0;
   for (let i = 0; i < timePoints.length; ++i) {
-    const { t, isBranching } = timePoints[i];
-    if (i > 0 && t - previousTime < minTime) {
-      numBranches += isBranching ? 1 : -1;
-      ++numSkippedPoints;
+    const { t, value: dValue } = timePoints[i];
+    ++count;
+    if (i > 0 && i + 1 < timePoints.length && t - previousTime < minTime) {
+      value += dValue;
       continue;
     }
     previousTime = t;
-    if (numSkippedPoints > 0) {
-      numBranches += isBranching ? 1 : -1;
-      histogram.push({ t, numBranches });
-      numSkippedPoints = 0;
-    } else {
-      histogram.push({ t, numBranches });
-      numBranches += isBranching ? 1 : -1;
-      histogram.push({ t, numBranches });
-    }
+    value += dValue;
+    histogram.push({ t, value, count });
+    count = 0;
   }
-  histogram.push({ t: 1, numBranches });
+  // histogram.push({ t: 1, value, count: 0 });
+  return histogram;
+}
+
+type TreeHistogramOptions = {
+  getNodeData: (n: PhyloNode) => number;
+  numBins: number;
+}
+
+export function getTreeHistogram(
+  tree: PhyloNode,
+  {
+    getNodeData,
+    numBins = 100
+  }: TreeHistogramOptions,
+) {
+  const timePoints: HistogramDataPoint[] = [];
+  const binSize = 1/numBins;
+  visitTreeDepthFirstPreOrder(tree, (node) => {
+    // if (node.isLeaf && isEqual(node.time, 1, binSize / 10)) {
+    //   return;
+    // }
+    timePoints.push({ t: node.time, value: getNodeData(node), count: 1 });
+  });
+  // Sort on time
+  timePoints.sort((a, b) => a.t - b.t);
+  // Bin
+  const histogram: HistogramDataPoint[] = [];
+  let value = 0;
+  let previousTime = -2*binSize;
+  let count = 0;
+  for (let i = 0; i < timePoints.length; ++i) {
+    const { t, value: dValue } = timePoints[i];
+    value += dValue;
+    ++count;
+    if (i + 1 < timePoints.length && t - previousTime < binSize) {
+      continue;
+    }
+    previousTime = t;
+    histogram.push({ t, value, count });
+    count = 0;
+    value = 0;
+  }
   return histogram;
 }

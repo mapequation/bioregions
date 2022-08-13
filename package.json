@@ -11,7 +11,7 @@
     "@fontsource/open-sans": "^4.5.8",
     "@fontsource/philosopher": "^4.5.5",
     "@mapequation/c3": "^1.1.1",
-    "@mapequation/infomap": "^2.3.0",
+    "@mapequation/infomap": "^2.6.0",
     "@phylocanvas/phylocanvas.gl": "^1.43.0",
     "@turf/boolean-intersects": "^6.5.0",
     "@turf/turf": "^6.5.0",

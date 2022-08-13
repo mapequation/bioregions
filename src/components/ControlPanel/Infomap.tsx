@@ -18,12 +18,15 @@ import {
   SliderFilledTrack,
   SliderThumb,
   HStack,
+  Flex,
+  Box,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
 import NetworkSize from './NetworkSize';
 import { useStore } from '../../store';
+import DualTreeHistogram from '../DualTreeHistogram';
 
 export default observer(function Infomap() {
   const { infomapStore, treeStore, mapStore } = useStore();
@@ -73,12 +76,43 @@ export default observer(function Infomap() {
           }
         />
       </FormControl>
-      <TreeHistogram
-        data={treeStore.histogram}
+      <DualTreeHistogram
+        dataLeft={treeStore.lineagesThroughTime}
+        dataRight={infomapStore.linkWeightThroughTime}
         formatTime={treeStore.timeFormatter}
-        isDisabled={!infomapStore.includeTreeInNetwork}
+        isDisabled={!infomapStore.network}
+        labelLeft="Lineages through time"
+        labelRight="Accumulated tree weight"
+        yScaleRight="log"
+        stepRight={false}
+        yTickFormatRight=".2p"
+        yMinRight={0.0005}
       />
-      <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
+
+      <FormControl
+        display="flex"
+        w="100%"
+        alignItems="center"
+        isDisabled={!infomapStore.includeTreeInNetwork}
+      >
+        <FormLabel htmlFor="useWholeTree" mb="0">
+          Integrate whole tree
+        </FormLabel>
+        <Spacer />
+        <Switch
+          id="useWholeTree"
+          isChecked={infomapStore.useWholeTree}
+          onChange={() =>
+            infomapStore.setUseWholeTree(!infomapStore.useWholeTree, true)
+          }
+        />
+      </FormControl>
+      <FormControl
+        w="100%"
+        isDisabled={
+          !infomapStore.includeTreeInNetwork || infomapStore.useWholeTree
+        }
+      >
         <FormLabel htmlFor="integrationTime" mb="0">
           Integration time
         </FormLabel>
@@ -86,7 +120,9 @@ export default observer(function Infomap() {
           <Slider
             w={200}
             isReversed
-            isDisabled={!infomapStore.includeTreeInNetwork}
+            isDisabled={
+              !infomapStore.includeTreeInNetwork || infomapStore.useWholeTree
+            }
             focusThumbOnChange={false}
             value={1 - infomapStore.integrationTime}
             onChange={(value) => infomapStore.setIntegrationTime(1 - value)}
@@ -103,7 +139,7 @@ export default observer(function Infomap() {
             <SliderThumb fontSize="sm" boxSize="16px" />
           </Slider>
           <Spacer />
-          <Tag size="sm">{format('.2r')(infomapStore.integrationTime)}</Tag>
+          <Tag size="sm">{format('.2~r')(infomapStore.integrationTime)}</Tag>
         </HStack>
       </FormControl>
       <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>
@@ -130,7 +166,7 @@ export default observer(function Infomap() {
             <SliderThumb fontSize="sm" boxSize="16px" />
           </Slider>
           <Spacer />
-          <Tag size="sm">{format('.2r')(infomapStore.segregationTime)}</Tag>
+          <Tag size="sm">{format('.2~r')(infomapStore.segregationTime)}</Tag>
         </HStack>
       </FormControl>
       <FormControl w="100%" isDisabled={!infomapStore.includeTreeInNetwork}>

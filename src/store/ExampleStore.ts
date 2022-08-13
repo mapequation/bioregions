@@ -112,12 +112,12 @@ export default class ExampleStore {
     }
     await speciesStore.load(example.speciesFile);
 
-    mapStore.setRenderType('heatmap');
-    mapStore.render();
+    // mapStore.setRenderType('heatmap');
+    // mapStore.render();
 
-    await infomapStore.run();
+    // await infomapStore.run();
 
-    mapStore.setRenderType('bioregions');
-    mapStore.render();
+    // mapStore.setRenderType('bioregions');
+    // mapStore.render();
   }
 }

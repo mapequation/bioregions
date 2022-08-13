@@ -11,23 +11,32 @@ type TreeHistogramProps = {
   data: HistogramDataPoint[];
   isDisabled?: boolean;
   formatTime?: (time: number) => string;
+  title: string;
+  yScale?: 'linear' | 'log';
 };
 
 export default observer(function TreeHistogram({
   data,
   isDisabled,
   formatTime,
+  title = '',
+  yScale = 'log',
 }: TreeHistogramProps) {
+  const yLog = yScale !== 'linear';
+  const x = (d: HistogramDataPoint) => d.t;
+  const y = (d: HistogramDataPoint) => d.value;
   const xDomain = [0, 1] as [number, number];
 
-  const maxNumBranches = max(
-    data ?? [{ numBranches: 1 }],
-    (d) => d.numBranches,
-  );
-  // data.length > 0 ? data[data.length - 1].numBranches : 1;
-  const yDomain = [1, maxNumBranches] as [number, number];
-
-  const d = data.map((d) => [d.t, d.numBranches] as [number, number]);
+  const maxValue = max(data ?? [{ value: 1 }], (d) => d.value);
+  let minValue = data.length > 0 ? data[0].value : 0;
+  if (yLog && data.length > 0 && data[0].value == 0) {
+    let i = 1;
+    while (data[i].value == 0) {
+      ++i;
+    }
+    minValue = data[i].value;
+  }
+  const yDomain = [minValue, maxValue] as [number, number];
 
   const color = !isDisabled
     ? 'var(--chakra-colors-gray-800)'
@@ -42,7 +51,7 @@ export default observer(function TreeHistogram({
   const yTickFormat = format('.1s');
 
   return (
-    <Box textAlign="center" pt={4} h={300}>
+    <Box textAlign="center" h={300}>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="100%"
@@ -59,14 +68,14 @@ export default observer(function TreeHistogram({
           fontSize="6px"
           // textAnchor="middle"
         >
-          Lineages through time
+          {title}
         </text>
         <AxisLeft
           domain={yDomain}
           xRange={xRange}
           yRange={yRange}
-          label=""
-          yLog
+          label="Lineages through time"
+          yLog={yLog}
           tickFormat={yTickFormat}
         />
         <AxisBottom
@@ -76,13 +85,15 @@ export default observer(function TreeHistogram({
           label="Time"
           tickFormat={formatTime}
         />
-        <Curve
-          data={d}
+        <Curve<HistogramDataPoint>
+          data={data}
+          xAccessor={x}
+          yAccessor={y}
           xDomain={xDomain}
           yDomain={yDomain}
           xRange={xRange}
           yRange={yRange}
-          yLog
+          yLog={yLog}
           strokeWidth="1"
           stroke={
             !isDisabled

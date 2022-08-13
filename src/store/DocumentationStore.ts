@@ -37,17 +37,17 @@ export default class DocumentationStore {
     speciesStore.binner.setCellCapacity(0, 100);
     infomapStore.setIntegrationTime(0.8);
     infomapStore.setSegregationTime(0);
-    infomapStore.setTreeWeightBalance(0.75);
+    // infomapStore.setTreeWeightBalance(0.75);
     infomapStore.setNumTrials(1);
     infomapStore.setMultilayerLogTime(false);
 
     await this.loadData();
 
-    try {
-      await infomapStore.run();
-    } catch (err: any) {
-      console.error('Error running Infomap on demo:', err);
-    }
+    // try {
+    //   await infomapStore.run();
+    // } catch (err: any) {
+    //   console.error('Error running Infomap on demo:', err);
+    // }
   }
 
   async loadData() {

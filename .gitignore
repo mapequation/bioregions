@@ -4,3 +4,4 @@ node_modules
 /public/data
 .vscode
 temp
+.DS_Store

@@ -1,11 +1,12 @@
 import { makeObservable, observable, action, computed } from 'mobx';
 import type RootStore from './RootStore';
-import { prepareTree, parseTree, getTreeHistogram } from '../utils/tree';
+import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
 import { format } from 'd3-format';
 import { scaleLinear } from 'd3-scale';
+import { isEqual } from '../utils/math';
 
 export type TreeNode = {
   data: PhyloNode;
@@ -36,7 +37,7 @@ export default class TreeStore {
       weightParameter: observable,
       numLeafNodes: observable,
       numNodes: computed,
-      histogram: computed,
+      lineagesThroughTime: computed,
       timeFormatter: computed,
     });
   }
@@ -51,11 +52,14 @@ export default class TreeStore {
     return this.treeNodeMap.size;
   }
 
-  get histogram() {
+  get lineagesThroughTime() {
     if (this.tree === null) {
       return [];
     }
-    return getTreeHistogram(this.tree);
+    return getAccumulatedTreeData(this.tree, {
+      getNodeData: (node) => !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
+      initialValue: 1,
+    });
   }
 
   /**

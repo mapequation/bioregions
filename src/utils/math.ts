@@ -35,3 +35,16 @@ export function interpolateLog(x: number, a: number = 1) {
   // return Math.log(x + 1) / LN2;
   return Math.log(a * x + 1) / Math.log(a + 1);
 }
+
+/**
+ * Tsallis entropy of uniform probability distribution
+ * @param k Number of categories
+ * @param q Order parameter
+ * @returns Tsallis entropy of uniform distribution
+ */
+export function uniformTsallisEntropy(k: number, q: number) {
+  if (isEqual(q, 1)) {
+    return Math.log(k);
+  }
+  return 1/(q - 1) * (1 - Math.pow(k, 1-q));
+}

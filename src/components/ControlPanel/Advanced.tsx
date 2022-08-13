@@ -158,7 +158,7 @@ export default observer(function Advanced() {
   const format2r = format('.2r');
   const formatPercent = (value: number) => `${format2r(value * 100)}%`;
 
-  const actualTreeWeightBalance = !infomapStore.network
+  const weightFromAncestralNodes = !infomapStore.network
     ? ''
     : `${(
         (100 * infomapStore.network.sumInternalTaxonLinkWeight) /
@@ -207,7 +207,9 @@ export default observer(function Advanced() {
             <Stat label="Codelength savings">
               {formatPercent(infomapStore.relativeCodelengthSavings)}
             </Stat>
-            <Stat label="Actual tree weight">{actualTreeWeightBalance}</Stat>
+            <Stat label="Ancestral network weight">
+              {weightFromAncestralNodes}
+            </Stat>
           </VStack>
 
           <Flex
@@ -246,22 +248,26 @@ export default observer(function Advanced() {
             alignItems="center"
             style={{ display: 'flex' }}
           >
-            <Box w="50%">Markov time</Box>
+            <Box w="50%">Spatial normalization order</Box>
             <Slider
               w="50%"
               focusThumbOnChange={false}
-              value={infomapStore.args.markovTime}
-              onChange={(value) => infomapStore.setMarkovTime(value)}
-              onChangeEnd={(value) => infomapStore.setMarkovTime(value)}
+              value={infomapStore.spatialNormalizationOrderForTree}
+              onChange={(value) =>
+                infomapStore.setSpatialNormalizationOrderForTree(value)
+              }
+              onChangeEnd={(value) =>
+                infomapStore.setSpatialNormalizationOrderForTree(value, true)
+              }
               min={0}
               max={3}
-              step={0.01}
+              step={0.1}
             >
               <SliderTrack>
                 <SliderFilledTrack />
               </SliderTrack>
               <SliderThumb fontSize="sm" boxSize="32px">
-                {infomapStore.args.markovTime}
+                {infomapStore.spatialNormalizationOrderForTree}
               </SliderThumb>
             </Slider>
           </Flex>
@@ -349,6 +355,80 @@ export default observer(function Advanced() {
               }
             />
           </FormControl>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="variableMarkovTime" mb="0">
+              Variable Markov time
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="variableMarkovTime"
+              isChecked={infomapStore.args.variableMarkovTime}
+              onChange={() =>
+                infomapStore.setVariableMarkovTime(
+                  !infomapStore.args.variableMarkovTime,
+                )
+              }
+            />
+          </FormControl>
+
+          <Flex
+            w="100%"
+            mt={4}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box w="50%">Variable Markov time strength</Box>
+            <Slider
+              w="50%"
+              focusThumbOnChange={false}
+              value={infomapStore.args.variableMarkovTimeStrength}
+              onChange={(value) =>
+                infomapStore.setVariableMarkovTimeStrength(value)
+              }
+              onChangeEnd={(value) =>
+                infomapStore.setVariableMarkovTimeStrength(value)
+              }
+              min={0}
+              max={3}
+              step={0.01}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" boxSize="32px">
+                {infomapStore.args.variableMarkovTimeStrength}
+              </SliderThumb>
+            </Slider>
+          </Flex>
+
+          <Flex
+            w="100%"
+            mt={4}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box w="50%">Markov time</Box>
+            <Slider
+              w="50%"
+              focusThumbOnChange={false}
+              value={infomapStore.args.markovTime}
+              onChange={(value) => infomapStore.setMarkovTime(value)}
+              onChangeEnd={(value) => infomapStore.setMarkovTime(value)}
+              min={0}
+              max={3}
+              step={0.01}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" boxSize="32px">
+                {infomapStore.args.markovTime}
+              </SliderThumb>
+            </Slider>
+          </Flex>
 
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="regularized" mb="0">

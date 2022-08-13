@@ -17,6 +17,7 @@ export interface DemoTreeProps {
   beta?: number;
   hideTree?: boolean;
   hideSegregation?: boolean;
+  hideIntegration?: boolean;
 }
 
 type Name = string;
@@ -25,7 +26,7 @@ type Pos = [number, number];
 const layout = d3.tree<PhyloNode>();
 
 export default observer(
-  ({ beta, hideTree, hideSegregation }: DemoTreeProps) => {
+  ({ beta, hideTree, hideSegregation, hideIntegration }: DemoTreeProps) => {
     const demoStore = useDemoStore();
     const hiddenLinkColor = useColorModeValue('#eeeeee', '#333333');
     const hiddenNodeFillColor = useColorModeValue('#ffffff', '#000000');
@@ -43,12 +44,13 @@ export default observer(
     }
 
     const {
-      integrationTime,
+      integrationTime: _intTime,
       segregationTime: _segTime,
       network,
       // haveStateNodes,
     } = infomapStore;
     const haveStateNodes = network && 'states' in network;
+    const integrationTime = hideIntegration ? 1 : _intTime;
     const segregationTime = hideSegregation ? 0 : _segTime;
     const networkLinks = network ? network.links : [];
     const blue = 'hsl(213, 55%, 53%)';
@@ -601,19 +603,21 @@ export default observer(
                     x1={100 * segregationTime}
                     y1={7}
                     x2={100 * segregationTime}
-                    y2={127}
+                    y2={hideIntegration ? 122 : 127}
                     stroke={red}
                     strokeDasharray="1.1,2"
                   />
                 )}
-                <line
-                  x1={100 * integrationTime}
-                  y1={7}
-                  x2={100 * integrationTime}
-                  y2={122}
-                  stroke={blue}
-                  strokeDasharray="0.4,1.3"
-                />
+                {!hideIntegration && (
+                  <line
+                    x1={100 * integrationTime}
+                    y1={7}
+                    x2={100 * integrationTime}
+                    y2={122}
+                    stroke={blue}
+                    strokeDasharray="0.4,1.3"
+                  />
+                )}
               </g>
 
               <g
@@ -638,20 +642,24 @@ export default observer(
                       : (1 - segregationTime).toFixed(2)}
                   </text>
                 )}
-                <text
-                  x={100 * integrationTime}
-                  y={106}
-                  dx={2}
-                  dy={
-                    Math.abs(segregationTime - integrationTime) < 0.35 ? -2 : 0
-                  }
-                  fill={blue}
-                >
-                  Integration time{' '}
-                  {integrationTime === 0 || integrationTime === 1
-                    ? 1 - integrationTime
-                    : (1 - integrationTime).toFixed(2)}
-                </text>
+                {!hideIntegration && (
+                  <text
+                    x={100 * integrationTime}
+                    y={106}
+                    dx={2}
+                    dy={
+                      Math.abs(segregationTime - integrationTime) < 0.35
+                        ? -2
+                        : 0
+                    }
+                    fill={blue}
+                  >
+                    Integration time{' '}
+                    {integrationTime === 0 || integrationTime === 1
+                      ? 1 - integrationTime
+                      : (1 - integrationTime).toFixed(2)}
+                  </text>
+                )}
               </g>
             </g>
           )}
