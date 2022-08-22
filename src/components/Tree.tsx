@@ -12,6 +12,8 @@ type TreeProps = {
   fillColour?: string;
   strokeColour?: string;
   fontColour?: string;
+  styleNodeEdges?: boolean;
+  styles?: { [key: string]: { fillColour: string; shape?: any } };
 };
 
 export default class PhylocanvasTree extends React.Component<TreeProps> {

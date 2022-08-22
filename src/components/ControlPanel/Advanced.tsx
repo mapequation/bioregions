@@ -215,6 +215,7 @@ export default observer(function Advanced() {
           <Flex
             w="100%"
             mt={4}
+            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
@@ -244,11 +245,12 @@ export default observer(function Advanced() {
           <Flex
             w="100%"
             mt={4}
+            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
           >
-            <Box w="50%">Spatial normalization order</Box>
+            <Box w="50%">Rarity order</Box>
             <Slider
               w="50%"
               focusThumbOnChange={false}
@@ -268,6 +270,40 @@ export default observer(function Advanced() {
               </SliderTrack>
               <SliderThumb fontSize="sm" boxSize="32px">
                 {infomapStore.spatialNormalizationOrderForTree}
+              </SliderThumb>
+            </Slider>
+          </Flex>
+
+          <Flex
+            w="100%"
+            mt={4}
+            pr={5}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box w="50%">Link threshold</Box>
+            <Slider
+              w="50%"
+              focusThumbOnChange={false}
+              value={infomapStore.linkWeightThresholdExponent}
+              onChange={(value) =>
+                infomapStore.setLinkWeightThresholdExponent(value)
+              }
+              onChangeEnd={(value) =>
+                infomapStore.setLinkWeightThresholdExponent(value, true)
+              }
+              min={-9}
+              max={-0.1}
+              step={0.1}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" h="32px" w="40px">
+                {format('.0e')(
+                  Math.pow(10, infomapStore.linkWeightThresholdExponent),
+                )}
               </SliderThumb>
             </Slider>
           </Flex>
@@ -375,6 +411,7 @@ export default observer(function Advanced() {
           <Flex
             w="100%"
             mt={4}
+            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
@@ -406,6 +443,7 @@ export default observer(function Advanced() {
           <Flex
             w="100%"
             mt={4}
+            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
@@ -448,7 +486,7 @@ export default observer(function Advanced() {
             animateOpacity
             style={{ width: '100%' }}
           >
-            <Flex w="100%" pl={2} py={2}>
+            <Flex w="100%" pl={2} py={2} pr={5}>
               <Box w="50%" fontSize="0.9rem">
                 Strength
               </Box>

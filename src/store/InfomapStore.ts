@@ -41,14 +41,14 @@ export interface BioregionsStateNetworkData extends BioregionsNetworkData {
 
 export interface BioregionsNetwork
   extends Required<BipartiteNetwork>,
-    BioregionsNetworkData {}
+  BioregionsNetworkData { }
 export interface BioregionsStateNetwork
   extends Required<StateNetwork>,
-    BioregionsStateNetworkData {}
+  BioregionsStateNetworkData { }
 
 export interface BioregionsMultilayerNetwork
   extends MultilayerIntraInterNetwork,
-    BioregionsNetworkData {
+  BioregionsNetworkData {
   layers: { id: number; name: string }[];
 }
 
@@ -167,6 +167,16 @@ export default class InfomapStore {
     },
   );
 
+  linkWeightThresholdExponent: number = -6;
+  setLinkWeightThresholdExponent = action(
+    (value: number, updateNetwork: boolean = false) => {
+      this.linkWeightThresholdExponent = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -191,6 +201,7 @@ export default class InfomapStore {
       includeTreeInNetwork: observable,
       alwaysUseStateNetwork: observable,
       uniformTreeLinks: observable,
+      linkWeightThresholdExponent: observable,
       integrationTime: observable,
       segregationTime: observable,
       haveStateNetwork: computed,
@@ -222,7 +233,7 @@ export default class InfomapStore {
     this.clearBioregions();
   });
 
-  clearBioregions = () => {};
+  clearBioregions = () => { };
 
   get haveStateNetwork() {
     return (
@@ -394,7 +405,7 @@ export default class InfomapStore {
     });
     // return getTreeHistogram(phyloTree, {
     //   getNodeData: (node) => phyloNodeWeights.get(node.name) ?? 0,
-    //   numBins: 30,
+    //   numBins: 100,
     // });
   }
 
@@ -623,11 +634,14 @@ export default class InfomapStore {
       return id;
     };
 
+    const linkWeightThreshold = Math.pow(10, this.linkWeightThresholdExponent);
+
     const addLink = (
       sourceName: string, // taxon
       targetName: string, // grid cell
       weight: number,
     ) => {
+      if (weight < linkWeightThreshold) { return; }
       const source = addNode(sourceName, false);
       const target = addNode(targetName, true);
       network.links.push({ source, target, weight });
@@ -667,6 +681,9 @@ export default class InfomapStore {
           const weight =
             (includeTree ? 1 - treeWeightBalance : 1) /
             cells.size ** diversityOrder;
+          if (weight < linkWeightThreshold) {
+            continue;
+          }
           sumNonTreeLinkWeight += weight;
           // TODO: No need to use the map here if not include tree, will not aggregate on species level
           const outLinks = linkMap.has(name)
@@ -773,6 +790,9 @@ export default class InfomapStore {
 
       for (const [cellId, count] of links.entries()) {
         const weight = count * interpolationWeight;
+        if (weight < linkWeightThreshold) {
+          continue;
+        }
         // Aggregate weight
         const currentWeight = outLinks.get(cellId) ?? 0;
         outLinks.set(cellId, currentWeight + weight);
@@ -824,7 +844,7 @@ export default class InfomapStore {
           parentLinks.numLinks === 0
             ? 1
             : (childWeight * degreeRatio) /
-              (1 + childWeight * relativeDegreeDifference);
+            (1 + childWeight * relativeDegreeDifference);
         const adjustedParentWeight = 1 - adjustedChildWeight;
 
         addLinks(parent, parentLinks.links, adjustedParentWeight);
@@ -842,13 +862,10 @@ export default class InfomapStore {
     // sumTreeLinkWeight * scale = totalTreeStrength
     const scale = totalTreeStrength / sumTreeLinkWeight;
     console.log(
-      `Sum non-tree link weight: ${
-        sumNonTreeLinkWeight
-      }, tree link weight: ${sumTreeLinkWeight} -> ${
-        sumTreeLinkWeight * scale
-      } => balance: ${
-        (sumTreeLinkWeight * scale) /
-        (sumTreeLinkWeight * scale + sumNonTreeLinkWeight)
+      `Sum non-tree link weight: ${sumNonTreeLinkWeight
+      }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
+      } => balance: ${(sumTreeLinkWeight * scale) /
+      (sumTreeLinkWeight * scale + sumNonTreeLinkWeight)
       }`,
     );
     network.sumTreeLinkWeight = sumTreeLinkWeight * scale;
@@ -1111,6 +1128,7 @@ export default class InfomapStore {
     type StateLinkMap = Map<TaxonName, StateCellOutLinks>;
 
     const linkMap = new Map<TaxonName, StateCellOutLinks>();
+    const linkWeightThreshold = Math.pow(10, this.linkWeightThresholdExponent);
 
     const addStateLink = (
       taxonName: string,
@@ -1134,6 +1152,8 @@ export default class InfomapStore {
     const addLinksToNetwork = () => {
       for (const [taxonName, outLinks] of linkMap.entries()) {
         for (const [stateCellName, weight] of outLinks) {
+          if (weight < linkWeightThreshold) { return; }
+
           const taxonNode = phyloStateNodes.get(taxonName)!;
           const cellStateNode = cellStateNodes.get(stateCellName)!;
 
@@ -1186,6 +1206,7 @@ export default class InfomapStore {
 
         const unscaledWeight = 1 / cells.size ** diversityOrder;
         const weight = (1 - treeWeightBalance) * unscaledWeight;
+        // TODO: Don't aggregate weight if below threshold or weight aggregated?
         unscaledNonTreeStrength += unscaledWeight * cells.size;
 
         for (const cellId of cells.values()) {
@@ -1296,6 +1317,7 @@ export default class InfomapStore {
         for (const [cellId, memWeight] of memLinks.entries()) {
           const weight =
             (memWeight * interpolationWeight) / links.size ** diversityOrder;
+          // TODO: Limit links here due to linkWeightThreshold or can be aggregated?
           sumTreeLinkWeight += weight;
           addStateLink(taxonName, cellId, memTaxonName, weight, treeLinks);
         }
@@ -1359,14 +1381,11 @@ export default class InfomapStore {
     const scale = totalTreeStrength / sumTreeLinkWeight;
 
     console.log(
-      `Sum non-tree link weight: ${
-        unscaledNonTreeStrength * (1 - treeWeightBalance)
-      }, tree link weight: ${sumTreeLinkWeight} -> ${
-        sumTreeLinkWeight * scale
-      } => balance: ${
-        (sumTreeLinkWeight * scale) /
-        (sumTreeLinkWeight * scale +
-          unscaledNonTreeStrength * (1 - treeWeightBalance))
+      `Sum non-tree link weight: ${unscaledNonTreeStrength * (1 - treeWeightBalance)
+      }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
+      } => balance: ${(sumTreeLinkWeight * scale) /
+      (sumTreeLinkWeight * scale +
+        unscaledNonTreeStrength * (1 - treeWeightBalance))
       }`,
     );
 

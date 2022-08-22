@@ -7,6 +7,9 @@ import type { PhyloNode } from '../utils/tree';
 import { format } from 'd3-format';
 import { scaleLinear } from 'd3-scale';
 import { isEqual } from '../utils/math';
+// @ts-ignore
+import PhylocanvasGL from '@phylocanvas/phylocanvas.gl';
+
 
 export type TreeNode = {
   data: PhyloNode;
@@ -23,7 +26,7 @@ export default class TreeStore {
   treeString: string | null = null;
   numLeafNodes: number = 0;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
-  treeNodeMap = new Map<string, TreeNode>();
+  treeNodeMap = new Map<string, TreeNode>(); // name -> { data: PhyloNode, bioregionId: number }
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -38,6 +41,7 @@ export default class TreeStore {
       numLeafNodes: observable,
       numNodes: computed,
       lineagesThroughTime: computed,
+      nodeStyles: computed,
       timeFormatter: computed,
     });
   }
@@ -60,6 +64,22 @@ export default class TreeStore {
       getNodeData: (node) => !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
       initialValue: 1,
     });
+  }
+
+  get nodeStyles() {
+    if (this.tree === null || this.rootStore.infomapStore.numBioregions === 0) {
+      return {};
+    }
+    const { colorBioregion } = this.rootStore.colorStore;
+    const styles: { [key: string]: { fillColour: string, shape?: any } } = {};
+    this.treeNodeMap.forEach((value, name) => {
+      if (name && value.bioregionId) {
+        styles[name] = {
+          fillColour: colorBioregion(value.bioregionId),
+        }
+      }
+    });
+    return styles;
   }
 
   /**

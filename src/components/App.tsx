@@ -43,6 +43,7 @@ export default observer(function App() {
                 fillColour={treeColor}
                 strokeColour={treeColor}
                 fontColour={treeColor}
+                styles={treeStore.nodeStyles}
               />
             )}
             <Statistics />

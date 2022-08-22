@@ -29,6 +29,7 @@ import Modal from '../ControlPanel/Modal';
 import Export from '../ControlPanel/Export';
 import TreeHistogram from '../TreeHistogram';
 import DualTreeHistogram from '../DualTreeHistogram';
+import PhylocanvasTree from '../Tree';
 // import TreeHistogram from '../TreeHistogram';
 
 export default observer(() => {
@@ -161,7 +162,7 @@ export default observer(() => {
               <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
             </Slider>
             <Tag size="sm" ml={4}>
-              {format('.2p')(infomapStore.treeWeightBalance)}
+              {format('.2~p')(infomapStore.treeWeightBalance)}
             </Tag>
           </FormControl>
           <FormControl display="flex" w="100%" alignItems="center">
@@ -203,8 +204,23 @@ export default observer(() => {
             labelRight="Accumulated link weight"
             yScaleRight="linear"
             stepRight={false}
-            yTickFormatRight=".2p"
+            yTickFormatRight=".2~p"
           />
+          {/* {treeStore.treeString != null && infomapStore.haveBioregions && (
+            <PhylocanvasTree
+              source={treeStore.treeString}
+              size={{ width: 600, height: 400 }}
+              showLabels
+              showLeafLabels
+              interactive
+              nodeSize={20}
+              styleNodeEdges={true}
+              // fillColour={treeColor}
+              // strokeColour={treeColor}
+              // fontColour={treeColor}
+              styles={treeStore.nodeStyles}
+            />
+          )} */}
         </Box>
       </Flex>
 
@@ -296,7 +312,7 @@ export default observer(() => {
 
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="spatialNormalization" mb="0">
-            Spatial normalization order
+            Rarity order
           </FormLabel>
           <Spacer />
           <Slider

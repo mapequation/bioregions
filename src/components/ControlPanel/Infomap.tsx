@@ -85,7 +85,7 @@ export default observer(function Infomap() {
         labelRight="Accumulated tree weight"
         yScaleRight="log"
         stepRight={false}
-        yTickFormatRight=".2p"
+        yTickFormatRight=".2~p"
         yMinRight={0.0005}
       />
 
