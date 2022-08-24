@@ -20,6 +20,7 @@ import {
   Flex,
   Box,
   Collapse,
+  Tag,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import { range, format } from 'd3';
@@ -159,7 +160,7 @@ export default observer(function Advanced() {
   const formatPercent = (value: number) => `${format2r(value * 100)}%`;
 
   const weightFromAncestralNodes = !infomapStore.network
-    ? ''
+    ? '-'
     : `${(
         (100 * infomapStore.network.sumInternalTaxonLinkWeight) /
         (infomapStore.network.sumInternalTaxonLinkWeight +
@@ -175,6 +176,7 @@ export default observer(function Advanced() {
         <Spacer />
         <Switch
           id="showAdvanced"
+          mr={1}
           isChecked={show}
           onChange={() => setShow(!show)}
         />
@@ -215,14 +217,13 @@ export default observer(function Advanced() {
           <Flex
             w="100%"
             mt={4}
-            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
           >
-            <Box w="50%">Diversity order</Box>
+            <Box minW={110}>Diversity order</Box>
             <Slider
-              w="50%"
+              mx={1}
               focusThumbOnChange={false}
               value={infomapStore.diversityOrder}
               onChange={(value) => infomapStore.setDiversityOrder(value)}
@@ -236,23 +237,23 @@ export default observer(function Advanced() {
               <SliderTrack>
                 <SliderFilledTrack />
               </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {infomapStore.diversityOrder}
-              </SliderThumb>
+              <SliderThumb fontSize="sm" boxSize="16px" />
             </Slider>
+            <Tag size="sm" minW={50}>
+              {infomapStore.diversityOrder}
+            </Tag>
           </Flex>
 
           <Flex
             w="100%"
             mt={4}
-            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
           >
-            <Box w="50%">Rarity order</Box>
+            <Box minW={110}>Rarity strength</Box>
             <Slider
-              w="50%"
+              mx={1}
               focusThumbOnChange={false}
               value={infomapStore.spatialNormalizationOrderForTree}
               onChange={(value) =>
@@ -268,23 +269,17 @@ export default observer(function Advanced() {
               <SliderTrack>
                 <SliderFilledTrack />
               </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {infomapStore.spatialNormalizationOrderForTree}
-              </SliderThumb>
+              <SliderThumb fontSize="sm" boxSize="16px" />
             </Slider>
+            <Tag size="sm" minW={50}>
+              {infomapStore.spatialNormalizationOrderForTree}
+            </Tag>
           </Flex>
 
-          <Flex
-            w="100%"
-            mt={4}
-            pr={5}
-            gap={2}
-            alignItems="center"
-            style={{ display: 'flex' }}
-          >
-            <Box w="50%">Link threshold</Box>
+          <Flex w="100%" mt={4} gap={2} alignItems="center">
+            <Box minW={110}>Link threshold</Box>
             <Slider
-              w="50%"
+              mx={1}
               focusThumbOnChange={false}
               value={infomapStore.linkWeightThresholdExponent}
               onChange={(value) =>
@@ -300,12 +295,13 @@ export default observer(function Advanced() {
               <SliderTrack>
                 <SliderFilledTrack />
               </SliderTrack>
-              <SliderThumb fontSize="sm" h="32px" w="40px">
-                {format('.0e')(
-                  Math.pow(10, infomapStore.linkWeightThresholdExponent),
-                )}
-              </SliderThumb>
+              <SliderThumb fontSize="sm" boxSize="16px" />
             </Slider>
+            <Tag size="sm" minW={50}>
+              {format('.0e')(
+                Math.pow(10, infomapStore.linkWeightThresholdExponent),
+              )}
+            </Tag>
           </Flex>
 
           <FormControl display="flex" w="100%" alignItems="center">
@@ -315,6 +311,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="alwaysUseStateNetwork"
+              mr={1}
               isChecked={infomapStore.alwaysUseStateNetwork}
               onChange={() =>
                 infomapStore.setAlwaysUseStateNetwork(
@@ -331,6 +328,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="patchSparseCells"
+              mr={1}
               isChecked={speciesStore.binner.patchSparseCells}
               onChange={() => {
                 speciesStore.binner.setPatchSparseCells(
@@ -353,6 +351,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="skipAdjustBipartiteFlow"
+              mr={1}
               isChecked={!infomapStore.args.skipAdjustBipartiteFlow}
               onChange={() =>
                 infomapStore.setSkipAdjustBipartiteFlow(
@@ -369,6 +368,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="twoLevel"
+              mr={1}
               isChecked={infomapStore.args.twoLevel}
               onChange={() => {
                 infomapStore.setTwoLevel(!infomapStore.args.twoLevel);
@@ -383,6 +383,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="entropyCorrected"
+              mr={1}
               isChecked={infomapStore.args.entropyCorrected}
               onChange={() =>
                 infomapStore.setEntropyCorrected(
@@ -392,65 +393,16 @@ export default observer(function Advanced() {
             />
           </FormControl>
 
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="variableMarkovTime" mb="0">
-              Variable Markov time
-            </FormLabel>
-            <Spacer />
-            <Switch
-              id="variableMarkovTime"
-              isChecked={infomapStore.args.variableMarkovTime}
-              onChange={() =>
-                infomapStore.setVariableMarkovTime(
-                  !infomapStore.args.variableMarkovTime,
-                )
-              }
-            />
-          </FormControl>
-
           <Flex
             w="100%"
             mt={4}
-            pr={5}
             gap={2}
             alignItems="center"
             style={{ display: 'flex' }}
           >
-            <Box w="50%">Variable Markov time strength</Box>
+            <Box minW="110px">Markov time</Box>
             <Slider
-              w="50%"
-              focusThumbOnChange={false}
-              value={infomapStore.args.variableMarkovTimeStrength}
-              onChange={(value) =>
-                infomapStore.setVariableMarkovTimeStrength(value)
-              }
-              onChangeEnd={(value) =>
-                infomapStore.setVariableMarkovTimeStrength(value)
-              }
-              min={0}
-              max={3}
-              step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {infomapStore.args.variableMarkovTimeStrength}
-              </SliderThumb>
-            </Slider>
-          </Flex>
-
-          <Flex
-            w="100%"
-            mt={4}
-            pr={5}
-            gap={2}
-            alignItems="center"
-            style={{ display: 'flex' }}
-          >
-            <Box w="50%">Markov time</Box>
-            <Slider
-              w="50%"
+              mx={1}
               focusThumbOnChange={false}
               value={infomapStore.args.markovTime}
               onChange={(value) => infomapStore.setMarkovTime(value)}
@@ -462,11 +414,61 @@ export default observer(function Advanced() {
               <SliderTrack>
                 <SliderFilledTrack />
               </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {infomapStore.args.markovTime}
-              </SliderThumb>
+              <SliderThumb fontSize="sm" boxSize="16px" />
             </Slider>
+            <Tag size="sm" minW={50}>
+              {infomapStore.args.markovTime}
+            </Tag>
           </Flex>
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="variableMarkovTime" mb="0">
+              Variable Markov time
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="variableMarkovTime"
+              mr={1}
+              isChecked={infomapStore.args.variableMarkovTime}
+              onChange={() =>
+                infomapStore.setVariableMarkovTime(
+                  !infomapStore.args.variableMarkovTime,
+                )
+              }
+            />
+          </FormControl>
+
+          <Collapse
+            in={infomapStore.args.variableMarkovTime}
+            animateOpacity
+            style={{ width: '100%', marginTop: 0 }}
+          >
+            <Flex w="100%" pl="10px" py={2}>
+              <Box minW="100px" fontSize="0.9rem">
+                Strength
+              </Box>
+              <Slider
+                mx={3}
+                isDisabled={!infomapStore.args.variableMarkovTime}
+                focusThumbOnChange={false}
+                value={infomapStore.args.variableMarkovTimeStrength}
+                onChange={(value) =>
+                  infomapStore.setVariableMarkovTimeStrength(value)
+                }
+                min={0}
+                max={3}
+                step={0.01}
+              >
+                <SliderTrack>
+                  <SliderFilledTrack />
+                </SliderTrack>
+                <SliderThumb fontSize="sm" boxSize="16px" />
+              </Slider>
+              <Tag size="sm" minW={50}>
+                {infomapStore.args.variableMarkovTimeStrength}
+              </Tag>
+            </Flex>
+          </Collapse>
 
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="regularized" mb="0">
@@ -475,6 +477,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="regularized"
+              mr={1}
               isChecked={infomapStore.args.regularized}
               onChange={() =>
                 infomapStore.setRegularized(!infomapStore.args.regularized)
@@ -484,14 +487,14 @@ export default observer(function Advanced() {
           <Collapse
             in={infomapStore.args.regularized}
             animateOpacity
-            style={{ width: '100%' }}
+            style={{ width: '100%', marginTop: 0 }}
           >
-            <Flex w="100%" pl={2} py={2} pr={5}>
-              <Box w="50%" fontSize="0.9rem">
+            <Flex w="100%" pl="10px" py={2}>
+              <Box minW="100px" fontSize="0.9rem">
                 Strength
               </Box>
               <Slider
-                w="50%"
+                mx={3}
                 isDisabled={!infomapStore.args.regularized}
                 focusThumbOnChange={false}
                 value={infomapStore.args.regularizationStrength}
@@ -500,15 +503,16 @@ export default observer(function Advanced() {
                 }
                 min={0}
                 max={5}
-                step={0.01}
+                step={0.1}
               >
                 <SliderTrack>
                   <SliderFilledTrack />
                 </SliderTrack>
-                <SliderThumb fontSize="sm" boxSize="32px">
-                  {infomapStore.args.regularizationStrength}
-                </SliderThumb>
+                <SliderThumb fontSize="sm" boxSize="16px" />
               </Slider>
+              <Tag size="sm" minW={50}>
+                {infomapStore.args.regularizationStrength}
+              </Tag>
             </Flex>
           </Collapse>
 
@@ -519,6 +523,7 @@ export default observer(function Advanced() {
             <Spacer />
             <Switch
               id="render-data-on-zoom"
+              mr={1}
               isChecked={mapStore.renderDataWhileZooming}
               onChange={() =>
                 mapStore.setRenderDataWhileZooming(

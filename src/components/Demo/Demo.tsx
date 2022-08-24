@@ -312,12 +312,12 @@ export default observer(() => {
 
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="spatialNormalization" mb="0">
-            Rarity order
+            Rarity strength
           </FormLabel>
           <Spacer />
           <Slider
             id="spatialNormalization"
-            w="30%"
+            w={100}
             focusThumbOnChange={false}
             value={infomapStore.spatialNormalizationOrderForTree}
             onChange={(value) =>
@@ -329,14 +329,14 @@ export default observer(() => {
             }}
             min={0}
             max={3}
-            step={0.01}
+            step={0.1}
           >
             <SliderTrack>
               <SliderFilledTrack />
             </SliderTrack>
             <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
           </Slider>
-          <Tag size="sm" ml={4}>
+          <Tag size="sm" ml={4} w={10}>
             {infomapStore.spatialNormalizationOrderForTree}
           </Tag>
         </FormControl>

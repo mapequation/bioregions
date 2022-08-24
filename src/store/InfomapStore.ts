@@ -388,9 +388,9 @@ export default class InfomapStore {
     this.linkWeightThroughTime = data;
   }
 
-  calcLinkWeightThroughTime(network: BioregionsNetwork | BioregionsStateNetwork) {
+  calcLinkWeightThroughTime(network: BioregionsNetwork | BioregionsStateNetwork | null) {
     const phyloTree = this.rootStore.treeStore.tree;
-    if (phyloTree === null) {
+    if (phyloTree === null || network === null) {
       return [];
     }
     const phyloNodeWeights: Map<string, number> = new Map();
@@ -460,7 +460,7 @@ export default class InfomapStore {
     this.setIsRunning();
     this.setCurrentTrial(0);
 
-    const network = this.updateNetwork();
+    const network = this.updateNetwork()!;
 
     const args = { ...this.args };
     // const isStateNetwork = 'states' in network;
@@ -566,6 +566,9 @@ export default class InfomapStore {
   };
 
   updateNetwork = () => {
+    if (!this.network && this.cells.length === 0) {
+      return null;
+    }
     console.time('createNetwork');
     const network = this.createNetwork();
     console.timeEnd('createNetwork');
