@@ -311,6 +311,35 @@ export default observer(() => {
         </FormControl>
 
         <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="moduleLevel" mb="0">
+            Module level
+          </FormLabel>
+          <Spacer />
+          <Slider
+            id="moduleLevel"
+            w={100}
+            focusThumbOnChange={false}
+            value={infomapStore.moduleLevel}
+            onChange={(value) => infomapStore.setModuleLevel(value)}
+            onChangeEnd={(value) => {
+              infomapStore.setModuleLevel(value, true);
+              infomapStore.run();
+            }}
+            min={0}
+            max={infomapStore.numLevels - 2}
+            step={1}
+          >
+            <SliderTrack>
+              <SliderFilledTrack />
+            </SliderTrack>
+            <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
+          </Slider>
+          <Tag size="sm" ml={4} w={10}>
+            {infomapStore.moduleLevel}
+          </Tag>
+        </FormControl>
+
+        <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="spatialNormalization" mb="0">
             Rarity strength
           </FormLabel>

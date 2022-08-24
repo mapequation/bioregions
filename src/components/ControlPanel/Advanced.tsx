@@ -363,7 +363,7 @@ export default observer(function Advanced() {
 
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="twoLevel" mb="0">
-              One level of bioregions
+              No nested bioregions
             </FormLabel>
             <Spacer />
             <Switch

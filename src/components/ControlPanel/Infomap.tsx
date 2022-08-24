@@ -250,6 +250,45 @@ export default observer(function Infomap() {
       >
         {infomapStore.numBioregions.toLocaleString()}
       </Stat>
+
+      {infomapStore.numLevels > 2 && (
+        <>
+          <Stat label="Hierarchical levels">{infomapStore.numLevels - 1}</Stat>
+
+          <Flex
+            w="100%"
+            mt={4}
+            gap={2}
+            alignItems="center"
+            style={{ display: 'flex' }}
+          >
+            <Box minW={110}>Module level</Box>
+            <Slider
+              mx={1}
+              focusThumbOnChange={false}
+              value={infomapStore.moduleLevel}
+              onChange={(value) => infomapStore.setModuleLevel(value)}
+              onChangeEnd={(value) => {
+                infomapStore.setModuleLevel(value, true);
+                if (mapStore.renderType === 'bioregions') {
+                  mapStore.render();
+                }
+              }}
+              min={0}
+              max={infomapStore.numLevels - 2}
+              step={1}
+            >
+              <SliderTrack>
+                <SliderFilledTrack />
+              </SliderTrack>
+              <SliderThumb fontSize="sm" boxSize="16px" />
+            </Slider>
+            <Tag size="sm" minW={50}>
+              {infomapStore.moduleLevel}
+            </Tag>
+          </Flex>
+        </>
+      )}
     </VStack>
   );
 });

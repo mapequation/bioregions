@@ -19,6 +19,7 @@ import {
 import type { PhyloNode } from '../utils/tree';
 import { isEqual, uniformTsallisEntropy } from '../utils/math';
 import { range } from '../utils/range';
+import { max, min } from 'd3-array';
 
 export interface BioregionsNetworkData {
   nodeIdMap: { [name: string]: number };
@@ -204,6 +205,7 @@ export default class InfomapStore {
       linkWeightThresholdExponent: observable,
       integrationTime: observable,
       segregationTime: observable,
+      moduleLevel: observable,
       haveStateNetwork: computed,
       numBioregions: computed,
       haveBioregions: computed,
@@ -379,6 +381,14 @@ export default class InfomapStore {
     }
   });
 
+  moduleLevel: number = 0;
+  setModuleLevel = action((value: number, updateModules = false) => {
+    this.moduleLevel = value;
+    if (updateModules) {
+      this.createBioregions();
+    }
+  })
+
   get cells() {
     return this.rootStore.speciesStore.binner.cells;
   }
@@ -417,17 +427,13 @@ export default class InfomapStore {
       tree_states: treeStatesString,
     } = result;
 
-    this.clearBioregions();
-
     const haveStates = statesTree != null;
     this.haveStateNodes = haveStates;
-    const infomapResult = haveStates ? statesTree : tree;
+    const infomapResult = haveStates ? statesTree : tree ?? null;
 
-    if (infomapResult) {
-      this.createBioregions(infomapResult, haveStates);
-      this.setTree(infomapResult);
-      this.setTreeString(haveStates ? treeStatesString : treeString);
-    }
+    this.createBioregions(infomapResult);
+    this.setTree(infomapResult);
+    this.setTreeString(haveStates ? treeStatesString : treeString);
 
     console.timeEnd('infomap');
     this.setIsRunning(false);
@@ -1470,7 +1476,15 @@ export default class InfomapStore {
     return lines.join('\n');
   }
 
-  createBioregions(tree: Tree | StateTree, haveStates: boolean) {
+  createBioregions(tree?: Tree | StateTree | null) {
+    if (!tree) {
+      tree = this.tree;
+    }
+    this.clearBioregions();
+    if (!tree || !tree.nodes || tree.nodes.length === 0) {
+      return;
+    }
+    const haveStates = 'stateId' in tree.nodes[0];
     if (haveStates) {
       this.createStateBioregions(tree as StateTree);
     } else {
@@ -1480,11 +1494,16 @@ export default class InfomapStore {
 
   createNonStateBioregions(tree: Tree) {
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells } = this;
+    const { cells, moduleLevel: _moduleLevel } = this;
     this.rootStore.clearBioregions();
 
+    const moduleLevel = min([_moduleLevel, tree.numLevels - 1])!;
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+    // TODO: Some modules may have only tree nodes, reduce to number of modules containing grid cells
+    console.log(`Create ${numModules} bioregions on level ${moduleLevel}`);
+
     const bioregions: Bioregion[] = Array.from(
-      { length: tree.numTopModules },
+      { length: numModules },
       () => ({
         flow: 0,
         bioregionId: 0,
@@ -1504,7 +1523,8 @@ export default class InfomapStore {
     }
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      const bioregionId = node.path[0];
+      // const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
       const bioregion = bioregions[bioregionId - 1];
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;
