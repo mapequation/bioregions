@@ -18,7 +18,7 @@ interface CanvasDatum {
   radius: number;
 }
 
-export interface IMapRenderer {}
+export interface IMapRenderer { }
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
@@ -60,8 +60,8 @@ export default class MapStore {
   height: number = 600;
 
   renderBatchIndex: number = 0;
-
   renderType: RenderType = 'records';
+  clipToLand: boolean = true;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -72,6 +72,7 @@ export default class MapStore {
       setRenderDataWhileZooming: action,
       projectionName: observable,
       renderType: observable,
+      clipToLand: observable,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -86,6 +87,12 @@ export default class MapStore {
   setRenderType(type: RenderType) {
     this.renderType = type;
   }
+
+  setClipToLand = action((value: boolean) => {
+    if (value === this.clipToLand) { return; }
+    this.clipToLand = value;
+    this.render();
+  })
 
   get multiPoints() {
     return this.rootStore.speciesStore.multiPointCollection
@@ -281,7 +288,7 @@ export default class MapStore {
 
     this.context2d.save();
 
-    this.renderLand();
+    this.renderLand({ clip: this.clipToLand });
     this.renderData();
 
     this.context2d.restore();

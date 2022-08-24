@@ -78,17 +78,16 @@ export default observer(function Map() {
           </Button>
         </ButtonGroup>
       </Flex>
-      <FormControl
-        display="flex"
-        w="100%"
-        alignItems="center"
-        isDisabled={true}
-      >
+      <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="clip" mb="0">
           Clip to land
         </FormLabel>
         <Spacer />
-        <Switch id="clip" defaultChecked isDisabled={true} />
+        <Switch
+          id="clip"
+          isChecked={mapStore.clipToLand}
+          onChange={() => mapStore.setClipToLand(!mapStore.clipToLand)}
+        />
       </FormControl>
 
       <ColorSettings />
