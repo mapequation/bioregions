@@ -1,3 +1,4 @@
+import React from 'react';
 import { observer } from 'mobx-react';
 import { Box, useColorModeValue } from '@chakra-ui/react';
 import {
@@ -18,6 +19,8 @@ export interface DemoTreeProps {
   hideTree?: boolean;
   hideSegregation?: boolean;
   hideIntegration?: boolean;
+  svgRef: React.RefObject<SVGSVGElement>;
+  crop?: boolean;
 }
 
 type Name = string;
@@ -26,7 +29,14 @@ type Pos = [number, number];
 const layout = d3.tree<PhyloNode>();
 
 export default observer(
-  ({ beta, hideTree, hideSegregation, hideIntegration }: DemoTreeProps) => {
+  ({
+    beta,
+    hideTree,
+    hideSegregation,
+    hideIntegration,
+    svgRef,
+    crop,
+  }: DemoTreeProps) => {
     const demoStore = useDemoStore();
     const hiddenLinkColor = useColorModeValue('#eeeeee', '#333333');
     const hiddenNodeFillColor = useColorModeValue('#ffffff', '#000000');
@@ -382,9 +392,10 @@ export default observer(
         <svg
           width="100%"
           height="100%"
-          viewBox="-4 -4 144 144"
+          viewBox={crop ? '-4 -5 144 100' : '-4 -4 144 144'}
           style={{ color: '#666' }}
           preserveAspectRatio="xMidYMid meet"
+          ref={svgRef}
         >
           <g className="help" opacity={0.5}>
             <g transform={`translate(${speciesX},-4)`}>

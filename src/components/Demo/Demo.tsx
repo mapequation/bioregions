@@ -23,7 +23,7 @@ import { format } from 'd3-format';
 import DemoTree from './DemoTree';
 import { useDemoStore } from '../../store';
 import Stat from '../Stat';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import NetworkSize from '../ControlPanel/NetworkSize';
 import Modal from '../ControlPanel/Modal';
 import Export from '../ControlPanel/Export';
@@ -31,19 +31,64 @@ import TreeHistogram from '../TreeHistogram';
 import DualTreeHistogram from '../DualTreeHistogram';
 import PhylocanvasTree from '../Tree';
 // import TreeHistogram from '../TreeHistogram';
+import { saveSvg } from '../../utils/exporter';
 
 export default observer(() => {
   const demoStore = useDemoStore();
   const [beta, setBeta] = useState(0.75);
-  const [hideTree, setHideTree] = useState(false);
-  const [hideSegregation, setHideSegregation] = useState(false);
+  const [segregateBranches, setSegregateBranches] = useState(false);
+  const [segregationTimeBackup, setSegregationTimeBackup] = useState(0.0);
   const [isInfomapOutputOpen, setIsInfomapOutputOpen] = useState(false);
+  const [crop, setCrop] = useState(false);
   const { treeStore, infomapStore, speciesStore } = demoStore;
   const { tree } = treeStore;
+  const svgRef = useRef<SVGSVGElement>(null);
 
   if (!tree || !speciesStore.loaded) {
     return null;
   }
+
+  const _saveSvg = () => {
+    if (!svgRef.current) {
+      return;
+    }
+
+    // const svg = svgRef.current;
+    // const vb = svg.viewBox.baseVal;
+    // const croppedViewbox = {x: vb.x, y: vb.y - 4, width: vb.width, height: vb.height - 40 } as DOMRect;
+    // svg.viewBox.baseVal = croppedViewbox;
+    let svgContent = svgRef.current.outerHTML;
+
+    // let svgContent = $svg.parent().html();
+    // // console.log("svgContent before:", svgContent.substring(0, 250));
+    svgContent = svgContent.replace(
+      /^<svg/,
+      [
+        '<svg',
+        'xmlns="http://www.w3.org/2000/svg"',
+        'xmlns:xlink="http://www.w3.org/1999/xlink"',
+        'version="1.1"',
+      ].join(' '),
+    );
+    // Safari inserts NS1/NS2 namespaces as xlink is not defined within the svg html
+    svgContent = svgContent.replace('NS1', 'xlink');
+    svgContent = svgContent.replace('NS2', 'xlink');
+
+    console.log(svgContent);
+
+    saveSvg('bioregions-demo.svg', svgContent);
+  };
+
+  const onClickSaveSvg = () => {
+    if (!svgRef.current) {
+      return;
+    }
+    setCrop(true);
+    setTimeout(() => {
+      _saveSvg();
+      setCrop(false);
+    }, 100);
+  };
 
   const runMultilayerInfomap = async () => {
     if (infomapStore.isRunning) {
@@ -78,9 +123,11 @@ export default observer(() => {
       <Box w="60%" pos="relative">
         <DemoTree
           beta={beta}
-          hideTree={hideTree}
-          hideSegregation={hideSegregation}
+          hideTree={!infomapStore.includeTreeInNetwork}
+          hideSegregation={!segregateBranches}
           hideIntegration={hideIntegration}
+          svgRef={svgRef}
+          crop={crop}
         />
         <Box pos="relative" top={-24} mb={-24}>
           {!hideIntegration && (
@@ -105,7 +152,7 @@ export default observer(() => {
               <SliderThumb />
             </Slider>
           )}
-          {!hideSegregation && (
+          {segregateBranches && (
             <Slider
               w={`${100 * (100 / 144)}%`}
               ml={`${400 / 144}%`}
@@ -166,6 +213,20 @@ export default observer(() => {
             </Tag>
           </FormControl>
           <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="includeTree" mb="0">
+              Include tree
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="includeTree"
+              isChecked={infomapStore.includeTreeInNetwork}
+              onChange={() => {
+                infomapStore.setIncludeTree(!infomapStore.includeTreeInNetwork);
+                infomapStore.run();
+              }}
+            />
+          </FormControl>
+          <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="useWholeTree" mb="0">
               Integrate whole tree
             </FormLabel>
@@ -176,6 +237,27 @@ export default observer(() => {
               onChange={() => {
                 infomapStore.setUseWholeTree(!infomapStore.useWholeTree, true);
                 infomapStore.run();
+              }}
+            />
+          </FormControl>
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="segregateBranches" mb="0">
+              Segregate branches
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="segregateBranches"
+              isChecked={segregateBranches}
+              onChange={() => {
+                if (segregateBranches) {
+                  setSegregationTimeBackup(infomapStore.segregationTime);
+                  infomapStore.setSegregationTime(0, true);
+                  infomapStore.run();
+                } else {
+                  infomapStore.setSegregationTime(segregationTimeBackup, true);
+                  infomapStore.run();
+                }
+                setSegregateBranches(!segregateBranches);
               }}
             />
           </FormControl>
@@ -287,28 +369,6 @@ export default observer(() => {
             </FormControl>
           </>
         )}
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="hideTree" mb="0">
-            Hide tree
-          </FormLabel>
-          <Spacer />
-          <Switch
-            id="hideTree"
-            isChecked={hideTree}
-            onChange={() => setHideTree(!hideTree)}
-          />
-        </FormControl>
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="hideSegregation" mb="0">
-            Hide segregation
-          </FormLabel>
-          <Spacer />
-          <Switch
-            id="hideSegregation"
-            isChecked={hideSegregation}
-            onChange={() => setHideSegregation(!hideSegregation)}
-          />
-        </FormControl>
 
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="moduleLevel" mb="0">
@@ -424,6 +484,7 @@ export default observer(() => {
         </Modal>
 
         <Export rootStore={demoStore} />
+        <Button onClick={onClickSaveSvg}>Save svg</Button>
       </VStack>
     </Box>
   );
