@@ -46,6 +46,7 @@ export default observer(
     const {
       integrationTime: _intTime,
       segregationTime: _segTime,
+      treeWeightBalance,
       network,
       // haveStateNodes,
     } = infomapStore;
@@ -81,11 +82,25 @@ export default observer(
 
     integratingBranches.forEach((branch: Branch) => {
       branchColorMap.set(getBranchId(branch), blue);
-      fillColorMap.set(branch.parent.uid, interpolateBlue(branch.childWeight));
+      fillColorMap.set(
+        branch.parent.uid,
+        interpolateBlue(1 - treeWeightBalance * (1 - branch.childWeight)),
+      );
       fillColorMap.set(
         branch.child.uid,
-        interpolateBlue(1 - branch.childWeight),
+        interpolateBlue(
+          branch.child.isLeaf
+            ? treeWeightBalance * (1 - branch.childWeight)
+            : 1 - treeWeightBalance * branch.childWeight,
+        ),
       );
+    });
+
+    // Add some blue on possibly remaining nodes not connected to intersecting branches
+    treeStore.treeNodeMap.forEach((node) => {
+      if (node.data.isLeaf && !fillColorMap.has(node.data.uid)) {
+        fillColorMap.set(node.data.uid, interpolateBlue(treeWeightBalance));
+      }
     });
 
     if (!hideSegregation) {
