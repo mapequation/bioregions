@@ -5,15 +5,18 @@ import {
   Heading,
   useColorModeValue,
   Box,
+  IconButton,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
+import { controlPanelWidth } from './ControlPanel/ControlPanel';
 import PhylocanvasTree from './Tree';
 import { useStore } from '../store';
 import Statistics from './Statistics';
 import Logo from './ControlPanel/Logo';
 import Documentation from './Documentation';
+import ColorMode from './ControlPanel/ColorMode';
 
 export default observer(function App() {
   const { treeStore } = useStore();
@@ -25,32 +28,34 @@ export default observer(function App() {
   // <Box sx={{ bg, backgroundSize: '10px 10px' }}>
   return (
     <Box>
-      <Container maxW="container.xl" pb={12}>
-        <Heading as="h1" size="xl" color="gray.700">
-          <Logo />
-        </Heading>
-        <HStack spacing="30px" alignItems="flex-start">
-          <ControlPanel />
-          <VStack flex={1}>
-            <WorldMap />
-            {treeStore.treeString != null && (
-              <PhylocanvasTree
-                source={treeStore.treeString}
-                size={{ width: 600, height: 400 }}
-                showLabels
-                showLeafLabels
-                interactive
-                fillColour={treeColor}
-                strokeColour={treeColor}
-                fontColour={treeColor}
-                styles={treeStore.nodeStyles}
-              />
-            )}
-            <Statistics />
-          </VStack>
-        </HStack>
+      <Box position="fixed" right={0}>
+        <ColorMode />
+      </Box>
+      <ControlPanel />
+      <VStack
+        flex={1}
+        alignItems="flex-start"
+        ml={controlPanelWidth + 25}
+        pt={5}
+        pb={12}
+      >
+        <WorldMap />
+        {treeStore.treeString != null && (
+          <PhylocanvasTree
+            source={treeStore.treeString}
+            size={{ width: 600, height: 400 }}
+            showLabels
+            showLeafLabels
+            interactive
+            fillColour={treeColor}
+            strokeColour={treeColor}
+            fontColour={treeColor}
+            styles={treeStore.nodeStyles}
+          />
+        )}
+        <Statistics />
         <Documentation />
-      </Container>
+      </VStack>
     </Box>
   );
 });

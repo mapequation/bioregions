@@ -17,9 +17,10 @@ const Section = ({
   return (
     <Box
       border="gray.800"
-      borderWidth={1}
-      rounded="md"
-      shadow="base"
+      borderWidth={0}
+      borderTopWidth={2}
+      // rounded="md"
+      // shadow="base"
       px={4}
       py={4}
       mt={4}

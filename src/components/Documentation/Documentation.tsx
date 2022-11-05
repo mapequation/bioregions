@@ -1,14 +1,16 @@
-import { Container, Heading } from '@chakra-ui/react';
+import { Container, Heading, useColorModeValue } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import Demo from '../Demo';
 
 export default observer(function Documentation() {
   // const { documentationStore } = useStore();
+  const color = useColorModeValue('hsl(0, 0%, 33%)', 'hsl(0, 0%, 60%)');
   return (
-    <Container maxW="container.xl" id="documentation">
-      <Heading as="h2">Documentation</Heading>
-      <Container></Container>
+    <Container alignItems="flex-start" maxW="container.xl" id="documentation">
+      <Heading as="h2" fontFamily="brand" color={color}>
+        Documentation
+      </Heading>
       <Algorithm />
     </Container>
   );

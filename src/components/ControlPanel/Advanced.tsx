@@ -556,6 +556,13 @@ export default observer(function Advanced() {
             </NumberInput>
           </FormControl>
 
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel mb="0">
+              <Button size="sm" w="100%" onClick={() => mapStore.render}>
+                Force render
+              </Button>
+            </FormLabel>
+          </FormControl>
           <FormControl
             display="flex"
             w="100%"

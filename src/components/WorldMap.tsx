@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { useStore } from '../store/';
+import { Box } from '@chakra-ui/react';
 
 type WorldMapProps = {
   width?: number;
@@ -23,8 +24,8 @@ export default observer(function WorldMap({
   }, [mapStore]);
 
   return (
-    <div>
+    <Box ml={4}>
       <canvas width={width} height={height} ref={canvasRef} />
-    </div>
+    </Box>
   );
 });
