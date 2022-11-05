@@ -23,7 +23,7 @@ export default class QuadtreeGeoBinner {
   minCellSizeLog2: number = 0;
   cellCapacityRange = rangeArrayOneSignificant(0, 6, { inclusive: true });
   maxCellCapacity: number = 100;
-  minCellCapacity: number = 1;
+  minCellCapacity: number = 10;
   root: Cell | null = null;
   private _scale: number = 1; // Set to 60 to have sizes subdivided to eventually one minute
   _cells: Cell[] = [];
