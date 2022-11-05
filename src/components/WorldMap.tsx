@@ -3,17 +3,10 @@ import { observer } from 'mobx-react';
 import { useStore } from '../store/';
 import { Box } from '@chakra-ui/react';
 
-type WorldMapProps = {
-  width?: number;
-  height?: number;
-};
-
-export default observer(function WorldMap({
-  width = 800,
-  height = 600,
-}: WorldMapProps) {
+export default observer(function WorldMap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { mapStore } = useStore();
+  const { width, height } = mapStore;
 
   useEffect(() => {
     if (canvasRef.current === null) {

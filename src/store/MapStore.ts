@@ -57,8 +57,8 @@ export default class MapStore {
 
   geoPath: d3.GeoPath | null = null;
 
-  width: number = 800;
-  height: number = 600;
+  width: number = 1200;
+  height: number = 900;
 
   renderBatchIndex: number = 0;
   renderType: RenderType = 'records';
