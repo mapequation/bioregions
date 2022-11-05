@@ -1,7 +1,7 @@
 import { expose } from 'threads/worker';
 import { Observable, Subject } from 'threads/observable';
-import { ParseAsyncConfig, ParseResult } from 'papaparse';
-import { loadFile } from '../utils/loader';
+import { ParseResult } from 'papaparse';
+import { loadFile, ParseAsyncConfig } from '../utils/loader';
 import { extension } from '../utils/filename';
 import jszip from 'jszip';
 import * as shapefile from 'shapefile';

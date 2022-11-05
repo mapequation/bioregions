@@ -445,19 +445,19 @@ export default observer(function Advanced() {
           >
             <Flex w="100%" pl="10px" py={2}>
               <Box minW="100px" fontSize="0.9rem">
-                Strength
+                Damping
               </Box>
               <Slider
                 mx={3}
                 isDisabled={!infomapStore.args.variableMarkovTime}
                 focusThumbOnChange={false}
-                value={infomapStore.args.variableMarkovTimeStrength}
+                value={infomapStore.args.variableMarkovDamping}
                 onChange={(value) =>
-                  infomapStore.setVariableMarkovTimeStrength(value)
+                  infomapStore.setVariableMarkovDamping(value)
                 }
                 min={0}
                 max={3}
-                step={0.01}
+                step={0.1}
               >
                 <SliderTrack>
                   <SliderFilledTrack />
@@ -465,7 +465,7 @@ export default observer(function Advanced() {
                 <SliderThumb fontSize="sm" boxSize="16px" />
               </Slider>
               <Tag size="sm" minW={50}>
-                {infomapStore.args.variableMarkovTimeStrength}
+                {infomapStore.args.variableMarkovDamping}
               </Tag>
             </Flex>
           </Collapse>
@@ -516,23 +516,6 @@ export default observer(function Advanced() {
             </Flex>
           </Collapse>
 
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="render-data-on-zoom" mb="0">
-              Render data while zooming
-            </FormLabel>
-            <Spacer />
-            <Switch
-              id="render-data-on-zoom"
-              mr={1}
-              isChecked={mapStore.renderDataWhileZooming}
-              onChange={() =>
-                mapStore.setRenderDataWhileZooming(
-                  !mapStore.renderDataWhileZooming,
-                )
-              }
-            />
-          </FormControl>
-
           <FormControl
             display="flex"
             w="100%"
@@ -557,12 +540,30 @@ export default observer(function Advanced() {
           </FormControl>
 
           <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="render-data-on-zoom" mb="0">
+              Render data while zooming
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="render-data-on-zoom"
+              mr={1}
+              isChecked={mapStore.renderDataWhileZooming}
+              onChange={() =>
+                mapStore.setRenderDataWhileZooming(
+                  !mapStore.renderDataWhileZooming,
+                )
+              }
+            />
+          </FormControl>
+
+          <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel mb="0">
               <Button size="sm" w="100%" onClick={() => mapStore.render}>
                 Force render
               </Button>
             </FormLabel>
           </FormControl>
+
           <FormControl
             display="flex"
             w="100%"

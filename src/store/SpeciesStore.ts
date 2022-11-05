@@ -391,7 +391,7 @@ export default class SpeciesStore {
       mapStore.renderMultiPoint(multiPoint);
     });
 
-    await loader.next();
+    await (await loader).next();
     this.loadEnd();
     console.log(
       `Ignored ${ignoredRows.length} rows due to no name:`,
@@ -410,7 +410,7 @@ export default class SpeciesStore {
 
     const loader = this.loadShapefileInWorker(file, this.onFeatures, nameKey);
 
-    await loader.next();
+    await (await loader).next();
 
     await this.postLoad();
   }

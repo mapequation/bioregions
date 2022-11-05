@@ -1,14 +1,15 @@
 import Papa, {
-  ParseAsyncConfig,
   ParseLocalConfig,
   ParseRemoteConfig,
   ParseResult,
   ParseError,
 } from 'papaparse';
 
+export type ParseAsyncConfig<T = any, TInput = undefined> = ParseLocalConfig<T, TInput> | ParseRemoteConfig<T>;
+
 function loadLocalFile<T = any>(
   file: File,
-  args: ParseLocalConfig<T, File> = { complete: () => {} },
+  args: ParseLocalConfig<T, File> = { complete: () => { } },
 ) {
   Papa.parse<T, File>(file, {
     dynamicTyping: true,
@@ -22,7 +23,7 @@ function loadLocalFile<T = any>(
 
 function loadRemoteFile<T = any>(
   url: string,
-  args: Omit<ParseRemoteConfig<T>, 'download'> = { complete: () => {} },
+  args: Omit<ParseRemoteConfig<T>, 'download'> = { complete: () => { } },
 ) {
   //@ts-ignore
   Papa.parse<T, string>(url, {
@@ -38,7 +39,7 @@ function loadRemoteFile<T = any>(
 
 export function loadFile(
   file: string | File,
-  args: ParseAsyncConfig<any, File | string> = { complete: () => {} },
+  args: ParseAsyncConfig<any, File | string> = { complete: () => { } },
 ) {
   if (typeof file === 'string') {
     loadRemoteFile(file, args as ParseRemoteConfig<any>);
@@ -49,7 +50,7 @@ export function loadFile(
 
 export function preview(
   file: string | File,
-  args: ParseAsyncConfig<any, File | string> = { complete: () => {} },
+  args: ParseAsyncConfig<any, File | string> = { complete: () => { } },
 ) {
   loadFile(file, {
     preview: 10,
