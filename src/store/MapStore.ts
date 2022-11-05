@@ -25,17 +25,17 @@ export type RenderType = 'records' | 'heatmap' | 'bioregions';
 type GetGridColor = (cell: Cell) => string;
 
 export const PROJECTIONS = [
+  'geoNaturalEarth1',
   'geoOrthographic',
   'geoMercator',
-  'geoNaturalEarth1',
 ] as const;
 
 export type Projection = typeof PROJECTIONS[number];
 
 export const PROJECTIONNAME: Record<Projection, string> = {
+  geoNaturalEarth1: 'Natural Earth',
   geoOrthographic: 'Orthographic',
   geoMercator: 'Mercator',
-  geoNaturalEarth1: 'Natural Earth',
 } as const;
 
 export default class MapStore {
@@ -48,7 +48,7 @@ export default class MapStore {
 
   projectionName: Projection = PROJECTIONS[0];
   projection = d3[this.projectionName]().precision(0.1)!;
-  rotation: [number, number] = [40, 0]; // for orthographic projection
+  rotation: [number, number] = [0, 0]; // for orthographic projection
 
   canvas: HTMLCanvasElement | null = null;
   svg: SVGSVGElement | null = null;
