@@ -2,7 +2,7 @@ import { Button, VStack } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
-import { saveString } from '../../utils/exporter';
+import { saveCanvas, saveString } from '../../utils/exporter';
 
 interface ExportProps {
   rootStore?: RootStore;
@@ -10,7 +10,11 @@ interface ExportProps {
 
 export default observer(function Export({ rootStore }: ExportProps) {
   const _rootStore = useStore();
-  const { infomapStore, speciesStore } = rootStore ?? _rootStore;
+  const { infomapStore, speciesStore, mapStore } = rootStore ?? _rootStore;
+
+  const downloadMap = () => {
+    saveCanvas(mapStore.canvas!, `${speciesStore.name}.png`);
+  };
 
   const downloadInfomapTree = () => {
     if (!infomapStore.treeString) return;
@@ -44,6 +48,13 @@ export default observer(function Export({ rootStore }: ExportProps) {
 
   return (
     <VStack align="stretch">
+      <Button
+        size="sm"
+        isDisabled={!infomapStore.treeString}
+        onClick={downloadMap}
+      >
+        Download map
+      </Button>
       <Button
         size="sm"
         isDisabled={!infomapStore.treeString}
