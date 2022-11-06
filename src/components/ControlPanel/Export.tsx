@@ -10,16 +10,17 @@ interface ExportProps {
 
 export default observer(function Export({ rootStore }: ExportProps) {
   const _rootStore = useStore();
-  const { infomapStore, speciesStore, mapStore } = rootStore ?? _rootStore;
+  const { infomapStore, mapStore } = rootStore ?? _rootStore;
+  const { parameterName } = infomapStore;
 
   const downloadMap = () => {
-    saveCanvas(mapStore.canvas!, `${speciesStore.name}.png`);
+    saveCanvas(mapStore.canvas!, `${parameterName}.png`);
   };
 
   const downloadInfomapTree = () => {
     if (!infomapStore.treeString) return;
 
-    const filename = `${speciesStore.name}.tree`;
+    const filename = `${parameterName}.tree`;
     saveString(filename, infomapStore.treeString);
   };
 
@@ -27,7 +28,7 @@ export default observer(function Export({ rootStore }: ExportProps) {
     if (!infomapStore.tree) return;
 
     const suffix = infomapStore.haveStateNodes ? '_states' : '';
-    const filename = `${speciesStore.name}${suffix}.json`;
+    const filename = `${parameterName}${suffix}.json`;
     saveString(filename, JSON.stringify(infomapStore.tree));
   };
 
@@ -35,14 +36,14 @@ export default observer(function Export({ rootStore }: ExportProps) {
     if (!infomapStore.network) return;
 
     const _states = infomapStore.haveStateNetwork ? `_states` : '';
-    const filename = `${speciesStore.name}${_states}.net`;
+    const filename = `${parameterName}${_states}.net`;
     saveString(filename, infomapStore.serializeNetwork() ?? '');
   };
 
   const downloadMultilayerNetwork = () => {
     if (!infomapStore.multilayerNetwork) return;
 
-    const filename = `${speciesStore.name}_intra.net`;
+    const filename = `${parameterName}_intra.net`;
     saveString(filename, infomapStore.serializeMultilayerNetwork() ?? '');
   };
 

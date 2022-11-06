@@ -214,6 +214,7 @@ export default class InfomapStore {
       integrationTime: observable,
       segregationTime: observable,
       moduleLevel: observable,
+      parameterName: computed,
       haveStateNetwork: computed,
       numBioregions: computed,
       haveBioregions: computed,
@@ -244,6 +245,20 @@ export default class InfomapStore {
   });
 
   clearBioregions = () => { };
+
+  get parameterName() {
+    let name = this.rootStore.speciesStore.name;
+    if (this.includeTreeInNetwork) {
+      name = `${name}_${this.useWholeTree ? 't' : `it${this.integrationTime}`}_tw${this.treeWeightBalance}`;
+      if (this.segregationTime > 0) {
+        name = `${name}_st${this.segregationTime}`;
+      }
+    }
+    if (this.numLevels > 2) {
+      name = `${name}_l${this.moduleLevel}`;
+    }
+    return name;
+  }
 
   get haveStateNetwork() {
     return (
