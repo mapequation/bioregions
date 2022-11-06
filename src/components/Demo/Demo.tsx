@@ -370,6 +370,26 @@ export default observer(() => {
           </>
         )}
 
+        {!infomapStore.useWholeTree && (
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="useWeightedTreeNodeLinksIfTimeSlice" mb="0">
+              Weighted tree links
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="useWeightedTreeNodeLinksIfTimeSlice"
+              isChecked={infomapStore.useWeightedTreeNodeLinksIfTimeSlice}
+              onChange={() => {
+                infomapStore.setUseWeightedTreeNodeLinksIfTimeSlice(
+                  !infomapStore.useWeightedTreeNodeLinksIfTimeSlice,
+                  true,
+                );
+                infomapStore.run();
+              }}
+            />
+          </FormControl>
+        )}
+
         <FormControl display="flex" w="100%" alignItems="center">
           <FormLabel htmlFor="moduleLevel" mb="0">
             Module level
@@ -408,12 +428,12 @@ export default observer(() => {
             id="spatialNormalization"
             w={100}
             focusThumbOnChange={false}
-            value={infomapStore.spatialNormalizationOrderForTree}
+            value={infomapStore.spatialNormalizationOrder}
             onChange={(value) =>
-              infomapStore.setSpatialNormalizationOrderForTree(value)
+              infomapStore.setSpatialNormalizationOrder(value)
             }
             onChangeEnd={(value) => {
-              infomapStore.setSpatialNormalizationOrderForTree(value, true);
+              infomapStore.setSpatialNormalizationOrder(value, true);
               infomapStore.run();
             }}
             min={0}
@@ -426,7 +446,7 @@ export default observer(() => {
             <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
           </Slider>
           <Tag size="sm" ml={4} w={10}>
-            {infomapStore.spatialNormalizationOrderForTree}
+            {infomapStore.spatialNormalizationOrder}
           </Tag>
         </FormControl>
 

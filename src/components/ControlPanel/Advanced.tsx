@@ -214,35 +214,41 @@ export default observer(function Advanced() {
             </Stat>
           </VStack>
 
-          <Flex
-            w="100%"
-            mt={4}
-            gap={2}
-            alignItems="center"
-            style={{ display: 'flex' }}
-          >
-            <Box minW={110}>Diversity order</Box>
-            <Slider
-              mx={1}
-              focusThumbOnChange={false}
-              value={infomapStore.diversityOrder}
-              onChange={(value) => infomapStore.setDiversityOrder(value)}
-              onChangeEnd={(value) =>
-                infomapStore.setDiversityOrder(value, true)
+          {!infomapStore.useWholeTree && (
+            <FormControl display="flex" w="100%" alignItems="center">
+              <FormLabel htmlFor="useWeightedTreeNodeLinksIfTimeSlice" mb="0">
+                Weight ancestral nodes on rarity
+              </FormLabel>
+              <Spacer />
+              <Switch
+                id="useWeightedTreeNodeLinksIfTimeSlice"
+                mr={1}
+                isChecked={infomapStore.useWeightedTreeNodeLinksIfTimeSlice}
+                onChange={() =>
+                  infomapStore.setUseWeightedTreeNodeLinksIfTimeSlice(
+                    !infomapStore.useWeightedTreeNodeLinksIfTimeSlice,
+                  )
+                }
+              />
+            </FormControl>
+          )}
+
+          <FormControl display="flex" w="100%" alignItems="center">
+            <FormLabel htmlFor="useWeightedSpecies" mb="0">
+              Weight species by rarity
+            </FormLabel>
+            <Spacer />
+            <Switch
+              id="useWeightedSpecies"
+              mr={1}
+              isChecked={infomapStore.useWeightedSpeciesLinks}
+              onChange={() =>
+                infomapStore.setUseWeightedSpeciesLinks(
+                  !infomapStore.useWeightedSpeciesLinks,
+                )
               }
-              min={0}
-              max={3}
-              step={0.1}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="16px" />
-            </Slider>
-            <Tag size="sm" minW={50}>
-              {infomapStore.diversityOrder}
-            </Tag>
-          </Flex>
+            />
+          </FormControl>
 
           <Flex
             w="100%"
@@ -255,12 +261,12 @@ export default observer(function Advanced() {
             <Slider
               mx={1}
               focusThumbOnChange={false}
-              value={infomapStore.spatialNormalizationOrderForTree}
+              value={infomapStore.spatialNormalizationOrder}
               onChange={(value) =>
-                infomapStore.setSpatialNormalizationOrderForTree(value)
+                infomapStore.setSpatialNormalizationOrder(value)
               }
               onChangeEnd={(value) =>
-                infomapStore.setSpatialNormalizationOrderForTree(value, true)
+                infomapStore.setSpatialNormalizationOrder(value, true)
               }
               min={0}
               max={3}
@@ -272,7 +278,7 @@ export default observer(function Advanced() {
               <SliderThumb fontSize="sm" boxSize="16px" />
             </Slider>
             <Tag size="sm" minW={50}>
-              {infomapStore.spatialNormalizationOrderForTree}
+              {infomapStore.spatialNormalizationOrder}
             </Tag>
           </Flex>
 
