@@ -1645,12 +1645,21 @@ export default class InfomapStore {
       return;
     }
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells } = this;
+    const { cells, moduleLevel: _moduleLevel } = this;
     this.rootStore.clearBioregions();
     console.log(tree);
 
+    if (!tree.nodes) {
+      console.error('No nodes!');
+      console.log(tree);
+      this.addError(`Infomap output error, please report.`);
+      return;
+    }
+    const moduleLevel = min([_moduleLevel, tree.numLevels - 1])!;
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+
     const bioregions: Bioregion[] = Array.from(
-      { length: tree.numTopModules },
+      { length: numModules },
       () => ({
         flow: 0,
         bioregionId: 0,
@@ -1661,18 +1670,11 @@ export default class InfomapStore {
         mostIndicative: [],
       }),
     );
-
-    if (!tree.nodes) {
-      console.error('No nodes!');
-      console.log(tree);
-      this.addError(`Infomap output error, please report.`);
-      return;
-    }
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
-      // const bioregionId = node.modules[0];
-      const bioregionId = node.path[0];
+      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not! Still issue?
+      // const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
       const bioregion = bioregions[bioregionId - 1];
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;
