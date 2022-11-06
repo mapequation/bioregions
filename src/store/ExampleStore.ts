@@ -5,6 +5,7 @@ interface ExampleSettings {
   maxCellSize?: number;
   minCellCapacity?: number;
   maxCellCapacity?: number;
+  includeTree?: boolean;
 }
 
 export interface Example {
@@ -82,8 +83,9 @@ export default class ExampleStore {
     examples.push({
       name: 'Global mammal occurrences',
       speciesFile: '/bioregions2/data/mammals_global.tsv',
+      treeFile: '/bioregions2/data/mammals_global.nwk',
       size: '56 MB',
-      settings: {},
+      settings: { includeTree: false },
     });
 
     return examples;
@@ -106,6 +108,9 @@ export default class ExampleStore {
 
     settings.maxCellCapacity != null &&
       speciesStore.binner.setMaxCellCapacity(settings.maxCellCapacity);
+
+    settings.includeTree != null &&
+      infomapStore.setIncludeTree(settings.includeTree)
 
     if (example.treeFile) {
       await treeStore.load(example.treeFile);
