@@ -128,7 +128,7 @@ export default class MapStore {
 
     ctx.beginPath();
     path(land);
-    ctx.fillStyle = '#777';
+    ctx.fillStyle = '#fff';
     ctx.fill();
 
     if (clip) {

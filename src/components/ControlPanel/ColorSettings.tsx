@@ -18,7 +18,7 @@ import { useStore } from '../../store';
 import { SchemeName } from '@mapequation/c3';
 
 export default observer(function Map() {
-  const { mapStore, colorStore } = useStore();
+  const { mapStore, colorStore, infomapStore } = useStore();
   const [showColorSettings, setShowColorSettings] = useState(false);
 
   const withRender = (
@@ -235,6 +235,23 @@ export default observer(function Map() {
               />
             </FormControl>
           </Flex>
+          {infomapStore.haveStateNetwork && (
+            <Flex mt={4}>
+              <FormControl display="flex" alignItems="center">
+                <FormLabel htmlFor="hideDominantOverlappingModule" mb="0">
+                  Hide dominant overlapping module
+                </FormLabel>
+                <Switch
+                  id="hideDominantOverlappingModule"
+                  isChecked={colorStore.hideDominantOverlappingModule}
+                  onChange={withRenderToggle(
+                    colorStore.toggleHideDominantOverlappingModule,
+                    'bioregions',
+                  )}
+                />
+              </FormControl>
+            </Flex>
+          )}
         </Box>
       )}
     </VStack>

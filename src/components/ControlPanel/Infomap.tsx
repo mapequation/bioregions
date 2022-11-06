@@ -93,7 +93,7 @@ export default observer(function Infomap() {
         display="flex"
         w="100%"
         alignItems="center"
-        isDisabled={!infomapStore.includeTreeInNetwork}
+        isDisabled={!infomapStore.includeTreeInNetwork && !treeStore.haveTree}
       >
         <FormLabel htmlFor="useWholeTree" mb="0">
           Integrate whole tree

@@ -19,6 +19,7 @@ export default class ColorStore {
   offset: number = 0;
   reverse: boolean = false;
   useFlow: boolean = true;
+  hideDominantOverlappingModule: boolean = false;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -91,6 +92,11 @@ export default class ColorStore {
         secondBioregionId,
         secondBioregionProportion,
       } = cell.overlappingBioregions;
+      if (this.hideDominantOverlappingModule) {
+        const color = Color(colorBioregion(secondBioregionId))!;
+        color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
+        return color.toString();
+      }
       const t =
         topBioregionProportion /
         (topBioregionProportion + secondBioregionProportion);
@@ -141,4 +147,7 @@ export default class ColorStore {
   toggleUseFlow = () => {
     this.useFlow = !this.useFlow;
   };
+  toggleHideDominantOverlappingModule = () => {
+    this.hideDominantOverlappingModule = !this.hideDominantOverlappingModule;
+  }
 }

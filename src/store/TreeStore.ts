@@ -39,6 +39,7 @@ export default class TreeStore {
       treeString: observable,
       weightParameter: observable,
       numLeafNodes: observable,
+      haveTree: computed,
       numNodes: computed,
       lineagesThroughTime: computed,
       nodeStyles: computed,
@@ -51,6 +52,10 @@ export default class TreeStore {
     this.tree = null;
     this.treeString = null;
   });
+
+  get haveTree() {
+    return this.tree != null;
+  }
 
   get numNodes() {
     return this.treeNodeMap.size;
