@@ -7,6 +7,7 @@ import type {
 } from '../../store/SpeciesStore';
 import type { ExtendedFeature } from 'd3';
 import OverlappingBioregions from './OverlappingBioregions';
+import ConnectedBioregions from './ConnectedBioregions';
 import type {
   QuadtreeNodeProperties,
   VisitCallback,
@@ -33,6 +34,7 @@ export default class Cell
   ] = [undefined, undefined, undefined, undefined];
   bioregionId: number = 0;
   overlappingBioregions: OverlappingBioregions = new OverlappingBioregions();
+  connectedBioregions: ConnectedBioregions = new ConnectedBioregions();
   path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc

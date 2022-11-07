@@ -31,7 +31,9 @@ export default class DocumentationStore {
   }
 
   async init() {
-    const { infomapStore, speciesStore } = this.demoStore;
+    const { infomapStore, speciesStore, mapStore } = this.demoStore;
+
+    mapStore.setColorModuleParticipation(false);
 
     speciesStore.binner.setCellSizeLog2(0, 1);
     speciesStore.binner.setCellCapacity(0, 100);

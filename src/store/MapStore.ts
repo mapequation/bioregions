@@ -63,6 +63,8 @@ export default class MapStore {
   renderBatchIndex: number = 0;
   renderType: RenderType = 'records';
   clipToLand: boolean = true;
+  colorModuleParticipation: boolean = true;
+  colorModuleParticipationStrength: number = 1.0;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -74,6 +76,8 @@ export default class MapStore {
       projectionName: observable,
       renderType: observable,
       clipToLand: observable,
+      colorModuleParticipation: observable,
+      colorModuleParticipationStrength: observable,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -97,6 +101,18 @@ export default class MapStore {
     if (value === this.clipToLand) { return; }
     this.clipToLand = value;
     this.render();
+  })
+
+  setColorModuleParticipation = action((value: boolean) => {
+    this.colorModuleParticipation = value;
+    this.render();
+  })
+
+  setColorModuleParticipationStrength = action((value: number, render: boolean = false) => {
+    this.colorModuleParticipationStrength = value;
+    if (render) {
+      this.render();
+    }
   })
 
   get multiPoints() {

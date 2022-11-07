@@ -128,6 +128,7 @@ export default class SpeciesStore {
     this.binner.cells.forEach((cell) => {
       cell.bioregionId = 0;
       cell.overlappingBioregions.clear();
+      cell.connectedBioregions.clear();
     });
     this.speciesMap.forEach((species) => {
       species.bioregionId = undefined;

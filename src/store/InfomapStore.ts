@@ -1600,6 +1600,29 @@ export default class InfomapStore {
       cell.bioregionId = bioregionId;
     });
 
+    console.time("Connected bioregions");
+    const network: BioregionsNetwork = this.network as BioregionsNetwork;
+    network.links.forEach(link => {
+      const w = link.weight ?? 1.0;
+      const cellId = network.nodes[link.target].id;
+      const taxonName = network.nodes[link.source].name!;
+      let speciesBioregionId = 0;
+      const species = speciesStore.speciesMap.get(taxonName);
+      if (species) {
+        speciesBioregionId = species.bioregionId!;
+      } else {
+        const treeNode = treeStore.treeNodeMap.get(taxonName);
+        speciesBioregionId = treeNode?.bioregionId ?? 0;
+      }
+      const cell = cells[cellId];
+      cell.connectedBioregions.addLink(speciesBioregionId, w);
+    })
+    cells.forEach(cell => {
+      cell.connectedBioregions.setOwnBioregion(cell.bioregionId);
+      cell.connectedBioregions.calcTopBioregions();
+    })
+    console.timeEnd("Connected bioregions");
+
     type Species = string;
     type BioregionId = number;
     const bioregionSpeciesCount = new Map<BioregionId, Map<Species, number>>();
