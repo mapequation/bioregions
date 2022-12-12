@@ -49,11 +49,7 @@ export default observer(function Export({ rootStore }: ExportProps) {
 
   return (
     <VStack align="stretch">
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.treeString}
-        onClick={downloadMap}
-      >
+      <Button size="sm" onClick={downloadMap}>
         Download map
       </Button>
       <Button
