@@ -117,7 +117,8 @@ export default observer(() => {
   const formatPercent = format('.3p');
 
   const showDeveloperStuff = false;
-  const hideIntegration = infomapStore.useWholeTree;
+  const hideIntegration =
+    infomapStore.useWholeTree || infomapStore.treeWeightBalance == 0;
 
   return (
     <Box>
