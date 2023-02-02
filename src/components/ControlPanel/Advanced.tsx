@@ -29,6 +29,8 @@ import { saveAs } from 'file-saver';
 import Stat from '../Stat';
 import Modal from './Modal';
 import { saveCanvas } from '../../utils/exporter';
+import { rangeArray } from '../../utils/range';
+import MultiSlider from './Slider';
 
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
@@ -37,6 +39,9 @@ export default observer(function Advanced() {
   const [isInfomapOutputOpen, setIsInfomapOutputOpen] = useState(false);
   const [show, setShow] = useState(process.env.NODE_ENV === 'development');
   const { speciesStore, treeStore, infomapStore, mapStore } = useStore();
+
+  const [markovTimeStart, setMarkovTimeStart] = useState(0.8);
+  const [markovTimeStop, setMarkovTimeStop] = useState(1.2);
 
   const paramSweepIntegrationTime = async () => {
     setIsRunning(true);
@@ -135,6 +140,41 @@ export default observer(function Advanced() {
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
       saveAs(zipFile, 'sweep seeds.zip');
+    } catch (err) {
+      console.error('Error in parameter sweep:', err);
+    }
+
+    setIsRunning(false);
+  };
+
+  const paramSweepMarkovTime = async () => {
+    setIsRunning(true);
+
+    try {
+      const zip = new JSZip();
+
+      const deltaMarkovTime = (markovTimeStop - markovTimeStart) / (steps - 1);
+      const markovTimes = range(steps).map(
+        (i) => markovTimeStart + i * deltaMarkovTime,
+      );
+
+      for (let i = 0; i < markovTimes.length; i++) {
+        setStep(i);
+        const markovTime = markovTimes[i];
+        infomapStore.setMarkovTime(markovTime);
+
+        await infomapStore.run();
+
+        if (mapStore.renderType === 'bioregions') {
+          mapStore.render();
+        }
+
+        const filename = `Markov-time-${markovTime}.json`;
+        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+      }
+
+      const zipFile = await zip.generateAsync({ type: 'blob' });
+      saveAs(zipFile, 'sweep num trials.zip');
     } catch (err) {
       console.error('Error in parameter sweep:', err);
     }
@@ -664,6 +704,35 @@ export default observer(function Advanced() {
             >
               Seeds
             </Button>
+            <Box w="100%">
+              <Box minW="110px">Markov time</Box>
+              <Flex
+                w="100%"
+                mt={4}
+                gap={2}
+                alignItems="center"
+                style={{ display: 'flex' }}
+              >
+                <MultiSlider
+                  values={rangeArray(0.5, 2, 0.01, { inclusive: true }).map(
+                    (v) => Math.round(v * 100) / 100,
+                  )}
+                  value={[markovTimeStart, markovTimeStop]}
+                  onChange={([start, stop]: [number, number]) => {
+                    setMarkovTimeStart(start);
+                    setMarkovTimeStop(stop);
+                  }}
+                />
+                <Button
+                  size="sm"
+                  isDisabled={!speciesStore.loaded || infomapStore.isRunning}
+                  isLoading={isRunning}
+                  onClick={paramSweepMarkovTime}
+                >
+                  Run
+                </Button>
+              </Flex>
+            </Box>
           </VStack>
           {isRunning && (
             <Progress
