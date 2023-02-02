@@ -235,7 +235,7 @@ export default observer(function Advanced() {
 
           <FormControl display="flex" w="100%" alignItems="center">
             <FormLabel htmlFor="useWeightedSpecies" mb="0">
-              Weight species by rarity
+              Weight species by range
             </FormLabel>
             <Spacer />
             <Switch

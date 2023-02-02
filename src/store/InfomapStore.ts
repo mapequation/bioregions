@@ -443,6 +443,9 @@ export default class InfomapStore {
   }
 
   getTaxonLinkWeight(numGridCells: number, numGridCellsTotal: number) {
+    if (!this.useWeightedSpeciesLinks) {
+      return 1;
+    }
     const { spatialNormalizationOrder: q } = this;
     return 1 - uniformTsallisEntropy(numGridCells, q) / uniformTsallisEntropy(numGridCellsTotal, q);
   }
