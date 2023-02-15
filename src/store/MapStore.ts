@@ -66,6 +66,9 @@ export default class MapStore {
   colorModuleParticipation: boolean = true;
   colorModuleParticipationStrength: number = 1.0;
 
+  waterColor: string = '#f0f8ff';
+  landColor: string = '#ffffff';
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -78,6 +81,8 @@ export default class MapStore {
       clipToLand: observable,
       colorModuleParticipation: observable,
       colorModuleParticipationStrength: observable,
+      waterColor: observable,
+      landColor: observable,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -101,6 +106,17 @@ export default class MapStore {
     if (value === this.clipToLand) { return; }
     this.clipToLand = value;
     this.render();
+  })
+
+  setWaterColor = action((value: string) => {
+    console.log(`!!! setWaterColor: ${value}, current: ${this.waterColor}`)
+    if (value === this.waterColor) { return; }
+    this.waterColor = value;
+  })
+
+  setLandColor = action((value: string) => {
+    if (value === this.waterColor) { return; }
+    this.waterColor = value;
   })
 
   setColorModuleParticipation = action((value: boolean) => {
@@ -139,12 +155,12 @@ export default class MapStore {
     ctx.clearRect(0, 0, this.width, this.height);
     ctx.beginPath();
     path(sphere);
-    ctx.fillStyle = 'AliceBlue';
+    ctx.fillStyle = this.waterColor;
     ctx.fill();
 
     ctx.beginPath();
     path(land);
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = this.landColor;
     ctx.fill();
 
     if (clip) {

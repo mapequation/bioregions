@@ -16,12 +16,22 @@ import {
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { SchemeName } from '@mapequation/c3';
+import ColorPicker from './ColorPicker';
 
 export default observer(function Map() {
   const { mapStore, colorStore, infomapStore } = useStore();
   const [showColorSettings, setShowColorSettings] = useState(false);
+  const [showWaterColor, setShowWaterColor] = useState(false);
+  const [showLandColor, setShowLandColor] = useState(false);
 
-  const withRender = (
+  const withRender = (setValue: (v: string) => void) => {
+    return (value: string) => {
+      setValue(value);
+      mapStore.render();
+    };
+  };
+
+  const withRenderType = (
     setValue: (v: number) => void,
     renderType: typeof mapStore.renderType,
   ) => {
@@ -61,6 +71,22 @@ export default observer(function Map() {
 
       {showColorSettings && (
         <Box mt={10} minW={250}>
+          <Box p={4}>
+            <Flex alignItems="center">
+              <Box mx={2}>Land</Box>
+              <ColorPicker
+                color={mapStore.landColor}
+                onChange={withRender(mapStore.setLandColor)}
+                label="Land color"
+              />
+              <Box mx={2}>Water</Box>
+              <ColorPicker
+                color={mapStore.waterColor}
+                onChange={withRender(mapStore.setWaterColor)}
+                label="Water color"
+              />
+            </Flex>
+          </Box>
           <Flex>
             <Select
               id="colorScale"
@@ -83,7 +109,7 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.saturation}
-              onChange={withRender(colorStore.setSaturation, 'bioregions')}
+              onChange={withRenderType(colorStore.setSaturation, 'bioregions')}
               min={0}
               max={1}
               step={0.01}
@@ -101,7 +127,10 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.saturationEnd}
-              onChange={withRender(colorStore.setSaturationEnd, 'bioregions')}
+              onChange={withRenderType(
+                colorStore.setSaturationEnd,
+                'bioregions',
+              )}
               min={0}
               max={1}
               step={0.01}
@@ -119,7 +148,7 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.lightness}
-              onChange={withRender(colorStore.setLightness, 'bioregions')}
+              onChange={withRenderType(colorStore.setLightness, 'bioregions')}
               min={0}
               max={1}
               step={0.01}
@@ -137,7 +166,10 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.lightnessEnd}
-              onChange={withRender(colorStore.setLightnessEnd, 'bioregions')}
+              onChange={withRenderType(
+                colorStore.setLightnessEnd,
+                'bioregions',
+              )}
               min={0}
               max={1}
               step={0.01}
@@ -155,7 +187,7 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.strength}
-              onChange={withRender(colorStore.setStrength, 'bioregions')}
+              onChange={withRenderType(colorStore.setStrength, 'bioregions')}
               min={0}
               max={1}
               step={0.01}
@@ -173,7 +205,7 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.offset}
-              onChange={withRender(colorStore.setOffset, 'bioregions')}
+              onChange={withRenderType(colorStore.setOffset, 'bioregions')}
               min={0}
               max={1}
               step={0.01}
@@ -191,7 +223,7 @@ export default observer(function Map() {
             <Slider
               focusThumbOnChange={false}
               value={colorStore.strength}
-              onChange={withRender(colorStore.setStrength, 'bioregions')}
+              onChange={withRenderType(colorStore.setStrength, 'bioregions')}
               min={0}
               max={1}
               step={0.01}
