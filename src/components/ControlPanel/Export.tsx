@@ -2,7 +2,14 @@ import { Button, VStack } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
-import { saveCanvas, saveString } from '../../utils/exporter';
+import {
+  saveBase64,
+  saveBlob,
+  saveCanvas,
+  saveString,
+} from '../../utils/exporter';
+//@ts-ignore
+import shpWrite from 'shp-write';
 
 interface ExportProps {
   rootStore?: RootStore;
@@ -10,7 +17,7 @@ interface ExportProps {
 
 export default observer(function Export({ rootStore }: ExportProps) {
   const _rootStore = useStore();
-  const { infomapStore, mapStore } = rootStore ?? _rootStore;
+  const { infomapStore, mapStore, speciesStore } = rootStore ?? _rootStore;
   const { parameterName } = infomapStore;
 
   const downloadMap = () => {
@@ -47,10 +54,29 @@ export default observer(function Export({ rootStore }: ExportProps) {
     saveString(filename, infomapStore.serializeMultilayerNetwork() ?? '');
   };
 
+  const downloadShapefile = async () => {
+    const geojson = speciesStore.generateGeojsonFromBins();
+    const shpOptions = {
+      folder: parameterName,
+      types: {
+        polygon: parameterName,
+      },
+    };
+    const data = await shpWrite.zip(geojson, shpOptions, { type: 'blob' });
+    saveBlob(`${parameterName}.zip`, data);
+  };
+
   return (
     <VStack align="stretch">
       <Button size="sm" onClick={downloadMap}>
         Download map
+      </Button>
+      <Button
+        size="sm"
+        isDisabled={!infomapStore.network}
+        onClick={downloadShapefile}
+      >
+        Download Shapefile
       </Button>
       <Button
         size="sm"

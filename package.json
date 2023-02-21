@@ -1,6 +1,6 @@
 {
   "name": "bioregions",
-  "version": "2.0.0-alpha.8",
+  "version": "2.0.0-alpha.9",
   "private": true,
   "homepage": "/bioregions2",
   "dependencies": {
@@ -20,6 +20,7 @@
     "@types/node": "^18.13.0",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
+    "assert": "^2.0.0",
     "d3": "^7.8.2",
     "d3-array": "^3.2.2",
     "d3-format": "^3.1.0",
@@ -39,6 +40,7 @@
     "react-icons": "^4.7.1",
     "react-scripts": "^5.0.1",
     "shapefile": "^0.6.6",
+    "shp-write": "github:danieledler/shp-write",
     "threads": "^1.7.0",
     "threads-plugin": "^1.4.0",
     "topojson-client": "^3.1.0",

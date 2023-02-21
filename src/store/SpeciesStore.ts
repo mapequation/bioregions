@@ -441,6 +441,25 @@ export default class SpeciesStore {
     mapStore.setRenderType('bioregions');
     mapStore.render();
   });
+
+  generateGeojsonFromBins = () => {
+    const features = this.binner.cells.map(cell => {
+      return {
+        type: "Feature",
+        geometry: cell.geometry,
+        properties: {
+          bioregion: cell.bioregionId + 1,
+          recordsCount: cell.numFeatures,
+          speciesCount: cell.speciesTopList.length,
+        }
+      }
+    });
+
+    return {
+      type: "FeatureCollection",
+      features
+    };
+  }
 }
 
 function createMapper<ItemType = string | number>(

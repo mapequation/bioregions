@@ -1,4 +1,26 @@
 import { saveAs } from 'file-saver';
+// import { Buffer } from "buffer";
+
+export function base64toData(content: string) {
+  // const binary = Buffer.from(content, 'base64');
+  const binary = atob(content);
+  let array: number[] = [];
+  for (let i = 0; i < binary.length; i++) {
+    // array.push(binary.at(i) as number);
+    array.push(binary.charCodeAt(i) as number);
+  }
+  return new Uint8Array(array);
+}
+
+export function saveBlob(filename: string, blob: Blob) {
+  saveAs(blob, filename);
+}
+
+export function saveBase64(filename: string, content: string, type: string) {
+  const data = base64toData(content);
+  const blob = new Blob([data], { type });
+  saveAs(blob, filename);
+}
 
 export function saveString(
   filename: string,
