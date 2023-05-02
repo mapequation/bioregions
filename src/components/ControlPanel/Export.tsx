@@ -66,6 +66,12 @@ export default observer(function Export({ rootStore }: ExportProps) {
     saveBlob(`${parameterName}.zip`, data);
   };
 
+  const downloadGeojson = async () => {
+    const geojson = speciesStore.generateGeojsonFromBins();
+    const data = JSON.stringify(geojson);
+    saveString(`${parameterName}.geojson`, data);
+  };
+
   return (
     <VStack align="stretch">
       <Button size="sm" onClick={downloadMap}>
@@ -77,6 +83,13 @@ export default observer(function Export({ rootStore }: ExportProps) {
         onClick={downloadShapefile}
       >
         Download Shapefile
+      </Button>
+      <Button
+        size="sm"
+        isDisabled={!infomapStore.network}
+        onClick={downloadGeojson}
+      >
+        Download GeoJSON
       </Button>
       <Button
         size="sm"
