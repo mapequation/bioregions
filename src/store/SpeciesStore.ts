@@ -2,7 +2,7 @@ import { action, makeObservable, observable, computed } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
-import { csvParse } from 'd3';
+import { csvParse, color as Color } from 'd3';
 import type RootStore from './RootStore';
 import type {
   Feature,
@@ -443,14 +443,19 @@ export default class SpeciesStore {
   });
 
   generateGeojsonFromBins = () => {
+    const { colorStore } = this.rootStore;
     const features = this.binner.cells.map(cell => {
+      const c = Color(cell.color)!;
       return {
         type: "Feature",
         geometry: cell.geometry,
         properties: {
+          id: cell.id,
           bioregion: cell.bioregionId + 1,
           recordsCount: cell.numFeatures,
           speciesCount: cell.speciesTopList.length,
+          color: c.formatHex(),
+          opacity: Math.round(c.opacity * 100),
         }
       }
     });

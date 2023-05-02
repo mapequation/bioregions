@@ -5,6 +5,32 @@ import type RootStore from './RootStore';
 import { Cell } from '../utils/QuadTree';
 import { color as Color, interpolateRgb } from 'd3';
 
+export class CellColor {
+  color: string = "#cccccc";
+  firstColor: string = "#cccccc";
+  secondColor: string = "#cccccc";
+  t: number = 0.0;
+  opacity: number = 1.0;
+
+  constructor(
+    firstColor = "#cccccc",
+    secondColor = "#cccccc",
+    t = 0.0,
+    opacity = 1.0,
+  ) {
+    this.firstColor = firstColor;
+    this.secondColor = secondColor;
+    this.t = t;
+    this.opacity = opacity;
+  }
+
+  generateColor(colorModuleParticipationStrength = 1) {
+    const color = Color(interpolateRgb(this.secondColor, this.firstColor)(this.t ** colorModuleParticipationStrength))!;
+    color.opacity = this.opacity ** colorModuleParticipationStrength;
+    return color.toString();
+  }
+}
+
 export default class ColorStore {
   rootStore: RootStore;
 
@@ -78,68 +104,41 @@ export default class ColorStore {
     return (bioregionId: number) => this.bioregionColors[bioregionId - 1];
   }
 
-  get colorCell() {
+  getCellColorData = (cell: Cell) => {
     const { colorBioregion } = this;
     if (this.rootStore.mapStore.colorModuleParticipation) {
       const { colorModuleParticipationStrength } = this.rootStore.mapStore;
-      return (cell: Cell) => {
-        if (cell.overlappingBioregions.size <= 1) {
-          if (cell.connectedBioregions.size <= 1) {
-            return colorBioregion(cell.bioregionId);
-          }
-          const {
-            topBioregionId,
-            topBioregionProportion,
-            secondBioregionId,
-            secondBioregionProportion,
-            ownProportion
-          } = cell.connectedBioregions;
-          let t =
-            topBioregionProportion /
-            (topBioregionProportion + secondBioregionProportion);
-          if (topBioregionId !== cell.bioregionId) {
-            // const c = Color("black")!
-            // c.opacity = ownProportion;
-            // return c.toString();
-            const firstColor = colorBioregion(cell.bioregionId);
-            const secondColor = colorBioregion(topBioregionId);
-            t = ownProportion / (ownProportion + topBioregionProportion)
-            const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
-            color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
-            return color.toString();
-          }
-          const firstColor = colorBioregion(topBioregionId);
-          const secondColor = colorBioregion(secondBioregionId);
-          const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
-          color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
-          return color.toString();
+
+      if (cell.overlappingBioregions.size <= 1) {
+        if (cell.connectedBioregions.size <= 1) {
+          return colorBioregion(cell.bioregionId);
         }
-        // Add colors from all overlapping bioregions weighted on opacity
-        // Let final opacity be half-transparent to signal overlapping bioregions
         const {
           topBioregionId,
           topBioregionProportion,
           secondBioregionId,
           secondBioregionProportion,
-        } = cell.overlappingBioregions;
-        if (this.hideDominantOverlappingModule) {
-          const color = Color(colorBioregion(secondBioregionId))!;
-          color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
-          return color.toString();
-        }
-        const t =
+          ownProportion
+        } = cell.connectedBioregions;
+        let t =
           topBioregionProportion /
           (topBioregionProportion + secondBioregionProportion);
+        if (topBioregionId !== cell.bioregionId) {
+          // const c = Color("black")!
+          // c.opacity = ownProportion;
+          // return c.toString();
+          const firstColor = colorBioregion(cell.bioregionId);
+          const secondColor = colorBioregion(topBioregionId);
+          t = ownProportion / (ownProportion + topBioregionProportion)
+          const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+          color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
+          return new CellColor(firstColor, secondColor, t, color.opacity);
+        }
         const firstColor = colorBioregion(topBioregionId);
         const secondColor = colorBioregion(secondBioregionId);
-        const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
-        color.opacity = topBioregionProportion;
+        const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+        color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
         return color.toString();
-      };
-    }
-    return (cell: Cell) => {
-      if (cell.overlappingBioregions.size <= 1) {
-        return colorBioregion(cell.bioregionId);
       }
       // Add colors from all overlapping bioregions weighted on opacity
       // Let final opacity be half-transparent to signal overlapping bioregions
@@ -162,6 +161,126 @@ export default class ColorStore {
       const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
       color.opacity = topBioregionProportion;
       return color.toString();
+    }
+
+    if (cell.overlappingBioregions.size <= 1) {
+      return colorBioregion(cell.bioregionId);
+    }
+    // Add colors from all overlapping bioregions weighted on opacity
+    // Let final opacity be half-transparent to signal overlapping bioregions
+    const {
+      topBioregionId,
+      topBioregionProportion,
+      secondBioregionId,
+      secondBioregionProportion,
+    } = cell.overlappingBioregions;
+    if (this.hideDominantOverlappingModule) {
+      const color = Color(colorBioregion(secondBioregionId))!;
+      color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
+      return color.toString();
+    }
+    const t =
+      topBioregionProportion /
+      (topBioregionProportion + secondBioregionProportion);
+    const firstColor = colorBioregion(topBioregionId);
+    const secondColor = colorBioregion(secondBioregionId);
+    const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+    color.opacity = topBioregionProportion;
+    return color.toString();
+  }
+
+  get colorCell() {
+    const { colorBioregion } = this;
+    if (this.rootStore.mapStore.colorModuleParticipation) {
+      const { colorModuleParticipationStrength } = this.rootStore.mapStore;
+      return (cell: Cell) => {
+        if (cell.overlappingBioregions.size <= 1) {
+          if (cell.connectedBioregions.size <= 1) {
+            cell.color = colorBioregion(cell.bioregionId);
+            return cell.color;
+          }
+          const {
+            topBioregionId,
+            topBioregionProportion,
+            secondBioregionId,
+            secondBioregionProportion,
+            ownProportion
+          } = cell.connectedBioregions;
+          let t =
+            topBioregionProportion /
+            (topBioregionProportion + secondBioregionProportion);
+          if (topBioregionId !== cell.bioregionId) {
+            // const c = Color("black")!
+            // c.opacity = ownProportion;
+            // return c.toString();
+            const firstColor = colorBioregion(cell.bioregionId);
+            const secondColor = colorBioregion(topBioregionId);
+            t = ownProportion / (ownProportion + topBioregionProportion)
+            const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+            color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
+            cell.color = color.toString();
+            return cell.color;
+          }
+          const firstColor = colorBioregion(topBioregionId);
+          const secondColor = colorBioregion(secondBioregionId);
+          const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+          color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
+          cell.color = color.toString();
+          return cell.color;
+        }
+        // Add colors from all overlapping bioregions weighted on opacity
+        // Let final opacity be half-transparent to signal overlapping bioregions
+        const {
+          topBioregionId,
+          topBioregionProportion,
+          secondBioregionId,
+          secondBioregionProportion,
+        } = cell.overlappingBioregions;
+        if (this.hideDominantOverlappingModule) {
+          const color = Color(colorBioregion(secondBioregionId))!;
+          color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
+          cell.color = color.toString();
+          return cell.color;
+        }
+        const t =
+          topBioregionProportion /
+          (topBioregionProportion + secondBioregionProportion);
+        const firstColor = colorBioregion(topBioregionId);
+        const secondColor = colorBioregion(secondBioregionId);
+        const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+        color.opacity = topBioregionProportion;
+        cell.color = color.toString();
+        return cell.color;
+      };
+    }
+    return (cell: Cell) => {
+      if (cell.overlappingBioregions.size <= 1) {
+        cell.color = colorBioregion(cell.bioregionId);
+        return cell.color;
+      }
+      // Add colors from all overlapping bioregions weighted on opacity
+      // Let final opacity be half-transparent to signal overlapping bioregions
+      const {
+        topBioregionId,
+        topBioregionProportion,
+        secondBioregionId,
+        secondBioregionProportion,
+      } = cell.overlappingBioregions;
+      if (this.hideDominantOverlappingModule) {
+        const color = Color(colorBioregion(secondBioregionId))!;
+        color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
+        cell.color = color.toString();
+        return cell.color;
+      }
+      const t =
+        topBioregionProportion /
+        (topBioregionProportion + secondBioregionProportion);
+      const firstColor = colorBioregion(topBioregionId);
+      const secondColor = colorBioregion(secondBioregionId);
+      const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+      color.opacity = topBioregionProportion;
+      cell.color = color.toString();
+      return cell.color;
     };
   }
 

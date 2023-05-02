@@ -14,6 +14,7 @@ import type {
 } from './QuadTreeGeoBinner';
 import * as turf from '@turf/turf';
 import booleanIntersects from '@turf/boolean-intersects';
+import { CellColor } from '../../store/ColorStore';
 
 export default class Cell
   implements ExtendedFeature<Polygon, QuadtreeNodeProperties>
@@ -35,6 +36,7 @@ export default class Cell
   bioregionId: number = 0;
   overlappingBioregions: OverlappingBioregions = new OverlappingBioregions();
   connectedBioregions: ConnectedBioregions = new ConnectedBioregions();
+  color: string = "#ffcccccc";
   path: number[] = [];
   area: number;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
