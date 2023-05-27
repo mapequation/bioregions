@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
 import _ from 'lodash';
 import PropTypes from 'prop-types';
-import R from 'ramda';
+import * as R from 'ramda';
 import FileInput from '../helpers/FileInput'
 import {FILE_PROGRESS} from '../../constants/ActionTypes';
 import {INDETERMINATE, PERCENT, COUNT, COUNT_WITH_TOTAL} from '../../actions/ProgressActions';
@@ -56,7 +56,7 @@ class FileLoaderDimmer extends Component {
     });
   }
 
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     const {parsedHead, parsedFeatureProperty} = nextProps;
 
     const haveDSV = parsedHead.length > 0

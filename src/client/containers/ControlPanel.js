@@ -60,6 +60,7 @@ class ControlPanel extends Component {
     // ) : 'Info';
     const panels = [
       {
+        key: 'Data-title',
         title: {
           content: 'Data',
           key: 'Data-title',
@@ -77,6 +78,7 @@ class ControlPanel extends Component {
         },
       },
       {
+        key: 'Info-title',
         title: {
           content: <InfoTitle active={display.panelIndex === 1} highlightStore={highlightStore} />,
           key: 'Info-title',
@@ -98,6 +100,7 @@ class ControlPanel extends Component {
         },
       },
       {
+        key: 'Map-title',
         title: {
           content: 'Map',
           key: 'Map-title',

@@ -1,4 +1,4 @@
-import { observable, action, decorate } from "mobx";
+import { observable, action, makeObservable } from "mobx";
 
 // export default class HighlightStore {
 //     @observable.ref highlightedCell = null;
@@ -12,12 +12,16 @@ import { observable, action, decorate } from "mobx";
 class HighlightStore {
   highlightedCell = null;
 
+  constructor() {
+    makeObservable(this, {
+      highlightedCell: observable.ref,
+      highlightCell: action,
+    })
+  }
+
   highlightCell = (cell) => {
     this.highlightedCell = cell;
   }
 }
 
-export default decorate(HighlightStore, {
-  highlightedCell: observable.ref,
-  highlightCell: action,
-});
+export default HighlightStore;

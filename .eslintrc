@@ -1,0 +1,15 @@
+// From https://github.com/airbnb/javascript/blob/master/linters/.eslintrc
+{
+    // "parser": "babel-eslint", // https://github.com/babel/babel-eslint
+    "plugins": [
+        "react" // https://github.com/yannickcr/eslint-plugin-react
+    ],
+    "env": { // http://eslint.org/docs/user-guide/configuring.html#specifying-environments
+        "browser": true, // browser global variables
+        "node": true // Node.js global variables and Node.js-specific rules
+    },
+    "extends": [
+        "react-app",
+        "prettier"
+    ]
+}

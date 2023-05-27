@@ -1,4 +1,4 @@
-import d3 from "d3";
+import * as d3 from "d3";
 import _ from "lodash";
 import {
   LOAD_FILES,
@@ -186,7 +186,7 @@ function loadShapefiles(files) {
       if (geometry.coordinates[0].length < 4) {
         return {
           type: "Point",
-          coordinates: geom.coordinates[0][0],
+          coordinates: geometry.coordinates[0][0],
         };
       }
       const simplified = turfSimplify({ type: "Feature", geometry }, tolerance);
@@ -296,9 +296,6 @@ function loadShapefiles(files) {
       state.geoJSON = shp.combine([parsedShape, parsedDbf]);
       console.log("Loaded state.geoJSON:", state.geoJSON);
       const { properties } = state.geoJSON.features[0];
-      console.log(
-        `Number of too simplified polygons: ${numTooSimplifiedPolygons} (Keeping unsimplified originals)`
-      );
       dispatch(requestGeoJSONNameField(properties));
     })
     .catch((err) => {
@@ -470,8 +467,12 @@ function parseGeoJSON(nameField) {
     )
   );
 
+  const numSpecies = new Set(
+    state.shapeFeatures.map((f) => f.properties[nameField])
+  ).size;
+
   console.log(
-    `numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}`
+    `numPoints: ${numPoints}, numPolygons: ${numPolygons}, numMultiPolygons: ${numMultiPolygons}, numMultiPolygonsExpanded: ${numMultiPolygonsExpanded}, numBadFeatures: ${numBadFeatures}, numSpecies: ${numSpecies}`
   );
 
   shapeToPoints();
@@ -561,6 +562,9 @@ function shapeToPoints() {
       }
     }
   });
+  const numSpecies = new Set(state.features.map((f) => f.properties["name"]))
+    .size;
+  console.log(`Resolving polygons to points -> ${numSpecies} species`);
 }
 
 function loadTextFile(file) {
@@ -687,7 +691,8 @@ function parseDSVHeader(content) {
     );
 
   state.DSVType = isTSV ? "TSV" : "CSV";
-  let parser = isTSV ? d3.tsv : d3.csv;
+  const delimiter = isTSV ? "\t" : ",";
+  let parser = d3.dsvFormat(delimiter);
 
   dispatch(
     setFileProgress(
@@ -713,7 +718,8 @@ function parseDSV(fieldsToColumns) {
   console.log("[DataWorker]: parseDSV with fieldsToColumns:", fieldsToColumns);
   const { Name, Latitude, Longitude } = fieldsToColumns; // Contains index of corresponding field
 
-  let parser = state.DSVType == "TSV" ? d3.tsv : d3.csv;
+  const delimiter = state.DSVType == "TSV" ? "\t" : ",";
+  let parser = d3.dsvFormat(delimiter);
   let numSkipped = 0;
   let count = 0;
 
@@ -788,6 +794,12 @@ function groupByName() {
   // state.speciesCountMap = d3.map(state.species, d => d.name);
   state.speciesCountMap = new Map(
     state.species.map(({ name, count }) => [name, count])
+  );
+  console.log(
+    `Grouped to ${state.speciesCountMap.size} species:`,
+    state.species,
+    `with counts:`,
+    state.speciesCountMap
   );
 }
 

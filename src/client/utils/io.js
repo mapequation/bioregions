@@ -55,6 +55,7 @@ export function readFile(file, format, progressCallback) {
       };
     }
     else {
+      /* eslint-disable */ 
       reader = new FileReaderSync();
     }
 

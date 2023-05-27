@@ -1,21 +1,22 @@
-import React, { Component } from "react";
-import shpWrite from "shp-write";
-import PropTypes from "prop-types";
-import R from "ramda";
-import d3 from "d3";
-import _ from "lodash";
-import Div from "../helpers/Div";
-import io from "../../utils/io";
-import * as statistics from "../../utils/statistics";
+import React, { Component } from 'react';
+import shpWrite from 'shp-write';
+import PropTypes from 'prop-types';
+import * as R from 'ramda';
+import * as d3 from 'd3';
+import _ from 'lodash';
+import Div from '../helpers/Div';
+import io from '../../utils/io';
+import * as statistics from '../../utils/statistics';
 import {
   getPajekNetwork,
   getBipartiteNetwork,
   getBipartitePhyloNetwork,
-} from "../../utils/clustering";
+} from '../../utils/clustering';
 import {
   clusteredBinsToCollectionOfMultiPolygons,
   clusteredBinsToCollectionOfPolygons,
-} from "../../utils/polygons";
+} from '../../utils/polygons';
+import $ from 'jquery';
 
 class Export extends Component {
   static propTypes = {
@@ -83,59 +84,59 @@ class ExportWindow extends Component {
     this.state = {
       files: {
         svg: {
-          group: "map",
+          group: 'map',
           filename: `${props.basename}_map.svg`,
-          icon: "file image outline icon",
+          icon: 'file image outline icon',
           url: null,
         },
         png: {
           filename: `${props.basename}_map.png`,
-          group: "map",
-          icon: "file image outline icon",
+          group: 'map',
+          icon: 'file image outline icon',
           url: null,
         },
         network: {
           filename: `${props.basename}_network.net`,
-          group: "network",
-          icon: "file text outline icon",
+          group: 'network',
+          icon: 'file text outline icon',
           url: null,
         },
         geojson: {
           filename: `${props.basename}_bioregions.geojson`,
-          group: "bioregions",
-          icon: "world icon",
+          group: 'bioregions',
+          icon: 'world icon',
           url: null,
         },
         shapefile: {
           filename: `${props.basename}_bioregions_shapefile.zip`,
-          group: "bioregions",
-          icon: "file archive outline icon",
+          group: 'bioregions',
+          icon: 'file archive outline icon',
           url: null,
         },
         presenceAbsence: {
           filename: `${props.basename}_presence-absence.txt`,
-          group: "bioregions",
-          icon: "file text outline icon",
+          group: 'bioregions',
+          icon: 'file text outline icon',
           url: null,
         },
         bioregionsCoords: {
           filename: `${props.basename}_bioregions-coords.txt`,
-          description: "Center coordinates for each bioregion",
-          group: "bioregions",
-          icon: "file text outline icon",
+          description: 'Center coordinates for each bioregion',
+          group: 'bioregions',
+          icon: 'file text outline icon',
           url: null,
         },
         tables: {
           filename: `${props.basename}_summary.csv`,
-          description: "Summary statistics for each bioregion",
-          group: "tables",
-          icon: "file text outline icon",
+          description: 'Summary statistics for each bioregion',
+          group: 'tables',
+          icon: 'file text outline icon',
           url: null,
         },
         treeSvg: {
           filename: `${props.basename}_tree.svg`,
-          group: "tree",
-          icon: "file image outline icon",
+          group: 'tree',
+          icon: 'file image outline icon',
           url: null,
         },
       },
@@ -159,7 +160,7 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch((error) => {
-        console.log("!!! Error getting map files:", error);
+        console.log('!!! Error getting map files:', error);
         this.setState({ error });
       });
 
@@ -181,7 +182,7 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch((error) => {
-        console.log("!!! Error getting cluster files:", error);
+        console.log('!!! Error getting cluster files:', error);
         this.setState({ error });
       });
 
@@ -192,7 +193,7 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch((error) => {
-        console.log("!!! Error getting tree svg file:", error);
+        console.log('!!! Error getting tree svg file:', error);
         this.setState({ error });
       });
 
@@ -203,7 +204,7 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch((error) => {
-        console.log("!!! Error getting presence-absence file:", error);
+        console.log('!!! Error getting presence-absence file:', error);
         this.setState({ error });
       });
 
@@ -214,13 +215,13 @@ class ExportWindow extends Component {
         this.setState({ files });
       })
       .catch((error) => {
-        console.log("!!! Error getting bioregions coords file:", error);
+        console.log('!!! Error getting bioregions coords file:', error);
         this.setState({ error });
       });
   }
 
   componentWillUnmount() {
-    console.log("Unmounting ExportWindow, revoking object urls...");
+    console.log('Unmounting ExportWindow, revoking object urls...');
     _.filter(this.state.files, (file) => file.url).forEach((file) => {
       console.log(`Revoking blob url ${file.url} for ${file.filename}...`);
       URL.revokeObjectURL(file.url);
@@ -228,56 +229,56 @@ class ExportWindow extends Component {
   }
 
   getSvgUrl() {
-    return this.getSvg("worldmap").then(
-      _.partial(io.dataToBlobURL, "image/svg+xml")
+    return this.getSvg('worldmap').then(
+      _.partial(io.dataToBlobURL, 'image/svg+xml'),
     );
   }
 
   getTreeSvgUrl() {
-    return this.getSvg("phylogram").then(
-      _.partial(io.dataToBlobURL, "image/svg+xml")
+    return this.getSvg('phylogram').then(
+      _.partial(io.dataToBlobURL, 'image/svg+xml'),
     );
   }
 
   getPngUrl(svgUrl) {
     if (!svgUrl) return Promise.resolve(null);
-    return this.getPng(svgUrl).then(_.partial(io.dataToBlobURL, "image/png"));
+    return this.getPng(svgUrl).then(_.partial(io.dataToBlobURL, 'image/png'));
   }
 
   getGeoJSONUrl() {
     if (this.props.clusters.length === 0) return Promise.resolve(null);
     return this.getGeoJSON()
       .then(io.prettyStringifyJSON)
-      .then(_.partial(io.dataToBlobURL, "application/vnd.geo+json"));
+      .then(_.partial(io.dataToBlobURL, 'application/vnd.geo+json'));
   }
 
   getShapefileUrl() {
     if (this.props.clusters.length === 0) return Promise.resolve(null);
     return this.getShapefile().then(
-      _.partial(io.dataToBlobURL, "application/zip")
+      _.partial(io.dataToBlobURL, 'application/zip'),
     );
   }
 
   getClustersCSVUrl() {
     if (this.props.clusters.length === 0) return Promise.resolve(null);
-    return this.getClustersCSV().then(_.partial(io.dataToBlobURL, "text/csv"));
+    return this.getClustersCSV().then(_.partial(io.dataToBlobURL, 'text/csv'));
   }
 
   getNetworkUrl() {
-    return this.getNetwork().then(_.partial(io.dataToBlobURL, "text/plain"));
+    return this.getNetwork().then(_.partial(io.dataToBlobURL, 'text/plain'));
   }
 
   getPresenceAbsenceUrl() {
     if (this.props.clusters.length === 0) return Promise.resolve(null);
     return this.getPresenceAbsence().then(
-      _.partial(io.dataToBlobURL, "text/plain")
+      _.partial(io.dataToBlobURL, 'text/plain'),
     );
   }
 
   getBioregionsCoordsUrl() {
     if (this.props.clusters.length === 0) return Promise.resolve(null);
     return this.getBioregionsCoords().then(
-      _.partial(io.dataToBlobURL, "text/plain")
+      _.partial(io.dataToBlobURL, 'text/plain'),
     );
   }
 
@@ -292,15 +293,15 @@ class ExportWindow extends Component {
       svgContent = svgContent.replace(
         /^<svg/,
         [
-          "<svg",
+          '<svg',
           'xmlns="http://www.w3.org/2000/svg"',
           'xmlns:xlink="http://www.w3.org/1999/xlink"',
           'version="1.1"',
-        ].join(" ")
+        ].join(' '),
       );
       // Safari inserts NS1/NS2 namespaces as xlink is not defined within the svg html
-      svgContent = svgContent.replace("NS1", "xlink");
-      svgContent = svgContent.replace("NS2", "xlink");
+      svgContent = svgContent.replace('NS1', 'xlink');
+      svgContent = svgContent.replace('NS2', 'xlink');
       // console.log("svgContent after:", svgContent.substring(0, 250));
       resolve(svgContent);
     });
@@ -308,30 +309,30 @@ class ExportWindow extends Component {
 
   getPng(svgUrl) {
     return new Promise((resolve, reject) => {
-      const $svg = $("svg.worldmap");
+      const $svg = $('svg.worldmap');
       const [width, height] = [$svg.width(), $svg.height()];
       this.canvas.width = width;
       this.canvas.height = height;
-      var ctx = this.canvas.getContext("2d");
+      var ctx = this.canvas.getContext('2d');
 
       var image = new Image(width, height);
       image.onload = () => {
-        console.log("Image loaded! Draw to canvas...");
+        console.log('Image loaded! Draw to canvas...');
         ctx.drawImage(image, 0, 0);
-        resolve(io.dataURLtoData(this.canvas.toDataURL("image/png")));
+        resolve(io.dataURLtoData(this.canvas.toDataURL('image/png')));
       };
       image.onerror = (e) => {
-        console.log("ERROR setting image src:", e.type, e, e.message);
+        console.log('ERROR setting image src:', e.type, e, e.message);
         reject(e);
       };
-      console.log("Set img src to svg url:", svgUrl);
+      console.log('Set img src to svg url:', svgUrl);
       image.src = svgUrl; // Trigger onload
     });
   }
 
   getGeoJSON() {
     return Promise.resolve(
-      clusteredBinsToCollectionOfMultiPolygons(this.props.bins)
+      clusteredBinsToCollectionOfMultiPolygons(this.props.bins),
     );
   }
 
@@ -350,7 +351,7 @@ class ExportWindow extends Component {
   getClustersCSV() {
     return new Promise((resolve) => {
       const { clusters, clusterColors } = this.props;
-      if (clusters.length == 0) return "";
+      if (clusters.length == 0) return '';
       let rows = [];
       clusters.forEach((cluster) => {
         const {
@@ -359,7 +360,7 @@ class ExportWindow extends Component {
           numSpecies,
           topCommonSpecies,
           topIndicatorSpecies,
-        } = cluster.values;
+        } = cluster.value;
         let clusterColor = clusterColors[clusterId];
         R.zip(topCommonSpecies, topIndicatorSpecies).forEach(
           ([common, indicator], i) => {
@@ -371,7 +372,7 @@ class ExportWindow extends Component {
               bioregion: clusterId + 1,
               clusterColor: clusterColor.hex(),
             });
-          }
+          },
         );
       });
 
@@ -397,14 +398,14 @@ class ExportWindow extends Component {
     return new Promise((resolve) => {
       const { species, clusters, clustersPerSpecies } = this.props;
       const lines = _.map(clustersPerSpecies, (clu, species) => {
-        const presenceAbsence = new Array(clusters.length).fill("0");
-        statistics.forEachLimited("rest", clu.clusters, (d) => {
-          presenceAbsence[d.clusterId] = "1";
+        const presenceAbsence = new Array(clusters.length).fill('0');
+        statistics.forEachLimited('rest', clu.clusters, (d) => {
+          presenceAbsence[d.clusterId] = '1';
         });
-        return `${species}\t${presenceAbsence.join("")}`;
+        return `${species}\t${presenceAbsence.join('')}`;
       });
       lines.unshift(`${lines.length} ${clusters.length}`);
-      resolve(lines.join("\n"));
+      resolve(lines.join('\n'));
     });
   }
 
@@ -425,7 +426,7 @@ class ExportWindow extends Component {
         return `${stats.lat / stats.count} ${stats.long / stats.count}`;
       });
       centerCoords.unshift(`# 0 0`);
-      resolve(centerCoords.join("\n"));
+      resolve(centerCoords.join('\n'));
     });
   }
 
@@ -445,14 +446,14 @@ class ExportWindow extends Component {
                   href={url}
                   download={filename}
                   target="_blank"
-                  className={`item ${url ? "active" : "disabled"}`}
+                  className={`item ${url ? 'active' : 'disabled'}`}
                 >
                   <div className="">
                     <i className="large icons">
                       <i className={icon}></i>
                       <i
                         className={`corner ${
-                          isLoading ? "notched circle loading" : "download"
+                          isLoading ? 'notched circle loading' : 'download'
                         } icon`}
                       ></i>
                     </i>
@@ -483,9 +484,9 @@ class ExportWindow extends Component {
     return (
       <div
         className="ui inverted active page dimmer"
-        style={{ overflow: "auto" }}
+        style={{ overflow: 'auto' }}
       >
-        <div className="ui container" style={{ background: "white" }}>
+        <div className="ui container" style={{ background: 'white' }}>
           <h1 className="ui header">
             Export
             <div className="sub header">{this.props.basename}</div>

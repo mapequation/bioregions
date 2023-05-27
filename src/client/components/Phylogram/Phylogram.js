@@ -1,10 +1,10 @@
 import PropTypes from 'prop-types';
 import React, { Component } from 'react';
 import phylogramChart from './phylogramChart.js';
+import treeChart from './treeChart.js';
 import chroma from 'chroma-js';
 
 class Phylogram extends Component {
-
   static propTypes = {
     // width: PropTypes.number.isRequired,
     // height: PropTypes.number.isRequired,
@@ -12,13 +12,15 @@ class Phylogram extends Component {
     clusterColors: PropTypes.array.isRequired,
     clustersPerSpecies: PropTypes.object.isRequired,
     phyloTree: PropTypes.object,
-  }
+  };
 
   shouldComponentUpdate(nextProps, nextState) {
-    const {clustersPerSpecies, clusterColors, phyloTree} = this.props;
-    return clusterColors !== nextProps.clusterColors ||
+    const { clustersPerSpecies, clusterColors, phyloTree } = this.props;
+    return (
+      clusterColors !== nextProps.clusterColors ||
       clustersPerSpecies !== nextProps.clustersPerSpecies ||
-      phyloTree !== nextProps.phyloTree;
+      phyloTree !== nextProps.phyloTree
+    );
   }
 
   getSvg() {
@@ -32,28 +34,28 @@ class Phylogram extends Component {
     // return svgProps + svg.html() + "</svg>";
   }
 
-  state = {}
+  state = {};
 
   updateDimensions = () => {
     if (!this.svgParent) {
-      throw new Error('Cannot find Phylogram container div')
+      throw new Error('Cannot find Phylogram container div');
     }
     let { clientWidth, clientHeight } = this.svgParent;
     let nextState = {
       width: clientWidth,
       containerWidth: clientWidth,
-      containerHeight: clientHeight
+      containerHeight: clientHeight,
     };
     this.setState(nextState);
-  }
+  };
 
   onResize = () => {
-    if (this.rqf) return
+    if (this.rqf) return;
     this.rqf = window.requestAnimationFrame(() => {
-      this.rqf = null
-      this.updateDimensions()
-    })
-  }
+      this.rqf = null;
+      this.updateDimensions();
+    });
+  };
 
   getChartProps() {
     return Object.assign({}, this.props, this.state);
@@ -63,15 +65,18 @@ class Phylogram extends Component {
     this.updateDimensions();
     window.addEventListener('resize', this.onResize, false);
     phylogramChart.create(this.svgParent, this.getChartProps());
+    // treeChart.update(this.svgParent, this.getChartProps());
   }
 
   componentDidUpdate() {
     phylogramChart.update(this.svgParent, this.getChartProps());
+    // treeChart.update(this.svgParent, this.getChartProps());
   }
 
   componentWillUnmount() {
     window.removeEventListener('resize', this.onResize);
     phylogramChart.destroy(this.svgParent);
+    // treeChart.destroy(this.svgParent);
   }
 
   render() {
@@ -79,8 +84,8 @@ class Phylogram extends Component {
 
     return (
       <div>
-        <div ref={(el) => this.svgParent = el}>
-        </div>
+        <div ref={(el) => (this.svgParent = el)}></div>
+        {/* <svg ref={(el) => (this.svgParent = el)}></svg> */}
       </div>
     );
   }

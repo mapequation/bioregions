@@ -34,7 +34,7 @@ class App extends Component {
     this.checkDataWorkerInitiated(this.props.data);
   }
 
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     this.checkDataWorkerInitiated(nextProps.data);
   }
 

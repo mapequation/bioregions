@@ -1,4 +1,4 @@
-import d3 from 'd3';
+import * as d3 from 'd3';
 // Distances in km of one degree lat/long
 const longDegreeAtEquator = 111.321;
 const longDegreeAtPole = 0;
@@ -15,10 +15,10 @@ const p2 = -93.50412; // longitude calculation term 2
 const p3 = 0.11774; // longitude calculation term 3
 // const p4 = -0.000165;
 
-const longDistancePerAbsoluteDegree = d3.scale.linear()
+const longDistancePerAbsoluteDegree = d3.scaleLinear()
 .domain([0, 90]).range([longDegreeAtEquator, longDegreeAtPole]);
 
-const latDistancePerAbsoluteDegree = d3.scale.linear()
+const latDistancePerAbsoluteDegree = d3.scaleLinear()
   .domain([0, 90]).range([latDegreeAtEquator, latDegreeAtPole]);
 
 const longDistancePerDegree = (lat) => longDistancePerAbsoluteDegree(Math.abs(lat));

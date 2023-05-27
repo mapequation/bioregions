@@ -1,6 +1,6 @@
 import * as ActionTypes from '../constants/ActionTypes';
 import * as DataFetching from '../constants/DataFetching';
-import d3 from 'd3';
+import * as d3 from 'd3';
 
 const initialState = {
   world: {},
@@ -8,7 +8,7 @@ const initialState = {
   width: 500,
   height: 500,
   // projection: d3.geo.mercator(),
-  projection: d3.geo.equirectangular(),
+  projection: d3.geoEquirectangular(),
   // projection: d3.geo.equirectangular.raw,
   graticuleStep: 2,
   showGraticules: true,

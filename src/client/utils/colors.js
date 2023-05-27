@@ -1,7 +1,7 @@
 import paletteGenerator from './paletteGen';
 import distinctColors from 'distinct-colors';
 import iWantHue from 'iwanthue-api';
-import d3 from 'd3';
+import * as d3 from 'd3';
 import chroma from 'chroma-js';
 
 const CAT_20 = ["#D66F87",
@@ -75,9 +75,9 @@ export default {
   }
 }
 
-function categoryColorsByD3(count, options) {
-  return extend(d3.scale.category20().range().map(color => chroma(color)), count, options);
-}
+// function categoryColorsByD3(count, options) {
+//   return extend(d3.scaleOrdinal(d3.schemeCategory20).range().map(color => chroma(color)), count, options);
+// }
 
 function extend(colors, count, options) {
   if (count > colors.length) {

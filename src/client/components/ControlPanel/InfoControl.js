@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
-import React from "react";
-import { observer } from "mobx-react";
+import React from 'react';
+import { observer } from 'mobx-react';
 import {
   Button,
   Form,
@@ -8,21 +8,22 @@ import {
   Label,
   Table,
   Message,
-} from "semantic-ui-react";
-import ShowInfomapButton from "../Infomap/ShowInfomapButton";
-import Tooltip from "../lib/Tooltip";
-import Checkbox from "../helpers/Checkbox";
-import Div from "../helpers/Div";
-import Colors from "./Colors";
-import chroma from "chroma-js";
+} from 'semantic-ui-react';
+import ShowInfomapButton from '../Infomap/ShowInfomapButton';
+import Tooltip from '../lib/Tooltip';
+import Checkbox from '../helpers/Checkbox';
+import Div from '../helpers/Div';
+import Colors from './Colors';
+import chroma from 'chroma-js';
 import {
   BY_CELL,
   BY_CLUSTER,
   BY_RECORDS,
   BY_SPECIES_RICHNESS,
-} from "../../constants/Display";
-import * as Binning from "../../constants/Binning";
-import "./InfoControl.css";
+} from '../../constants/Display';
+import * as Binning from '../../constants/Binning';
+import * as d3 from 'd3';
+import './InfoControl.css';
 
 // @observer
 class InfoControl extends React.Component {
@@ -52,9 +53,9 @@ class InfoControl extends React.Component {
   constructor(props) {
     super(props);
 
-    this.formatArea = d3.format(",.2g");
-    this.formatSize = d3.format(",.3r");
-    this.formatIndicativeScore = d3.format(",.3g");
+    this.formatArea = d3.format(',.2g');
+    this.formatSize = d3.format(',.3r');
+    this.formatIndicativeScore = d3.format(',.3g');
   }
 
   toggleShowInfomapUI = () => {
@@ -83,7 +84,7 @@ class InfoControl extends React.Component {
     }
     const { colorBy } = this.props;
     this.props.changeColorBy(
-      colorBy === BY_RECORDS ? BY_SPECIES_RICHNESS : BY_RECORDS
+      colorBy === BY_RECORDS ? BY_SPECIES_RICHNESS : BY_RECORDS,
     );
   };
 
@@ -132,7 +133,7 @@ class InfoControl extends React.Component {
             </Table.Row>
             <Table.Row disabled={mapBy !== BY_CELL && !opacityByRecords}>
               <Table.Cell>
-                {mapBy === BY_CELL ? "Color" : "Opacity"} by
+                {mapBy === BY_CELL ? 'Color' : 'Opacity'} by
               </Table.Cell>
               <Table.Cell>
                 <Button.Group compact basic size="mini">
@@ -276,21 +277,21 @@ class InfoControl extends React.Component {
       key: name,
       cells: [
         {
-          key: "name",
+          key: 'name',
           content: <span title={name}>{name}</span>,
-          className: "infoTableCell infoTableNameCell",
+          className: 'infoTableCell infoTableNameCell',
         },
         {
-          key: "count",
+          key: 'count',
           content: count,
-          className: "infoTableCell",
-          textAlign: "right",
+          className: 'infoTableCell',
+          textAlign: 'right',
         },
         {
-          key: "score",
+          key: 'score',
           content: this.formatIndicativeScore(score),
-          className: "infoTableCell",
-          textAlign: "right",
+          className: 'infoTableCell',
+          textAlign: 'right',
         },
       ],
     });
@@ -305,21 +306,21 @@ class InfoControl extends React.Component {
           size="small"
           headerRow={[
             {
-              key: "name",
-              content: "Top common species",
-              className: "infoTableHeader",
+              key: 'name',
+              content: 'Top common species',
+              className: 'infoTableHeader',
             },
             {
-              key: "count",
-              content: "Count",
-              className: "infoTableHeader",
-              textAlign: "right",
+              key: 'count',
+              content: 'Count',
+              className: 'infoTableHeader',
+              textAlign: 'right',
             },
             {
-              key: "score",
-              content: "Score",
-              className: "infoTableHeader",
-              textAlign: "right",
+              key: 'score',
+              content: 'Score',
+              className: 'infoTableHeader',
+              textAlign: 'right',
             },
           ]}
           renderBodyRow={renderSpeciesRow}
@@ -333,21 +334,21 @@ class InfoControl extends React.Component {
           size="small"
           headerRow={[
             {
-              key: "name",
-              content: "Top indicative species",
-              className: "infoTableHeader",
+              key: 'name',
+              content: 'Top indicative species',
+              className: 'infoTableHeader',
             },
             {
-              key: "count",
-              content: "Count",
-              className: "infoTableHeader",
-              textAlign: "right",
+              key: 'count',
+              content: 'Count',
+              className: 'infoTableHeader',
+              textAlign: 'right',
             },
             {
-              key: "score",
-              content: "Score",
-              className: "infoTableHeader",
-              textAlign: "right",
+              key: 'score',
+              content: 'Score',
+              className: 'infoTableHeader',
+              textAlign: 'right',
             },
           ]}
           renderBodyRow={renderSpeciesRow}
@@ -372,8 +373,8 @@ class InfoControl extends React.Component {
           size="mini"
           style={{
             backgroundColor: clusterColor.hex(),
-            color: clusterColor.luminance() < 0.5 ? "white" : "black",
-            border: "1px solid #ccc",
+            color: clusterColor.luminance() < 0.5 ? 'white' : 'black',
+            border: '1px solid #ccc',
           }}
         >
           Bioregion {d.clusterId + 1}
@@ -381,12 +382,12 @@ class InfoControl extends React.Component {
       );
 
     const CellLabelDivider = (
-      <span>{isSelected ? "Selected" : "Mouse over"}</span>
+      <span>{isSelected ? 'Selected' : 'Mouse over'}</span>
     );
 
     return (
       <div>
-        <div style={{ fontSize: "0.85em" }}>
+        <div style={{ fontSize: '0.85em' }}>
           <Divider horizontal>{CellLabelDivider}</Divider>
           <div style={{ marginTop: -10 }}>
             {ClusterLabel}
@@ -418,8 +419,8 @@ class InfoControl extends React.Component {
           size="mini"
           style={{
             backgroundColor: clusterColor,
-            color: chroma(clusterColor).luminance() < 0.5 ? "white" : "black",
-            border: "1px solid #ccc",
+            color: chroma(clusterColor).luminance() < 0.5 ? 'white' : 'black',
+            border: '1px solid #ccc',
           }}
         >
           Bioregion {d.clusterId + 1}
@@ -431,8 +432,8 @@ class InfoControl extends React.Component {
         size="mini"
         style={{
           backgroundColor: d.color,
-          color: chroma(d.color).luminance() < 0.5 ? "white" : "black",
-          border: "1px solid #ccc",
+          color: chroma(d.color).luminance() < 0.5 ? 'white' : 'black',
+          border: '1px solid #ccc',
         }}
       >
         Cell {d.binId}
@@ -441,14 +442,14 @@ class InfoControl extends React.Component {
 
     const CellLabelDivider = (
       <span>
-        {isSelected ? "Selected" : "Mouse over"}
+        {isSelected ? 'Selected' : 'Mouse over'}
         {/* { CellLabel } */}
       </span>
     );
 
     const { unit } = this.props.binning;
     const size = this.formatSize(
-      unit === Binning.MINUTE ? 60 * d.size : d.size
+      unit === Binning.MINUTE ? 60 * d.size : d.size,
     );
     const unitSymbol =
       unit === Binning.MINUTE ? Binning.MINUTE_SYMBOL : Binning.DEGREE_SYMBOL;
@@ -456,11 +457,11 @@ class InfoControl extends React.Component {
     //TODO: Rename count and speciesCount to numRecords and numSpecies for consistensy with cluster
     return (
       <div>
-        <div style={{ fontSize: "0.85em" }}>
+        <div style={{ fontSize: '0.85em' }}>
           <Divider horizontal>{CellLabelDivider}</Divider>
           <div style={{ marginTop: -10 }}>
             {CellLabel}
-            Size: <b>{sizeText}</b> ({this.formatArea(d.area)} km2).{" "}
+            Size: <b>{sizeText}</b> ({this.formatArea(d.area)} km2).{' '}
             {ClusterLabel}
           </div>
         </div>
@@ -475,12 +476,12 @@ class InfoControl extends React.Component {
   renderHighlightedAndSelected(highlightedCell) {
     const { selectedCell, infoBy, selectedClusterId, clusters } = this.props;
     const selectedCluster =
-      selectedClusterId === -1 ? null : clusters[selectedClusterId].values;
-    const target = infoBy === BY_CLUSTER ? "bioregions" : "grid cells";
+      selectedClusterId === -1 ? null : clusters[selectedClusterId].value;
+    const target = infoBy === BY_CLUSTER ? 'bioregions' : 'grid cells';
     const haveContent = highlightedCell || selectedCell || selectedCluster;
     if (!haveContent) {
       return (
-        <div style={{ paddingTop: "1.5em" }}>
+        <div style={{ paddingTop: '1.5em' }}>
           <Message
             info
             compact
@@ -495,7 +496,7 @@ class InfoControl extends React.Component {
     }
     if (infoBy === BY_CLUSTER) {
       const highlightedCluster = highlightedCell
-        ? clusters[highlightedCell.clusterId].values
+        ? clusters[highlightedCell.clusterId].value
         : null;
       return (
         <div>

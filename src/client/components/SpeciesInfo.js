@@ -17,7 +17,7 @@ class SpeciesInfo extends Component {
     // http://eol.org/api/search/1.0.json?q=Ursus&page=1&exact=false&filter_by_taxon_concept_id=&filter_by_hierarchy_entry_id=&filter_by_string=&cache_ttl=
   }
 
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     if (nextProps.species !== this.currentSpecies) {
       this.fetchSpeciesInfo(nextProps.species);
     }

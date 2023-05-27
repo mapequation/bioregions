@@ -3,7 +3,8 @@ import QuadtreeGeoBinner from "../utils/QuadtreeGeoBinner";
 import * as Binning from "../constants/Binning";
 import _ from "lodash";
 import colors from "../utils/colors";
-import DataWorker from "worker-loader!../workers/DataWorker";
+/* eslint-disable */ 
+// import DataWorker from "worker-loader!../workers/DataWorker";
 import EventEmitter2 from "eventemitter2";
 import geoTreeUtils from "../utils/phylogeny/geoTreeUtils";
 import treeUtils from "../utils/treeUtils";
@@ -67,8 +68,8 @@ function binning(state = getInitialBinningState(), action) {
   }
 }
 
-var dataWorker = new DataWorker();
-// var dataWorker = new Worker(new URL("../workers/DataWorker", import.meta.url));
+// var dataWorker = new DataWorker();
+var dataWorker = new Worker(new URL("../workers/DataWorker", import.meta.url));
 var dataWorkerInitiated = false;
 var progressEmitter = new EventEmitter2({
   wildcard: false,

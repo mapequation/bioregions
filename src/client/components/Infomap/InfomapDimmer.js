@@ -52,7 +52,7 @@ class InfomapDimmer extends Component {
     this.scrollToBottom();
   }
 
-  componentWillReceiveProps(nextProps) {
+  UNSAFE_componentWillReceiveProps(nextProps) {
     if (nextProps.isClustering) {
       this.stdoutLines = [];
       this.setState({ stdout: "" });
@@ -64,7 +64,7 @@ class InfomapDimmer extends Component {
     }
   }
 
-  componentWillUpdate() {
+  UNSAFE_componentWillUpdate() {
     const { textarea } = this;
     if (!textarea) return;
     // Should keep scroll to bottom only if already at bottom

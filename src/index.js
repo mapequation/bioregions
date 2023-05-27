@@ -1,8 +1,13 @@
 // import "babel-polyfill";
 // import { polyfill } from "es6-promise";
 // polyfill();
+import { Buffer } from "buffer";
+/* eslint-disable */
+// @ts-ignore
+window.Buffer = Buffer;
+
 import React from "react";
-import { render } from "react-dom";
+import { createRoot } from "react-dom/client";
 import { Provider } from "react-redux";
 import App from "./client/containers/App";
 import configureStore from "./client/store/configureStore";
@@ -16,14 +21,15 @@ const store = configureStore();
 const highlightStore = new HighlightStore();
 window.hstore = highlightStore;
 
-render(
+createRoot(document.getElementById("app")).render(
   <div>
     {/* <App /> is your app entry point */}
     <Provider store={store}>
       <App highlightStore={highlightStore} />
     </Provider>
-  </div>,
-  document.getElementById("app")
+  </div>
 );
 
-render(<ExamplePhylogram />, document.getElementById("example-phylogram"));
+createRoot(document.getElementById("example-phylogram")).render(
+  <ExamplePhylogram />
+);

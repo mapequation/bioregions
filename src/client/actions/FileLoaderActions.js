@@ -160,7 +160,7 @@ export function loadSampleTreeFile(url) {
               response
             )}`
           );
-          const errorMessage = `Error loading files '${urls.join(", ")}': `;
+          const errorMessage = `Error loading tree file '${url}': `;
           const subMessage =
             response.status && response.statusText
               ? `${response.status} ${response.statusText}`

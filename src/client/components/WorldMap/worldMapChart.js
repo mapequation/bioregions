@@ -1,5 +1,5 @@
 import $ from "jquery";
-import d3 from "d3";
+import * as d3 from "d3";
 import * as topojson from "topojson-client";
 import colorbrewer from "colorbrewer";
 import chroma from "chroma-js";
@@ -74,7 +74,7 @@ world.update = function (el, properties) {
       left: 0,
       right: 0,
       height: 500,
-      projection: d3.geo.mercator(),
+      projection: d3.geoMercator(),
     },
     properties
   );
@@ -104,8 +104,7 @@ world.update = function (el, properties) {
   g.attr("transform", `translate(${props.left}, ${props.top})`);
 
   // console.log("Creating worldmap zoom behavior...");
-  const zoom = d3.behavior
-    .zoom()
+  const zoom = d3.zoom()
     .scaleExtent([1, MAX_SCALE_EXTENT])
     .on("zoom", onZoom);
 
@@ -117,7 +116,7 @@ world.update = function (el, properties) {
     .translate([width / 2, height / 2])
     .scale(width / 2 / Math.PI);
 
-  const geoPath = d3.geo.path().pointRadius(1).projection(props.projection);
+  const geoPath = d3.geoPath().pointRadius(1).projection(props.projection);
   window.geo = geoPath;
   window.proj = props.projection;
 
@@ -134,7 +133,7 @@ world.update = function (el, properties) {
 
   const { graticuleStep, showGraticules } = props;
   // const stepScale = props.binning.unit === Binning.MINUTE ? 1.0 / 60 : 1;
-  let graticule = d3.geo.graticule().step([graticuleStep, graticuleStep]);
+  let graticule = d3.geoGraticule().step([graticuleStep, graticuleStep]);
   window.graticule = graticule;
 
   const emptyGraticule = () => [];
@@ -205,8 +204,7 @@ world.update = function (el, properties) {
     const selectedCellMax = props.selectedCell
       ? props.selectedCell.links.get(props.selectedCell.binId)
       : 1.0;
-    const selectedCellAlphaScale = d3.scale
-      .linear()
+    const selectedCellAlphaScale = d3.scaleLinear()
       .domain([0, selectedCellMax])
       .range([0.2, 1]);
 
@@ -246,8 +244,7 @@ world.update = function (el, properties) {
       const domainMax = domainExtent[1];
       const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
       domain.push(domainMax);
-      const heatmapOpacityScale = d3.scale
-        .log()
+      const heatmapOpacityScale = d3.scaleLog()
         .domain(domainExtent)
         .range(range);
       return (d) => heatmapOpacityScale(countPerArea(d));
@@ -267,8 +264,7 @@ world.update = function (el, properties) {
       };
 
       const linkColors = colorbrewer.Blues["9"];
-      const selectedCellColorScale = d3.scale
-        .linear()
+      const selectedCellColorScale = d3.scaleLinear()
         .domain([0, selectedCellMax])
         .range([0, 8]);
 
@@ -334,8 +330,10 @@ world.update = function (el, properties) {
     world._zoomScale = scale;
     // console.log(`doZoom: t: ${translation}, s: ${scale}`);
 
-    zoom.translate(translation);
-    zoom.scale(scale);
+    const transform = d3.zoomTransform(g);
+    transform.translate(translation);
+    transform.scale(scale);
+
     g.attr("transform", "translate(" + translation + ")scale(" + scale + ")");
 
     //adjust the country hover stroke width based on zoom level
@@ -384,15 +382,17 @@ world.update = function (el, properties) {
     // }
   }
 
-  function onZoom() {
+  function onZoom(event) {
     if (!props.world) {
       return;
     }
 
-    const t = d3.event.translate;
-    const s = d3.event.scale;
+    let { x, y, k } = event.transform;
+    const t = [x, y];
+    const s = k;
+
     const h = height / 4;
-    // console.log('d3.event t:', t, 's:', s);
+    // console.log('event t:', t, 's:', s);
 
     t[0] = Math.min(
       (width / height) * (s - 1),
@@ -408,31 +408,33 @@ world.update = function (el, properties) {
     // props.onZoom({ translation: t, scale: s });
   }
 
-  function onClickGridCell(d) {
+  function onClickGridCell(event, d) {
     console.log("####### mouse CLICK", d);
-    d3.event.stopPropagation();
-    d3.event.preventDefault();
+    event.stopPropagation();
+    event.preventDefault();
     console.log("props:", props);
+    const lonlat = props.projection.invert(d3.pointer(event));
+    console.log("Long, Lat:", lonlat);
     props.onMouseClick(d);
   }
 
-  function onMouseOverGridCell(d) {
+  function onMouseOverGridCell(event, d) {
     // console.log('####### mouse OVER', d);
-    d3.event.stopPropagation();
-    d3.event.preventDefault();
+    event.stopPropagation();
+    event.preventDefault();
     props.onMouseOver(d);
   }
 
-  function onMouseOutGridCell(d) {
+  function onMouseOutGridCell(event, d) {
     // console.log('####### mouse OUT', d);
-    d3.event.stopPropagation();
-    d3.event.preventDefault();
+    event.stopPropagation();
+    event.preventDefault();
     props.onMouseOut(d);
   }
 
   //geo translation on mouse click in map
-  function onClick() {
-    var lonlat = props.projection.invert(d3.mouse(this));
+  function onClick(event) {
+    const lonlat = props.projection.invert(d3.pointer(event));
     console.log("Long, Lat:", lonlat);
     props.onMouseClick(null);
   }
@@ -453,9 +455,9 @@ world.update = function (el, properties) {
     world.render();
   }
 
-  function onChangeClipOverlay(clip) {
-    overlayGroup.attr("clip-path", clip ? "url(#clip)" : null);
-  }
+  // function onChangeClipOverlay(clip) {
+  //   overlayGroup.attr("clip-path", clip ? "url(#clip)" : null);
+  // }
 
   return world;
 };
