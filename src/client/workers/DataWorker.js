@@ -490,7 +490,7 @@ function parseGeoJSON(nameField) {
 function shapeToPoints() {
   state.features = [];
   // Divide by 2 to reduce edge cases where species are not included
-  const minNodeSize = getNodeSize(state.binning.minNodeSizeLog2); // 2
+  const minNodeSize = getNodeSize(state.binning.minNodeSizeLog2) / 2;
   const halfMinNodeSize = minNodeSize / 2;
   // const resolution = minNodeSize / 8;
   const tolerance = minNodeSize / 8;
