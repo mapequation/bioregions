@@ -444,13 +444,14 @@ export default class SpeciesStore {
 
   generateGeojsonFromBins = () => {
     const { colorStore } = this.rootStore;
-    const features = this.binner.cells.map(cell => {
+    const features = this.binner.cells.map((cell, index) => {
       const c = Color(cell.color)!;
       return {
         type: "Feature",
         geometry: cell.geometry,
         properties: {
           id: cell.id,
+          index,
           bioregion: cell.bioregionId + 1,
           recordsCount: cell.numFeatures,
           speciesCount: cell.speciesTopList.length,
@@ -465,7 +466,23 @@ export default class SpeciesStore {
       features
     };
   }
+
+  generatePresenceAbsenceDataPerCell = () => {
+    // Enumerates cells with same 'index' property as in GeoJSON/Shapefile output
+    const numCells = this.binner.cells.length;
+    const data = new Map<string, string[]>(); // species -> presenceAbsence
+    this.speciesMap.forEach(value => {
+      data.set(value.name, new Array(numCells).fill("0"));
+    });
+    this.binner.cells.forEach((cell, i) => {
+      cell.speciesTopList.forEach(d => {
+        data.get(d.name)![i] = "1";
+      })
+    })
+    return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
+  }
 }
+
 
 function createMapper<ItemType = string | number>(
   nameColumn: string,

@@ -72,55 +72,75 @@ export default observer(function Export({ rootStore }: ExportProps) {
     saveString(`${parameterName}.geojson`, data);
   };
 
+  const downloadPresenceAbsencePerCell = async () => {
+    const data = speciesStore.generatePresenceAbsenceDataPerCell();
+    saveString(`${parameterName}_presence-absence.txt`, data);
+  };
+
+  type DownloadItem = {
+    title: string;
+    onClick: () => void;
+    isDisabled: boolean;
+    hide?: boolean;
+  };
+  const downloadItems: DownloadItem[] = [
+    {
+      title: 'Download map',
+      onClick: downloadMap,
+      isDisabled: false,
+    },
+    {
+      title: 'Download Shapefile',
+      onClick: downloadShapefile,
+      isDisabled: !infomapStore.network,
+    },
+    {
+      title: 'Download GeoJSON',
+      onClick: downloadGeojson,
+      isDisabled: !infomapStore.network,
+    },
+    {
+      title: 'Download Cell Presence/Absence',
+      onClick: downloadPresenceAbsencePerCell,
+      isDisabled: !infomapStore.network,
+    },
+    {
+      title: 'Download Infomap tree',
+      onClick: downloadInfomapTree,
+      isDisabled: !infomapStore.treeString,
+    },
+    {
+      title: 'Download Infomap output',
+      onClick: downloadInfomapOutput,
+      isDisabled: !infomapStore.tree,
+    },
+    {
+      title: 'Download network',
+      onClick: downloadNetwork,
+      isDisabled: !infomapStore.network,
+    },
+    {
+      title: 'Download multilayer network',
+      onClick: downloadMultilayerNetwork,
+      isDisabled: !infomapStore.multilayerNetwork,
+      hide: !infomapStore.multilayerNetwork,
+    },
+  ];
+
   return (
     <VStack align="stretch">
-      <Button size="sm" onClick={downloadMap}>
-        Download map
-      </Button>
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.network}
-        onClick={downloadShapefile}
-      >
-        Download Shapefile
-      </Button>
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.network}
-        onClick={downloadGeojson}
-      >
-        Download GeoJSON
-      </Button>
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.treeString}
-        onClick={downloadInfomapTree}
-      >
-        Download Infomap tree
-      </Button>
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.tree}
-        onClick={downloadInfomapOutput}
-      >
-        Download Infomap output
-      </Button>
-      <Button
-        size="sm"
-        isDisabled={!infomapStore.network}
-        onClick={downloadNetwork}
-      >
-        Download network
-      </Button>
-      {infomapStore.multilayerNetwork && (
-        <Button
-          size="sm"
-          isDisabled={!infomapStore.multilayerNetwork}
-          onClick={downloadMultilayerNetwork}
-        >
-          Download multilayer network
-        </Button>
-      )}
+      {downloadItems
+        .filter((item) => !item.hide)
+        .map((item) => (
+          <Button
+            key={item.title}
+            size="sm"
+            isDisabled={item.isDisabled}
+            onClick={item.onClick}
+          >
+            {item.title}
+          </Button>
+        ))}
     </VStack>
   );
 });
