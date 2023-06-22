@@ -469,6 +469,13 @@ export default class InfomapStore {
     this.haveStateNodes = haveStates;
     const infomapResult = haveStates ? statesTree : tree ?? null;
 
+
+    const { moduleLevel: _moduleLevel } = this;
+    const moduleLevel = tree ? min([_moduleLevel, tree.numLevels - 2])! : 0;
+    if (moduleLevel !== _moduleLevel) {
+      this.setModuleLevel(moduleLevel, false);
+    }
+
     this.createBioregions(infomapResult);
     this.setTree(infomapResult);
     this.setTreeString(haveStates ? treeStatesString : treeString);
@@ -1544,10 +1551,8 @@ export default class InfomapStore {
 
   createNonStateBioregions(tree: Tree) {
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells, moduleLevel: _moduleLevel } = this;
+    const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
-
-    const moduleLevel = min([_moduleLevel, tree.numLevels - 1])!;
     const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
     // TODO: Some modules may have only tree nodes, reduce to number of modules containing grid cells
     console.log(`Create ${numModules} bioregions on level ${moduleLevel}`);
@@ -1686,7 +1691,7 @@ export default class InfomapStore {
       return;
     }
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells, moduleLevel: _moduleLevel } = this;
+    const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
     console.log(tree);
 
@@ -1696,7 +1701,6 @@ export default class InfomapStore {
       this.addError(`Infomap output error, please report.`);
       return;
     }
-    const moduleLevel = min([_moduleLevel, tree.numLevels - 1])!;
     const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
 
     const bioregions: Bioregion[] = Array.from(
