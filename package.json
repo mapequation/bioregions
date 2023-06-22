@@ -1,6 +1,6 @@
 {
   "name": "bioregions",
-  "version": "2.0.0-alpha.9",
+  "version": "2.0.0-alpha.10",
   "private": true,
   "homepage": "/bioregions2",
   "dependencies": {
@@ -64,7 +64,7 @@
     "styleguide": "styleguidist server",
     "styleguide:build": "styleguidist build",
     "predeploy": "npm run build",
-    "deploy": "scp -r build/* mapequation:/var/www/bioregions2"
+    "deploy": "rsync -avzh build/* mapequation:/var/www/bioregions2"
   },
   "eslintConfig": {
     "extends": [

@@ -74,53 +74,66 @@ export default observer(function Export({ rootStore }: ExportProps) {
 
   const downloadPresenceAbsencePerCell = async () => {
     const data = speciesStore.generatePresenceAbsenceDataPerCell();
-    saveString(`${parameterName}_presence-absence.txt`, data);
+    saveString(`${parameterName}_presence-absence-per-cell.txt`, data);
+  };
+
+  const downloadPresenceAbsencePerBioregion = async () => {
+    const data = speciesStore.generatePresenceAbsenceDataPerBioregion();
+    saveString(`${parameterName}_presence-absence-per-bioregion.txt`, data);
   };
 
   type DownloadItem = {
     title: string;
+    description?: string;
     onClick: () => void;
     isDisabled: boolean;
     hide?: boolean;
   };
   const downloadItems: DownloadItem[] = [
     {
-      title: 'Download map',
+      title: 'Map',
       onClick: downloadMap,
       isDisabled: false,
     },
     {
-      title: 'Download Shapefile',
+      title: 'Shapefile',
       onClick: downloadShapefile,
       isDisabled: !infomapStore.network,
     },
     {
-      title: 'Download GeoJSON',
+      title: 'GeoJSON',
       onClick: downloadGeojson,
       isDisabled: !infomapStore.network,
     },
     {
-      title: 'Download Cell Presence/Absence',
+      title: 'Presence/Absence per cell',
+      description: 'Species presence/absence matrix',
       onClick: downloadPresenceAbsencePerCell,
       isDisabled: !infomapStore.network,
     },
     {
-      title: 'Download Infomap tree',
+      title: 'Presence/Absence per bioregion',
+      description: 'Species presence/absence matrix',
+      onClick: downloadPresenceAbsencePerBioregion,
+      isDisabled: !infomapStore.tree,
+    },
+    {
+      title: 'Infomap tree',
       onClick: downloadInfomapTree,
       isDisabled: !infomapStore.treeString,
     },
     {
-      title: 'Download Infomap output',
+      title: 'Infomap output',
       onClick: downloadInfomapOutput,
       isDisabled: !infomapStore.tree,
     },
     {
-      title: 'Download network',
+      title: 'Network',
       onClick: downloadNetwork,
       isDisabled: !infomapStore.network,
     },
     {
-      title: 'Download multilayer network',
+      title: 'Multilayer network',
       onClick: downloadMultilayerNetwork,
       isDisabled: !infomapStore.multilayerNetwork,
       hide: !infomapStore.multilayerNetwork,
@@ -134,6 +147,7 @@ export default observer(function Export({ rootStore }: ExportProps) {
         .map((item) => (
           <Button
             key={item.title}
+            title={item.description}
             size="sm"
             isDisabled={item.isDisabled}
             onClick={item.onClick}

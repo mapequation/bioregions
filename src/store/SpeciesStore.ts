@@ -481,8 +481,22 @@ export default class SpeciesStore {
     })
     return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
   }
-}
 
+  generatePresenceAbsenceDataPerBioregion = () => {
+    const { numBioregions } = this.rootStore.infomapStore;
+    const data = new Map<string, string[]>(); // species -> presenceAbsence
+    this.speciesMap.forEach(value => {
+      data.set(value.name, new Array(numBioregions).fill("0"));
+    });
+    this.binner.cells.forEach(cell => {
+      cell.speciesTopList.forEach(d => {
+        data.get(d.name)![cell.bioregionId - 1] = "1";
+      })
+    })
+    return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
+  }
+
+}
 
 function createMapper<ItemType = string | number>(
   nameColumn: string,
