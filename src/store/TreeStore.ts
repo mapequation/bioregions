@@ -103,6 +103,7 @@ export default class TreeStore {
   setTree = action((tree: PhyloNode | null) => {
     this.tree = tree;
     this.calculateTreeStats();
+    this.rootStore.infomapStore.updateNetwork();
   });
 
   setTreeString = action((treeString: string) => {
