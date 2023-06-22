@@ -54,6 +54,16 @@ export default observer(function PieChart({
           viewBox="-100 -100 200 200"
           style={{ marginInline: 'auto' }}
         >
+          {aggregated.length === 0 && (
+            <circle
+              cx={0}
+              cy={0}
+              r={radius}
+              fill={restColor}
+              stroke="white"
+              strokeWidth={4}
+            />
+          )}
           {aggregated.length === 1 && (
             <circle
               cx={0}

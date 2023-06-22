@@ -115,9 +115,11 @@ const BioregionInfo = observer(function Bioregion({
                   <Td isNumeric>{formatScore(commonSpecies.score)}</Td>
                   <Td>
                     <PieChart
-                      values={speciesStore.speciesMap
-                        .get(commonSpecies.name)!
-                        .countPerRegion.entries()}
+                      values={
+                        speciesStore.speciesMap
+                          .get(commonSpecies.name)
+                          ?.countPerRegion.entries() ?? []
+                      }
                     />
                   </Td>
                   <Td>{indicativeSpecies.name}</Td>
@@ -125,9 +127,11 @@ const BioregionInfo = observer(function Bioregion({
                   <Td isNumeric>{formatScore(indicativeSpecies.score)}</Td>
                   <Td>
                     <PieChart
-                      values={speciesStore.speciesMap
-                        .get(indicativeSpecies?.name)!
-                        .countPerRegion.entries()}
+                      values={
+                        speciesStore.speciesMap
+                          .get(indicativeSpecies.name)
+                          ?.countPerRegion.entries() ?? []
+                      }
                     />
                   </Td>
                 </Tr>
