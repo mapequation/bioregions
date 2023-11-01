@@ -10,6 +10,7 @@ import {
   Heading,
   Text,
 } from '@chakra-ui/react';
+import { formatThousands } from '../utils/formats';
 
 const Tooltip = observer(function _Tooltip() {
   const { mapStore } = useStore();
@@ -23,24 +24,23 @@ const Tooltip = observer(function _Tooltip() {
   return (
     <Box pos="absolute" left={x} top={y} pointerEvents="none">
       <Card bgColor="rgba(255,255,255,0.2)">
-        <CardHeader pb={0}>
+        <CardHeader p={2}>
           <Heading size="xs">
             Cell <small style={{ color: '#cccccc' }}>{cell.id}</small>
           </Heading>
+          <Text style={{ display: 'inline-block' }}>
+            {cell.sizeString}
+            <small>×</small>
+            {cell.sizeString}
+          </Text>
+          <Text fontSize="xs" style={{ display: 'inline-block' }}>
+            ({formatThousands(Math.round(cell.area))} km²)
+          </Text>
         </CardHeader>
-        <CardBody>
+        <CardBody p={2} pt={0}>
           <Box>
-            <Text style={{ display: 'inline-block' }}>
-              Size: {cell.sizeString}
-              <small>x</small>
-              {cell.sizeString}
-            </Text>
-            <Text>({Math.round(cell.area)} km2)</Text>
-            <Badge ml={2} bgColor={cell.color}>
-              Bioregion {cell.bioregionId}
-            </Badge>
+            <Badge bgColor={cell.color}>Bioregion {cell.bioregionId}</Badge>
           </Box>
-          <Box>{}</Box>
         </CardBody>
       </Card>
     </Box>
