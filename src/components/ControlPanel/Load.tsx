@@ -142,7 +142,7 @@ export const LoadData = observer(function LoadData() {
 
       if (['csv', 'tsv'].includes(fileExt) && occurrenceData === null) {
         occurrenceData = file;
-      } else if (['nwk', 'tre'].includes(fileExt)) {
+      } else if (['nwk', 'tre', 'tree'].includes(fileExt)) {
         tree = file;
       } else if (shpExtensions.includes(fileExt)) {
         shpFiles.push(file);
