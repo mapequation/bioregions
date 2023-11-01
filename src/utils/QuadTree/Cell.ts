@@ -466,6 +466,6 @@ export default class Cell
     const isRight = x >= xMid;
     const isBelow = y >= yMid;
     const i = (Number(isBelow) << 1) | Number(isRight);
-    return this.children[i]?.find(x, y, radius);
+    return this.children[i]?.find(x, y, radius) ?? (this.visible ? this : undefined);
   }
 }
