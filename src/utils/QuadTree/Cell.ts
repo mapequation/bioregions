@@ -134,6 +134,10 @@ export default class Cell
     return Math.log2(this.size);
   }
 
+  get sizeString() {
+    return this.sizeLog2 < 0 ? `1/${Math.round(Math.pow(2, -this.sizeLog2))}˚` : `${this.size}˚`;
+  }
+
   get speciesTopList() {
     if (this._recalcStats) {
       this.calcStats();
@@ -451,5 +455,17 @@ export default class Cell
       .sort((a, b) => (a.count > b.count ? -1 : 1));
 
     this._recalcStats = false;
+  }
+
+  find(x: number, y: number, radius?: number): Cell | undefined {
+    if (this.isLeaf) {
+      return this;
+    }
+    const [xMid, yMid] = this.center;
+
+    const isRight = x >= xMid;
+    const isBelow = y >= yMid;
+    const i = (Number(isBelow) << 1) | Number(isRight);
+    return this.children[i]?.find(x, y, radius);
   }
 }

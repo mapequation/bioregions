@@ -299,6 +299,13 @@ export default class QuadtreeGeoBinner {
     return nodes;
   });
 
+  find(x: number, y: number, radius?: number) {
+    if (radius === undefined) {
+      radius = Infinity;
+    }
+    return this.root?.find(x, y, radius);
+  }
+
   // visitWithinThresholds(callback: VisitCallback) {
   //   this.visitNonEmpty((node: Node) => {
   //     // Skip biggest non-empty nodes if its number of features are below the lower threshold

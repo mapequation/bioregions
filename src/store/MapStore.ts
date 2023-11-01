@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { action, makeObservable, observable } from 'mobx';
-import { Cell } from '../utils/QuadTree';
+import { type Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
@@ -38,6 +38,12 @@ export const PROJECTIONNAME: Record<Projection, string> = {
   geoMercator: 'Mercator',
 } as const;
 
+type TooltipData = {
+  x: number,
+  y: number,
+  active: boolean,
+}
+
 export default class MapStore {
   rootStore: RootStore;
   isZooming: boolean = false;
@@ -69,6 +75,10 @@ export default class MapStore {
   waterColor: string = '#f0f8ff';
   landColor: string = '#ffffff';
 
+  tooltipActive: boolean = false;
+  tooltipPos: [number, number] = [0, 0];
+  tooltipCell: Cell | null = null;
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -83,6 +93,9 @@ export default class MapStore {
       colorModuleParticipationStrength: observable,
       waterColor: observable,
       landColor: observable,
+      tooltipActive: observable,
+      tooltipPos: observable,
+      tooltipCell: observable.ref,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -411,4 +424,37 @@ export default class MapStore {
     this.isZooming = false;
     this.render();
   }
+
+  getPosFromEvent(event: React.MouseEvent<HTMLCanvasElement>): [number, number] {
+    const { offsetX, offsetY } = event.nativeEvent;
+    return [offsetX, offsetY];
+  }
+
+  setTooltipPos = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+    this.tooltipPos = this.getPosFromEvent(event);
+  })
+
+  onMouseEnter = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+    this.tooltipActive = true;
+    this.setTooltipPos(event);
+  })
+
+  onMouseLeave = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+    this.tooltipActive = false;
+    this.tooltipCell = null;
+  })
+
+  onMouseMove = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+    this.setTooltipPos(event);
+    const longlat = this.projection.invert!(this.tooltipPos);
+    if (!longlat) {
+      return;
+    }
+    const cell = this.rootStore.speciesStore.binner.find(...longlat) ?? null;
+    this.tooltipCell = cell?.visible ? cell : null;
+  })
+
+  onMouseClick = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+    console.log(event)
+  })
 }
