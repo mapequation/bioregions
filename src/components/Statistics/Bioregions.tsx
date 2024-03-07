@@ -49,7 +49,7 @@ const BioregionInfo = observer(function Bioregion({
   const MAX_NUM_ROWS = 10;
   const numValues = Math.min(
     Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
-    MAX_NUM_ROWS - 1,
+    MAX_NUM_ROWS,
   );
 
   const mostCommon = bioregion.mostCommon.slice(0, numValues);

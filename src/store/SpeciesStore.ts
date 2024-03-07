@@ -2,7 +2,7 @@ import { action, makeObservable, observable, computed } from 'mobx';
 import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
-import { csvParse, color as Color } from 'd3';
+import { csvParse, tsvFormatRows, color as Color } from 'd3';
 import type RootStore from './RootStore';
 import type {
   Feature,
@@ -443,7 +443,6 @@ export default class SpeciesStore {
   });
 
   generateGeojsonFromBins = () => {
-    const { colorStore } = this.rootStore;
     const features = this.binner.cells.map((cell, index) => {
       const c = Color(cell.color)!;
       return {
@@ -494,6 +493,60 @@ export default class SpeciesStore {
       })
     })
     return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
+  }
+
+  generateSummaryTabularDataPerBioregion = () => {
+    const { infomapStore, colorStore } = this.rootStore;
+    const { bioregions } = infomapStore;
+    const { colorBioregion } = colorStore;
+
+    const header = [
+      "bioregion",
+      "rank_in_bioregion",
+      "common_species_name",
+      "common_species_count",
+      "common_species_score",
+      "indicative_species_name",
+      "indicative_species_count",
+      "indicative_species_score",
+      "bioregion_color",
+    ];
+    const data = [header];
+
+    bioregions.forEach(bioregion => {
+
+      const MAX_NUM_ROWS = 10;
+      const numValues = Math.min(
+        Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
+        MAX_NUM_ROWS,
+      );
+
+      const mostCommon = bioregion.mostCommon.slice(0, numValues);
+      const mostIndicative = bioregion.mostIndicative.slice(0, numValues);
+
+
+      mostCommon.forEach(
+        (
+          commonSpecies: { name: string; count: number; score: number },
+          index: number,
+        ) => {
+          const indicativeSpecies = mostIndicative[index]!;
+          data.push([
+            bioregion.bioregionId,
+            index + 1,
+            commonSpecies.name,
+            commonSpecies.count,
+            commonSpecies.score,
+            indicativeSpecies.name,
+            indicativeSpecies.count,
+            indicativeSpecies.score,
+            Color(colorBioregion(bioregion.bioregionId))?.formatHex(),
+          ].map(value => `${value}`))
+        }
+      )
+    });
+
+    return tsvFormatRows(data);
   }
 
 }

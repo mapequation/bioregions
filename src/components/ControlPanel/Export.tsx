@@ -2,12 +2,7 @@ import { Button, VStack } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
-import {
-  saveBase64,
-  saveBlob,
-  saveCanvas,
-  saveString,
-} from '../../utils/exporter';
+import { saveBlob, saveCanvas, saveString } from '../../utils/exporter';
 //@ts-ignore
 import shpWrite from 'shp-write';
 
@@ -82,6 +77,11 @@ export default observer(function Export({ rootStore }: ExportProps) {
     saveString(`${parameterName}_presence-absence-per-bioregion.txt`, data);
   };
 
+  const downloadSummaryTables = async () => {
+    const data = speciesStore.generateSummaryTabularDataPerBioregion();
+    saveString(`${parameterName}_summary_tables.tsv`, data);
+  };
+
   type DownloadItem = {
     title: string;
     description?: string;
@@ -115,6 +115,12 @@ export default observer(function Export({ rootStore }: ExportProps) {
       title: 'Presence/Absence per bioregion',
       description: 'Species presence/absence matrix',
       onClick: downloadPresenceAbsencePerBioregion,
+      isDisabled: !infomapStore.tree,
+    },
+    {
+      title: 'Summary tables',
+      description: 'Most common and indicative species per bioregion',
+      onClick: downloadSummaryTables,
       isDisabled: !infomapStore.tree,
     },
     {
