@@ -5,3 +5,4 @@ node_modules
 .vscode
 temp
 .DS_Store
+.next
