@@ -4,7 +4,7 @@ import { type Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
 import { select } from 'd3-selection';
-import zoom from '../utils/zoom';
+import { zoomProjection, zoomFixed } from '../utils/zoom';
 import { MultiPoint } from '../types/geojson';
 import { GeometryFeature } from './SpeciesStore';
 // import * as c3 from '@mapequation/c3';
@@ -55,7 +55,8 @@ export default class MapStore {
   projectionName: Projection = PROJECTIONS[0];
   projection = d3[this.projectionName]().precision(0.1)!;
   rotation: [number, number] = [40, 0]; // for orthographic projection
-  translation: [number, number] = [480, 250]; // Places the 0˚,0˚ point at the center of a 960x500 area
+  // translation: [number, number] = [480, 250]; // Places the 0˚,0˚ point at the center of a 960x500 area
+  translation: [number, number] = [600, 450];
 
   canvas: HTMLCanvasElement | null = null;
   svg: SVGSVGElement | null = null;
@@ -107,7 +108,7 @@ export default class MapStore {
     }
 
     if (this.projectionName === 'geoNaturalEarth1') {
-      this.projection.translate(this.translation)
+      this.projection.translate(this.translation);
     }
   }
 
@@ -347,9 +348,6 @@ export default class MapStore {
   setProjection(projection: Projection) {
     this.projectionName = projection;
     this.projection = d3[projection]().precision(0.1)!;
-    if (projection === 'geoOrthographic' || true) {
-      this.projection.rotate(this.rotation);
-    }
     this.setGeoPath(this.projection, this.context2d!);
     this.adjustHeight();
     this.applyZoom();
@@ -391,10 +389,12 @@ export default class MapStore {
     if (this.canvas !== null) {
       this.canvas.height = height;
     }
+    projection.translate([width / 2, height / 2]);
   }
 
   applyZoom() {
-    const canvasZoom = zoom(this.projection) as d3Zoom.ZoomBehavior<
+    const zoomBehavior = this.projectionName === "geoOrthographic" ? zoomProjection : zoomFixed;
+    const canvasZoom = zoomBehavior(this.projection) as d3Zoom.ZoomBehavior<
       HTMLCanvasElement,
       CanvasDatum
     >;

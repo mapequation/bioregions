@@ -1,8 +1,15 @@
+// @ts-nocheck
 import * as d3 from 'd3';
 import versor from 'versor';
 
-export default function zoom(
-  projection,
+interface CanvasDatum {
+  width: number;
+  height: number;
+  radius: number;
+}
+
+export function zoomProjection(
+  projection: d3.GeoProjection,
   {
     // Capture the projection’s original scale, before any zooming.
     scale = projection._scale === undefined
@@ -30,10 +37,10 @@ export default function zoom(
 
     return tl > 1
       ? [
-          d3.mean(t, (p) => p[0]),
-          d3.mean(t, (p) => p[1]),
-          Math.atan2(t[1][1] - t[0][1], t[1][0] - t[0][0]),
-        ]
+        d3.mean(t, (p) => p[0]),
+        d3.mean(t, (p) => p[1]),
+        Math.atan2(t[1][1] - t[0][1], t[1][0] - t[0][0]),
+      ]
       : t[0];
   }
 
@@ -67,6 +74,44 @@ export default function zoom(
     (selection) =>
       selection
         .property('__zoom', d3.zoomIdentity.scale(projection.scale()))
+        .call(zoom),
+    {
+      on(type, ...options) {
+        return options.length
+          ? (zoom.on(type, ...options), this)
+          : zoom.on(type);
+      },
+    },
+  );
+}
+
+export function zoomFixed(
+  projection: d3.GeoProjection,
+  {
+    // Capture the projection’s original scale, before any zooming.
+    scale = projection._scale === undefined
+      ? (projection._scale = projection.scale())
+      : projection._scale,
+    scaleExtent = [0.8, 1000],
+  } = {},
+) {
+  const zoom = d3
+    .zoom()
+    .scaleExtent(scaleExtent.map((x) => x * scale))
+    .on('zoom', zoomed);
+
+  const [tx, ty] = projection.translate();
+
+  function zoomed(event: d3.D3ZoomEvent<HTMLCanvasElement, CanvasDatum>) {
+    const { k, x, y } = event.transform;
+    projection.translate([x, y]);
+    projection.scale(k);
+  }
+
+  return Object.assign(
+    (selection) =>
+      selection
+        .property('__zoom', d3.zoomIdentity.scale(projection.scale()).translate(tx / scale, ty / scale))
         .call(zoom),
     {
       on(type, ...options) {
