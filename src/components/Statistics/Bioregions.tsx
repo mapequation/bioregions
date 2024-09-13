@@ -7,12 +7,21 @@ import {
   Th,
   Td,
   useColorModeValue,
+  Text,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverArrow,
+  PopoverCloseButton,
+  PopoverHeader,
+  PopoverBody,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { format } from 'd3-format';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
 import PieChart from './PieChart';
+import { InfoOutlineIcon } from '@chakra-ui/icons';
 
 const formatScore = format('.3r');
 // const formatNumber = format(',');
@@ -87,7 +96,25 @@ const BioregionInfo = observer(function Bioregion({
               Most common species
             </Th>
             <Th colSpan={3} textAlign="center">
-              Most indicative species
+              <Text display="flex" alignItems="center">
+                Most indicative species
+                <Popover trigger="hover">
+                  <PopoverTrigger>
+                    <InfoOutlineIcon ml={2} />
+                  </PopoverTrigger>
+                  <PopoverContent textTransform="none">
+                    <PopoverArrow />
+                    <PopoverCloseButton />
+                    <PopoverHeader>Most indicative species</PopoverHeader>
+                    <PopoverBody fontWeight="normal">
+                      The score of a species <em>s</em> in bioregion <em>r</em>{' '}
+                      is defined as the relative abundance of <em>s</em> within{' '}
+                      <em>r</em> divided by the relative abundance of <em>s</em>{' '}
+                      in total.
+                    </PopoverBody>
+                  </PopoverContent>
+                </Popover>
+              </Text>
             </Th>
           </Tr>
           <Tr>
