@@ -45,7 +45,7 @@ export default function Slider({
       <RangeSlider
         mx={2}
         min={0}
-        max={values.length - 1}
+        max={Math.max(0, values.length - 1)}
         step={1}
         value={limits}
         onChange={setLimits}

@@ -1,5 +1,5 @@
-import { expose } from 'threads/worker';
-import { Observable, Subject } from 'threads/observable';
+// import { expose } from 'threads/worker';
+// import { Observable, Subject } from 'threads/observable';
 import { ParseResult } from 'papaparse';
 import { loadFile, ParseAsyncConfig } from '../utils/loader';
 import { extension } from '../utils/filename';
@@ -13,9 +13,9 @@ import type {
 } from '../store/SpeciesStore';
 import { normalizeSpeciesName } from '../utils/names';
 
-let dataStream = new Subject();
+// let dataStream = new Subject();
 
-function load(
+async function load(
   file: string | File,
   args: Omit<ParseAsyncConfig<any, File | string>, 'complete'> = {},
 ) {
@@ -24,12 +24,17 @@ function load(
   return new Promise<string>((resolve) => {
     loadFile(file, {
       complete() {
-        dataStream.complete();
-        dataStream = new Subject();
+        // dataStream.complete();
+        // dataStream = new Subject();
+        postMessage({ type: "status", status: "complete" });
         resolve('Loading finished');
       },
       chunk(chunk: ParseResult<any>) {
-        dataStream.next(chunk.data);
+        // dataStream.next(chunk.data);
+        chunk.errors.forEach(e => {
+          console.log(e)
+        })
+        postMessage({ type: "data", data: chunk.data });
       },
       // chunkSize: 1024 * 100,
       ...args,
@@ -112,7 +117,8 @@ async function loadShapefiles(files: File[], nameKey?: string) {
       return (feature: GeometryFeature) => {
         batch.push(feature);
         if (batch.length > 100) {
-          dataStream.next(batch);
+          // dataStream.next(batch);
+          postMessage({ type: "data", data: batch });
           batch = [];
         }
       };
@@ -160,19 +166,41 @@ async function loadShapefiles(files: File[], nameKey?: string) {
     console.error('!! shp error:', error);
   }
 
-  dataStream.complete();
-  dataStream = new Subject();
+  // dataStream.complete();
+  // dataStream = new Subject();
+  postMessage({ type: "status", status: "complete" });
+
 }
 
 async function cancelLoad() {
   // TODO: Create and store an abort function for all load functions
 }
 
-expose({
-  load,
-  loadShapefile,
-  stream() {
-    return Observable.from(dataStream);
-  },
-  cancelLoad,
-});
+// expose({
+//   load,
+//   loadShapefile,
+//   stream() {
+// return Observable.from(dataStream);
+//   },
+//   cancelLoad,
+// });
+
+
+onmessage = function (event) {
+  const { type } = event.data;
+  console.log("[DataWorker]: got message of type:", type);
+  try {
+    switch (type) {
+      case "LOAD":
+        load(event.data.file, event.data.args);
+        break;
+      case "LOAD_SHAPEFILE":
+        loadShapefile(event.data.file, event.data.nameKey);
+        break;
+      default:
+        console.log("[DataWorker]: Unrecognised message type:", type);
+    }
+  } catch (err) {
+    console.log("[DataWorker]: Error:", err);
+  }
+};

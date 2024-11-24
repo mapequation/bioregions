@@ -27,10 +27,10 @@ export default class LandStore {
 
   async loadLandLayer() {
     const [land110m, land50m] = await Promise.all([
-      fetch('/bioregions2/maps/physical/land-110m.json').then((res) =>
+      fetch('maps/physical/land-110m.json').then((res) =>
         res.json(),
       ),
-      fetch('/bioregions2/maps/physical/land-50m.json').then((res) =>
+      fetch('maps/physical/land-50m.json').then((res) =>
         res.json(),
       ),
     ]);

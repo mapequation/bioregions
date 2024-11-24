@@ -408,7 +408,7 @@ export default observer(() => {
               infomapStore.run();
             }}
             min={0}
-            max={infomapStore.numLevels - 2}
+            max={Math.max(0, infomapStore.numLevels - 2)}
             step={1}
           >
             <SliderTrack>

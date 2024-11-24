@@ -30,9 +30,7 @@ export default function Logo() {
         <Text fontFamily="brand" fontSize="22px" fontWeight={700}>
           <span style={{ color }}>Infomap</span>{' '}
           <span style={{ color: brand }}>Bioregions</span>
-          <span style={{ ...styles.version }}>
-            {' v' + process.env.REACT_APP_VERSION}
-          </span>
+          <span style={{ ...styles.version }}>{' v' + __APP_VERSION__}</span>
         </Text>
         <Text fontSize="xs" fontWeight={300} style={{ marginTop: 1 }}>
           Powered by Infomap v{Infomap.__version__}

@@ -1547,6 +1547,8 @@ export default class InfomapStore {
     } else {
       this.createNonStateBioregions(tree as Tree);
     }
+
+    console.log("!!! DEBUG, store:", this.rootStore)
   }
 
   createNonStateBioregions(tree: Tree) {

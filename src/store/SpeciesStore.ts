@@ -1,5 +1,5 @@
 import { action, makeObservable, observable, computed } from 'mobx';
-import { spawn, Thread, Worker } from 'threads';
+// import { spawn, Thread, Worker } from 'threads';
 import { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
 import { csvParse, tsvFormatRows, color as Color } from 'd3';
@@ -241,45 +241,77 @@ export default class SpeciesStore {
     // }
   });
 
-  private async *loadData(
+  private async loadData(
     file: string | File,
     getItems: (items: { [key: string]: string | number }[]) => void,
     args: ParseConfig = {},
   ) {
-    const dataWorker = await spawn(
-      new Worker(
-        //@ts-ignore
+
+    // dataWorker.stream().subscribe(getItems);
+
+    // yield dataWorker.load(file, args);
+
+    return new Promise<void>((resolve, reject) => {
+
+      const dataWorker = new Worker(
         new URL('../workers/DataWorker.ts', import.meta.url),
-      ),
-    );
-    this.dataWorker = dataWorker;
+        { type: 'module' }
+      );
 
-    dataWorker.stream().subscribe(getItems);
+      dataWorker.addEventListener("message", (event: any) => {
+        if (event.data.type === "status") {
+          if (event.data.status === "complete") {
+            dataWorker.terminate();
+            resolve();
+          }
+        }
+        else if (event.data.type === "data") {
+          getItems(event.data.data);
+        }
+      })
 
-    yield dataWorker.load(file, args);
+      dataWorker.postMessage({ type: "LOAD", file, args })
+    })
 
-    const res = await Thread.terminate(dataWorker);
-    this.dataWorker = null;
-    return res;
+
+    // const res = await Thread.terminate(dataWorker);
+    // this.dataWorker = null;
+    // return res;
   }
 
-  private async *loadShapefileInWorker(
+  private async loadShapefileInWorker(
     file: string | File | File[],
     onFeatures: (features: GeometryFeature[]) => void,
     nameKey?: string,
   ) {
-    const dataWorker = await spawn(
-      new Worker(
-        //@ts-ignore
+
+    // dataWorker.stream().subscribe(onFeatures);
+
+    // yield dataWorker.loadShapefile(file, nameKey);
+
+    // return await Thread.terminate(dataWorker);
+
+    return new Promise<void>((resolve, reject) => {
+
+      const dataWorker = new Worker(
         new URL('../workers/DataWorker.ts', import.meta.url),
-      ),
-    );
+        { type: 'module' }
+      );
 
-    dataWorker.stream().subscribe(onFeatures);
+      dataWorker.addEventListener("message", (event: any) => {
+        if (event.data.type === "status") {
+          if (event.data.status === "complete") {
+            dataWorker.terminate();
+            resolve();
+          }
+        }
+        else if (event.data.type === "data") {
+          onFeatures(event.data.data);
+        }
+      })
 
-    yield dataWorker.loadShapefile(file, nameKey);
-
-    return await Thread.terminate(dataWorker);
+      dataWorker.postMessage({ type: "LOAD_SHAPEFILE", file, nameKey })
+    });
   }
 
   loadStart = action(() => {
@@ -366,7 +398,7 @@ export default class SpeciesStore {
 
     const ignoredRows: any[] = [];
 
-    const loader = this.loadData(file, (items) => {
+    await this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
 
       for (let item of items) {
@@ -392,7 +424,7 @@ export default class SpeciesStore {
       mapStore.renderMultiPoint(multiPoint);
     });
 
-    await (await loader).next();
+    // await (await loader).next();
     this.loadEnd();
     console.log(
       `Ignored ${ignoredRows.length} rows due to no name:`,
@@ -409,16 +441,14 @@ export default class SpeciesStore {
   async loadShapefile(file: string | File | File[], nameKey?: string) {
     this.preLoad();
 
-    const loader = this.loadShapefileInWorker(file, this.onFeatures, nameKey);
-
-    await (await loader).next();
+    await this.loadShapefileInWorker(file, this.onFeatures, nameKey);
 
     await this.postLoad();
   }
 
   cancelLoad = action(async () => {
     if (this.dataWorker) {
-      await Thread.terminate(this.dataWorker);
+      this.dataWorker.terminate();
       this.dataWorker = null;
     }
     await this.postLoad();

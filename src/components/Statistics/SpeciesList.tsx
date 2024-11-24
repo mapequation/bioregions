@@ -13,11 +13,12 @@ import {
 import { observer } from 'mobx-react';
 import { useState } from 'react';
 import { useStore } from '../../store';
-import PieChart from './PieChart';
+import PieChart, { SpeciesPieChart } from './PieChart';
 
 export default observer(function SpeciesList() {
   const [filter, setFilter] = useState('');
-  const { speciesStore } = useStore();
+  const { speciesStore, colorStore } = useStore();
+  const { colorBioregion } = colorStore;
   const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 
   if (speciesStore.numSpecies === 0) {
@@ -68,7 +69,7 @@ export default observer(function SpeciesList() {
                 </Td>
                 <Td isNumeric>{species.count.toLocaleString()}</Td>
                 <Td>
-                  <PieChart values={species.countPerRegion.entries()} />
+                  <SpeciesPieChart speciesName={species.name} />
                 </Td>
               </Tr>
             );

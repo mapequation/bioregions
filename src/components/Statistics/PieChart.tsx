@@ -15,13 +15,28 @@ import {
   PopoverArrow,
 } from '@chakra-ui/react';
 
-export default observer(function PieChart({
+export const SpeciesPieChart = observer(function _SpeciesPieChart({
+  speciesName,
+}: {
+  speciesName: string;
+}) {
+  const { colorStore, speciesStore } = useStore();
+  const { colorBioregion } = colorStore;
+
+  const values = Array.from(
+    speciesStore.speciesMap.get(speciesName)?.countPerRegion.entries() ?? [],
+  );
+
+  return <PieChart values={values} color={colorBioregion} />;
+});
+
+export default function PieChart({
   values,
+  color,
 }: {
   values: Iterable<[key: number, count: number]>;
+  color: (_: number) => string;
 }) {
-  const { colorStore } = useStore();
-  const { colorBioregion } = colorStore;
   const [key, count] = [0, 1];
   const sorted = [...values].sort((a, b) => b[count] - a[count]);
   const total = sorted.reduce((tot, value) => tot + value[count], 0);
@@ -69,11 +84,7 @@ export default observer(function PieChart({
               cx={0}
               cy={0}
               r={radius}
-              fill={
-                sorted[0][key] === -1
-                  ? restColor
-                  : colorBioregion(sorted[0][key])
-              }
+              fill={sorted[0][key] === -1 ? restColor : color(sorted[0][key])}
               stroke="white"
               strokeWidth={4}
             />
@@ -90,9 +101,7 @@ export default observer(function PieChart({
                 <path
                   key={i}
                   d={`M ${x0} ${y0} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x1} ${y2} L 0 0 Z`}
-                  fill={
-                    value[key] === -1 ? restColor : colorBioregion(value[key])
-                  }
+                  fill={value[key] === -1 ? restColor : color(value[key])}
                   stroke="white"
                   strokeWidth={4}
                 />
@@ -114,9 +123,7 @@ export default observer(function PieChart({
               {aggregated.map((value, i) => (
                 <Tr
                   key={i}
-                  bg={
-                    value[key] === -1 ? restColor : colorBioregion(value[key])
-                  }
+                  bg={value[key] === -1 ? restColor : color(value[key])}
                   color={value[key] === -1 ? 'black' : 'white'}
                 >
                   <Td>
@@ -131,4 +138,4 @@ export default observer(function PieChart({
       </PopoverContent>
     </Popover>
   );
-});
+}

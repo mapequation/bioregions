@@ -17,7 +17,7 @@ export function AxisBottom({
   yRange = [90, 10],
   label,
   tickFormat,
-  ticksColor="currentColor",
+  ticksColor = 'currentColor',
 }: AxisProps): JSX.Element {
   const ticks = useMemo(() => {
     const scale = scaleLinear().domain(domain).range(xRange);
@@ -42,8 +42,8 @@ export function AxisBottom({
         // display="none"
         strokeWidth={0.5}
       />
-      {ticks.map(({ value, offset }) => (
-        <g key={`bottom-${value}`} transform={`translate(${offset}, 0)`}>
+      {ticks.map(({ value, offset }, i) => (
+        <g key={`bottom-${i}`} transform={`translate(${offset}, 0)`}>
           <line y2="2" stroke="currentColor" strokeWidth={0.5} />
           <text
             fill={ticksColor}
@@ -78,7 +78,7 @@ export function AxisLeft({
   yLog,
   label,
   tickFormat,
-  ticksColor="currentColor",
+  ticksColor = 'currentColor',
 }: AxisProps): JSX.Element {
   const ticks = useMemo(() => {
     const _scale = yLog ? scaleLog : scaleLinear;
@@ -142,7 +142,7 @@ export function AxisRight({
   yLog,
   label,
   tickFormat,
-  ticksColor="currentColor",
+  ticksColor = 'currentColor',
 }: AxisProps): JSX.Element {
   const ticks = useMemo(() => {
     const _scale = yLog ? scaleLog : scaleLinear;

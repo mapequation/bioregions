@@ -1,12 +1,4 @@
-import {
-  Container,
-  HStack,
-  VStack,
-  Heading,
-  useColorModeValue,
-  Box,
-  IconButton,
-} from '@chakra-ui/react';
+import { VStack, useColorModeValue, Box } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
@@ -14,11 +6,10 @@ import { controlPanelWidth } from './ControlPanel/ControlPanel';
 import PhylocanvasTree from './Tree';
 import { useStore } from '../store';
 import Statistics from './Statistics';
-import Logo from './ControlPanel/Logo';
 import Documentation from './Documentation';
 import ColorMode from './ControlPanel/ColorMode';
 
-export default observer(function App() {
+const PhyloTree = observer(function _PhyloTree() {
   const { treeStore } = useStore();
   const treeColor = useColorModeValue('#666666', '#eeeeee');
   // const bg = useColorModeValue(
@@ -26,6 +17,27 @@ export default observer(function App() {
   //   '#1A202C',
   // );
   // <Box sx={{ bg, backgroundSize: '10px 10px' }}>
+
+  if (treeStore.treeString == null) {
+    return;
+  }
+  return <div>[Tree component: pending update]</div>;
+  // return (
+  //   <PhylocanvasTree
+  //     source={treeStore.treeString}
+  //     size={{ width: 600, height: 400 }}
+  //     showLabels
+  //     showLeafLabels
+  //     interactive
+  //     fillColour={treeColor}
+  //     strokeColour={treeColor}
+  //     fontColour={treeColor}
+  //     styles={treeStore.nodeStyles}
+  //   />
+  // );
+});
+
+export default observer(function App() {
   return (
     <Box>
       <Box position="fixed" right={0}>
@@ -40,19 +52,7 @@ export default observer(function App() {
         pb={12}
       >
         <WorldMap />
-        {treeStore.treeString != null && (
-          <PhylocanvasTree
-            source={treeStore.treeString}
-            size={{ width: 600, height: 400 }}
-            showLabels
-            showLeafLabels
-            interactive
-            fillColour={treeColor}
-            strokeColour={treeColor}
-            fontColour={treeColor}
-            styles={treeStore.nodeStyles}
-          />
-        )}
+        <PhyloTree />
         <Statistics />
         <Documentation />
       </VStack>

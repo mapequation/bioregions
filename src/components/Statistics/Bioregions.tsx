@@ -20,7 +20,7 @@ import { observer } from 'mobx-react';
 import { format } from 'd3-format';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
-import PieChart from './PieChart';
+import PieChart, { SpeciesPieChart } from './PieChart';
 import { InfoOutlineIcon } from '@chakra-ui/icons';
 
 const formatScore = format('.3r');
@@ -96,7 +96,7 @@ const BioregionInfo = observer(function Bioregion({
               Most common species
             </Th>
             <Th colSpan={3} textAlign="center">
-              <Text display="flex" alignItems="center">
+              <Text as="div" display="flex" alignItems="center">
                 Most indicative species
                 <Popover trigger="hover">
                   <PopoverTrigger>
@@ -141,25 +141,13 @@ const BioregionInfo = observer(function Bioregion({
                   <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
                   <Td isNumeric>{formatScore(commonSpecies.score)}</Td>
                   <Td>
-                    <PieChart
-                      values={
-                        speciesStore.speciesMap
-                          .get(commonSpecies.name)
-                          ?.countPerRegion.entries() ?? []
-                      }
-                    />
+                    <SpeciesPieChart speciesName={commonSpecies.name} />
                   </Td>
                   <Td>{indicativeSpecies.name}</Td>
                   <Td isNumeric>{indicativeSpecies.count}</Td>
                   <Td isNumeric>{formatScore(indicativeSpecies.score)}</Td>
                   <Td>
-                    <PieChart
-                      values={
-                        speciesStore.speciesMap
-                          .get(indicativeSpecies.name)
-                          ?.countPerRegion.entries() ?? []
-                      }
-                    />
+                    <SpeciesPieChart speciesName={indicativeSpecies.name} />
                   </Td>
                 </Tr>
               );
