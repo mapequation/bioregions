@@ -17,8 +17,7 @@ import booleanIntersects from '@turf/boolean-intersects';
 import { CellColor } from '../../store/ColorStore';
 
 export default class Cell
-  implements ExtendedFeature<Polygon, QuadtreeNodeProperties>
-{
+  implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
   x1: number; // west
   y1: number; // south
   x2: number; // east
@@ -42,6 +41,7 @@ export default class Cell
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
   private _recalcStats: boolean = true;
   private _speciesTopList: { count: number; name: string }[] = [];
+  private _speciesRichness: number = 0;
   // @ts-ignore
   type = 'Feature';
 
@@ -143,6 +143,26 @@ export default class Cell
       this.calcStats();
     }
     return this._speciesTopList;
+  }
+
+  get speciesRichness() {
+    if (this._recalcStats) {
+      this.calcStats();
+    }
+    return this._speciesRichness;
+  }
+
+  get overlap() {
+    const {
+      topBioregionProportion,
+      secondBioregionProportion,
+      ownProportion
+    } = this.connectedBioregions;
+    return ownProportion;
+    let t =
+      topBioregionProportion /
+      (topBioregionProportion + secondBioregionProportion);
+    return t;
   }
 
   add(
@@ -454,7 +474,24 @@ export default class Cell
       .map(([name, count]) => ({ count, name }))
       .sort((a, b) => (a.count > b.count ? -1 : 1));
 
+    this._speciesRichness = speciesMap.size;
+
     this._recalcStats = false;
+  }
+
+  _bioregionMetrics = {
+    relativeRichness: 0,
+    overlap: 0,
+    endemicity: 0,
+    occupancy: 0,
+  }
+  calcBioregionStats() {
+    const { connectedBioregions, bioregionId } = this;
+    const numSpecies = connectedBioregions.flowCount.count;
+    const numSpeciesWithin = connectedBioregions.bioregionIds.get(bioregionId)?.count ?? 0;
+    const biotaOverlap = (numSpecies - numSpeciesWithin) / numSpecies;
+
+    this._bioregionMetrics.overlap = biotaOverlap;
   }
 
   find(x: number, y: number, radius?: number): Cell | undefined {

@@ -18,8 +18,17 @@ import {
   Tag,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
-import type { Projection, RenderType } from '../../store/MapStore';
-import { PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
+import type {
+  HeatmapTarget,
+  Projection,
+  RenderType,
+} from '../../store/MapStore';
+import {
+  PROJECTIONS,
+  PROJECTIONNAME,
+  HEATMAP_TARGETS,
+  HEATMAP_TARGET_NAME,
+} from '../../store/MapStore';
 import ColorSettings from './ColorSettings';
 
 const ProjectionSelect = observer(function ProjectionSelect() {
@@ -85,6 +94,29 @@ export default observer(function Map() {
           </Button>
         </ButtonGroup>
       </Flex>
+      {mapStore.renderType === 'heatmap' && (
+        <FormControl display="flex" w="100%" alignItems="center">
+          <FormLabel htmlFor="clip" mb="0">
+            Heatmap value
+          </FormLabel>
+          <Spacer />
+          <Select
+            size="sm"
+            value={mapStore.heatmapTarget}
+            name="heatmapTarget"
+            onChange={(e) =>
+              mapStore.setHeatmapTarget(e.target.value as HeatmapTarget, true)
+            }
+          >
+            {HEATMAP_TARGETS.map((target) => (
+              <option value={target} key={target}>
+                {HEATMAP_TARGET_NAME[target]}
+              </option>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
       <FormControl display="flex" w="100%" alignItems="center">
         <FormLabel htmlFor="clip" mb="0">
           Clip to land

@@ -38,6 +38,26 @@ export const PROJECTIONNAME: Record<Projection, string> = {
   geoMercator: 'Mercator',
 } as const;
 
+export const HEATMAP_TARGETS = [
+  "records",
+  "richness",
+  "relativeRichness",
+  "overlap",
+  "endemicity",
+  "occupancy",
+] as const;
+
+export type HeatmapTarget = typeof HEATMAP_TARGETS[number];
+
+export const HEATMAP_TARGET_NAME: Record<HeatmapTarget, string> = {
+  records: "Records",
+  richness: "Species richness",
+  relativeRichness: "Relative species richness",
+  overlap: "Biota overlap",
+  endemicity: "Endemicity",
+  occupancy: "Occupancy",
+} as const;
+
 type TooltipData = {
   x: number,
   y: number,
@@ -80,6 +100,8 @@ export default class MapStore {
   tooltipPos: [number, number] = [0, 0];
   tooltipCell: Cell | null = null;
 
+  heatmapTarget: HeatmapTarget = "records";
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -97,6 +119,7 @@ export default class MapStore {
       tooltipActive: observable,
       tooltipPos: observable,
       tooltipCell: observable.ref,
+      heatmapTarget: observable,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -140,6 +163,13 @@ export default class MapStore {
 
   setColorModuleParticipationStrength = action((value: number, render: boolean = false) => {
     this.colorModuleParticipationStrength = value;
+    if (render) {
+      this.render();
+    }
+  })
+
+  setHeatmapTarget = action((value: HeatmapTarget, render: boolean = false) => {
+    this.heatmapTarget = value;
     if (render) {
       this.render();
     }
@@ -265,9 +295,32 @@ export default class MapStore {
     ctx.fill();
   }
 
-  private static _heatmapColor(cells: Cell[]): GetGridColor {
+  private _getHeatmapColorTargetGetter(): (n: Cell) => number {
+    switch (this.heatmapTarget) {
+      case "records":
+        return (n: Cell) => n.recordsPerArea;
+      case "richness":
+        return (n: Cell) => n.speciesRichness;
+      case "relativeRichness":
+        return (n: Cell) => n.speciesRichness; //TODO: Implement
+      case "overlap":
+        return (n: Cell) => n.overlap;
+      case "endemicity":
+        return (n: Cell) => n.recordsPerArea; //TODO: Implement
+      case "occupancy":
+        return (n: Cell) => n.recordsPerArea; //TODO: Implement
+      default:
+        console.warn(`Heatmap target '${this.heatmapTarget}' lacks implementation.`);
+        return (n: Cell) => n.recordsPerArea;
+    }
+  }
+
+  private _heatmapColor(cells: Cell[]): GetGridColor {
     //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
-    const domainExtent = d3.extent(cells, (n: Cell) => n.recordsPerArea) as [
+
+    const getTarget = this._getHeatmapColorTargetGetter();
+
+    const domainExtent = d3.extent(cells, getTarget) as [
       number,
       number,
     ];
@@ -276,7 +329,7 @@ export default class MapStore {
     const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
     domain.push(domainMax);
 
-    const heatmapOpacityScale = d3
+    const heatmapColorIndexScale = d3
       .scaleLog()
       .domain(domainExtent)
       .range([0, 8]);
@@ -294,7 +347,7 @@ export default class MapStore {
     ]; // Colorbrewer YlOrRd
 
     return (cell: Cell) =>
-      colorRange[Math.floor(heatmapOpacityScale(cell.recordsPerArea))];
+      colorRange[Math.floor(heatmapColorIndexScale(getTarget(cell)))];
   }
 
   private _bioregionColor(): GetGridColor {
@@ -316,7 +369,7 @@ export default class MapStore {
 
     const getGridColor =
       this.renderType === 'heatmap' || !tree
-        ? MapStore._heatmapColor(cells)
+        ? this._heatmapColor(cells)
         : this.cellColor();
 
     cells.forEach((cell: Cell) =>

@@ -1,7 +1,23 @@
+class FlowCount {
+  flow: number = 0.0;
+  count: number = 0;
+
+  add(flow: number) {
+    this.flow += flow;
+    this.count += 1;
+  }
+
+  static init(flow: number) {
+    const fc = new FlowCount()
+    fc.add(flow);
+    return fc;
+  }
+}
+
 export default class ConnectedBioregions {
   bioregionId: number = 0;
-  bioregionIds: Map<number, number> = new Map(); // bioregionId -> flow
-  flow: number = 0.0; // total flow in cell
+  bioregionIds: Map<number, FlowCount> = new Map(); // bioregionId -> flow
+  flowCount: FlowCount = new FlowCount(); // total flow and count (num species) in cell
   memoryIdToBioregion: Map<string, number> = new Map();
   topBioregionId: number = 0;
   topBioregionProportion: number = 0;
@@ -16,11 +32,13 @@ export default class ConnectedBioregions {
   }
 
   addLink(bioregionId: number, flow: number) {
-    this.flow += flow;
-    this.bioregionIds.set(
-      bioregionId,
-      (this.bioregionIds.get(bioregionId) ?? 0) + flow,
-    );
+    this.flowCount.add(flow);
+    const flowCount = this.bioregionIds.get(bioregionId);
+    if (!flowCount) {
+      this.bioregionIds.set(bioregionId, FlowCount.init(flow));
+    } else {
+      flowCount.add(flow);
+    }
   }
 
   calcTopBioregions() {
@@ -29,7 +47,8 @@ export default class ConnectedBioregions {
     let topBioregionId = 0;
     let secondFlow = 0;
     let secondBioregionId = 0;
-    this.bioregionIds.forEach((flow, bioregionId) => {
+    this.bioregionIds.forEach((flowCount, bioregionId) => {
+      const { flow } = flowCount;
       if (flow > topFlow) {
         secondFlow = topFlow;
         secondBioregionId = topBioregionId;
@@ -43,16 +62,16 @@ export default class ConnectedBioregions {
 
     if (this.bioregionId !== topBioregionId) {
       this.notTopBioregion = true;
-      this.ownProportion = (this.bioregionIds.get(this.bioregionId) ?? 0) / this.flow;
       // this.topBioregionId = this.bioregionId;
       // this.topBioregionProportion = (this.bioregionIds.get(this.bioregionId) ?? 0) / this.flow;
       // this.secondBioregionId = topBioregionId;
       // this.secondBioregionProportion = topFlow / this.flow;
     }
+    this.ownProportion = (this.bioregionIds.get(this.bioregionId)?.flow ?? 0) / this.flowCount.flow;
     this.topBioregionId = topBioregionId;
-    this.topBioregionProportion = topFlow / this.flow;
+    this.topBioregionProportion = topFlow / this.flowCount.flow;
     this.secondBioregionId = secondBioregionId;
-    this.secondBioregionProportion = secondFlow / this.flow;
+    this.secondBioregionProportion = secondFlow / this.flowCount.flow;
 
     if (this.bioregionIds.size === 1) {
       this.secondBioregionId = this.topBioregionId;
@@ -67,7 +86,7 @@ export default class ConnectedBioregions {
 
   clear() {
     this.bioregionIds = new Map();
-    this.flow = 0.0;
+    this.flowCount = new FlowCount();
     this.topBioregionId = 0;
     this.memoryIdToBioregion = new Map();
   }
