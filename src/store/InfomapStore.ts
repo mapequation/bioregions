@@ -14,10 +14,10 @@ import {
   visitTreeDepthFirstPostOrder,
   type HistogramDataPoint,
   getAccumulatedTreeData,
-  getTreeHistogram,
+  // getTreeHistogram,
 } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
-import { isEqual, uniformTsallisEntropy } from '../utils/math';
+import { calculateStats, isEqual, uniformTsallisEntropy } from '../utils/math';
 import { range } from '../utils/range';
 import { max, min } from 'd3-array';
 import { Cell } from '../utils/QuadTree';
@@ -67,7 +67,8 @@ export class Bioregion {
   bioregionId = 0;
   numRecords = 0;
   species: string[] = [];
-  cells: Cell[] = [];
+  // cells: Cell[] = [];
+  cellMap: Map<string, Cell> = new Map(); // cellId -> cell
   mostCommon: {
     name: string;
     count: number;
@@ -78,9 +79,19 @@ export class Bioregion {
     count: number;
     score: number;
   }[] = [];
+  meanNumSpeciesWithin = 0;
+  stddevNumSpeciesWithin = 0.0;
+
+  addCell(cell: Cell) {
+    this.cellMap.set(cell.id, cell);
+  }
+
+  get cells() {
+    return this.cellMap.values();
+  }
 
   get numGridCells() {
-    return this.cells.length;
+    return this.cellMap.size;
   }
 
   calcStats(speciesStore: SpeciesStore) {
@@ -135,6 +146,63 @@ export class Bioregion {
     this.mostIndicative.sort((a, b) =>
       isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
     );
+
+
+    // Bioregion metrics
+    const I_c = [];
+    const I_s = [];
+    const { nameToCellIds } = speciesStore.binner;
+    for (const cell of this.cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      const { connectedBioregions } = cell;
+      const numSpeciesWithin = connectedBioregions.bioregionIds.get(this.bioregionId)?.count ?? 0;
+      I_c.push(numSpeciesWithin);
+    }
+    if (I_c.length > 0) {
+      const { mean, stddev } = calculateStats(I_c);
+      this.meanNumSpeciesWithin = mean;
+      this.stddevNumSpeciesWithin = stddev;
+    }
+
+    for (const speciesName of this.species) {
+      const species = speciesStore.speciesMap.get(speciesName);
+      if (species) {
+        const connectedCellIds = nameToCellIds[speciesName];
+        let numCellsWithin = 0;
+        for (const cellId of connectedCellIds) {
+          const cell = this.cellMap.get(cellId);
+          if (!cell) {
+            // Cell is outside the module
+            continue;
+          }
+          if (cell.bioregionId === this.bioregionId) {
+            ++numCellsWithin;
+          }
+        }
+        I_s.push(numCellsWithin)
+        species.numGridCells = connectedCellIds.size;
+        species.numGridCellsWithinModule = numCellsWithin;
+      }
+    }
+
+    const { mean, stddev } = calculateStats(I_s);
+
+    for (const cell of this.cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      cell.calcBioregionStats({
+        meanNumSpeciesWithin: this.meanNumSpeciesWithin,
+        stddevNumSpeciesWithin: this.stddevNumSpeciesWithin,
+        meanSpeciesExtentWithin: mean,
+        sddevSpeciesExtentWithin: stddev,
+        speciesMap: speciesStore.speciesMap,
+      })
+    }
   }
 };
 
@@ -529,6 +597,7 @@ export default class InfomapStore {
     this.haveStateNodes = haveStates;
     const infomapResult = haveStates ? statesTree : tree ?? null;
 
+    console.log(`Infomap with id ${id} finished`)
 
     const { moduleLevel: _moduleLevel } = this;
     const moduleLevel = tree ? min([_moduleLevel, tree.numLevels - 2])! : 0;
@@ -547,12 +616,12 @@ export default class InfomapStore {
 
   onInfomapError = (error: string, id: number) => {
     this.infomapId = null;
-    console.error(error);
+    console.error(error, id);
     console.timeEnd('infomap');
     this.setIsRunning(false);
   };
 
-  onInfomapOutput = action((output: string, id: number) => {
+  onInfomapOutput = action((output: string) => {
     this.infomapOutput += output + '\n';
     this.parseOutput(output);
   });
@@ -590,7 +659,7 @@ export default class InfomapStore {
         })
         .on('error', (err, id) => {
           this.onInfomapError(err, id);
-          //reject();
+          reject(err);
         })
         .run({
           network,
@@ -635,7 +704,7 @@ export default class InfomapStore {
         })
         .on('error', (err, id) => {
           this.onInfomapError(err, id);
-          //reject();
+          reject(err);
         })
         .run({
           network,
@@ -1448,7 +1517,7 @@ export default class InfomapStore {
           return;
         }
         const links = getMemLinksFromTreeNode(node);
-        const q = this.spatialNormalizationOrder;
+        // const q = this.spatialNormalizationOrder;
         const nodeWeight = this.getTaxonLinkWeight(links.sumWeight, network.numGridCellNodes);
         addLinks(node, links.links, nodeWeight);
       });
@@ -1655,7 +1724,7 @@ export default class InfomapStore {
       if (!cell) {
         console.warn(`Can't find cell for node ${node.id}`, node);
       }
-      bioregion.cells.push(cell);
+      bioregion.addCell(cell);
 
       // set the bioregion id to the top mulitlevel module of the node
       // different from the node path!
@@ -1754,7 +1823,7 @@ export default class InfomapStore {
         node.flow,
         memTaxonName,
       );
-      bioregion.cells.push(cell);
+      bioregion.addCell(cell);
     });
     for (const cell of cells) {
       cell.overlappingBioregions.calcTopBioregions();
@@ -1825,7 +1894,7 @@ export default class InfomapStore {
         node.flow,
         memTaxonName,
       );
-      bioregion.cells.push(cell);
+      bioregion.addCell(cell);
     });
     for (const cell of cells) {
       cell.overlappingBioregions.calcTopBioregions();

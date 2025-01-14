@@ -70,6 +70,8 @@ export type Species = {
   bioregionId?: number;
   count: number;
   countPerRegion: Map<number, number>;
+  numGridCells?: number;
+  numGridCellsWithinModule?: number;
 };
 
 export default class SpeciesStore {
@@ -253,24 +255,29 @@ export default class SpeciesStore {
 
     return new Promise<void>((resolve, reject) => {
 
-      const dataWorker = new Worker(
-        new URL('../workers/DataWorker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      try {
+        const dataWorker = new Worker(
+          new URL('../workers/DataWorker.ts', import.meta.url),
+          { type: 'module' }
+        );
 
-      dataWorker.addEventListener("message", (event: any) => {
-        if (event.data.type === "status") {
-          if (event.data.status === "complete") {
-            dataWorker.terminate();
-            resolve();
+        dataWorker.addEventListener("message", (event: any) => {
+          if (event.data.type === "status") {
+            if (event.data.status === "complete") {
+              dataWorker.terminate();
+              resolve();
+            }
           }
-        }
-        else if (event.data.type === "data") {
-          getItems(event.data.data);
-        }
-      })
+          else if (event.data.type === "data") {
+            getItems(event.data.data);
+          }
+        })
 
-      dataWorker.postMessage({ type: "LOAD", file, args })
+        dataWorker.postMessage({ type: "LOAD", file, args })
+      }
+      catch (err) {
+        reject(err);
+      }
     })
 
 
@@ -293,24 +300,29 @@ export default class SpeciesStore {
 
     return new Promise<void>((resolve, reject) => {
 
-      const dataWorker = new Worker(
-        new URL('../workers/DataWorker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      try {
+        const dataWorker = new Worker(
+          new URL('../workers/DataWorker.ts', import.meta.url),
+          { type: 'module' }
+        );
 
-      dataWorker.addEventListener("message", (event: any) => {
-        if (event.data.type === "status") {
-          if (event.data.status === "complete") {
-            dataWorker.terminate();
-            resolve();
+        dataWorker.addEventListener("message", (event: any) => {
+          if (event.data.type === "status") {
+            if (event.data.status === "complete") {
+              dataWorker.terminate();
+              resolve();
+            }
           }
-        }
-        else if (event.data.type === "data") {
-          onFeatures(event.data.data);
-        }
-      })
+          else if (event.data.type === "data") {
+            onFeatures(event.data.data);
+          }
+        })
 
-      dataWorker.postMessage({ type: "LOAD_SHAPEFILE", file, nameKey })
+        dataWorker.postMessage({ type: "LOAD_SHAPEFILE", file, nameKey })
+      }
+      catch (err) {
+        reject(err);
+      }
     });
   }
 

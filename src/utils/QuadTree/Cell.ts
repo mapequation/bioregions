@@ -4,6 +4,7 @@ import type {
   PointFeature,
   GeoFeature,
   PolygonFeature,
+  Species,
 } from '../../store/SpeciesStore';
 import type { ExtendedFeature } from 'd3';
 import OverlappingBioregions from './OverlappingBioregions';
@@ -14,7 +15,7 @@ import type {
 } from './QuadTreeGeoBinner';
 import * as turf from '@turf/turf';
 import booleanIntersects from '@turf/boolean-intersects';
-import { CellColor } from '../../store/ColorStore';
+import { calcMedian } from '../math';
 
 export default class Cell
   implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
@@ -479,19 +480,43 @@ export default class Cell
     this._recalcStats = false;
   }
 
-  _bioregionMetrics = {
+  bioregionMetrics = {
     relativeRichness: 0,
     overlap: 0,
     endemicity: 0,
     occupancy: 0,
   }
-  calcBioregionStats() {
+  calcBioregionStats({
+    meanNumSpeciesWithin,
+    stddevNumSpeciesWithin,
+    meanSpeciesExtentWithin,
+    sddevSpeciesExtentWithin,
+    speciesMap
+  }: {
+    meanNumSpeciesWithin: number,
+    stddevNumSpeciesWithin: number,
+    meanSpeciesExtentWithin: number,
+    sddevSpeciesExtentWithin: number,
+    speciesMap: Map<string, Species>
+  }) {
     const { connectedBioregions, bioregionId } = this;
     const numSpecies = connectedBioregions.flowCount.count;
     const numSpeciesWithin = connectedBioregions.bioregionIds.get(bioregionId)?.count ?? 0;
-    const biotaOverlap = (numSpecies - numSpeciesWithin) / numSpecies;
 
-    this._bioregionMetrics.overlap = biotaOverlap;
+
+    this.bioregionMetrics.overlap = numSpecies === 0 ? 0 : (numSpecies - numSpeciesWithin) / numSpecies;
+    this.bioregionMetrics.relativeRichness = stddevNumSpeciesWithin < 1e-10 ? 0 : (numSpeciesWithin - meanNumSpeciesWithin) / stddevNumSpeciesWithin;
+
+    const endemicity = this.speciesTopList.map(({ name }) => {
+      const species = speciesMap.get(name)!
+      return species.numGridCellsWithinModule! / species.numGridCells!;
+    })
+    const occupancy = this.speciesTopList.map(({ name }) => {
+      const species = speciesMap.get(name)!
+      return (species.numGridCellsWithinModule! - meanSpeciesExtentWithin) / sddevSpeciesExtentWithin;
+    })
+    this.bioregionMetrics.endemicity = calcMedian(endemicity);
+    this.bioregionMetrics.occupancy = calcMedian(occupancy);
   }
 
   find(x: number, y: number, radius?: number): Cell | undefined {

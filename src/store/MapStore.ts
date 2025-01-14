@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { action, makeObservable, observable } from 'mobx';
+import { action, makeObservable, observable, computed } from 'mobx';
 import { type Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import * as d3Zoom from 'd3-zoom';
@@ -58,11 +58,20 @@ export const HEATMAP_TARGET_NAME: Record<HeatmapTarget, string> = {
   occupancy: "Occupancy",
 } as const;
 
-type TooltipData = {
-  x: number,
-  y: number,
-  active: boolean,
-}
+export const HEATMAP_TARGET_SCALE: Record<HeatmapTarget, "linear" | "log"> = {
+  records: "log",
+  richness: "log",
+  relativeRichness: "linear",
+  overlap: "linear",
+  endemicity: "linear",
+  occupancy: "linear",
+} as const;
+
+// type TooltipData = {
+//   x: number,
+//   y: number,
+//   active: boolean,
+// }
 
 export default class MapStore {
   rootStore: RootStore;
@@ -101,6 +110,10 @@ export default class MapStore {
   tooltipCell: Cell | null = null;
 
   heatmapTarget: HeatmapTarget = "records";
+  // heatmapScale: "linear" | "log" = "linear";
+  get heatmapScale(): "linear" | "log" {
+    return HEATMAP_TARGET_SCALE[this.heatmapTarget]
+  }
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -120,6 +133,7 @@ export default class MapStore {
       tooltipPos: observable,
       tooltipCell: observable.ref,
       heatmapTarget: observable,
+      heatmapScale: computed,
       onZoom: action,
       onZoomEnd: action,
       setProjection: action,
@@ -302,9 +316,9 @@ export default class MapStore {
       case "richness":
         return (n: Cell) => n.speciesRichness;
       case "relativeRichness":
-        return (n: Cell) => n.speciesRichness; //TODO: Implement
+        return (n: Cell) => n.bioregionMetrics.relativeRichness;
       case "overlap":
-        return (n: Cell) => n.overlap;
+        return (n: Cell) => n.bioregionMetrics.overlap;
       case "endemicity":
         return (n: Cell) => n.recordsPerArea; //TODO: Implement
       case "occupancy":
@@ -329,8 +343,7 @@ export default class MapStore {
     const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
     domain.push(domainMax);
 
-    const heatmapColorIndexScale = d3
-      .scaleLog()
+    const heatmapColorIndexScale = (this.heatmapScale === "log" ? d3.scaleLog() : d3.scaleLinear())
       .domain(domainExtent)
       .range([0, 8]);
 
@@ -345,15 +358,16 @@ export default class MapStore {
       '#bd0026',
       '#800026',
     ]; // Colorbrewer YlOrRd
+    console.log(heatmapColorIndexScale)
 
     return (cell: Cell) =>
       colorRange[Math.floor(heatmapColorIndexScale(getTarget(cell)))];
   }
 
-  private _bioregionColor(): GetGridColor {
-    const { bioregionColors } = this.rootStore.colorStore;
-    return (cell: Cell) => bioregionColors[cell.bioregionId - 1];
-  }
+  // private _bioregionColor(): GetGridColor {
+  //   const { bioregionColors } = this.rootStore.colorStore;
+  //   return (cell: Cell) => bioregionColors[cell.bioregionId - 1];
+  // }
 
   private cellColor(): GetGridColor {
     return this.rootStore.colorStore.colorCell;
@@ -492,7 +506,7 @@ export default class MapStore {
     this.setTooltipPos(event);
   })
 
-  onMouseLeave = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+  onMouseLeave = action(() => {
     this.tooltipActive = false;
     this.tooltipCell = null;
   })
