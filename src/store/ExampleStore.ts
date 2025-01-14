@@ -35,8 +35,8 @@ export default class ExampleStore {
     if (process.env.NODE_ENV === 'development') {
       examples.push({
         name: 'Demo',
-        speciesFile: '/data/demo.csv',
-        treeFile: '/data/demo.nwk',
+        speciesFile: '/bioregions2/data/demo.csv',
+        treeFile: '/bioregions2/data/demo.nwk',
         size: '140 B',
         settings: {
           minCellSize: 0,
@@ -48,8 +48,8 @@ export default class ExampleStore {
 
       examples.push({
         name: 'Sample',
-        speciesFile: '/data/head.csv',
-        treeFile: '/data/head.nwk',
+        speciesFile: '/bioregions2/data/head.csv',
+        treeFile: '/bioregions2/data/head.nwk',
         size: '370 B',
         settings: {
           minCellSize: 0,
@@ -61,7 +61,7 @@ export default class ExampleStore {
 
       examples.push({
         name: 'Birches',
-        speciesFile: '/data/BIRCHES.zip',
+        speciesFile: '/bioregions2/data/BIRCHES.zip',
         size: '2.3 MB',
         settings: {
           minCellSize: 0,
@@ -74,16 +74,16 @@ export default class ExampleStore {
 
     examples.push({
       name: 'Neotropical mammal occurrences',
-      speciesFile: '/data/mammals_neotropics.csv',
-      treeFile: '/data/mammals_neotropics.nwk',
+      speciesFile: '/bioregions2/data/mammals_neotropics.csv',
+      treeFile: '/bioregions2/data/mammals_neotropics.nwk',
       size: '2.8 MB',
       settings: {},
     });
 
     examples.push({
       name: 'Global mammal occurrences',
-      speciesFile: '/data/mammals_global.tsv',
-      treeFile: '/data/mammals_global.nwk',
+      speciesFile: '/bioregions2/data/mammals_global.tsv',
+      treeFile: '/bioregions2/data/mammals_global.nwk',
       size: '56 MB',
       settings: { includeTree: false },
     });
@@ -92,7 +92,7 @@ export default class ExampleStore {
   }
 
   async loadExample(example: Example) {
-    const { speciesStore, treeStore, infomapStore, mapStore } = this.rootStore;
+    const { speciesStore, treeStore, infomapStore, } = this.rootStore;
 
     this.rootStore.clearData();
     const { settings } = example;

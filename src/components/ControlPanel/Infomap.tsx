@@ -22,7 +22,7 @@ import {
   Box,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
-import TreeHistogram from '../TreeHistogram';
+// import TreeHistogram from '../TreeHistogram';
 import Stat from '../Stat';
 import NetworkSize from './NetworkSize';
 import { useStore } from '../../store';

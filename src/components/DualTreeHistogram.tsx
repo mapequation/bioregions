@@ -83,7 +83,7 @@ export default observer(function DualTreeHistogram({
 
   const tickFormatLeft = format(yTickFormatLeft ?? '.1s');
   const tickFormatRight = format(yTickFormatRight ?? '.1s');
-  const f = format;
+  // const f = format;
 
   return (
     <Box textAlign="center" h={300}>

@@ -20,7 +20,7 @@ import { observer } from 'mobx-react';
 import { format } from 'd3-format';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
-import PieChart, { SpeciesPieChart } from './PieChart';
+import { SpeciesPieChart } from './PieChart';
 import { InfoOutlineIcon } from '@chakra-ui/icons';
 
 const formatScore = format('.3r');
@@ -49,7 +49,7 @@ const BioregionInfo = observer(function Bioregion({
 }: {
   bioregion: Bioregion;
 }) {
-  const { colorStore, speciesStore } = useStore();
+  const { colorStore } = useStore();
   const { colorBioregion } = colorStore;
   const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
 

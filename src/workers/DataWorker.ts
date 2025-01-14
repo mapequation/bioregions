@@ -172,9 +172,9 @@ async function loadShapefiles(files: File[], nameKey?: string) {
 
 }
 
-async function cancelLoad() {
-  // TODO: Create and store an abort function for all load functions
-}
+// async function cancelLoad() {
+//   // TODO: Create and store an abort function for all load functions
+// }
 
 // expose({
 //   load,

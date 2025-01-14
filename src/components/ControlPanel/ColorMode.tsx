@@ -1,17 +1,7 @@
-import { IconButton, useColorMode, useColorModeValue } from '@chakra-ui/react';
+import { IconButton, useColorMode } from '@chakra-ui/react';
 
 export default function ColorMode() {
   const { toggleColorMode } = useColorMode();
-  const color = useColorModeValue('hsl(0, 0%, 33%)', 'hsl(0, 0%, 60%)');
-  const brand = useColorModeValue('hsl(0, 68%, 42%)', 'hsl(0, 68%, 62%)');
-  const version = useColorModeValue('hsl(0, 0%, 70%)', 'hsl(0, 0%, 30%)');
-
-  const styles = {
-    version: {
-      color: version,
-      fontSize: 10,
-    },
-  };
 
   return (
     <IconButton

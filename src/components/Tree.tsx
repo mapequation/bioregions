@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 // @ts-ignore
 import PhylocanvasGL from '@phylocanvas/phylocanvas.gl';
 

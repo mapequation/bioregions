@@ -11,7 +11,7 @@ const numericStyles: SystemStyleObject = {
   },
 };
 
-const tableVariantSimpler: PartsStyleFunction<typeof parts> = (props) => {
+const tableVariantSimpler: PartsStyleFunction<typeof parts> = () => {
   const paddingTop = '5px !important';
 
   return {

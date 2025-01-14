@@ -1,8 +1,9 @@
 node_modules
 /build
+/dist
 /public/maps
 /public/data
 .vscode
 temp
 .DS_Store
-.next
+*.tsbuildinfo

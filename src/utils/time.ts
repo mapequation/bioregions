@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { makeObservable, observable } from 'mobx';
 
 export function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));

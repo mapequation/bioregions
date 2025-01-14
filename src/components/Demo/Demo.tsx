@@ -28,9 +28,9 @@ import { useRef, useState } from 'react';
 import NetworkSize from '../ControlPanel/NetworkSize';
 import Modal from '../ControlPanel/Modal';
 import Export from '../ControlPanel/Export';
-import TreeHistogram from '../TreeHistogram';
+// import TreeHistogram from '../TreeHistogram';
 import DualTreeHistogram from '../DualTreeHistogram';
-import PhylocanvasTree from '../Tree';
+// import PhylocanvasTree from '../Tree';
 // import TreeHistogram from '../TreeHistogram';
 import { saveSvg } from '../../utils/exporter';
 

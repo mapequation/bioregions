@@ -1,6 +1,7 @@
-import { isEqual } from '../math';
+// import { isEqual } from '../math';
 
 //import _ from 'lodash';
+// @ts-ignore
 export { prepareTree } from './treeUtilsJS';
 
 export interface Branch {
@@ -178,7 +179,7 @@ export function getTreeHistogram(
   }: TreeHistogramOptions,
 ) {
   const timePoints: HistogramDataPoint[] = [];
-  const binSize = 1/numBins;
+  const binSize = 1 / numBins;
   visitTreeDepthFirstPreOrder(tree, (node) => {
     // if (node.isLeaf && isEqual(node.time, 1, binSize / 10)) {
     //   return;
@@ -190,7 +191,7 @@ export function getTreeHistogram(
   // Bin
   const histogram: HistogramDataPoint[] = [];
   let value = 0;
-  let previousTime = -2*binSize;
+  let previousTime = -2 * binSize;
   let count = 0;
   for (let i = 0; i < timePoints.length; ++i) {
     const { t, value: dValue } = timePoints[i];

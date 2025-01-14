@@ -21,8 +21,8 @@ import ColorPicker from './ColorPicker';
 export default observer(function Map() {
   const { mapStore, colorStore, infomapStore } = useStore();
   const [showColorSettings, setShowColorSettings] = useState(false);
-  const [showWaterColor, setShowWaterColor] = useState(false);
-  const [showLandColor, setShowLandColor] = useState(false);
+  // const [showWaterColor, setShowWaterColor] = useState(false);
+  // const [showLandColor, setShowLandColor] = useState(false);
 
   const withRender = (setValue: (v: string) => void) => {
     return (value: string) => {

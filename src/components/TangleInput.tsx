@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Box, useColorModeValue } from '@chakra-ui/react';
+import { useColorModeValue } from '@chakra-ui/react';
 import { clamp } from '../utils/math';
 
 export const useMousePosition = () => {
