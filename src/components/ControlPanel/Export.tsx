@@ -155,7 +155,7 @@ export default observer(function Export({ rootStore }: ExportProps) {
             key={item.title}
             title={item.description}
             size="sm"
-            isDisabled={item.isDisabled}
+            disabled={item.isDisabled}
             onClick={item.onClick}
           >
             {item.title}

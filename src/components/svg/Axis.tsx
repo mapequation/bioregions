@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { scaleLinear, scaleLog } from 'd3';
 
 type AxisProps = {
@@ -18,7 +18,7 @@ export function AxisBottom({
   label,
   tickFormat,
   ticksColor = 'currentColor',
-}: AxisProps): JSX.Element {
+}: AxisProps): React.ReactElement {
   const ticks = useMemo(() => {
     const scale = scaleLinear().domain(domain).range(xRange);
     const width = xRange[1] - xRange[0];
@@ -34,7 +34,10 @@ export function AxisBottom({
   const xMid = (x0 + x1) / 2;
 
   return (
-    <g transform={`translate(0, ${yRange[0]})`} style={{ color: '#999' }}>
+    <g
+      transform={`translate(0, ${yRange[0]})`}
+      style={{ color: '#999', fontSize: '6px' }}
+    >
       <path
         d={['M', x0, 3, 'v', -3, 'H', x1, 'v', 3].join(' ')}
         fill="none"
@@ -43,12 +46,15 @@ export function AxisBottom({
         strokeWidth={0.5}
       />
       {ticks.map(({ value, offset }, i) => (
-        <g key={`bottom-${i}`} transform={`translate(${offset}, 0)`}>
+        <g
+          key={`bottom-${i}`}
+          transform={`translate(${offset}, 0)`}
+          style={{ fontSize: '4px' }}
+        >
           <line y2="2" stroke="currentColor" strokeWidth={0.5} />
           <text
             fill={ticksColor}
             strokeWidth={0}
-            fontSize="4px"
             textAnchor="middle"
             transform="translate(0, 10)"
           >
@@ -62,7 +68,6 @@ export function AxisBottom({
           fill="currentColor"
           strokeWidth={0}
           transform={`translate(${xMid}, 18)`}
-          fontSize="6px"
         >
           {label}
         </text>
@@ -79,7 +84,7 @@ export function AxisLeft({
   label,
   tickFormat,
   ticksColor = 'currentColor',
-}: AxisProps): JSX.Element {
+}: AxisProps): React.ReactElement {
   const ticks = useMemo(() => {
     const _scale = yLog ? scaleLog : scaleLinear;
     const scale = _scale().domain(domain).range(yRange);
@@ -96,7 +101,10 @@ export function AxisLeft({
   const yMid = (y0 + y1) / 2;
 
   return (
-    <g transform={`translate(${xRange[0]}, 0)`} style={{ color: '#999999' }}>
+    <g
+      transform={`translate(${xRange[0]}, 0)`}
+      style={{ color: '#999999', fontSize: '6px' }}
+    >
       <path
         // d={['M', -3, y0, 'h', 3, 'V', y1, 'h', -3].join(' ')}
         d={['M', -3, y0, 'h', 3, 'V', y1].join(' ')}
@@ -106,13 +114,16 @@ export function AxisLeft({
         strokeWidth={0.5}
       />
       {ticks.map(({ value, offset }) => (
-        <g key={`left-${value}`} transform={`translate(0, ${offset})`}>
+        <g
+          key={`left-${value}`}
+          transform={`translate(0, ${offset})`}
+          style={{ fontSize: '4px' }}
+        >
           <line x2="-2" stroke="currentColor" strokeWidth={0.5} />
           <text
             fill={ticksColor}
             strokeWidth={0}
             dy="2px"
-            fontSize="4px"
             textAnchor="end"
             transform="translate(-5, 0)"
           >
@@ -126,7 +137,6 @@ export function AxisLeft({
           strokeWidth={0}
           transform={`translate(-15, ${yMid}) rotate(-90)`}
           textAnchor="middle"
-          fontSize="6px"
         >
           {label}
         </text>
@@ -143,7 +153,7 @@ export function AxisRight({
   label,
   tickFormat,
   ticksColor = 'currentColor',
-}: AxisProps): JSX.Element {
+}: AxisProps): React.ReactElement {
   const ticks = useMemo(() => {
     const _scale = yLog ? scaleLog : scaleLinear;
     const scale = _scale().domain(domain).range(yRange);
@@ -160,7 +170,10 @@ export function AxisRight({
   const yMid = (y0 + y1) / 2;
 
   return (
-    <g transform={`translate(${xRange[1]}, 0)`} style={{ color: '#999999' }}>
+    <g
+      transform={`translate(${xRange[1]}, 0)`}
+      style={{ color: '#999999', fontSize: '6px' }}
+    >
       <path
         // d={['M', -3, y0, 'h', 3, 'V', y1, 'h', -3].join(' ')}
         d={['M', -3, y0, 'h', 3, 'V', y1].join(' ')}
@@ -170,13 +183,16 @@ export function AxisRight({
         strokeWidth={0.5}
       />
       {ticks.map(({ value, offset }, i) => (
-        <g key={`right-${i}`} transform={`translate(0, ${offset})`}>
+        <g
+          key={`right-${i}`}
+          transform={`translate(0, ${offset})`}
+          style={{ fontSize: '4px' }}
+        >
           <line x2="2" stroke="currentColor" strokeWidth={0.5} />
           <text
             fill={ticksColor}
             strokeWidth={0}
             dy="2px"
-            fontSize="4px"
             textAnchor="start"
             transform="translate(5, 0)"
           >
@@ -190,7 +206,6 @@ export function AxisRight({
           strokeWidth={0}
           transform={`translate(15, ${yMid}) rotate(-90)`}
           textAnchor="middle"
-          fontSize="6px"
         >
           {label}
         </text>

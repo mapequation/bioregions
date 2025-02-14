@@ -1,19 +1,15 @@
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 
+import { Table } from '@chakra-ui/react';
+
 import {
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
   PopoverArrow,
-} from '@chakra-ui/react';
+  PopoverBody,
+  PopoverContent,
+  PopoverRoot,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 export const SpeciesPieChart = observer(function _SpeciesPieChart({
   speciesName,
@@ -61,7 +57,7 @@ export default function PieChart({
   let theta = -Math.PI / 2;
   const radius = 100;
   return (
-    <Popover trigger="hover">
+    <PopoverRoot>
       <PopoverTrigger>
         <svg
           width="30px"
@@ -112,30 +108,30 @@ export default function PieChart({
       <PopoverContent pointerEvents="none">
         <PopoverArrow />
         <PopoverBody>
-          <Table variant="simple" size="sm">
-            <Thead>
-              <Tr>
-                <Th>Bioregion</Th>
-                <Th isNumeric>Percent</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
+          <Table.Root variant="line" size="sm">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeader>Bioregion</Table.ColumnHeader>
+                <Table.ColumnHeader>Percent</Table.ColumnHeader>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
               {aggregated.map((value, i) => (
-                <Tr
+                <Table.Row
                   key={i}
                   bg={value[key] === -1 ? restColor : color(value[key])}
                   color={value[key] === -1 ? 'black' : 'white'}
                 >
-                  <Td>
+                  <Table.Cell>
                     {value[key] === -1 ? 'Rest' : `Bioregion ${value[key]}`}
-                  </Td>
-                  <Td isNumeric>{(value[count] * 100).toFixed(2)}%</Td>
-                </Tr>
+                  </Table.Cell>
+                  <Table.Cell>{(value[count] * 100).toFixed(2)}%</Table.Cell>
+                </Table.Row>
               ))}
-            </Tbody>
-          </Table>
+            </Table.Body>
+          </Table.Root>
         </PopoverBody>
       </PopoverContent>
-    </Popover>
+    </PopoverRoot>
   );
 }

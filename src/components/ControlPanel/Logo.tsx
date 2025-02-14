@@ -1,4 +1,5 @@
-import { HStack, Text, useColorModeValue, VStack } from '@chakra-ui/react';
+import { Box, HStack, Text, VStack } from '@chakra-ui/react';
+import { useColorModeValue } from '../ui/color-mode';
 import Infomap from '@mapequation/infomap';
 
 export default function Logo() {
@@ -15,8 +16,8 @@ export default function Logo() {
   };
 
   return (
-    <HStack justify="flex-start" align="flex-start" spacing={3}>
-      <div style={{ position: 'relative' }}>
+    <HStack justify="flex-start" align="flex-start" gap={3}>
+      <Box position="relative">
         <a href="//mapequation.org" style={{ display: 'block' }}>
           <img
             alt="MapEquation"
@@ -25,14 +26,14 @@ export default function Logo() {
             src="//www.mapequation.org/assets/img/twocolormapicon_whiteboarder.svg"
           />
         </a>
-      </div>
-      <VStack w="100%" align="flex-start" pb={1}>
+      </Box>
+      <VStack w="100%" align="flex-start" pb={1} gap={0}>
         <Text fontFamily="brand" fontSize="22px" fontWeight={700}>
           <span style={{ color }}>Infomap</span>{' '}
           <span style={{ color: brand }}>Bioregions</span>
           <span style={{ ...styles.version }}>{' v' + __APP_VERSION__}</span>
         </Text>
-        <Text fontSize="xs" fontWeight={300} style={{ marginTop: 1 }}>
+        <Text fontSize="xs" lineHeight="shorter" fontWeight={300}>
           Powered by Infomap v{Infomap.__version__}
         </Text>
       </VStack>

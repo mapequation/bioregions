@@ -160,14 +160,13 @@ export default class MapStore {
   })
 
   setWaterColor = action((value: string) => {
-    console.log(`!!! setWaterColor: ${value}, current: ${this.waterColor}`)
     if (value === this.waterColor) { return; }
     this.waterColor = value;
   })
 
   setLandColor = action((value: string) => {
-    if (value === this.waterColor) { return; }
-    this.waterColor = value;
+    if (value === this.landColor) { return; }
+    this.landColor = value;
   })
 
   setColorModuleParticipation = action((value: boolean) => {

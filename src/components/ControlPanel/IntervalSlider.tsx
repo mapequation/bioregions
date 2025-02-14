@@ -1,27 +1,22 @@
 import { useState, useEffect } from 'react';
-import {
-  Box,
-  RangeSlider,
-  RangeSliderProps,
-  RangeSliderTrack,
-  RangeSliderFilledTrack,
-  RangeSliderThumb,
-  HStack,
-} from '@chakra-ui/react';
+import { Box, HStack } from '@chakra-ui/react';
+import { Slider as CSlider } from '../ui/slider';
 
 type SliderProps = {
   values: number[];
   value: [number, number];
   onChange: (value: [number, number]) => void;
   valueFormat?: (value: number) => string;
+  disabled?: boolean;
 };
 export default function Slider({
   values,
   value,
   onChange,
   valueFormat = (val) => val.toString(),
+  disabled,
   ...props
-}: SliderProps & RangeSliderProps) {
+}: SliderProps) {
   const calcLimits = (values: number[], [start, stop]: [number, number]) => {
     const startIndex = values.indexOf(start);
     const stopIndex = values.indexOf(stop);
@@ -42,22 +37,20 @@ export default function Slider({
   return (
     <HStack w="100%" fontSize="0.875rem">
       <Box minW="5ch">{valueFormat(values[limits[0]])}</Box>
-      <RangeSlider
+      <CSlider
         mx={2}
+        w="100%"
+        disabled={disabled}
         min={0}
         max={Math.max(0, values.length - 1)}
         step={1}
         value={limits}
-        onChange={setLimits}
-        onChangeEnd={([start, stop]) => onChange([values[start], values[stop]])}
+        onValueChange={(e) => setLimits(e.value)}
+        onValueChangeEnd={(e) =>
+          onChange([0, 1].map((i) => values[e.value[i]]) as [number, number])
+        }
         {...props}
-      >
-        <RangeSliderTrack>
-          <RangeSliderFilledTrack />
-        </RangeSliderTrack>
-        <RangeSliderThumb index={0} />
-        <RangeSliderThumb index={1} />
-      </RangeSlider>
+      />
       <Box textAlign="right" minW="4ch">
         {valueFormat(values[limits[1]])}
       </Box>

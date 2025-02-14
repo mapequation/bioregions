@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useColorModeValue } from '@chakra-ui/react';
 import { clamp } from '../utils/math';
+import { useColorModeValue } from './ui/color-mode';
 
 export const useMousePosition = () => {
   const [position, setPosition] = useState({ x: 0, y: 0 });

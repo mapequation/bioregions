@@ -1,7 +1,7 @@
 import { makeObservable, observable, action } from 'mobx';
 import type RootStore from './RootStore';
 
-type StatisticsBy = 'species' | 'bioregions';
+export type StatisticsBy = 'species' | 'bioregions';
 
 export default class SettingsStore {
   rootStore: RootStore;

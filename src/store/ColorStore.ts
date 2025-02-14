@@ -293,12 +293,20 @@ export default class ColorStore {
   setSaturationEnd = (value: number) => {
     this.saturationEnd = value;
   };
+  setSaturationRange = action((value: [number, number]) => {
+    this.saturation = value[0];
+    this.saturationEnd = value[1];
+  })
   setLightness = (value: number) => {
     this.lightness = value;
   };
   setLightnessEnd = (value: number) => {
     this.lightnessEnd = value;
   };
+  setLightnessRange = action((value: [number, number]) => {
+    this.lightness = value[0];
+    this.lightnessEnd = value[1];
+  })
   setMidpoint = (value: number) => {
     this.midpoint = value;
   };

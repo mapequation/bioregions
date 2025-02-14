@@ -12,7 +12,13 @@ export default observer(function Data() {
       <LoadExample />
 
       {(treeStore.isLoading || speciesStore.isLoading) && (
-        <Progress size="xs" isIndeterminate />
+        <Progress.Root size="xs" value={null}>
+          <Progress.Track>
+            <Progress.Range />
+          </Progress.Track>
+          <Progress.Label />
+          <Progress.ValueText />
+        </Progress.Root>
       )}
 
       {speciesStore.isLoading && (

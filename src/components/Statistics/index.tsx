@@ -1,8 +1,10 @@
 import { observer } from 'mobx-react';
-import { HStack, VStack, Radio, RadioGroup, Flex, Box } from '@chakra-ui/react';
+import { HStack, VStack, Flex, Box } from '@chakra-ui/react';
 import Bioregions from './Bioregions';
 import SpeciesList from './SpeciesList';
 import { useStore } from '../../store';
+import { Radio, RadioGroup } from '../ui/radio';
+import { StatisticsBy } from '@/store/SettingsStore';
 
 export default observer(function Statistics() {
   const { infomapStore, settingsStore } = useStore();
@@ -25,7 +27,9 @@ const SelectStatisticsBy = observer(function () {
     <Flex>
       <Box mr={2}>Statistics by</Box>
       <RadioGroup
-        onChange={settingsStore.setStatisticsBy}
+        onValueChange={(e) =>
+          settingsStore.setStatisticsBy(e.value as StatisticsBy)
+        }
         value={settingsStore.statisticsBy}
       >
         <HStack>

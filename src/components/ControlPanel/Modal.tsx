@@ -1,18 +1,19 @@
 import {
-  Modal as ChakraModal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  ModalProps,
-} from '@chakra-ui/react';
+  DialogBackdrop,
+  DialogBody,
+  DialogCloseTrigger,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogRoot,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Dialog } from '@chakra-ui/react';
 
 type MyModalProps = {
   header: string;
-  footer?: React.ReactComponentElement<any>;
-} & ModalProps;
+  footer?: React.ReactElement<any>;
+} & Dialog.RootProps;
 
 export default function Modal({
   header,
@@ -21,14 +22,16 @@ export default function Modal({
   ...props
 }: React.PropsWithChildren<MyModalProps>) {
   return (
-    <ChakraModal {...props}>
-      <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>{header}</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody>{children}</ModalBody>
-        <ModalFooter>{footer != null && footer}</ModalFooter>
-      </ModalContent>
-    </ChakraModal>
+    <DialogRoot {...props}>
+      <DialogBackdrop />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{header}</DialogTitle>
+        </DialogHeader>
+        <DialogCloseTrigger />
+        <DialogBody>{children}</DialogBody>
+        <DialogFooter>{footer != null && footer}</DialogFooter>
+      </DialogContent>
+    </DialogRoot>
   );
 }

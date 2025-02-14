@@ -1,6 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Box, useColorModeValue } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
+import { useColorModeValue } from '../ui/color-mode';
 import {
   getIntersectingBranches,
   PhyloNode,
@@ -19,7 +20,7 @@ export interface DemoTreeProps {
   hideTree?: boolean;
   hideSegregation?: boolean;
   hideIntegration?: boolean;
-  svgRef: React.RefObject<SVGSVGElement>;
+  svgRef: React.RefObject<SVGSVGElement | null>;
   crop?: boolean;
 }
 
@@ -196,7 +197,7 @@ export default observer(
     };
 
     const { nameToCellIds } = binner;
-    const getPhysLink = (link: typeof networkLinks[number]) => {
+    const getPhysLink = (link: (typeof networkLinks)[number]) => {
       // source: tree node, target: grid cell
       const taxonName = getPhysName(link.source);
       const cellName = getPhysName(link.target);
@@ -397,12 +398,12 @@ export default observer(
           preserveAspectRatio="xMidYMid meet"
           ref={svgRef}
         >
-          <g className="help" opacity={0.5}>
+          <g className="help" opacity={0.5} style={{ fontSize: '3px' }}>
             <g transform={`translate(${speciesX},-4)`}>
               <g transform="translate(-3,0)">
                 <SpeciesIcon size={6} />
               </g>
-              <text textAnchor="middle" dy={9} fontSize={3}>
+              <text textAnchor="middle" dy={9}>
                 Species
               </text>
             </g>
@@ -410,13 +411,13 @@ export default observer(
               <g transform="translate(-3,0)">
                 <GridCellIcon size={6} />
               </g>
-              <text textAnchor="middle" dy={9} fontSize={3}>
+              <text textAnchor="middle" dy={9}>
                 Grid cells
               </text>
             </g>
           </g>
           {!haveStateNodes && (
-            <g>
+            <g style={{ fontSize: '3px' }}>
               {!useBundledCurves && (
                 <g
                   className="tree-links"
@@ -494,7 +495,7 @@ export default observer(
               )}
             </g>
           )}
-          <g className="grid-cells">
+          <g className="grid-cells" style={{ fontSize: '3px' }}>
             {physCellNodes.map(({ key, cell, svgString }) => (
               <g key={key}>
                 <title>
@@ -523,7 +524,7 @@ export default observer(
             ))}
           </g>
           {haveStateNodes && (
-            <g>
+            <g style={{ fontSize: '3px' }}>
               {useBundledCurves && (
                 <g
                   className="state-tree-bundle-links"
@@ -650,7 +651,7 @@ export default observer(
                 paintOrder="stroke"
                 stroke="white"
                 strokeWidth={1}
-                fontSize={3}
+                style={{ fontSize: '3px' }}
               >
                 {!hideSegregation && (
                   <text
@@ -698,7 +699,7 @@ export default observer(
           </g>
           <g
             fill="var(--chakra-colors-gray-500)"
-            fontSize={3}
+            style={{ fontSize: '3px' }}
             fontWeight={400}
             textAnchor="middle"
             paintOrder="stroke"
@@ -720,6 +721,7 @@ export default observer(
             className="phylo-tree"
             strokeLinejoin="round"
             strokeLinecap="round"
+            style={{ fontSize: '3px' }}
           >
             {positionedTree.links().map((link) => (
               <path

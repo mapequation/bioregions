@@ -1,7 +1,8 @@
-import { Container, Heading, useColorModeValue } from '@chakra-ui/react';
+import { Container, Heading } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import Demo from '../Demo';
+import { useColorModeValue } from '../ui/color-mode';
 
 export default observer(function Documentation() {
   // const { documentationStore } = useStore();

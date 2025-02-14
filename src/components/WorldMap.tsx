@@ -1,15 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { useStore } from '../store/';
-import {
-  Badge,
-  Box,
-  Card,
-  CardBody,
-  CardHeader,
-  Heading,
-  Text,
-} from '@chakra-ui/react';
+import { Badge, Box, Card, Heading, Text } from '@chakra-ui/react';
 import { formatThousands } from '../utils/formats';
 
 const Tooltip = observer(function _Tooltip() {
@@ -23,8 +15,8 @@ const Tooltip = observer(function _Tooltip() {
   const [x, y] = mapStore.tooltipPos;
   return (
     <Box pos="absolute" left={x} top={y} pointerEvents="none">
-      <Card bgColor="rgba(255,255,255,0.2)">
-        <CardHeader p={2}>
+      <Card.Root bgColor="rgba(255,255,255,0.2)">
+        <Card.Header p={2}>
           <Heading size="xs">
             Cell <small style={{ color: '#cccccc' }}>{cell.id}</small>
           </Heading>
@@ -36,13 +28,13 @@ const Tooltip = observer(function _Tooltip() {
           <Text fontSize="xs" style={{ display: 'inline-block' }}>
             ({formatThousands(Math.round(cell.area))} km²)
           </Text>
-        </CardHeader>
-        <CardBody p={2} pt={0}>
+        </Card.Header>
+        <Card.Body p={2} pt={0}>
           <Box>
             <Badge bgColor={cell.color}>Bioregion {cell.bioregionId}</Badge>
           </Box>
-        </CardBody>
-      </Card>
+        </Card.Body>
+      </Card.Root>
     </Box>
   );
 });

@@ -1,23 +1,25 @@
 import React, { useState } from 'react';
 import { observer } from 'mobx-react';
-import { Button, Tag, Select, Icon } from '@chakra-ui/react';
+import {
+  Tag,
+  Icon,
+  Button,
+  FileUploadFileAcceptDetails,
+} from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
 import { FiUpload } from 'react-icons/fi';
-import {
-  Table,
-  Tr,
-  Td,
-  Tbody,
-  Thead,
-  Th,
-  Tfoot,
-  TableCaption,
-} from '@chakra-ui/react';
+import { Table } from '@chakra-ui/react';
 import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
 import type { Example } from '../../store/ExampleStore';
+import Select from './Select';
+import {
+  FileUploadList,
+  FileUploadRoot,
+  FileUploadTrigger,
+} from '@/components/ui/file-upload';
 
 const shpExtensions: string[] = ['shp', 'shx', 'dbf', 'prj'];
 
@@ -55,60 +57,6 @@ const guessColumnNames = (cols: string[]) => {
   return { name, lat, long };
 };
 
-export const LoadExample = observer(function LoadExample() {
-  const store = useStore();
-  const [isOpen, setIsOpen] = useState(false);
-  const { speciesStore, exampleStore } = store;
-
-  const rowHover = {
-    background: 'var(--chakra-colors-gray-50)',
-  };
-
-  const loadExample = (example: Example) => {
-    setIsOpen(false);
-    exampleStore.loadExample(example);
-  };
-
-  return (
-    <>
-      <Button
-        isDisabled={speciesStore.isLoading}
-        size="sm"
-        onClick={() => setIsOpen(true)}
-      >
-        Load examples
-      </Button>
-
-      <Modal
-        header="Example Data"
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-      >
-        <Table size="sm" variant="simple">
-          <Thead>
-            <Tr>
-              <Th>Description</Th>
-              <Th textAlign="right">Size</Th>
-            </Tr>
-          </Thead>
-          <Tbody style={{ cursor: 'pointer' }}>
-            {exampleStore.examples.map((example) => (
-              <Tr
-                key={example.name}
-                _hover={rowHover}
-                onClick={() => loadExample(example)}
-              >
-                <Td>{example.name}</Td>
-                <Td>{example.size}</Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </Modal>
-    </>
-  );
-});
-
 export const LoadData = observer(function LoadData() {
   const { speciesStore, treeStore, infomapStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
@@ -124,11 +72,8 @@ export const LoadData = observer(function LoadData() {
   const values = [nameColumn, latColumn, longColumn];
   console.log(`name: ${nameColumn}, lat: ${latColumn}, long: ${longColumn}`);
 
-  const onChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { files } = event.target;
-    if (!files || files.length === 0) {
-      return;
-    }
+  const onFileChange = async (details: FileUploadFileAcceptDetails) => {
+    const { files } = details;
 
     infomapStore.setTree(null);
 
@@ -205,93 +150,142 @@ export const LoadData = observer(function LoadData() {
 
   return (
     <>
-      <Button
-        isDisabled={speciesStore.isLoading}
-        leftIcon={<FiUpload />}
-        size="sm"
-        as="label"
-        htmlFor="file-input"
-      >
-        Load data...
-      </Button>
-      <input
-        type="file"
-        id="file-input"
+      <FileUploadRoot
+        disabled={speciesStore.isLoading}
         accept={`.csv,.tsv,.nwk,.tre,.zip,${shpExtensions
           .map((ext) => `.${ext}`)
           .join(',')}`}
-        multiple
-        style={{ visibility: 'hidden', display: 'none' }}
-        onChange={onChange}
-      />
+        maxFiles={100}
+        onFileAccept={onFileChange}
+      >
+        <FileUploadTrigger width="100%">
+          <Button size="sm" as="div" width="100%" variant="surface">
+            <FiUpload /> Load data...
+          </Button>
+        </FileUploadTrigger>
+        <FileUploadList />
+      </FileUploadRoot>
 
       <Modal
         header="Load data"
-        isOpen={isOpen}
-        onClose={onClose}
+        open={isOpen}
+        onOpenChange={onClose}
         scrollBehavior="inside"
-        size="4xl"
+        size="xl"
         footer={<Button children={'Finish'} onClick={onSubmit} />}
       >
-        <Table size="sm" variant="simple">
-          <TableCaption placement="top">File preview</TableCaption>
-          <Thead>
-            <Tr>
+        <Table.Root size="sm" variant="line">
+          <Table.Caption>File preview</Table.Caption>
+          <Table.Header>
+            <Table.Row>
               {header.map((cell, i) => (
-                <Th key={i}>{cell}</Th>
+                <Table.ColumnHeader key={i}>{cell}</Table.ColumnHeader>
               ))}
-            </Tr>
-          </Thead>
-          <Tbody>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
             {lines.slice(0, visibleRows).map((_, i) => (
-              <Tr key={i}>
+              <Table.Row key={i}>
                 {header.map((field) => (
-                  <Td key={field}>{lines[i][field]}</Td>
+                  <Table.Cell key={field}>{lines[i][field]}</Table.Cell>
                 ))}
-              </Tr>
+              </Table.Row>
             ))}
-          </Tbody>
-          <Tfoot>
-            <Tr>
-              <Td colSpan={3}>&hellip;</Td>
-            </Tr>
-          </Tfoot>
-        </Table>
+          </Table.Body>
+          <Table.Footer>
+            <Table.Row>
+              <Table.Cell colSpan={3}>&hellip;</Table.Cell>
+            </Table.Row>
+          </Table.Footer>
+        </Table.Root>
 
-        <Table size="sm" variant="simple">
-          <TableCaption placement="top">Map data columns</TableCaption>
-          <Thead>
-            <Tr>
-              <Th colSpan={2}>Column</Th>
-              <Th>Data</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
+        <Table.Root size="sm" variant="line">
+          <Table.Caption>Map data columns</Table.Caption>
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeader colSpan={2}>Column</Table.ColumnHeader>
+              <Table.ColumnHeader>Data</Table.ColumnHeader>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
             {columns.map((column, i) => (
-              <Tr key={i}>
-                <Td>
-                  <Tag textTransform="capitalize">{column}</Tag>
-                </Td>
-                <Td>
+              <Table.Row key={i}>
+                <Table.Cell>
+                  <Tag.Root textTransform="capitalize">
+                    <Tag.Label>{column}</Tag.Label>
+                  </Tag.Root>
+                </Table.Cell>
+                <Table.Cell>
                   <Icon as={BsArrowRight} />
-                </Td>
-                <Td>
+                </Table.Cell>
+                <Table.Cell>
                   <Select
                     size="sm"
-                    value={values[i]}
-                    onChange={(e) => setColumn[i](e.target.value)}
-                  >
-                    {header.map((cell, j) => (
-                      <option value={cell} key={j}>
-                        {cell}
-                      </option>
-                    ))}
-                  </Select>
-                </Td>
-              </Tr>
+                    label=""
+                    value={[values[i]]}
+                    onValueChange={(e) => setColumn[i](e.value[0])}
+                    items={header.map((cell) => ({ label: cell, value: cell }))}
+                  ></Select>
+                </Table.Cell>
+              </Table.Row>
             ))}
-          </Tbody>
-        </Table>
+          </Table.Body>
+        </Table.Root>
+      </Modal>
+    </>
+  );
+});
+
+export const LoadExample = observer(function LoadExample() {
+  const store = useStore();
+  const [isOpen, setIsOpen] = useState(false);
+  const { speciesStore, exampleStore } = store;
+
+  const rowHover = {
+    background: 'var(--chakra-colors-gray-50)',
+  };
+
+  const loadExample = (example: Example) => {
+    setIsOpen(false);
+    exampleStore.loadExample(example);
+  };
+
+  return (
+    <>
+      <Button
+        disabled={speciesStore.isLoading}
+        size="sm"
+        onClick={() => setIsOpen(true)}
+        variant="outline"
+      >
+        Load examples
+      </Button>
+
+      <Modal
+        header="Example Data"
+        open={isOpen}
+        onOpenChange={(e) => setIsOpen(e.open)}
+      >
+        <Table.Root size="sm" variant="line">
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeader>Description</Table.ColumnHeader>
+              <Table.ColumnHeader textAlign="right">Size</Table.ColumnHeader>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body style={{ cursor: 'pointer' }}>
+            {exampleStore.examples.map((example) => (
+              <Table.Row
+                key={example.name}
+                _hover={rowHover}
+                onClick={() => loadExample(example)}
+              >
+                <Table.Cell>{example.name}</Table.Cell>
+                <Table.Cell>{example.size}</Table.Cell>
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table.Root>
       </Modal>
     </>
   );

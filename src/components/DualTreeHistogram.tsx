@@ -95,99 +95,97 @@ export default observer(function DualTreeHistogram({
         style={{ color, stroke: color }}
         preserveAspectRatio="xMidYMid meet"
       >
-        <text
-          fill={strokeLeft}
-          stroke={strokeLeft}
-          strokeWidth={0.5}
-          x={margin.left}
-          y={margin.top - 12}
-          fontSize="6px"
-          // textAnchor="middle"
-        >
-          —
-        </text>
-        <text
-          fill="#999999"
-          strokeWidth={0}
-          x={margin.left + 8}
-          y={margin.top - 12}
-          fontSize="6px"
-          // textAnchor="middle"
-        >
-          {labelLeft}
-        </text>
-        <text
-          fill={strokeRight}
-          stroke={strokeRight}
-          strokeWidth={0.5}
-          x={margin.left}
-          y={margin.top - 5}
-          fontSize="6px"
-          // textAnchor="middle"
-        >
-          —
-        </text>
-        <text
-          fill="#999999"
-          strokeWidth={0}
-          x={margin.left + 8}
-          y={margin.top - 5}
-          fontSize="6px"
-          // textAnchor="middle"
-        >
-          {labelRight}
-        </text>
-        <AxisLeft
-          domain={yDomainLeft}
-          xRange={xRange}
-          yRange={yRange}
-          label=""
-          yLog={yLogLeft}
-          tickFormat={tickFormatLeft}
-          ticksColor={strokeLeft}
-        />
-        <AxisRight
-          domain={yDomainRight}
-          xRange={xRange}
-          yRange={yRange}
-          label=""
-          yLog={yLogRight}
-          tickFormat={tickFormatRight}
-          ticksColor={strokeRight}
-        />
-        <AxisBottom
-          domain={xDomain}
-          xRange={xRange}
-          yRange={yRange}
-          label="Time"
-          tickFormat={formatTime}
-        />
-        <Curve
-          data={dataLeft}
-          xAccessor={x}
-          yAccessor={y}
-          xDomain={xDomain}
-          yDomain={yDomainLeft}
-          xRange={xRange}
-          yRange={yRange}
-          yLog={yLogLeft}
-          strokeWidth="1"
-          stroke={strokeLeft}
-          step={stepLeft}
-        />
-        <Curve
-          data={dataRight}
-          xAccessor={x}
-          yAccessor={yRight}
-          xDomain={xDomain}
-          yDomain={yDomainRight}
-          xRange={xRange}
-          yRange={yRange}
-          yLog={yLogRight}
-          strokeWidth="1"
-          stroke={strokeRight}
-          step={stepRight}
-        />
+        <g style={{ fontSize: '6px' }}>
+          <text
+            fill={strokeLeft}
+            stroke={strokeLeft}
+            strokeWidth={0.5}
+            x={margin.left}
+            y={margin.top - 12}
+            // textAnchor="middle"
+          >
+            —
+          </text>
+          <text
+            fill="#999999"
+            strokeWidth={0}
+            x={margin.left + 8}
+            y={margin.top - 12}
+            // textAnchor="middle"
+          >
+            {labelLeft}
+          </text>
+          <text
+            fill={strokeRight}
+            stroke={strokeRight}
+            strokeWidth={0.5}
+            x={margin.left}
+            y={margin.top - 5}
+            // textAnchor="middle"
+          >
+            —
+          </text>
+          <text
+            fill="#999999"
+            strokeWidth={0}
+            x={margin.left + 8}
+            y={margin.top - 5}
+            // textAnchor="middle"
+          >
+            {labelRight}
+          </text>
+          <AxisLeft
+            domain={yDomainLeft}
+            xRange={xRange}
+            yRange={yRange}
+            label=""
+            yLog={yLogLeft}
+            tickFormat={tickFormatLeft}
+            ticksColor={strokeLeft}
+          />
+          <AxisRight
+            domain={yDomainRight}
+            xRange={xRange}
+            yRange={yRange}
+            label=""
+            yLog={yLogRight}
+            tickFormat={tickFormatRight}
+            ticksColor={strokeRight}
+          />
+          <AxisBottom
+            domain={xDomain}
+            xRange={xRange}
+            yRange={yRange}
+            label="Time"
+            tickFormat={formatTime}
+          />
+          <Curve
+            data={dataLeft}
+            xAccessor={x}
+            yAccessor={y}
+            xDomain={xDomain}
+            yDomain={yDomainLeft}
+            xRange={xRange}
+            yRange={yRange}
+            yLog={yLogLeft}
+            strokeWidth="1"
+            stroke={strokeLeft}
+            step={stepLeft}
+          />
+          <Curve
+            data={dataRight}
+            xAccessor={x}
+            yAccessor={yRight}
+            xDomain={xDomain}
+            yDomain={yDomainRight}
+            xRange={xRange}
+            yRange={yRange}
+            yLog={yLogRight}
+            strokeWidth="1"
+            stroke={strokeRight}
+            step={stepRight}
+          />
+        </g>
       </svg>
     </Box>
   );

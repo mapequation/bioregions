@@ -1,21 +1,14 @@
 import { observer } from 'mobx-react';
 import {
   Flex,
-  Select,
   Button,
   ButtonGroup,
   VStack,
-  FormControl,
-  FormLabel,
-  Switch,
   Spacer,
-  Collapse,
   Box,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
   Tag,
+  Field,
+  Collapsible,
 } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type {
@@ -30,6 +23,9 @@ import {
   HEATMAP_TARGET_NAME,
 } from '../../store/MapStore';
 import ColorSettings from './ColorSettings';
+import Select from './Select';
+import { Switch } from '../ui/switch';
+import { Slider } from '../ui/slider';
 
 const ProjectionSelect = observer(function ProjectionSelect() {
   const { mapStore } = useStore();
@@ -38,17 +34,15 @@ const ProjectionSelect = observer(function ProjectionSelect() {
     <Select
       size="sm"
       ml={1}
-      variant="filled"
-      value={mapStore.projectionName}
+      // variant="filled"
+      value={[mapStore.projectionName]}
       name="projection"
-      onChange={(e) => mapStore.setProjection(e.target.value as Projection)}
-    >
-      {PROJECTIONS.map((projection) => (
-        <option value={projection} key={projection}>
-          {PROJECTIONNAME[projection]}
-        </option>
-      ))}
-    </Select>
+      onValueChange={(e) => mapStore.setProjection(e.value[0] as Projection)}
+      items={PROJECTIONS.map((projection) => ({
+        label: PROJECTIONNAME[projection],
+        value: projection,
+      }))}
+    />
   );
 });
 
@@ -66,118 +60,113 @@ export default observer(function Map() {
     <VStack>
       <ProjectionSelect />
       <Flex w="100%">
-        <ButtonGroup
-          variant="outline"
-          isAttached
-          size="sm"
-          isDisabled={!speciesStore.loaded || speciesStore.isLoading}
-        >
-          <Button
-            onClick={setRenderType('records')}
-            isActive={mapStore.renderType === 'records'}
-          >
-            Records
-          </Button>
-          <Button
-            onClick={setRenderType('heatmap')}
-            isActive={mapStore.renderType === 'heatmap'}
-          >
-            Heatmap
-          </Button>
-          <Button
-            onClick={setRenderType('bioregions')}
-            isLoading={infomapStore.isRunning}
-            isDisabled={!infomapStore.haveBioregions}
-            isActive={mapStore.renderType === 'bioregions'}
-          >
-            Bioregions
-          </Button>
-        </ButtonGroup>
+        <Field.Root disabled={!speciesStore.loaded || speciesStore.isLoading}>
+          <ButtonGroup variant="outline" attached size="sm">
+            <Button
+              onClick={setRenderType('records')}
+              variant={mapStore.renderType === 'records' ? 'solid' : 'outline'}
+            >
+              Records
+            </Button>
+            <Button
+              onClick={setRenderType('heatmap')}
+              variant={mapStore.renderType === 'heatmap' ? 'solid' : 'outline'}
+            >
+              Heatmap
+            </Button>
+            <Button
+              onClick={setRenderType('bioregions')}
+              loading={infomapStore.isRunning}
+              disabled={!infomapStore.haveBioregions}
+              variant={
+                mapStore.renderType === 'bioregions' ? 'solid' : 'outline'
+              }
+            >
+              Bioregions
+            </Button>
+          </ButtonGroup>
+        </Field.Root>
       </Flex>
       {mapStore.renderType === 'heatmap' && (
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="clip" mb="0">
+        <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+          <Field.Label htmlFor="clip" mb="0">
             Heatmap value
-          </FormLabel>
+          </Field.Label>
           <Spacer />
           <Select
             size="sm"
-            value={mapStore.heatmapTarget}
+            value={[mapStore.heatmapTarget]}
             name="heatmapTarget"
-            onChange={(e) =>
-              mapStore.setHeatmapTarget(e.target.value as HeatmapTarget, true)
+            onValueChange={(e) =>
+              mapStore.setHeatmapTarget(e.value[0] as HeatmapTarget, true)
             }
-          >
-            {HEATMAP_TARGETS.map((target) => (
-              <option value={target} key={target}>
-                {HEATMAP_TARGET_NAME[target]}
-              </option>
-            ))}
-          </Select>
-        </FormControl>
+            items={HEATMAP_TARGETS.map((target) => ({
+              label: HEATMAP_TARGET_NAME[target],
+              value: target,
+            }))}
+          />
+        </Field.Root>
       )}
 
-      <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="clip" mb="0">
+      <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+        <Field.Label htmlFor="clip" mb="0">
           Clip to land
-        </FormLabel>
+        </Field.Label>
         <Spacer />
         <Switch
           id="clip"
-          isChecked={mapStore.clipToLand}
-          onChange={() => mapStore.setClipToLand(!mapStore.clipToLand)}
+          checked={mapStore.clipToLand}
+          onCheckedChange={() => mapStore.setClipToLand(!mapStore.clipToLand)}
         />
-      </FormControl>
-      <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="colorModuleParticipation" mb="0">
+      </Field.Root>
+      <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+        <Field.Label htmlFor="colorModuleParticipation" mb="0">
           Show inter-connected bioregions
-        </FormLabel>
+        </Field.Label>
         <Spacer />
         <Switch
           id="colorModuleParticipation"
-          isChecked={mapStore.colorModuleParticipation}
-          onChange={() =>
+          checked={mapStore.colorModuleParticipation}
+          onCheckedChange={() =>
             mapStore.setColorModuleParticipation(
               !mapStore.colorModuleParticipation,
             )
           }
         />
-      </FormControl>
+      </Field.Root>
 
-      <Collapse
-        in={mapStore.colorModuleParticipation}
-        animateOpacity
+      <Collapsible.Root
+        open={mapStore.colorModuleParticipation}
         style={{ width: '100%', marginTop: 0 }}
       >
-        <Flex w="100%" pl="10px" py={2}>
-          <Box minW="100px" fontSize="0.9rem">
-            Strength
-          </Box>
-          <Slider
-            mx={3}
-            isDisabled={!mapStore.colorModuleParticipation}
-            focusThumbOnChange={false}
-            value={mapStore.colorModuleParticipationStrength}
-            onChange={(value) =>
-              mapStore.setColorModuleParticipationStrength(value)
-            }
-            onChangeEnd={(value) =>
-              mapStore.setColorModuleParticipationStrength(value, true)
-            }
-            min={0}
-            max={1}
-            step={0.1}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="16px" />
-          </Slider>
-          <Tag size="sm" minW={50}>
-            {mapStore.colorModuleParticipationStrength}
-          </Tag>
-        </Flex>
-      </Collapse>
+        <Collapsible.Content>
+          <Flex w="100%" pl="10px" py={2} alignItems="center">
+            <Box minW="100px" fontSize="0.9rem">
+              Strength
+            </Box>
+            <Slider
+              mx={3}
+              w="100%"
+              size="sm"
+              disabled={!mapStore.colorModuleParticipation}
+              // focusThumbOnChange={false}
+              value={[mapStore.colorModuleParticipationStrength]}
+              onValueChange={(e) =>
+                mapStore.setColorModuleParticipationStrength(e.value[0])
+              }
+              onValueChangeEnd={(e) =>
+                mapStore.setColorModuleParticipationStrength(e.value[0], true)
+              }
+              min={0}
+              max={1}
+              step={0.1}
+            ></Slider>
+            <Tag.Root size="sm" minW={50}>
+              <Tag.Label>{mapStore.colorModuleParticipationStrength}</Tag.Label>
+            </Tag.Root>
+          </Flex>
+        </Collapsible.Content>
+      </Collapsible.Root>
 
       <ColorSettings />
     </VStack>

@@ -1,4 +1,4 @@
-import { Table, Thead, Tbody, Tr, Td, Tfoot, Tag } from '@chakra-ui/react';
+import { Table, Tag } from '@chakra-ui/react';
 import type {
   BioregionsNetwork,
   BioregionsStateNetwork,
@@ -21,56 +21,74 @@ export default function NetworkSize({
     : network.nodes.length.toLocaleString();
 
   return (
-    <Table width="100%" size="sm" variant="simpler">
-      <Thead>
-        <Tr>
-          <Td></Td>
-          <Td>Nodes</Td>
-          <Td>Links</Td>
-        </Tr>
-      </Thead>
-      <Tbody>
-        <Tr>
-          <Td>Species</Td>
-          <Td isNumeric>
-            <Tag size="sm">{network.numLeafTaxonNodes.toLocaleString()}</Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">{network.numLeafTaxonLinks.toLocaleString()}</Tag>
-          </Td>
-        </Tr>
-        <Tr>
-          <Td>Ancestors</Td>
-          <Td isNumeric>
-            <Tag size="sm">
-              {network.numInternalTaxonNodes.toLocaleString()}
-            </Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">
-              {network.numInternalTaxonLinks.toLocaleString()}
-            </Tag>
-          </Td>
-        </Tr>
-        <Tr>
-          <Td>{gridLabel}</Td>
-          <Td isNumeric>
-            <Tag size="sm">{numGridCells}</Tag>
-          </Td>
-          <Td isNumeric></Td>
-        </Tr>
-      </Tbody>
-      <Tfoot>
-        <Tr>
-          <Td>{totalLabel}</Td>
-          <Td isNumeric>
-            <Tag size="sm">{totalNumNodes}</Tag>
-          </Td>
-          <Td isNumeric>
-            <Tag size="sm">{network.links.length.toLocaleString()}</Tag>
-          </Td>
-        </Tr>
-      </Tfoot>
-    </Table>
+    <Table.Root width="100%" size="sm" variant="line">
+      <Table.Header>
+        <Table.Row>
+          <Table.Cell></Table.Cell>
+          <Table.Cell>Nodes</Table.Cell>
+          <Table.Cell>Links</Table.Cell>
+        </Table.Row>
+      </Table.Header>
+      <Table.Body>
+        <Table.Row>
+          <Table.Cell>Species</Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>
+                {network.numLeafTaxonNodes.toLocaleString()}
+              </Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>
+                {network.numLeafTaxonLinks.toLocaleString()}
+              </Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell>Ancestors</Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>
+                {network.numInternalTaxonNodes.toLocaleString()}
+              </Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>
+                {network.numInternalTaxonLinks.toLocaleString()}
+              </Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+        </Table.Row>
+        <Table.Row>
+          <Table.Cell>{gridLabel}</Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>{numGridCells}</Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+          <Table.Cell></Table.Cell>
+        </Table.Row>
+      </Table.Body>
+      <Table.Footer>
+        <Table.Row>
+          <Table.Cell>{totalLabel}</Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              <Tag.Label>{totalNumNodes}</Tag.Label>
+            </Tag.Root>
+          </Table.Cell>
+          <Table.Cell>
+            <Tag.Root size="sm">
+              {network.links.length.toLocaleString()}
+            </Tag.Root>
+          </Table.Cell>
+        </Table.Row>
+      </Table.Footer>
+    </Table.Root>
   );
 }

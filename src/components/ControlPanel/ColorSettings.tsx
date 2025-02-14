@@ -1,22 +1,14 @@
 import { observer } from 'mobx-react';
-import {
-  Flex,
-  Select,
-  VStack,
-  FormControl,
-  FormLabel,
-  Switch,
-  Spacer,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Box,
-} from '@chakra-ui/react';
+import { Flex, VStack, Spacer, Box, Field, Tag } from '@chakra-ui/react';
 import { useState } from 'react';
 import { useStore } from '../../store';
 import { SchemeName } from '@mapequation/c3';
 import ColorPicker from './ColorPicker';
+import { Switch } from '../ui/switch';
+import Select from './Select';
+import { Slider } from '../ui/slider';
+import IntervalSlider from './IntervalSlider';
+import { rangeArray } from '@/utils/range';
 
 export default observer(function Map() {
   const { mapStore, colorStore, infomapStore } = useStore();
@@ -35,8 +27,20 @@ export default observer(function Map() {
     setValue: (v: number) => void,
     renderType: typeof mapStore.renderType,
   ) => {
-    return (value: number) => {
-      setValue(value);
+    return (e: { value: number[] }) => {
+      setValue(e.value[0]);
+      if (mapStore.renderType === renderType) {
+        mapStore.render();
+      }
+    };
+  };
+
+  const withRenderTypeRange = (
+    setValue: (v: [number, number]) => void,
+    renderType: typeof mapStore.renderType,
+  ) => {
+    return (e: { value: [number, number] }) => {
+      setValue(e.value);
       if (mapStore.renderType === renderType) {
         mapStore.render();
       }
@@ -57,17 +61,17 @@ export default observer(function Map() {
 
   return (
     <VStack w="100%">
-      <FormControl display="flex" w="100%" alignItems="center">
-        <FormLabel htmlFor="color-settings-switch" mb="0">
+      <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+        <Field.Label htmlFor="color-settings-switch" mb="0">
           Color settings
-        </FormLabel>
+        </Field.Label>
         <Spacer />
         <Switch
           id="color-settings-switch"
-          isChecked={showColorSettings}
-          onChange={() => setShowColorSettings(!showColorSettings)}
+          checked={showColorSettings}
+          onCheckedChange={() => setShowColorSettings(!showColorSettings)}
         />
-      </FormControl>
+      </Field.Root>
 
       {showColorSettings && (
         <Box mt={10} minW={250}>
@@ -90,198 +94,151 @@ export default observer(function Map() {
           <Flex>
             <Select
               id="colorScale"
-              value={colorStore.scheme}
-              onChange={(e) => {
-                colorStore.setScheme(e.target?.value! as SchemeName);
+              label="Color scheme"
+              value={[colorStore.scheme as string]}
+              onValueChange={(e) => {
+                colorStore.setScheme(e.value[0]! as SchemeName);
                 if (mapStore.renderType === 'bioregions') {
                   mapStore.render();
                 }
               }}
-            >
-              <option value="Sinebow">Sinebow</option>
-              <option value="Rainbow">Rainbow</option>
-              <option value="Turbo">Turbo</option>
-              <option value="Viridis">Viridis</option>
-              <option value="Greys">Greys</option>
-            </Select>
+              items={[
+                { label: 'Sinebow', value: 'Sinebow' },
+                { label: 'Rainbow', value: 'Rainbow' },
+                { label: 'Turbo', value: 'Turbo' },
+                { label: 'Viridis', value: 'Viridis' },
+                { label: 'Greys', value: 'Greys' },
+              ]}
+            />
           </Flex>
-          <Flex mt={4}>
+          <Flex w="100%" mt={4} alignItems="flex-end">
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.saturation}</Tag.Label>
+            </Tag.Root>
             <Slider
-              focusThumbOnChange={false}
-              value={colorStore.saturation}
-              onChange={withRenderType(colorStore.setSaturation, 'bioregions')}
+              w="100%"
+              size="sm"
+              label="Saturation"
+              mx={2}
+              value={[colorStore.saturation, colorStore.saturationEnd]}
               min={0}
               max={1}
               step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.saturation}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>Saturation</Box>
-          </Flex>
-          <Flex mt={4}>
-            <Slider
-              focusThumbOnChange={false}
-              value={colorStore.saturationEnd}
-              onChange={withRenderType(
-                colorStore.setSaturationEnd,
+              onValueChange={withRenderTypeRange(
+                colorStore.setSaturationRange,
                 'bioregions',
               )}
+            />
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.saturationEnd}</Tag.Label>
+            </Tag.Root>
+          </Flex>
+
+          <Flex w="100%" mt={4} alignItems="flex-end">
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.lightness}</Tag.Label>
+            </Tag.Root>
+            <Slider
+              w="100%"
+              size="sm"
+              label="Lightness"
+              mx={2}
+              value={[colorStore.lightness, colorStore.lightnessEnd]}
               min={0}
               max={1}
               step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.saturationEnd}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>SaturationEnd</Box>
-          </Flex>
-          <Flex mt={4}>
-            <Slider
-              focusThumbOnChange={false}
-              value={colorStore.lightness}
-              onChange={withRenderType(colorStore.setLightness, 'bioregions')}
-              min={0}
-              max={1}
-              step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.lightness}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>Lightness</Box>
-          </Flex>
-          <Flex mt={4}>
-            <Slider
-              focusThumbOnChange={false}
-              value={colorStore.lightnessEnd}
-              onChange={withRenderType(
-                colorStore.setLightnessEnd,
+              onValueChange={withRenderTypeRange(
+                colorStore.setLightnessRange,
                 'bioregions',
               )}
-              min={0}
-              max={1}
-              step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.lightnessEnd}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>LightnessEnd</Box>
+            />
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.lightnessEnd}</Tag.Label>
+            </Tag.Root>
           </Flex>
-          <Flex mt={4}>
+
+          <Flex w="100%" mt={4} alignItems="flex-end">
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.strength}</Tag.Label>
+            </Tag.Root>
             <Slider
-              focusThumbOnChange={false}
-              value={colorStore.strength}
-              onChange={withRenderType(colorStore.setStrength, 'bioregions')}
+              w="100%"
+              size="sm"
+              label="Weight strength"
+              mx={2}
+              value={[colorStore.strength]}
               min={0}
               max={1}
               step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.strength}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>Weight strength</Box>
+              onValueChange={withRenderType(
+                colorStore.setStrength,
+                'bioregions',
+              )}
+            />
           </Flex>
-          <Flex mt={4}>
+
+          <Flex w="100%" mt={4} alignItems="flex-end">
+            <Tag.Root height={5}>
+              <Tag.Label width={10}>{colorStore.offset}</Tag.Label>
+            </Tag.Root>
             <Slider
-              focusThumbOnChange={false}
-              value={colorStore.offset}
-              onChange={withRenderType(colorStore.setOffset, 'bioregions')}
+              w="100%"
+              size="sm"
+              label="Offset"
+              mx={2}
+              value={[colorStore.offset]}
               min={0}
               max={1}
               step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.offset}
-              </SliderThumb>
-            </Slider>
-            <Box mx={14}>Offset</Box>
+              onValueChange={withRenderType(colorStore.setOffset, 'bioregions')}
+            />
           </Flex>
-          <Flex mt={4} display="none">
-            <Slider
-              focusThumbOnChange={false}
-              value={colorStore.strength}
-              onChange={withRenderType(colorStore.setStrength, 'bioregions')}
-              min={0}
-              max={1}
-              step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="32px">
-                {colorStore.strength}
-              </SliderThumb>
-            </Slider>
-            <Box mx={10}>Strength</Box>
-          </Flex>
+
           <Flex mt={4}>
-            <FormControl display="flex" alignItems="center">
-              <FormLabel htmlFor="reverse" mb="0">
+            <Field.Root display="flex" flexDir="row" alignItems="center">
+              <Field.Label htmlFor="reverse" mb="0">
                 Reverse
-              </FormLabel>
+              </Field.Label>
               <Switch
                 id="reverse"
-                isChecked={colorStore.reverse}
-                onChange={withRenderToggle(
+                checked={colorStore.reverse}
+                onCheckedChange={withRenderToggle(
                   colorStore.toggleReverse,
                   'bioregions',
                 )}
               />
-            </FormControl>
+            </Field.Root>
           </Flex>
           <Flex mt={4}>
-            <FormControl display="flex" alignItems="center">
-              <FormLabel htmlFor="useFlow" mb="0">
+            <Field.Root display="flex" flexDir="row" alignItems="center">
+              <Field.Label htmlFor="useFlow" mb="0">
                 Use flow
-              </FormLabel>
+              </Field.Label>
               <Switch
                 id="useFlow"
-                isChecked={colorStore.useFlow}
-                onChange={withRenderToggle(
+                checked={colorStore.useFlow}
+                onCheckedChange={withRenderToggle(
                   colorStore.toggleUseFlow,
                   'bioregions',
                 )}
               />
-            </FormControl>
+            </Field.Root>
           </Flex>
           {infomapStore.haveStateNetwork && (
             <Flex mt={4}>
-              <FormControl display="flex" alignItems="center">
-                <FormLabel htmlFor="hideDominantOverlappingModule" mb="0">
+              <Field.Root display="flex" flexDir="row" alignItems="center">
+                <Field.Label htmlFor="hideDominantOverlappingModule" mb="0">
                   Hide dominant overlapping module
-                </FormLabel>
+                </Field.Label>
                 <Switch
                   id="hideDominantOverlappingModule"
-                  isChecked={colorStore.hideDominantOverlappingModule}
-                  onChange={withRenderToggle(
+                  checked={colorStore.hideDominantOverlappingModule}
+                  onCheckedChange={withRenderToggle(
                     colorStore.toggleHideDominantOverlappingModule,
                     'bioregions',
                   )}
                 />
-              </FormControl>
+              </Field.Root>
             </Flex>
           )}
         </Box>

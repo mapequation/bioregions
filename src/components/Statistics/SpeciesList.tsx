@@ -1,15 +1,5 @@
-import {
-  Box,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Input,
-  Text,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { Box, Table, Input, Text } from '@chakra-ui/react';
+import { useColorModeValue } from '../ui/color-mode';
 import { observer } from 'mobx-react';
 import { useState } from 'react';
 import { useStore } from '../../store';
@@ -41,40 +31,44 @@ export default observer(function SpeciesList() {
       borderWidth="2px"
       boxShadow="md"
     >
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th colSpan={2}>
+      <Table.Root variant="line">
+        <Table.Header>
+          <Table.Row>
+            <Table.ColumnHeader colSpan={2}>
               <Input
                 placeholder="Filter species..."
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
               />
-            </Th>
-            <Th textAlign="start">{speciesStore.numSpecies}</Th>
-          </Tr>
-          <Tr>
-            <Th>Name</Th>
-            <Th isNumeric>Count</Th>
-            <Th textAlign="center">Regions</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
+            </Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="start">
+              {speciesStore.numSpecies}
+            </Table.ColumnHeader>
+          </Table.Row>
+          <Table.Row>
+            <Table.ColumnHeader>Name</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">Count</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="center">Regions</Table.ColumnHeader>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
           {items.map((species) => {
             return (
-              <Tr key={species.name} w="100%">
-                <Td>
+              <Table.Row key={species.name} w="100%">
+                <Table.Cell>
                   <Text>{species.name}</Text>
-                </Td>
-                <Td isNumeric>{species.count.toLocaleString()}</Td>
-                <Td>
+                </Table.Cell>
+                <Table.Cell textAlign="right">
+                  {species.count.toLocaleString()}
+                </Table.Cell>
+                <Table.Cell>
                   <SpeciesPieChart speciesName={species.name} />
-                </Td>
-              </Tr>
+                </Table.Cell>
+              </Table.Row>
             );
           })}
-        </Tbody>
-      </Table>
+        </Table.Body>
+      </Table.Root>
     </Box>
   );
 });

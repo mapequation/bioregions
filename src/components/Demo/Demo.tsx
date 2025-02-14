@@ -1,24 +1,13 @@
 import { observer } from 'mobx-react';
 import {
   Box,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
   VStack,
-  FormControl,
-  FormLabel,
   Spacer,
   Tag,
-  Switch,
   Button,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
   Flex,
-  Collapse,
+  Collapsible,
+  Field,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import DemoTree from './DemoTree';
@@ -33,6 +22,9 @@ import DualTreeHistogram from '../DualTreeHistogram';
 // import PhylocanvasTree from '../Tree';
 // import TreeHistogram from '../TreeHistogram';
 import { saveSvg } from '../../utils/exporter';
+import { Slider } from '../ui/slider';
+import { Switch } from '../ui/switch';
+import { NumberInputField, NumberInputRoot } from '../ui/number-input';
 
 export default observer(() => {
   const demoStore = useDemoStore();
@@ -136,23 +128,20 @@ export default observer(() => {
             <Slider
               w={`${100 * (100 / 144)}%`}
               ml={`${400 / 144}%`}
-              isReversed
+              // isReversed
               min={0}
               max={1}
               step={0.01}
-              value={1 - integrationTime}
-              onChange={(value) => infomapStore.setIntegrationTime(1 - value)}
-              onChangeEnd={(value) => {
-                infomapStore.setIntegrationTime(1 - value, true);
+              value={[1 - integrationTime]}
+              onValueChange={(e) =>
+                infomapStore.setIntegrationTime(1 - e.value[0])
+              }
+              onValueChangeEnd={(e) => {
+                infomapStore.setIntegrationTime(1 - e.value[0], true);
                 infomapStore.run();
               }}
               colorScheme="blue"
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb />
-            </Slider>
+            />
           )}
           {segregateBranches && (
             <Slider
@@ -161,19 +150,14 @@ export default observer(() => {
               min={0}
               max={1}
               step={0.01}
-              value={segregationTime}
-              onChange={infomapStore.setSegregationTime}
-              onChangeEnd={(value) => {
-                infomapStore.setSegregationTime(value, true);
+              value={[segregationTime]}
+              onValueChange={(e) => infomapStore.setSegregationTime(e.value[0])}
+              onValueChangeEnd={(e) => {
+                infomapStore.setSegregationTime(e.value[0], true);
                 infomapStore.run();
               }}
               colorScheme="red"
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb />
-            </Slider>
+            ></Slider>
           )}
         </Box>
       </Box>
@@ -185,72 +169,71 @@ export default observer(() => {
         justify="space-between"
       >
         <VStack w={350} align="start">
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="treeWeightBalance" mb="0">
+          <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+            <Field.Label htmlFor="treeWeightBalance" mb="0">
               Relative tree strength
-            </FormLabel>
+            </Field.Label>
             <Spacer />
             <Slider
               id="treeWeightBalance"
               w="30%"
-              isDisabled={!infomapStore.includeTreeInNetwork}
-              focusThumbOnChange={false}
-              value={infomapStore.treeWeightBalance}
-              onChange={(value) => infomapStore.setTreeWeightBalance(value)}
-              onChangeEnd={(value) => {
-                infomapStore.setTreeWeightBalance(value, true);
+              disabled={!infomapStore.includeTreeInNetwork}
+              // focusThumbOnChange={false}
+              value={[infomapStore.treeWeightBalance]}
+              onValueChange={(e) =>
+                infomapStore.setTreeWeightBalance(e.value[0])
+              }
+              onValueChangeEnd={(e) => {
+                infomapStore.setTreeWeightBalance(e.value[0], true);
                 infomapStore.run();
               }}
               min={0}
               max={1}
               step={0.01}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-            </Slider>
-            <Tag size="sm" ml={4}>
-              {format('.2~p')(infomapStore.treeWeightBalance)}
-            </Tag>
-          </FormControl>
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="includeTree" mb="0">
+            ></Slider>
+            <Tag.Root size="sm" ml={4}>
+              <Tag.Label>
+                {format('.2~p')(infomapStore.treeWeightBalance)}
+              </Tag.Label>
+            </Tag.Root>
+          </Field.Root>
+          <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+            <Field.Label htmlFor="includeTree" mb="0">
               Include tree
-            </FormLabel>
+            </Field.Label>
             <Spacer />
             <Switch
               id="includeTree"
-              isChecked={infomapStore.includeTreeInNetwork}
-              onChange={() => {
+              checked={infomapStore.includeTreeInNetwork}
+              onCheckedChange={() => {
                 infomapStore.setIncludeTree(!infomapStore.includeTreeInNetwork);
                 infomapStore.run();
               }}
             />
-          </FormControl>
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="useWholeTree" mb="0">
+          </Field.Root>
+          <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+            <Field.Label htmlFor="useWholeTree" mb="0">
               Integrate whole tree
-            </FormLabel>
+            </Field.Label>
             <Spacer />
             <Switch
               id="useWholeTree"
-              isChecked={infomapStore.useWholeTree}
-              onChange={() => {
+              checked={infomapStore.useWholeTree}
+              onCheckedChange={() => {
                 infomapStore.setUseWholeTree(!infomapStore.useWholeTree, true);
                 infomapStore.run();
               }}
             />
-          </FormControl>
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="segregateBranches" mb="0">
+          </Field.Root>
+          <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+            <Field.Label htmlFor="segregateBranches" mb="0">
               Segregate branches
-            </FormLabel>
+            </Field.Label>
             <Spacer />
             <Switch
               id="segregateBranches"
-              isChecked={segregateBranches}
-              onChange={() => {
+              checked={segregateBranches}
+              onCheckedChange={() => {
                 if (segregateBranches) {
                   setSegregationTimeBackup(infomapStore.segregationTime);
                   infomapStore.setSegregationTime(0, true);
@@ -262,8 +245,8 @@ export default observer(() => {
                 setSegregateBranches(!segregateBranches);
               }}
             />
-          </FormControl>
-          <VStack w="100%" align="stretch" spacing={2}>
+          </Field.Root>
+          <VStack w="100%" align="stretch" gap={2}>
             <VStack w="100%" align="stretch">
               <NetworkSize network={network} />
               <Stat label="Levels">{infomapStore.numLevels}</Stat>
@@ -311,31 +294,41 @@ export default observer(() => {
       <VStack mt={4} maxW={350} align="start">
         {showDeveloperStuff && (
           <>
-            <FormControl display="flex" w="100%" alignItems="center">
-              <FormLabel htmlFor="alwaysUseStateNetwork" mb="0">
+            <Field.Root
+              display="flex"
+              flexDir="row"
+              w="100%"
+              alignItems="center"
+            >
+              <Field.Label htmlFor="alwaysUseStateNetwork" mb="0">
                 Always use state network
-              </FormLabel>
+              </Field.Label>
               <Spacer />
               <Switch
                 id="alwaysUseStateNetwork"
-                isChecked={infomapStore.alwaysUseStateNetwork}
-                onChange={() => {
+                checked={infomapStore.alwaysUseStateNetwork}
+                onCheckedChange={() => {
                   infomapStore.setAlwaysUseStateNetwork(
                     !infomapStore.alwaysUseStateNetwork,
                   );
                   infomapStore.run();
                 }}
               />
-            </FormControl>
-            <FormControl display="flex" w="100%" alignItems="center">
-              <FormLabel htmlFor="uniformTreeLinks" mb="0">
+            </Field.Root>
+            <Field.Root
+              display="flex"
+              flexDir="row"
+              w="100%"
+              alignItems="center"
+            >
+              <Field.Label htmlFor="uniformTreeLinks" mb="0">
                 Uniform tree links
-              </FormLabel>
+              </Field.Label>
               <Spacer />
               <Switch
                 id="uniformTreeLinks"
-                isChecked={infomapStore.uniformTreeLinks}
-                onChange={() => {
+                checked={infomapStore.uniformTreeLinks}
+                onCheckedChange={() => {
                   infomapStore.setUniformTreeLinks(
                     !infomapStore.uniformTreeLinks,
                     true,
@@ -343,45 +336,45 @@ export default observer(() => {
                   infomapStore.run();
                 }}
               />
-            </FormControl>
-            <FormControl display="flex" w="100%" alignItems="center">
-              <FormLabel htmlFor="curveBundleBeta" mb="0">
+            </Field.Root>
+            <Field.Root
+              display="flex"
+              flexDir="row"
+              w="100%"
+              alignItems="center"
+            >
+              <Field.Label htmlFor="curveBundleBeta" mb="0">
                 Curve bundle strength
-              </FormLabel>
+              </Field.Label>
               <Spacer />
               <Slider
                 id="curveBundleBeta"
                 w="30%"
-                isDisabled={infomapStore.integrationTime === 1}
-                focusThumbOnChange={false}
-                value={beta}
-                onChange={setBeta}
+                disabled={infomapStore.integrationTime === 1}
+                // focusThumbOnChange={false}
+                value={[beta]}
+                onValueChange={(e) => setBeta(e.value[0])}
                 min={0}
                 max={1}
                 step={0.01}
-              >
-                <SliderTrack>
-                  <SliderFilledTrack />
-                </SliderTrack>
-                <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-              </Slider>
-              <Tag size="sm" ml={4}>
-                {beta}
-              </Tag>
-            </FormControl>
+              ></Slider>
+              <Tag.Root size="sm" ml={4}>
+                <Tag.Label>{beta}</Tag.Label>
+              </Tag.Root>
+            </Field.Root>
           </>
         )}
 
         {!infomapStore.useWholeTree && (
-          <FormControl display="flex" w="100%" alignItems="center">
-            <FormLabel htmlFor="useWeightedTreeNodeLinksIfTimeSlice" mb="0">
+          <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+            <Field.Label htmlFor="useWeightedTreeNodeLinksIfTimeSlice" mb="0">
               Weighted tree links
-            </FormLabel>
+            </Field.Label>
             <Spacer />
             <Switch
               id="useWeightedTreeNodeLinksIfTimeSlice"
-              isChecked={infomapStore.useWeightedTreeNodeLinksIfTimeSlice}
-              onChange={() => {
+              checked={infomapStore.useWeightedTreeNodeLinksIfTimeSlice}
+              onCheckedChange={() => {
                 infomapStore.setUseWeightedTreeNodeLinksIfTimeSlice(
                   !infomapStore.useWeightedTreeNodeLinksIfTimeSlice,
                   true,
@@ -389,131 +382,120 @@ export default observer(() => {
                 infomapStore.run();
               }}
             />
-          </FormControl>
+          </Field.Root>
         )}
 
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="moduleLevel" mb="0">
+        <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+          <Field.Label htmlFor="moduleLevel" mb="0">
             Module level
-          </FormLabel>
+          </Field.Label>
           <Spacer />
           <Slider
             id="moduleLevel"
             w={100}
-            focusThumbOnChange={false}
-            value={infomapStore.moduleLevel}
-            onChange={(value) => infomapStore.setModuleLevel(value)}
-            onChangeEnd={(value) => {
-              infomapStore.setModuleLevel(value, true);
+            // focusThumbOnChange={false}
+            value={[infomapStore.moduleLevel]}
+            onValueChange={(e) => infomapStore.setModuleLevel(e.value[0])}
+            onValueChangeEnd={(e) => {
+              infomapStore.setModuleLevel(e.value[0], true);
               infomapStore.run();
             }}
             min={0}
             max={Math.max(0, infomapStore.numLevels - 2)}
             step={1}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-          </Slider>
-          <Tag size="sm" ml={4} w={10}>
-            {infomapStore.moduleLevel}
-          </Tag>
-        </FormControl>
+          ></Slider>
+          <Tag.Root size="sm" ml={4} w={10}>
+            <Tag.Label>{infomapStore.moduleLevel}</Tag.Label>
+          </Tag.Root>
+        </Field.Root>
 
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="spatialNormalization" mb="0">
+        <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+          <Field.Label htmlFor="spatialNormalization" mb="0">
             Rarity strength
-          </FormLabel>
+          </Field.Label>
           <Spacer />
           <Slider
             id="spatialNormalization"
             w={100}
-            focusThumbOnChange={false}
-            value={infomapStore.spatialNormalizationOrder}
-            onChange={(value) =>
-              infomapStore.setSpatialNormalizationOrder(value)
+            // focusThumbOnChange={false}
+            value={[infomapStore.spatialNormalizationOrder]}
+            onValueChange={(e) =>
+              infomapStore.setSpatialNormalizationOrder(e.value[0])
             }
-            onChangeEnd={(value) => {
-              infomapStore.setSpatialNormalizationOrder(value, true);
+            onValueChangeEnd={(e) => {
+              infomapStore.setSpatialNormalizationOrder(e.value[0], true);
               infomapStore.run();
             }}
             min={0}
             max={3}
             step={0.1}
-          >
-            <SliderTrack>
-              <SliderFilledTrack />
-            </SliderTrack>
-            <SliderThumb fontSize="sm" boxSize="16px"></SliderThumb>
-          </Slider>
-          <Tag size="sm" ml={4} w={10}>
-            {infomapStore.spatialNormalizationOrder}
-          </Tag>
-        </FormControl>
+          ></Slider>
+          <Tag.Root size="sm" ml={4} w={10}>
+            <Tag.Label>{infomapStore.spatialNormalizationOrder}</Tag.Label>
+          </Tag.Root>
+        </Field.Root>
 
-        <FormControl display="flex" w="100%" alignItems="center">
-          <FormLabel htmlFor="colorModuleParticipation" mb="0">
+        <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+          <Field.Label htmlFor="colorModuleParticipation" mb="0">
             Show inter-connected bioregions
-          </FormLabel>
+          </Field.Label>
           <Spacer />
           <Switch
             id="colorModuleParticipation"
-            isChecked={mapStore.colorModuleParticipation}
-            onChange={() =>
+            checked={mapStore.colorModuleParticipation}
+            onCheckedChange={() =>
               mapStore.setColorModuleParticipation(
                 !mapStore.colorModuleParticipation,
               )
             }
           />
-        </FormControl>
+        </Field.Root>
 
-        <Collapse
-          in={mapStore.colorModuleParticipation}
-          animateOpacity
+        <Collapsible.Root
+          open={mapStore.colorModuleParticipation}
           style={{ width: '100%', marginTop: 0 }}
         >
-          <Flex w="100%" pl="10px" py={2}>
-            <Box minW="100px" fontSize="0.9rem">
-              Strength
-            </Box>
-            <Slider
-              mx={3}
-              isDisabled={!mapStore.colorModuleParticipation}
-              focusThumbOnChange={false}
-              value={mapStore.colorModuleParticipationStrength}
-              onChange={(value) =>
-                mapStore.setColorModuleParticipationStrength(value)
-              }
-              onChangeEnd={(value) =>
-                mapStore.setColorModuleParticipationStrength(value, true)
-              }
-              min={0}
-              max={1}
-              step={0.1}
-            >
-              <SliderTrack>
-                <SliderFilledTrack />
-              </SliderTrack>
-              <SliderThumb fontSize="sm" boxSize="16px" />
-            </Slider>
-            <Tag size="sm" minW={50}>
-              {mapStore.colorModuleParticipationStrength}
-            </Tag>
-          </Flex>
-        </Collapse>
+          <Collapsible.Content>
+            <Flex w="100%" pl="10px" py={2}>
+              <Box minW="100px" fontSize="0.9rem">
+                Strength
+              </Box>
+              <Slider
+                mx={3}
+                disabled={!mapStore.colorModuleParticipation}
+                // focusThumbOnChange={false}
+                value={[mapStore.colorModuleParticipationStrength]}
+                onValueChange={(e) =>
+                  mapStore.setColorModuleParticipationStrength(e.value[0])
+                }
+                onValueChangeEnd={(e) =>
+                  mapStore.setColorModuleParticipationStrength(e.value[0], true)
+                }
+                min={0}
+                max={1}
+                step={0.1}
+              ></Slider>
+              <Tag.Root size="sm" minW={50}>
+                <Tag.Label>
+                  {mapStore.colorModuleParticipationStrength}
+                </Tag.Label>
+              </Tag.Root>
+            </Flex>
+          </Collapsible.Content>
+        </Collapsible.Root>
 
         <Button onClick={() => setIsInfomapOutputOpen(true)}>
           Infomap console
         </Button>
 
-        <FormControl
+        <Field.Root
           display="flex"
+          flexDir="row"
           w="100%"
           alignItems="center"
-          isDisabled={infomapStore.isRunning}
+          disabled={infomapStore.isRunning}
         >
-          <FormLabel mb="0">
+          <Field.Label mb="0">
             <Button
               size="sm"
               w="100%"
@@ -524,29 +506,25 @@ export default observer(() => {
             >
               {!infomapStore.isRunning ? 'Run multilayer' : 'Abort'}
             </Button>
-          </FormLabel>
+          </Field.Label>
           <Spacer />
-          <NumberInput
+          <NumberInputRoot
             maxW="70px"
             min={2}
             size="xs"
-            value={infomapStore.numLayers}
-            onChange={(value) => infomapStore.setNumLayers(+value)}
+            value={`${infomapStore.numLayers}`}
+            onValueChange={(e) => infomapStore.setNumLayers(+e.value)}
           >
             <NumberInputField />
-            <NumberInputStepper>
-              <NumberIncrementStepper />
-              <NumberDecrementStepper />
-            </NumberInputStepper>
-          </NumberInput>
-        </FormControl>
+          </NumberInputRoot>
+        </Field.Root>
 
         <Modal
           header="Infomap output"
-          isOpen={isInfomapOutputOpen}
-          onClose={() => setIsInfomapOutputOpen(false)}
+          open={isInfomapOutputOpen}
+          onOpenChange={(e) => setIsInfomapOutputOpen(e.open)}
           scrollBehavior="inside"
-          size="3xl"
+          size="xl"
         >
           <Box maxW="50%" fontSize="0.8rem">
             <pre>

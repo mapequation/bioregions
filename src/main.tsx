@@ -5,17 +5,17 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './components/App';
 import reportWebVitals from './reportWebVitals';
-import { ChakraProvider } from '@chakra-ui/react';
+import { Provider } from '@/components/ui/provider';
 import theme from './theme';
 import store, { StoreContext } from './store';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ChakraProvider theme={theme}>
+    <Provider system={theme}>
       <StoreContext.Provider value={store}>
         <App />
       </StoreContext.Provider>
-    </ChakraProvider>
+    </Provider>
   </StrictMode>,
 );
 

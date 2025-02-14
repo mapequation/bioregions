@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import { observer } from 'mobx-react';
-import { Box, VStack, Divider } from '@chakra-ui/react';
+import { Box, Center, Separator, Spinner, VStack } from '@chakra-ui/react';
 import { format } from 'd3-format';
 import { useStore } from '../../store';
 import Stat from '../Stat';
-import Slider from './Slider';
+import IntervalSlider from './IntervalSlider';
 
 const formatCellCapacity = format('.0s');
 
@@ -18,9 +18,16 @@ export default observer(function Resolution() {
   }, [infomapStore, mapStore]);
 
   return (
-    <VStack align="flex-start">
+    <VStack align="flex-start" position="relative">
+      {infomapStore.isRunning && (
+        <Box pos="absolute" inset="0" bg="bg/80">
+          <Center h="full">
+            <Spinner color="teal.500" />
+          </Center>
+        </Box>
+      )}
       <Box>Cell size</Box>
-      <Slider
+      <IntervalSlider
         values={binner.cellSizeLog2Range}
         value={binner.cellSizeLog2}
         onChange={([start, stop]) => {
@@ -30,10 +37,10 @@ export default observer(function Resolution() {
         valueFormat={(value) =>
           value < 0 ? `1/${Math.pow(2, -value)}˚` : `${Math.pow(2, value)}˚`
         }
-        isDisabled={speciesStore.isLoading}
+        disabled={speciesStore.isLoading}
       />
       <Box>Cell capacity</Box>
-      <Slider
+      <IntervalSlider
         values={binner.cellCapacityRange}
         value={binner.cellCapacity}
         onChange={([start, stop]) => {
@@ -41,11 +48,11 @@ export default observer(function Resolution() {
           render();
         }}
         valueFormat={formatCellCapacity}
-        isDisabled={speciesStore.isLoading}
+        disabled={speciesStore.isLoading}
       />
       {speciesStore.loaded && (
         <>
-          <Divider />
+          <Separator />
           <Stat label="Grid cells">{binner.cells.length.toLocaleString()}</Stat>
         </>
       )}

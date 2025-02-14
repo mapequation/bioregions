@@ -1,15 +1,15 @@
 import { observer } from 'mobx-react';
+import { Box, Button, DialogActionTrigger } from '@chakra-ui/react';
 import {
-  Box,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  Button,
-} from '@chakra-ui/react';
+  DialogBody,
+  DialogCloseTrigger,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogRoot,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { useState } from 'react';
 import { HexColorInput, HexColorPicker } from 'react-colorful';
 
@@ -40,26 +40,27 @@ export default observer(function ColorPicker({
   };
 
   return (
-    <Box>
-      <Box
-        onClick={() => setIsOpen(!isOpen)}
-        bg={color}
-        w={8}
-        h={8}
-        border="1px solid #dddddd"
-      />
+    <DialogRoot open={isOpen} onOpenChange={(e) => setIsOpen(e.open)}>
+      <DialogTrigger asChild>
+        <Button
+          onClick={() => setIsOpen(!isOpen)}
+          bg={color}
+          w={8}
+          h={8}
+          border="1px solid #dddddd"
+        />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{label || 'Pick a color'}</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <HexColorPicker color={color} onChange={setTempColor} />
+          <HexColorInput color={color} onChange={setTempColor} />
+        </DialogBody>
 
-      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{label || 'Pick a color'}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <HexColorPicker color={color} onChange={setTempColor} />
-            <HexColorInput color={color} onChange={setTempColor} />
-          </ModalBody>
-
-          <ModalFooter>
+        <DialogFooter>
+          <DialogActionTrigger asChild>
             <Button
               colorScheme="blue"
               mr={3}
@@ -68,12 +69,15 @@ export default observer(function ColorPicker({
             >
               Save
             </Button>
+          </DialogActionTrigger>
+          <DialogActionTrigger asChild>
             <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
+          </DialogActionTrigger>
+        </DialogFooter>
+        <DialogCloseTrigger />
+      </DialogContent>
+    </DialogRoot>
   );
 });

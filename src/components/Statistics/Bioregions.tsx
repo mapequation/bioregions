@@ -1,27 +1,20 @@
+import { Box, Popover, Table, Text } from '@chakra-ui/react';
 import {
-  Box,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  useColorModeValue,
-  Text,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
   PopoverArrow,
-  PopoverCloseButton,
-  PopoverHeader,
   PopoverBody,
-} from '@chakra-ui/react';
+  PopoverContent,
+  PopoverHeader,
+  PopoverRoot,
+  PopoverTrigger,
+} from '../ui/popover';
 import { observer } from 'mobx-react';
 import { format } from 'd3-format';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
 import { SpeciesPieChart } from './PieChart';
-import { InfoOutlineIcon } from '@chakra-ui/icons';
+// import { InfoOutlineIcon } from '@chakra-ui/icons';
+import { CiCircleInfo } from 'react-icons/ci';
+import { useColorModeValue } from '../ui/color-mode';
 
 const formatScore = format('.3r');
 // const formatNumber = format(',');
@@ -89,22 +82,24 @@ const BioregionInfo = observer(function Bioregion({
         Bioregion {bioregion.bioregionId}
       </Box>
 
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th colSpan={3} textAlign="center">
+      <Table.Root variant="line">
+        <Table.Header>
+          <Table.Row>
+            <Table.ColumnHeader colSpan={3} textAlign="center">
               Most common species
-            </Th>
-            <Th colSpan={3} textAlign="center">
+            </Table.ColumnHeader>
+            <Table.ColumnHeader colSpan={3} textAlign="center">
               <Text as="div" display="flex" alignItems="center">
                 Most indicative species
-                <Popover trigger="hover">
+                <PopoverRoot>
                   <PopoverTrigger>
-                    <InfoOutlineIcon ml={2} />
+                    <Box ml={2}>
+                      <CiCircleInfo />
+                    </Box>
                   </PopoverTrigger>
                   <PopoverContent textTransform="none">
                     <PopoverArrow />
-                    <PopoverCloseButton />
+                    <Popover.CloseTrigger />
                     <PopoverHeader>Most indicative species</PopoverHeader>
                     <PopoverBody fontWeight="normal">
                       The score of a species <em>s</em> in bioregion <em>r</em>{' '}
@@ -113,22 +108,22 @@ const BioregionInfo = observer(function Bioregion({
                       in total.
                     </PopoverBody>
                   </PopoverContent>
-                </Popover>
+                </PopoverRoot>
               </Text>
-            </Th>
-          </Tr>
-          <Tr>
-            <Th>Name</Th>
-            <Th isNumeric>Count</Th>
-            <Th isNumeric>Score</Th>
-            <Th textAlign="center">Regions</Th>
-            <Th>Name</Th>
-            <Th isNumeric>Count</Th>
-            <Th isNumeric>Score</Th>
-            <Th textAlign="center">Regions</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
+            </Table.ColumnHeader>
+          </Table.Row>
+          <Table.Row>
+            <Table.ColumnHeader>Name</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">Count</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">Score</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="center">Regions</Table.ColumnHeader>
+            <Table.ColumnHeader>Name</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">Count</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="right">Score</Table.ColumnHeader>
+            <Table.ColumnHeader textAlign="center">Regions</Table.ColumnHeader>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
           {mostCommon.map(
             (
               commonSpecies: { name: string; count: number; score: number },
@@ -136,25 +131,33 @@ const BioregionInfo = observer(function Bioregion({
             ) => {
               const indicativeSpecies = mostIndicative[index]!;
               return (
-                <Tr key={index} w="100%">
-                  <Td>{commonSpecies.name}</Td>
-                  <Td isNumeric>{commonSpecies.count.toLocaleString()}</Td>
-                  <Td isNumeric>{formatScore(commonSpecies.score)}</Td>
-                  <Td>
+                <Table.Row key={index} w="100%">
+                  <Table.Cell>{commonSpecies.name}</Table.Cell>
+                  <Table.Cell textAlign="right">
+                    {commonSpecies.count.toLocaleString()}
+                  </Table.Cell>
+                  <Table.Cell textAlign="right">
+                    {formatScore(commonSpecies.score)}
+                  </Table.Cell>
+                  <Table.Cell>
                     <SpeciesPieChart speciesName={commonSpecies.name} />
-                  </Td>
-                  <Td>{indicativeSpecies.name}</Td>
-                  <Td isNumeric>{indicativeSpecies.count}</Td>
-                  <Td isNumeric>{formatScore(indicativeSpecies.score)}</Td>
-                  <Td>
+                  </Table.Cell>
+                  <Table.Cell>{indicativeSpecies.name}</Table.Cell>
+                  <Table.Cell textAlign="right">
+                    {indicativeSpecies.count}
+                  </Table.Cell>
+                  <Table.Cell textAlign="right">
+                    {formatScore(indicativeSpecies.score)}
+                  </Table.Cell>
+                  <Table.Cell>
                     <SpeciesPieChart speciesName={indicativeSpecies.name} />
-                  </Td>
-                </Tr>
+                  </Table.Cell>
+                </Table.Row>
               );
             },
           )}
-        </Tbody>
-      </Table>
+        </Table.Body>
+      </Table.Root>
     </Box>
   );
 });

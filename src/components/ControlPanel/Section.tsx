@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  Box,
-  Heading,
-  Spinner,
-  Flex,
-  useColorModeValue,
-} from '@chakra-ui/react';
+import { Box, Heading, Spinner, Flex } from '@chakra-ui/react';
+import { useColorModeValue } from '../ui/color-mode';
 
 const Section = ({
   label,
