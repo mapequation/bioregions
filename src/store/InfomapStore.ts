@@ -188,7 +188,12 @@ export class Bioregion {
       }
     }
 
-    const { mean, stddev } = calculateStats(I_s);
+    let [mean, stddev] = [0, 0];
+    if (I_s.length > 0) {
+      const stats = calculateStats(I_s);
+      mean = stats.mean;
+      stddev = stats.stddev;
+    }
 
     for (const cell of this.cells) {
       if (!cell.isLeaf) {
