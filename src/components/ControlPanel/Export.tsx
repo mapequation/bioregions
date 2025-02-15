@@ -82,6 +82,11 @@ export default observer(function Export({ rootStore }: ExportProps) {
     saveString(`${parameterName}_summary_tables.tsv`, data);
   };
 
+  const downloadFullTables = async () => {
+    const data = speciesStore.generateFullTabularDataPerBioregion();
+    saveString(`${parameterName}_full_tables.tsv`, data);
+  };
+
   type DownloadItem = {
     title: string;
     description?: string;
@@ -121,6 +126,12 @@ export default observer(function Export({ rootStore }: ExportProps) {
       title: 'Summary tables',
       description: 'Most common and indicative species per bioregion',
       onClick: downloadSummaryTables,
+      isDisabled: !infomapStore.tree,
+    },
+    {
+      title: 'Full tables',
+      description: 'All species per bioregion with common and indicative score',
+      onClick: downloadFullTables,
       isDisabled: !infomapStore.tree,
     },
     {

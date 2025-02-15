@@ -537,7 +537,7 @@ export default class SpeciesStore {
     return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
   }
 
-  generateSummaryTabularDataPerBioregion = () => {
+  generateSummaryTabularDataPerBioregion = (maxNumRows?: number) => {
     const { infomapStore, colorStore } = this.rootStore;
     const { bioregions } = infomapStore;
     const { colorBioregion } = colorStore;
@@ -557,7 +557,7 @@ export default class SpeciesStore {
 
     bioregions.forEach(bioregion => {
 
-      const MAX_NUM_ROWS = 10;
+      const MAX_NUM_ROWS = maxNumRows ?? 10;
       const numValues = Math.min(
         Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
         MAX_NUM_ROWS,
@@ -582,6 +582,39 @@ export default class SpeciesStore {
             indicativeSpecies.name,
             indicativeSpecies.count,
             indicativeSpecies.score,
+            Color(colorBioregion(bioregion.bioregionId))?.formatHex(),
+          ].map(value => `${value}`))
+        }
+      )
+    });
+
+    return tsvFormatRows(data);
+  }
+
+  generateFullTabularDataPerBioregion = () => {
+    const { infomapStore, colorStore } = this.rootStore;
+    const { bioregions } = infomapStore;
+    const { colorBioregion } = colorStore;
+
+    const header = [
+      "bioregion",
+      "species_name",
+      "count",
+      "indicative_score",
+      "bioregion_color",
+    ];
+    const data = [header];
+
+    bioregions.forEach(bioregion => {
+      bioregion.mostCommon.forEach(
+        (
+          commonSpecies: { name: string; count: number; score: number },
+        ) => {
+          data.push([
+            bioregion.bioregionId,
+            commonSpecies.name,
+            commonSpecies.count,
+            commonSpecies.score,
             Color(colorBioregion(bioregion.bioregionId))?.formatHex(),
           ].map(value => `${value}`))
         }
