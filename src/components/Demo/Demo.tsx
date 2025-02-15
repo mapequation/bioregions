@@ -128,16 +128,16 @@ export default observer(() => {
             <Slider
               w={`${100 * (100 / 144)}%`}
               ml={`${400 / 144}%`}
+              thumbAlignment="center"
               // isReversed
+              origin="start" // TODO: should support 'end'
               min={0}
               max={1}
               step={0.01}
-              value={[1 - integrationTime]}
-              onValueChange={(e) =>
-                infomapStore.setIntegrationTime(1 - e.value[0])
-              }
+              value={[integrationTime]}
+              onValueChange={(e) => infomapStore.setIntegrationTime(e.value[0])}
               onValueChangeEnd={(e) => {
-                infomapStore.setIntegrationTime(1 - e.value[0], true);
+                infomapStore.setIntegrationTime(e.value[0], true);
                 infomapStore.run();
               }}
               colorScheme="blue"
@@ -147,6 +147,7 @@ export default observer(() => {
             <Slider
               w={`${100 * (100 / 144)}%`}
               ml={`${400 / 144}%`}
+              thumbAlignment="center"
               min={0}
               max={1}
               step={0.01}

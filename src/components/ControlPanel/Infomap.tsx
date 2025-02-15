@@ -19,7 +19,6 @@ import { Switch } from '../ui/switch';
 import { Slider } from '../ui/slider';
 import {
   NumberInputField,
-  NumberInputLabel,
   NumberInputRoot,
 } from '@/components/ui/number-input';
 import { Progress } from '../Progress';
@@ -118,16 +117,15 @@ export default observer(function Infomap() {
           <Slider
             w={200}
             // isReversed
+            origin="start" // TODO: should support 'end'
             disabled={
               !infomapStore.includeTreeInNetwork || infomapStore.useWholeTree
             }
             // focusThumbOnChange={false}
-            value={[1 - infomapStore.integrationTime]}
-            onValueChange={(e) =>
-              infomapStore.setIntegrationTime(1 - e.value[0])
-            }
+            value={[infomapStore.integrationTime]}
+            onValueChange={(e) => infomapStore.setIntegrationTime(e.value[0])}
             onValueChangeEnd={(e) =>
-              infomapStore.setIntegrationTime(1 - e.value[0], true)
+              infomapStore.setIntegrationTime(e.value[0], true)
             }
             min={0}
             max={1}
