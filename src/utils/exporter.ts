@@ -12,6 +12,10 @@ export function base64toData(content: string) {
   return new Uint8Array(array);
 }
 
+export function stringToBlob(content: string, type: string = "text/plain;charset=utf-8") {
+  return new Blob([content], { type });
+}
+
 export function saveBlob(filename: string, blob: Blob) {
   saveAs(blob, filename);
 }
@@ -40,7 +44,7 @@ export function saveSvg(
   saveAs(blob, filename);
 }
 
-export async function saveCanvas(canvas: HTMLCanvasElement, filename?: string) {
+export async function saveCanvas(canvas: HTMLCanvasElement, filename?: string): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob: Blob | null) => {
       if (blob == null) {

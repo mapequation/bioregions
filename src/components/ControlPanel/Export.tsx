@@ -2,7 +2,8 @@ import { Button, VStack } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
-import { saveBlob, saveCanvas, saveString } from '../../utils/exporter';
+import { saveBlob, saveCanvas, stringToBlob } from '../../utils/exporter';
+import JSZip from 'jszip';
 //@ts-ignore
 import shpWrite from 'shp-write';
 
@@ -10,164 +11,162 @@ interface ExportProps {
   rootStore?: RootStore;
 }
 
+type DownloadItem = {
+  title: string;
+  description?: string;
+  extension: string;
+  getBlob: () => Promise<Blob>;
+  disabled: boolean;
+  hide?: boolean;
+};
+
 export default observer(function Export({ rootStore }: ExportProps) {
   const _rootStore = useStore();
   const { infomapStore, mapStore, speciesStore } = rootStore ?? _rootStore;
   const { parameterName } = infomapStore;
 
-  const downloadMap = () => {
-    saveCanvas(mapStore.canvas!, `${parameterName}.png`);
+  const download = async (item: DownloadItem) => {
+    const filename = `${parameterName}${item.extension}`;
+    const blob = await item.getBlob();
+    saveBlob(filename, blob);
   };
 
-  const downloadInfomapTree = () => {
-    if (!infomapStore.treeString) return;
-
-    const filename = `${parameterName}.tree`;
-    saveString(filename, infomapStore.treeString);
-  };
-
-  const downloadInfomapOutput = () => {
-    if (!infomapStore.tree) return;
-
-    const suffix = infomapStore.haveStateNodes ? '_states' : '';
-    const filename = `${parameterName}${suffix}.json`;
-    saveString(filename, JSON.stringify(infomapStore.tree));
-  };
-
-  const downloadNetwork = () => {
-    if (!infomapStore.network) return;
-
-    const _states = infomapStore.haveStateNetwork ? `_states` : '';
-    const filename = `${parameterName}${_states}.net`;
-    saveString(filename, infomapStore.serializeNetwork() ?? '');
-  };
-
-  const downloadMultilayerNetwork = () => {
-    if (!infomapStore.multilayerNetwork) return;
-
-    const filename = `${parameterName}_intra.net`;
-    saveString(filename, infomapStore.serializeMultilayerNetwork() ?? '');
-  };
-
-  const downloadShapefile = async () => {
-    const geojson = speciesStore.generateGeojsonFromBins();
-    const shpOptions = {
-      folder: parameterName,
-      types: {
-        polygon: parameterName,
-      },
-    };
-    const data = await shpWrite.zip(geojson, shpOptions, { type: 'blob' });
-    saveBlob(`${parameterName}.zip`, data);
-  };
-
-  const downloadGeojson = async () => {
-    const geojson = speciesStore.generateGeojsonFromBins();
-    const data = JSON.stringify(geojson);
-    saveString(`${parameterName}.geojson`, data);
-  };
-
-  const downloadPresenceAbsencePerCell = async () => {
-    const data = speciesStore.generatePresenceAbsenceDataPerCell();
-    saveString(`${parameterName}_presence-absence-per-cell.txt`, data);
-  };
-
-  const downloadPresenceAbsencePerBioregion = async () => {
-    const data = speciesStore.generatePresenceAbsenceDataPerBioregion();
-    saveString(`${parameterName}_presence-absence-per-bioregion.txt`, data);
-  };
-
-  const downloadSummaryTables = async () => {
-    const data = speciesStore.generateSummaryTabularDataPerBioregion();
-    saveString(`${parameterName}_summary_tables.tsv`, data);
-  };
-
-  const downloadFullTables = async () => {
-    const data = speciesStore.generateFullTabularDataPerBioregion();
-    saveString(`${parameterName}_full_tables.tsv`, data);
-  };
-
-  type DownloadItem = {
-    title: string;
-    description?: string;
-    onClick: () => void;
-    isDisabled: boolean;
-    hide?: boolean;
-  };
   const downloadItems: DownloadItem[] = [
     {
       title: 'Map',
-      onClick: downloadMap,
-      isDisabled: false,
+      extension: '.png',
+      disabled: false,
+      getBlob: async () => saveCanvas(mapStore.canvas!),
     },
     {
       title: 'Shapefile',
-      onClick: downloadShapefile,
-      isDisabled: !infomapStore.network,
+      extension: '.zip',
+      disabled: !infomapStore.network,
+      getBlob: async () => {
+        const geojson = speciesStore.generateGeojsonFromBins();
+        const shpOptions = {
+          folder: parameterName,
+          types: {
+            polygon: parameterName,
+          },
+        };
+        return shpWrite.zip(geojson, shpOptions, { type: 'blob' });
+      },
     },
     {
       title: 'GeoJSON',
-      onClick: downloadGeojson,
-      isDisabled: !infomapStore.network,
+      extension: '.geojson',
+      disabled: !infomapStore.network,
+      getBlob: async () => {
+        const geojson = speciesStore.generateGeojsonFromBins();
+        const data = JSON.stringify(geojson);
+        return stringToBlob(data);
+      },
     },
     {
       title: 'Presence/Absence per cell',
       description: 'Species presence/absence matrix',
-      onClick: downloadPresenceAbsencePerCell,
-      isDisabled: !infomapStore.network,
+      extension: '_presence-absence-per-cell.txt',
+      disabled: !infomapStore.network,
+      getBlob: async () => {
+        const data = speciesStore.generatePresenceAbsenceDataPerCell();
+        return stringToBlob(data);
+      },
     },
     {
       title: 'Presence/Absence per bioregion',
-      description: 'Species presence/absence matrix',
-      onClick: downloadPresenceAbsencePerBioregion,
-      isDisabled: !infomapStore.tree,
+      description: 'Species presence/absence for each bioregion',
+      extension: '_presence-absence-per-bioregion.txt',
+      disabled: !infomapStore.tree,
+      getBlob: async () => {
+        const data = speciesStore.generatePresenceAbsenceDataPerBioregion();
+        return stringToBlob(data);
+      },
     },
     {
       title: 'Summary tables',
       description: 'Most common and indicative species per bioregion',
-      onClick: downloadSummaryTables,
-      isDisabled: !infomapStore.tree,
+      extension: '_summary_tables.tsv',
+      disabled: !infomapStore.tree,
+      getBlob: async () => {
+        const data = speciesStore.generateSummaryTabularDataPerBioregion();
+        return stringToBlob(data);
+      },
     },
     {
       title: 'Full tables',
       description: 'All species per bioregion with common and indicative score',
-      onClick: downloadFullTables,
-      isDisabled: !infomapStore.tree,
+      extension: '_full_tables.tsv',
+      disabled: !infomapStore.tree,
+      getBlob: async () => {
+        const data = speciesStore.generateFullTabularDataPerBioregion();
+        return stringToBlob(data);
+      },
     },
     {
       title: 'Infomap tree',
-      onClick: downloadInfomapTree,
-      isDisabled: !infomapStore.treeString,
+      extension: '.treee',
+      disabled: !infomapStore.treeString,
+      getBlob: async () => {
+        return stringToBlob(infomapStore.treeString!);
+      },
     },
     {
       title: 'Infomap output',
-      onClick: downloadInfomapOutput,
-      isDisabled: !infomapStore.tree,
+      extension: `${infomapStore.haveStateNodes ? '_states' : ''}.json`,
+      disabled: !infomapStore.tree,
+      getBlob: async () => {
+        return stringToBlob(JSON.stringify(infomapStore.tree));
+      },
     },
     {
       title: 'Network',
-      onClick: downloadNetwork,
-      isDisabled: !infomapStore.network,
+      extension: `${infomapStore.haveStateNodes ? '_states' : ''}.net`,
+      disabled: !infomapStore.network,
+      getBlob: async () => {
+        return stringToBlob(infomapStore.serializeNetwork() ?? '');
+      },
     },
     {
       title: 'Multilayer network',
-      onClick: downloadMultilayerNetwork,
-      isDisabled: !infomapStore.multilayerNetwork,
+      extension: '_intra.net',
+      getBlob: async () => {
+        return stringToBlob(infomapStore.serializeMultilayerNetwork() ?? '');
+      },
+      disabled: !infomapStore.multilayerNetwork,
       hide: !infomapStore.multilayerNetwork,
     },
   ];
+  const downloadAllItem: DownloadItem = {
+    title: 'All',
+    description: 'Downlaod all enabled files,',
+    extension: '_all.zip',
+    disabled: false,
+    getBlob: async () => {
+      const zip = new JSZip();
+      for (const item of downloadItems) {
+        if (item.disabled) continue;
+        const filename = `${parameterName}${item.extension}`;
+        const blob = await item.getBlob();
+        zip.file(filename, blob);
+      }
+      const zipFile = await zip.generateAsync({ type: 'blob' });
+      return zipFile;
+    },
+  };
+  const downloadItemsAll = [...downloadItems, downloadAllItem];
 
   return (
     <VStack align="stretch">
-      {downloadItems
+      {downloadItemsAll
         .filter((item) => !item.hide)
         .map((item) => (
           <Button
             key={item.title}
             title={item.description}
             size="sm"
-            disabled={item.isDisabled}
-            onClick={item.onClick}
+            disabled={item.disabled}
+            onClick={() => download(item)}
           >
             {item.title}
           </Button>
