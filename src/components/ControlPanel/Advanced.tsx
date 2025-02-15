@@ -5,7 +5,6 @@ import {
   VStack,
   Progress,
   Spacer,
-  NumberInput,
   Flex,
   Box,
   Tag,

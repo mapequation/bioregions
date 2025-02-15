@@ -7,8 +7,6 @@ import ColorPicker from './ColorPicker';
 import { Switch } from '../ui/switch';
 import Select from './Select';
 import { Slider } from '../ui/slider';
-import IntervalSlider from './IntervalSlider';
-import { rangeArray } from '@/utils/range';
 
 export default observer(function Map() {
   const { mapStore, colorStore, infomapStore } = useStore();

@@ -1,5 +1,5 @@
 import { observer } from 'mobx-react';
-import { Box, Button, DialogActionTrigger } from '@chakra-ui/react';
+import { Button, DialogActionTrigger } from '@chakra-ui/react';
 import {
   DialogBody,
   DialogCloseTrigger,
