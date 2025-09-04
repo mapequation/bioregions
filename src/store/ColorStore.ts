@@ -1,9 +1,74 @@
 import { makeObservable, observable, action, computed } from 'mobx';
 import * as c3 from '@mapequation/c3';
-import type { SchemeName } from '@mapequation/c3';
+import type { SchemeName as c3SchemeName } from '@mapequation/c3';
 import type RootStore from './RootStore';
 import { Cell } from '../utils/QuadTree';
 import { color as Color, interpolateRgb } from 'd3';
+
+export type SchemeName = c3SchemeName | 'Mural';
+
+export const COLOR_SCHEMES = [
+  { label: 'Sinebow', value: 'Sinebow' },
+  { label: 'Rainbow', value: 'Rainbow' },
+  { label: 'Turbo', value: 'Turbo' },
+  { label: 'Viridis', value: 'Viridis' },
+  { label: 'Greys', value: 'Greys' },
+  { label: 'Mural', value: 'Mural' },
+];
+
+// Englewood mural (5 first from a plugin to Illustrator, extended with glasbey)
+const MURAL_COLORS = [
+  "#afb581",
+  "#efab6a",
+  "#e78c6e",
+  "#838eab",
+  "#c4c0d5",
+  "#55c2ba",
+  "#55a26d",
+  "#ae8635",
+  "#8acaf3",
+  "#82d79e",
+  "#a68679",
+  "#a6aaef",
+  "#419eb2",
+  "#8aa29e",
+  "#aacac2",
+  "#ceaa9e",
+  "#8a9a45",
+  "#35a292",
+  "#8a9275",
+  "#75a6d7",
+  "#d7be61",
+  "#9eb6c6",
+  "#86ba71",
+  "#c29669",
+  "#79b696",
+  "#b2ce75",
+  "#8e8ace",
+  "#a6a2c2",
+  "#c67551",
+  "#69b6ca",
+  "#d7be92",
+  "#b2a24d",
+  "#79d2df",
+  "#aec2ef",
+  "#aecaa6",
+  "#79d7be",
+  "#f3aa92",
+  "#7596a2",
+  "#9aae96",
+  "#719a82",
+  "#69aaaa",
+  "#a28a5d",
+  "#82a26d",
+  "#aea282",
+  "#d2a251",
+  "#8ebaba",
+  "#a6b65d",
+  "#8aa2ba",
+  "#7592ca",
+  "#9a9a61",
+];
 
 export class CellColor {
   color: string = "#cccccc";
@@ -84,6 +149,10 @@ export default class ColorStore {
     const colorData = this.useFlow
       ? bioregions.map((r) => r.flow)
       : numBioregions;
+
+    if (this.scheme === 'Mural') {
+      return MURAL_COLORS;
+    }
 
     const colors = c3.colors(colorData, {
       saturation: this.saturation,

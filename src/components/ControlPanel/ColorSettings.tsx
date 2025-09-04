@@ -2,11 +2,11 @@ import { observer } from 'mobx-react';
 import { Flex, VStack, Spacer, Box, Field, Tag } from '@chakra-ui/react';
 import { useState } from 'react';
 import { useStore } from '../../store';
-import { SchemeName } from '@mapequation/c3';
 import ColorPicker from './ColorPicker';
 import { Switch } from '../ui/switch';
 import Select from './Select';
 import { Slider } from '../ui/slider';
+import { COLOR_SCHEMES, type SchemeName } from '@/store/ColorStore';
 
 export default observer(function Map() {
   const { mapStore, colorStore, infomapStore } = useStore();
@@ -100,13 +100,7 @@ export default observer(function Map() {
                   mapStore.render();
                 }
               }}
-              items={[
-                { label: 'Sinebow', value: 'Sinebow' },
-                { label: 'Rainbow', value: 'Rainbow' },
-                { label: 'Turbo', value: 'Turbo' },
-                { label: 'Viridis', value: 'Viridis' },
-                { label: 'Greys', value: 'Greys' },
-              ]}
+              items={COLOR_SCHEMES}
             />
           </Flex>
           <Flex w="100%" mt={4} alignItems="flex-end">
