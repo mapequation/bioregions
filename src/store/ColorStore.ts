@@ -151,7 +151,24 @@ export default class ColorStore {
       : numBioregions;
 
     if (this.scheme === 'Mural') {
-      return MURAL_COLORS;
+      if (numBioregions <= MURAL_COLORS.length) {
+        return MURAL_COLORS;
+      }
+
+      // Extend from c3 if more colors are needed
+      const c3colors = c3.colors(colorData, {
+        saturation: this.saturation,
+        saturationEnd: this.saturationEnd,
+        lightness: this.lightness,
+        lightnessEnd: this.lightnessEnd,
+        midpoint: this.midpoint,
+        steepness: this.steepness,
+        scheme: "Turbo",
+        offset: this.offset,
+        reverse: this.reverse,
+        strength: this.strength,
+      });
+      return MURAL_COLORS.concat(c3colors.slice(MURAL_COLORS.length, numBioregions));
     }
 
     const colors = c3.colors(colorData, {
