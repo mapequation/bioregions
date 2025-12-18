@@ -90,18 +90,20 @@ export default observer(() => {
     }
 
     await infomapStore.runMultilayer();
-    console.log('Multilayer network:');
-    const net = infomapStore.multilayerNetwork!;
-    const treeNodesByLayer: Map<number, string[]> = new Map();
-    net.intra.forEach(({ layerId, source, target }) => {
-      const nodes = treeNodesByLayer.get(layerId) ?? [];
-      if (nodes.length === 0) {
-        treeNodesByLayer.set(layerId, nodes);
-      }
-      const sourceName = net.nodes![source].name;
-      const targetName = net.nodes![target].name;
-      console.log(`Layer ${layerId}: ${sourceName} - ${targetName}`);
-    });
+    // console.log('Multilayer network:');
+    // const net = infomapStore.multilayerNetwork!;
+    // const treeNodesByLayer: Map<number, string[]> = new Map();
+    // net.intra.forEach(({ layerId, source, target, weight }) => {
+    //   const nodes = treeNodesByLayer.get(layerId) ?? [];
+    //   if (nodes.length === 0) {
+    //     treeNodesByLayer.set(layerId, nodes);
+    //   }
+    //   const sourceName = net.nodes![source].name; // tree node
+    //   const targetName = net.nodes![target].name; // grid cell
+    //   console.log(
+    //     `Layer ${layerId}: ${sourceName} - ${targetName}, weight: ${weight}`,
+    //   );
+    // });
   };
 
   const { integrationTime, segregationTime, network } = infomapStore;

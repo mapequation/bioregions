@@ -256,6 +256,7 @@ export default observer(function Infomap() {
             <Slider
               mx={1}
               // focusThumbOnChange={false}
+              w="100px"
               value={[infomapStore.moduleLevel]}
               onValueChange={(e) => infomapStore.setModuleLevel(e.value[0])}
               onValueChangeEnd={(e) => {

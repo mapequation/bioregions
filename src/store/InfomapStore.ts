@@ -279,6 +279,7 @@ export default class InfomapStore {
     }
   })
 
+  // Weight ancestral nodes on rarity
   useWeightedTreeNodeLinksIfTimeSlice: boolean = false;
   setUseWeightedTreeNodeLinksIfTimeSlice = action((value: boolean, updateNetwork: boolean = false) => {
     this.useWeightedTreeNodeLinksIfTimeSlice = value;
@@ -913,6 +914,8 @@ export default class InfomapStore {
      */
 
     const integrationTime = _integrationTime ?? this.integrationTime;
+    const useWholeTree = (_integrationTime === undefined) && this.useWholeTree;
+
     const missing = new Set<string>();
 
     // source (tree node) -> target (grid cell) -> weight
@@ -927,7 +930,7 @@ export default class InfomapStore {
       } else {
         node.speciesSet = new Set();
         if (
-          this.useWholeTree ||
+          useWholeTree ||
           node.children.some((child) => child.time > integrationTime)
         ) {
           node.children.forEach((child) => {
@@ -987,7 +990,7 @@ export default class InfomapStore {
       }
     };
 
-    if (this.useWholeTree) {
+    if (useWholeTree) {
       visitTreeDepthFirstPostOrder(tree, (node) => {
         if (node.parent === null) {
           return;
@@ -1148,6 +1151,7 @@ export default class InfomapStore {
     let nodeIdCounter = 0;
 
     integrationTimes.forEach((t, layerId) => {
+      console.log(`=== Creating layer ${layerId} at time ${t}`);
       const network = this.createStandardNetwork(t);
       network.nodes.forEach((node) => {
         if (multilayerNetwork.nodeIdMap[node.name!] === undefined) {
@@ -1159,12 +1163,14 @@ export default class InfomapStore {
       network.links.forEach((link) => {
         const sourceName = network.nodes[link.source].name!;
         const targetName = network.nodes[link.target].name!;
-        multilayerNetwork.intra.push({
+        const intraLink = {
           layerId,
           source: multilayerNetwork.nodeIdMap[sourceName],
           target: multilayerNetwork.nodeIdMap[targetName],
           weight: link.weight!,
-        });
+        }
+        multilayerNetwork.intra.push(intraLink);
+        // console.log(`${sourceName} -> ${targetName} (w: ${link.weight})`)
       });
       multilayerNetwork.numLeafTaxonNodes += network.numLeafTaxonNodes;
       multilayerNetwork.numInternalTaxonNodes += network.numInternalTaxonNodes;
