@@ -5,12 +5,16 @@ import { Badge, Box, Card, Heading, Text } from '@chakra-ui/react';
 import { formatThousands } from '../utils/formats';
 
 const Tooltip = observer(function _Tooltip() {
-  const { mapStore } = useStore();
+  const { mapStore, infomapStore, treeStore } = useStore();
   const { tooltipCell: cell } = mapStore;
+  const { timeFormatter } = treeStore;
 
   if (!cell) {
     return null;
   }
+  const bioregion = infomapStore.bioregions.find(
+    (b) => b.bioregionId === cell.bioregionId,
+  );
 
   const [x, y] = mapStore.tooltipPos;
   return (
@@ -33,6 +37,14 @@ const Tooltip = observer(function _Tooltip() {
           <Box>
             <Badge bgColor={cell.color}>Bioregion {cell.bioregionId}</Badge>
           </Box>
+          {bioregion && (
+            <Box>
+              <Text>
+                Oldest tree node:{' '}
+                {`${timeFormatter(bioregion.oldestPhyloNodeTime)} (t=${bioregion.oldestPhyloNodeTime.toFixed(2)})`}
+              </Text>
+            </Box>
+          )}
         </Card.Body>
       </Card.Root>
     </Box>

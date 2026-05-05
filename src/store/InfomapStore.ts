@@ -22,6 +22,7 @@ import { range } from '../utils/range';
 import { max, min } from 'd3-array';
 import { Cell } from '../utils/QuadTree';
 import SpeciesStore from './SpeciesStore';
+import TreeStore from './TreeStore';
 
 export interface BioregionsNetworkData {
   nodeIdMap: { [name: string]: number };
@@ -81,6 +82,7 @@ export class Bioregion {
   }[] = [];
   meanNumSpeciesWithin = 0;
   stddevNumSpeciesWithin = 0.0;
+  oldestPhyloNodeTime = 0.0;
 
   addCell(cell: Cell) {
     this.cellMap.set(cell.id, cell);
@@ -94,7 +96,7 @@ export class Bioregion {
     return this.cellMap.size;
   }
 
-  calcStats(speciesStore: SpeciesStore) {
+  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore) {
     type Species = string;
     const speciesCount = new Map<Species, number>();
 
@@ -167,6 +169,7 @@ export class Bioregion {
       this.stddevNumSpeciesWithin = stddev;
     }
 
+    let minTime = 1;
     for (const speciesName of this.species) {
       const species = speciesStore.speciesMap.get(speciesName);
       if (species) {
@@ -186,7 +189,12 @@ export class Bioregion {
         species.numGridCells = connectedCellIds.size;
         species.numGridCellsWithinModule = numCellsWithin;
       }
+      const treeNode = treeStore.treeNodeMap.get(speciesName);
+      if (treeNode) {
+        minTime = min([minTime, treeNode.data.time])!;
+      }
     }
+    this.oldestPhyloNodeTime = minTime;
 
     let [mean, stddev] = [0, 0];
     if (I_s.length > 0) {
@@ -1765,7 +1773,7 @@ export default class InfomapStore {
 
     console.time("Calc bioregion stats")
     for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore);
+      bioregion.calcStats(speciesStore, treeStore);
     }
     console.timeEnd("Calc bioregion stats")
 
@@ -1840,7 +1848,7 @@ export default class InfomapStore {
 
     console.time("Calc bioregion stats")
     for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore);
+      bioregion.calcStats(speciesStore, treeStore);
     }
     console.timeEnd("Calc bioregion stats")
 
@@ -1911,7 +1919,7 @@ export default class InfomapStore {
 
     console.time("Calc bioregion stats")
     for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore);
+      bioregion.calcStats(speciesStore, treeStore);
     }
     console.timeEnd("Calc bioregion stats")
 

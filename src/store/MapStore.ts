@@ -319,9 +319,9 @@ export default class MapStore {
       case "overlap":
         return (n: Cell) => n.bioregionMetrics.overlap;
       case "endemicity":
-        return (n: Cell) => n.recordsPerArea; //TODO: Implement
+        return (n: Cell) => n.bioregionMetrics.endemicity;
       case "occupancy":
-        return (n: Cell) => n.recordsPerArea; //TODO: Implement
+        return (n: Cell) => n.bioregionMetrics.occupancy;
       default:
         console.warn(`Heatmap target '${this.heatmapTarget}' lacks implementation.`);
         return (n: Cell) => n.recordsPerArea;

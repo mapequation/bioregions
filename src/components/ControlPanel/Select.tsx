@@ -25,7 +25,7 @@ const Select = (props: SelectProps) => {
     items,
   });
   return (
-    <SelectRoot {...rest} collection={collection}>
+    <SelectRoot {...rest} collection={collection} style={{ zIndex: 4000 }}>
       {label && <SelectLabel>{label}</SelectLabel>}
       <SelectTrigger>
         <SelectValueText placeholder={placeholder} />
