@@ -1,34 +1,25 @@
+# New Project
 
-# Infomap Bioregions
-### Interactive mapping of biogeographical regions from species distributions
+> ✨ Bootstrapped with Create Snowpack App (CSA).
 
+## Available Scripts
 
-## Running locally
+### npm start
 
-First install all dependencies:
+Runs the app in the development mode.
+Open http://localhost:8080 to view it in the browser.
 
-```bash
-$ make
-```
+The page will reload if you make edits.
+You will also see any lint errors in the console.
 
-The generated project includes a development server on port `3003`, which will rebuild the app whenever you change application code. To start the server, run:
+### npm run build
 
-```bash
-$ npm start
-```
+Builds a static copy of your site to the `build/` folder.
+Your app is ready to be deployed!
 
-To run the server with the dev-tools enabled, run:
+**For the best production performance:** Add a build bundler plugin like "@snowpack/plugin-webpack" to your `snowpack.config.js` config file.
 
-```bash
-$ npm run dev
-```
+### npm test
 
-To build for production, this command will output optimized production code:
-
-```bash
-$ npm run build
-```
-
-## Contributing
-
-Use the [Fork-and-Branch Git Workflow](http://blog.scottlowe.org/2015/01/27/using-fork-branch-git-workflow/)
+Launches the application test runner.
+Run with the `--watch` flag (`npm test -- --watch`) to run in interactive watch mode.
