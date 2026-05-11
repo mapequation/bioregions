@@ -1,6 +1,0 @@
---colors
---include src/__tests__/testHelper.js
---reporter spec
---require source-map-support/register
---require babel-register
-src/cli-utils/**/*-test.js
