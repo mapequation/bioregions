@@ -37,8 +37,8 @@ export default observer(function Map() {
     setValue: (v: [number, number]) => void,
     renderType: typeof mapStore.renderType,
   ) => {
-    return (e: { value: [number, number] }) => {
-      setValue(e.value);
+    return (e: { value: number[] }) => {
+      setValue([e.value[0]!, e.value[1]!]);
       if (mapStore.renderType === renderType) {
         mapStore.render();
       }
