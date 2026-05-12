@@ -2,7 +2,7 @@
   "name": "bioregions",
   "version": "2.0.0-alpha.18",
   "private": true,
-  "homepage": "/bioregions2",
+  "homepage": "/bioregions",
   "type": "module",
   "scripts": {
     "dev": "vite",
