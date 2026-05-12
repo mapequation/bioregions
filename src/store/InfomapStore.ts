@@ -1,0 +1,1928 @@
+import { action, makeObservable, observable, computed } from 'mobx';
+import Infomap from '@mapequation/infomap';
+import type { Tree, StateTree, Result } from '@mapequation/infomap';
+import type {
+  BipartiteNetwork,
+  StateNetwork,
+  MultilayerIntraInterNetwork,
+} from '@mapequation/infomap/network';
+import type { Arguments } from '@mapequation/infomap/arguments';
+import type RootStore from './RootStore';
+import {
+  getIntersectingBranches,
+  visitTreeDepthFirstPreOrder,
+  visitTreeDepthFirstPostOrder,
+  type HistogramDataPoint,
+  getAccumulatedTreeData,
+  // getTreeHistogram,
+} from '../utils/tree';
+import type { PhyloNode } from '../utils/tree';
+import { calculateStats, isEqual, uniformTsallisEntropy } from '../utils/math';
+import { range } from '../utils/range';
+import { max, min } from 'd3-array';
+import { Cell } from '../utils/QuadTree';
+import SpeciesStore from './SpeciesStore';
+import TreeStore from './TreeStore';
+
+export interface BioregionsNetworkData {
+  nodeIdMap: { [name: string]: number };
+  numLeafTaxonNodes: number;
+  numInternalTaxonNodes: number;
+  numGridCellNodes: number;
+  numLeafTaxonLinks: number;
+  numInternalTaxonLinks: number;
+  sumLeafTaxonLinkWeight: number;
+  sumInternalTaxonLinkWeight: number;
+  sumLinkWeight: number;
+  sumTreeLinkWeight: number;
+  isDirected: boolean;
+  includeTree: boolean;
+}
+
+export interface BioregionsStateNetworkData extends BioregionsNetworkData {
+  numStateGridCellNodes: number;
+}
+
+export interface BioregionsNetwork
+  extends Required<BipartiteNetwork>,
+  BioregionsNetworkData { }
+export interface BioregionsStateNetwork
+  extends Required<StateNetwork>,
+  BioregionsStateNetworkData { }
+
+export interface BioregionsMultilayerNetwork
+  extends MultilayerIntraInterNetwork,
+  BioregionsNetworkData {
+  layers: { id: number; name: string }[];
+}
+
+type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
+
+const defaultArgs: RequiredArgs = {
+  silent: false,
+  output: ['json', 'tree'],
+};
+
+export class Bioregion {
+  flow = 0;
+  bioregionId = 0;
+  numRecords = 0;
+  species: string[] = [];
+  // cells: Cell[] = [];
+  cellMap: Map<string, Cell> = new Map(); // cellId -> cell
+  mostCommon: {
+    name: string;
+    count: number;
+    score: number;
+  }[] = [];
+  mostIndicative: {
+    name: string;
+    count: number;
+    score: number;
+  }[] = [];
+  meanNumSpeciesWithin = 0;
+  stddevNumSpeciesWithin = 0.0;
+  oldestPhyloNodeTime = 0.0;
+
+  addCell(cell: Cell) {
+    this.cellMap.set(cell.id, cell);
+  }
+
+  get cells() {
+    return this.cellMap.values();
+  }
+
+  get numGridCells() {
+    return this.cellMap.size;
+  }
+
+  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore) {
+    type Species = string;
+    const speciesCount = new Map<Species, number>();
+
+    let numSpeciesWithoutBioregions = 0;
+    for (const cell of this.cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      for (const { count, name } of cell.speciesTopList) {
+        const species = speciesStore.speciesMap.get(name)!;
+
+        const bioregionId = species.bioregionId!;
+        if (!bioregionId) {
+          // console.warn(`No bioregion id for species ${name}: ${bioregionId}`);
+          ++numSpeciesWithoutBioregions;
+          continue;
+        }
+
+        this.numRecords += count;
+        speciesCount.set(name, (speciesCount.get(name) ?? 0) + count,
+        );
+      }
+    }
+    if (numSpeciesWithoutBioregions > 0) {
+      // May happen if 100% tree weight
+      console.warn(`Bioregion ${this.bioregionId} contains ${numSpeciesWithoutBioregions} species without assigned bioregions.`);
+    }
+
+    // Update speciesStore.speciesMap with regions for each species
+    for (const [name, count] of speciesCount.entries()) {
+      // Most indicative
+      const tf = count / this.numRecords;
+      const idf =
+        (speciesStore.speciesMap.get(name)?.count ?? 0) /
+        speciesStore.numRecords;
+      const score = tf / idf;
+      this.mostIndicative.push({ name, score, count });
+      this.mostCommon.push({ name, score, count });
+
+      const species = speciesStore.speciesMap.get(name)!;
+      species.countPerRegion.set(
+        this.bioregionId,
+        (species.countPerRegion.get(this.bioregionId) ?? 0) + count,
+      );
+    }
+
+    this.mostCommon.sort((a, b) => b.count - a.count);
+    this.mostIndicative.sort((a, b) =>
+      isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
+    );
+
+
+    // Bioregion metrics
+    const I_c = [];
+    const I_s = [];
+    const { nameToCellIds } = speciesStore.binner;
+    for (const cell of this.cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      const { connectedBioregions } = cell;
+      const numSpeciesWithin = connectedBioregions.bioregionIds.get(this.bioregionId)?.count ?? 0;
+      I_c.push(numSpeciesWithin);
+    }
+    if (I_c.length > 0) {
+      const { mean, stddev } = calculateStats(I_c);
+      this.meanNumSpeciesWithin = mean;
+      this.stddevNumSpeciesWithin = stddev;
+    }
+
+    let minTime = 1;
+    for (const speciesName of this.species) {
+      const species = speciesStore.speciesMap.get(speciesName);
+      if (species) {
+        const connectedCellIds = nameToCellIds[speciesName];
+        let numCellsWithin = 0;
+        for (const cellId of connectedCellIds) {
+          const cell = this.cellMap.get(cellId);
+          if (!cell) {
+            // Cell is outside the module
+            continue;
+          }
+          if (cell.bioregionId === this.bioregionId) {
+            ++numCellsWithin;
+          }
+        }
+        I_s.push(numCellsWithin)
+        species.numGridCells = connectedCellIds.size;
+        species.numGridCellsWithinModule = numCellsWithin;
+      }
+      const treeNode = treeStore.treeNodeMap.get(speciesName);
+      if (treeNode) {
+        minTime = min([minTime, treeNode.data.time])!;
+      }
+    }
+    this.oldestPhyloNodeTime = minTime;
+
+    let [mean, stddev] = [0, 0];
+    if (I_s.length > 0) {
+      const stats = calculateStats(I_s);
+      mean = stats.mean;
+      stddev = stats.stddev;
+    }
+
+    for (const cell of this.cells) {
+      if (!cell.isLeaf) {
+        // Don't include patched cells to statistics as all records are on leaf cells
+        continue;
+      }
+      cell.calcBioregionStats({
+        meanNumSpeciesWithin: this.meanNumSpeciesWithin,
+        stddevNumSpeciesWithin: this.stddevNumSpeciesWithin,
+        meanSpeciesExtentWithin: mean,
+        sddevSpeciesExtentWithin: stddev,
+        speciesMap: speciesStore.speciesMap,
+      })
+    }
+  }
+};
+
+export default class InfomapStore {
+  rootStore: RootStore;
+  args: RequiredArgs & Arguments = {
+    twoLevel: false,
+    numTrials: process.env.NODE_ENV === 'production' ? 5 : 1,
+    regularized: false,
+    regularizationStrength: 1,
+    entropyCorrected: false,
+    entropyCorrectionStrength: 1,
+    markovTime: 1,
+    variableMarkovTime: false,
+    variableMarkovDamping: 1,
+    skipAdjustBipartiteFlow: true,
+    seed: 123,
+    ...defaultArgs,
+  };
+  network: BioregionsNetwork | BioregionsStateNetwork | null = null;
+  multilayerNetwork: BioregionsMultilayerNetwork | null = null;
+  numLayers: number = 5;
+  multilayerLogTime: boolean = false;
+  tree: Tree | StateTree | null = null;
+  haveStateNodes: boolean = false;
+  treeString?: string;
+  includeTreeInNetwork: boolean = true;
+  alwaysUseStateNetwork: boolean = false;
+  isRunning: boolean = false;
+  currentTrial: number = 0;
+  infomap: Infomap = new Infomap();
+  infomapId: number | null = null;
+  infomapOutput: string = '';
+  bioregions: Bioregion[] = [];
+
+  error?: string;
+  //TODO: Show error in UI
+  addError = action((message: string) => {
+    this.error = message;
+  });
+
+  clearError = action(() => {
+    this.error = undefined;
+  });
+
+  // The link weight balance from no tree (0) to only tree (1)
+  useWholeTree: boolean = true;
+  setUseWholeTree = action((value: boolean, updateNetwork = false) => {
+    this.useWholeTree = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  });
+
+  // The link weight balance from no tree (0) to only tree (1)
+  treeWeightBalance: number = 1;
+  setTreeWeightBalance = action((value: number, updateNetwork = false) => {
+    this.treeWeightBalance = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  });
+
+  useWeightedSpeciesLinks: boolean = true;
+  setUseWeightedSpeciesLinks = action((value: boolean, updateNetwork: boolean = false) => {
+    this.useWeightedSpeciesLinks = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  })
+
+  // Weight ancestral nodes on rarity
+  useWeightedTreeNodeLinksIfTimeSlice: boolean = false;
+  setUseWeightedTreeNodeLinksIfTimeSlice = action((value: boolean, updateNetwork: boolean = false) => {
+    this.useWeightedTreeNodeLinksIfTimeSlice = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  })
+
+  spatialNormalizationOrder: number = 1;
+  setSpatialNormalizationOrder = action(
+    (value: number, updateNetwork: boolean = false) => {
+      this.spatialNormalizationOrder = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
+
+  //TODO: Rename to explain, it's about how to accumulate overlapping links from tree
+  uniformTreeLinks: boolean = true;
+  setUniformTreeLinks = action(
+    (value: boolean, updateNetwork: boolean = false) => {
+      this.uniformTreeLinks = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
+
+  linkWeightThresholdExponent: number = -6;
+  setLinkWeightThresholdExponent = action(
+    (value: number, updateNetwork: boolean = false) => {
+      this.linkWeightThresholdExponent = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
+
+  constructor(rootStore: RootStore) {
+    this.rootStore = rootStore;
+
+    makeObservable(this, {
+      error: observable,
+      network: observable.ref,
+      multilayerNetwork: observable.ref,
+      numLayers: observable,
+      multilayerLogTime: observable,
+      tree: observable.ref,
+      treeString: observable,
+      infomapOutput: observable,
+      haveStateNodes: observable,
+      args: observable,
+      currentTrial: observable,
+      isRunning: observable,
+      bioregions: observable.ref,
+      useWeightedSpeciesLinks: observable,
+      useWeightedTreeNodeLinksIfTimeSlice: observable,
+      spatialNormalizationOrder: observable,
+      useWholeTree: observable,
+      treeWeightBalance: observable,
+      includeTreeInNetwork: observable,
+      alwaysUseStateNetwork: observable,
+      uniformTreeLinks: observable,
+      linkWeightThresholdExponent: observable,
+      integrationTime: observable,
+      segregationTime: observable,
+      moduleLevel: observable,
+      parameterName: computed,
+      haveStateNetwork: computed,
+      numBioregions: computed,
+      haveBioregions: computed,
+      codelength: computed,
+      numLevels: computed,
+      relativeCodelengthSavings: computed,
+      run: action,
+    });
+
+    this.initInfomap();
+  }
+
+  initInfomap() {
+    this.infomap
+      .on('data', this.onInfomapOutput)
+      .on('error', this.onInfomapError)
+      .on('finished', this.onInfomapFinished);
+  }
+
+  clearData = action(() => {
+    this.network = null;
+    this.tree = null;
+    this.treeString = undefined;
+    this.isRunning = false;
+    this.currentTrial = 0;
+    this.bioregions = [];
+    this.clearBioregions();
+  });
+
+  clearBioregions = () => { };
+
+  get parameterName() {
+    let name = this.rootStore.speciesStore.name;
+    if (this.includeTreeInNetwork) {
+      name = `${name}_${this.useWholeTree ? 't' : `it${this.integrationTime}`}_tw${this.treeWeightBalance}`;
+      if (this.segregationTime > 0) {
+        name = `${name}_st${this.segregationTime}`;
+      }
+    }
+    if (this.numLevels > 2) {
+      name = `${name}_l${this.moduleLevel}`;
+    }
+    return name;
+  }
+
+  get haveStateNetwork() {
+    return (
+      this.rootStore.treeStore.tree &&
+      (this.segregationTime > 0 || this.alwaysUseStateNetwork)
+    );
+  }
+
+  get haveBioregions() {
+    return this.numBioregions > 0;
+  }
+
+  get numBioregions() {
+    return this.bioregions.length;
+  }
+
+  get codelength() {
+    return this.tree?.codelength ?? 0;
+  }
+
+  get numLevels() {
+    return this.tree?.numLevels ?? 0;
+  }
+
+  get relativeCodelengthSavings() {
+    return this.tree?.relativeCodelengthSavings ?? 0;
+  }
+
+  setCurrentTrial = action((trial: number) => {
+    this.currentTrial = trial;
+  });
+
+  setNumTrials = action((numTrials: number) => {
+    this.args.numTrials = numTrials;
+  });
+
+  setSeed = action((seed: number) => {
+    this.args.seed = seed;
+  });
+
+  setSkipAdjustBipartiteFlow = action((value: boolean = true) => {
+    this.args.skipAdjustBipartiteFlow = value;
+  });
+
+  setTwoLevel = action((value: boolean = true) => {
+    this.args.twoLevel = value;
+  });
+
+  setRegularized = action((value: boolean = true) => {
+    this.args.regularized = value;
+  });
+
+  setRegularizationStrength = action((strength: number) => {
+    this.args.regularizationStrength = strength;
+  });
+
+  setEntropyCorrected = action((value: boolean = true) => {
+    this.args.entropyCorrected = value;
+  });
+
+  setEntropyCorrectionStrength = action((strength: number) => {
+    this.args.entropyCorrectionStrength = strength;
+  });
+
+  setMarkovTime = action((value: number) => {
+    this.args.markovTime = value;
+  });
+
+  setVariableMarkovTime = action((value: boolean) => {
+    this.args.variableMarkovTime = value;
+  });
+
+  setVariableMarkovDamping = action((value: number) => {
+    this.args.variableMarkovDamping = value;
+  });
+
+  setAlwaysUseStateNetwork = action(
+    (value: boolean, updateNetwork: boolean = true) => {
+      this.alwaysUseStateNetwork = value;
+      if (updateNetwork) {
+        this.updateNetwork();
+      }
+    },
+  );
+
+  setTree = action((tree: Tree | StateTree | null) => {
+    this.tree = tree;
+  });
+
+  setTreeString = action((treeString?: string) => {
+    this.treeString = treeString;
+  });
+
+  setNetwork = action(
+    (network: BioregionsNetwork | BioregionsStateNetwork | null) => {
+      this.network = network;
+    },
+  );
+
+  setMultilayerNetwork = action(
+    (network: BioregionsMultilayerNetwork | null) => {
+      this.multilayerNetwork = network;
+    },
+  );
+
+  setNumLayers = action((numLayers: number) => {
+    this.numLayers = numLayers;
+  });
+
+  setMultilayerLogTime = action((multilayerLogTime: boolean) => {
+    this.multilayerLogTime = multilayerLogTime;
+  });
+
+  setBioregions = action((bioregions: Bioregion[]) => {
+    this.bioregions = bioregions;
+  });
+
+  setStateBioregions = action((bioregions: Bioregion[]) => {
+    this.bioregions = bioregions;
+  });
+
+  setIsRunning = action((isRunning: boolean = true) => {
+    this.isRunning = isRunning;
+  });
+
+  setIncludeTree = action((value: boolean = true) => {
+    this.includeTreeInNetwork = value;
+    this.updateNetwork();
+  });
+
+  integrationTime: number = 1;
+  setIntegrationTime = action((value: number, updateNetwork = false) => {
+    this.integrationTime = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  });
+  segregationTime: number = 0;
+  setSegregationTime = action((value: number, updateNetwork = false) => {
+    this.segregationTime = value;
+    if (updateNetwork) {
+      this.updateNetwork();
+    }
+  });
+
+  moduleLevel: number = 0;
+  setModuleLevel = action((value: number, updateModules = false) => {
+    this.moduleLevel = value;
+    if (updateModules) {
+      this.createBioregions();
+    }
+  })
+
+  get cells() {
+    return this.rootStore.speciesStore.binner.cells;
+  }
+
+  linkWeightThroughTime: HistogramDataPoint[] = [];
+  setLinkWeightThroughTime(data: HistogramDataPoint[]) {
+    this.linkWeightThroughTime = data;
+  }
+
+  calcLinkWeightThroughTime(network: BioregionsNetwork | BioregionsStateNetwork | null) {
+    const phyloTree = this.rootStore.treeStore.tree;
+    if (phyloTree === null || network === null) {
+      return [];
+    }
+    const phyloNodeWeights: Map<string, number> = new Map();
+    const nodes = 'states' in network ? network.states : network.nodes;
+    network.links.forEach(link => {
+      const taxonName = nodes[link.source].name!;
+      phyloNodeWeights.set(taxonName, (link.weight ?? 0) / network.sumLinkWeight + (phyloNodeWeights.get(taxonName) ?? 0));
+    })
+    return getAccumulatedTreeData(phyloTree, {
+      getNodeData: (node) => phyloNodeWeights.get(node.name) ?? 0,
+      initialValue: 0,
+    });
+    // return getTreeHistogram(phyloTree, {
+    //   getNodeData: (node) => phyloNodeWeights.get(node.name) ?? 0,
+    //   numBins: 100,
+    // });
+  }
+
+  getTaxonLinkWeight(numGridCells: number, numGridCellsTotal: number) {
+    if (!this.useWeightedSpeciesLinks) {
+      return 1;
+    }
+    const { spatialNormalizationOrder: q } = this;
+    return 1 - uniformTsallisEntropy(numGridCells, q) / uniformTsallisEntropy(numGridCellsTotal, q);
+  }
+
+  getTaxonLinkWeightOnTimeSlice(numGridCells: number, numGridCellsTotal: number) {
+    if (this.useWeightedTreeNodeLinksIfTimeSlice) {
+      return this.getTaxonLinkWeight(numGridCells, numGridCellsTotal);
+    }
+    return 1.0;
+  }
+
+  onInfomapFinished = action((result: Result, id: number) => {
+    const {
+      json: tree,
+      json_states: statesTree,
+      tree: treeString,
+      tree_states: treeStatesString,
+    } = result;
+
+    const haveStates = statesTree != null;
+    this.haveStateNodes = haveStates;
+    const infomapResult = haveStates ? statesTree : tree ?? null;
+
+    console.log(`Infomap with id ${id} finished`)
+
+    const { moduleLevel: _moduleLevel } = this;
+    const moduleLevel = tree ? min([_moduleLevel, tree.numLevels - 2])! : 0;
+    if (moduleLevel !== _moduleLevel) {
+      this.setModuleLevel(moduleLevel, false);
+    }
+
+    this.createBioregions(infomapResult);
+    this.setTree(infomapResult);
+    this.setTreeString(haveStates ? treeStatesString : treeString);
+
+    console.timeEnd('infomap');
+    this.setIsRunning(false);
+    this.infomapId = null;
+  });
+
+  onInfomapError = (error: string, id: number) => {
+    this.infomapId = null;
+    console.error(error, id);
+    console.timeEnd('infomap');
+    this.setIsRunning(false);
+  };
+
+  onInfomapOutput = action((output: string) => {
+    this.infomapOutput += output + '\n';
+    this.parseOutput(output);
+  });
+
+  async run() {
+    if (this.infomapId !== null) {
+      await this.abort();
+    }
+    const { cells } = this;
+
+    if (cells.length === 0) {
+      console.error('No cells in binner!');
+      return;
+    }
+
+    this.setIsRunning();
+    this.setCurrentTrial(0);
+
+    const network = this.updateNetwork()!;
+
+    const args = { ...this.args };
+    // const isStateNetwork = 'states' in network;
+    if (network.isDirected) {
+      args.directed = true;
+      // args.regularized = true;
+    }
+
+    console.time('infomap');
+
+    return new Promise<void>((resolve, reject) => {
+      this.infomapId = this.infomap
+        .on('finished', (result, id) => {
+          this.onInfomapFinished(result, id);
+          resolve();
+        })
+        .on('error', (err, id) => {
+          this.onInfomapError(err, id);
+          reject(err);
+        })
+        .run({
+          network,
+          args,
+        });
+    });
+  }
+
+  async runMultilayer() {
+    if (this.infomapId !== null) {
+      await this.abort();
+    }
+    const { cells } = this;
+
+    if (cells.length === 0) {
+      console.error('No cells in binner!');
+      return;
+    }
+
+    this.setIsRunning();
+    this.setCurrentTrial(0);
+
+    const network = this.createMultilayerNetwork();
+    this.setMultilayerNetwork(network);
+
+    const args = {
+      ...this.args,
+      multilayerRelaxLimit: 1,
+      multilayerRelaxRate: 0.15,
+    };
+    if (network.isDirected) {
+      args.directed = true;
+    }
+
+    console.time('infomap');
+
+    return new Promise<void>((resolve, reject) => {
+      this.infomapId = this.infomap
+        .on('finished', (result, id) => {
+          this.onInfomapFinished(result, id);
+          resolve();
+        })
+        .on('error', (err, id) => {
+          this.onInfomapError(err, id);
+          reject(err);
+        })
+        .run({
+          network,
+          args,
+        });
+    });
+  }
+
+  async abort() {
+    if (this.infomapId === null) {
+      return false;
+    }
+
+    try {
+      await this.infomap.terminate(this.infomapId, 0);
+    } catch (e: any) {
+      console.error('Worker error', e);
+    }
+    this.infomapId = null;
+    this.setIsRunning(false);
+    this.setTree(null);
+    this.setTreeString(undefined);
+    this.setCurrentTrial(0);
+
+    return true;
+  }
+
+  parseOutput = (output: string) => {
+    const trial = output.match(/^Trial (\d+)\//);
+    if (trial) {
+      this.setCurrentTrial(+trial[1]);
+      return;
+    }
+
+    const summary = output.match(/^Summary after/);
+    if (summary) {
+      this.setCurrentTrial(this.currentTrial + 1);
+    }
+  };
+
+  updateNetwork = () => {
+    if (!this.network && this.cells.length === 0) {
+      return null;
+    }
+    console.time('createNetwork');
+    const network = this.createNetwork();
+    console.timeEnd('createNetwork');
+    this.setNetwork(network);
+    this.setLinkWeightThroughTime(this.calcLinkWeightThroughTime(network))
+    return network;
+  };
+
+  public createNetwork(): BioregionsNetwork | BioregionsStateNetwork {
+    if (this.haveStateNetwork) {
+      return this.createStateNetwork();
+    }
+    return this.createStandardNetwork();
+  }
+
+  public createStandardNetwork(_integrationTime?: number): BioregionsNetwork {
+    const { tree } = this.rootStore.treeStore;
+    const includeTree =
+      this.includeTreeInNetwork &&
+      tree !== null &&
+      this.treeWeightBalance !== 0;
+
+    /*
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added.
+    */
+    const network: BioregionsNetwork = {
+      nodes: [],
+      links: [], // source: taxon node, target: grid cell
+      bipartiteStartId: 0,
+      nodeIdMap: {},
+      numLeafTaxonNodes: 0,
+      numInternalTaxonNodes: 0,
+      numGridCellNodes: 0,
+      numLeafTaxonLinks: 0,
+      numInternalTaxonLinks: 0,
+      sumLeafTaxonLinkWeight: 0,
+      sumInternalTaxonLinkWeight: 0,
+      sumLinkWeight: 0,
+      sumTreeLinkWeight: 0,
+      isDirected: false,
+      includeTree,
+    };
+    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+
+    let nodeId = 0;
+
+    const addNode = (name: string, isGridCell: boolean) => {
+      let id = network.nodeIdMap[name];
+      if (id != null) {
+        return id;
+      }
+      id = nodeId++;
+      network.nodeIdMap[name] = id;
+      network.nodes.push({ id, name });
+      if (!isGridCell) {
+        const treeNode = this.rootStore.treeStore.treeNodeMap.get(name);
+        if (treeNode && !treeNode.data.isLeaf) {
+          ++network.numInternalTaxonNodes;
+        } else {
+          ++network.numLeafTaxonNodes;
+        }
+      } else {
+        ++network.numGridCellNodes;
+      }
+      return id;
+    };
+
+    const linkWeightThreshold = Math.pow(10, this.linkWeightThresholdExponent);
+
+    const addLink = (
+      sourceName: string, // taxon
+      targetName: string, // grid cell
+      weight: number,
+    ) => {
+      if (weight < linkWeightThreshold) { return; }
+      const source = addNode(sourceName, false);
+      const target = addNode(targetName, true);
+      network.links.push({ source, target, weight });
+      const treeNode = this.rootStore.treeStore.treeNodeMap.get(sourceName);
+      if (treeNode && !treeNode.data.isLeaf) {
+        ++network.numInternalTaxonLinks;
+        network.sumInternalTaxonLinkWeight += weight;
+      } else {
+        ++network.numLeafTaxonLinks;
+        network.sumLeafTaxonLinkWeight += weight;
+      }
+      network.sumLinkWeight += weight;
+    };
+
+    // Add all cells first
+    for (let { id: cellId } of cells) {
+      addNode(cellId, true);
+    }
+
+    network.bipartiteStartId = nodeId;
+
+    // for (let name of Object.keys(nameToCellIds)) {
+    //   addNode(name);
+    // }
+
+    type NodeId = string;
+    type CellId = string;
+    type Weight = number;
+
+    const linkMap = new Map<NodeId, Map<CellId, Weight>>();
+    let sumNonTreeLinkWeight = 0;
+
+    const { treeWeightBalance } = this;
+    if (!includeTree || treeWeightBalance < 1) {
+      for (let [name, cells] of Object.entries(nameToCellIds)) {
+        const nodeWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
+        for (let cellId of cells.values()) {
+          const weight = (includeTree ? 1 - treeWeightBalance : 1) * nodeWeight;
+          if (weight < linkWeightThreshold) {
+            continue;
+          }
+          sumNonTreeLinkWeight += weight;
+          // TODO: No need to use the map here if not include tree, will not aggregate on species level
+          const outLinks = linkMap.has(name)
+            ? linkMap.get(name)!
+            : linkMap.set(name, new Map()).get(name)!;
+          // if (!outLinks.has(cellId)) {
+          //   ++network.numNonTreeLinks;
+          // }
+          outLinks.set(cellId, (outLinks.get(cellId) ?? 0) + weight);
+        }
+      }
+    }
+
+    // network.numNonTreeNodes = linkMap.size;
+
+    if (!includeTree) {
+      for (const [source, outLinks] of linkMap.entries()) {
+        for (const [target, weight] of outLinks.entries()) {
+          addLink(source, target, weight);
+        }
+      }
+
+      // If not including tree, we are done.
+      return network;
+    }
+
+    /**
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added (as in createNetwork).
+    First species (leaf) nodes, then the internal tree nodes.
+
+     * 1. Depth first search post order (from leafs):
+     * 2. If leaf node
+     *    - create set with the species as only element
+     * 3. If non-leaf
+     *    - create set with union from children sets from (2)
+     *    - if younger than integrationTime and parent is older,
+     *      add links from this and parent node to grid cells
+     *      weighted on closeness to integration time
+     */
+
+    const integrationTime = _integrationTime ?? this.integrationTime;
+    const useWholeTree = (_integrationTime === undefined) && this.useWholeTree;
+
+    const missing = new Set<string>();
+
+    // source (tree node) -> target (grid cell) -> weight
+    const treeLinks = new Map<NodeId, Map<CellId, Weight>>();
+
+    let sumTreeLinkWeight = 0;
+
+    // Include internal tree nodes into network
+    visitTreeDepthFirstPostOrder(tree, (node) => {
+      if (node.isLeaf) {
+        node.speciesSet = new Set([node.name]);
+      } else {
+        node.speciesSet = new Set();
+        if (
+          useWholeTree ||
+          node.children.some((child) => child.time > integrationTime)
+        ) {
+          node.children.forEach((child) => {
+            if (child.speciesSet) {
+              for (const each of child.speciesSet) {
+                node.speciesSet?.add(each);
+              }
+            }
+          });
+        }
+      }
+    });
+
+    const getLinksFromTreeNode = (node: PhyloNode) => {
+      const links = new Map<CellId, Weight>();
+      let numLinks = 0;
+
+      for (const species of node.speciesSet!) {
+        if (!nameToCellIds[species]) {
+          missing.add(species);
+          continue;
+        }
+
+        for (const cellId of nameToCellIds[species]) {
+          const currentCount = links.get(cellId) ?? 0;
+
+          if (currentCount === 0 || !this.uniformTreeLinks) {
+            links.set(cellId, currentCount + 1);
+            ++numLinks;
+          }
+        }
+      }
+
+      return { links, numLinks };
+    };
+
+    const addLinks = (
+      node: PhyloNode,
+      links: Map<CellId, Weight>,
+      interpolationWeight: number,
+    ) => {
+      // TODO: Make sure internal tree nodes don't have same name as leaf nodes
+
+      const outLinks = treeLinks.has(node.name)
+        ? treeLinks.get(node.name)!
+        : treeLinks.set(node.name, new Map()).get(node.name)!;
+
+      for (const [cellId, count] of links.entries()) {
+        const weight = count * interpolationWeight;
+        if (weight < linkWeightThreshold) {
+          continue;
+        }
+        // Aggregate weight
+        const currentWeight = outLinks.get(cellId) ?? 0;
+        outLinks.set(cellId, currentWeight + weight);
+        sumTreeLinkWeight += weight;
+      }
+    };
+
+    if (useWholeTree) {
+      visitTreeDepthFirstPostOrder(tree, (node) => {
+        if (node.parent === null) {
+          return;
+        }
+        const links = getLinksFromTreeNode(node);
+        // const nodeWeight = 1 - links.numLinks / network.numGridCellNodes // linear
+        // const nodeWeight = 1 - Math.log2(links.numLinks) / Math.log2(network.numGridCellNodes); // log
+        // const nodeWeight = 1 / links.numLinks - 1 / network.numGridCellNodes; // 1/x
+        // Tsallis entropy generalizes both above with parameter 0, 1 and 2 respectively
+        const nodeWeight = this.getTaxonLinkWeight(links.numLinks, network.numGridCellNodes);
+        // const nodeWeight = Math.pow(node.time, q);
+        addLinks(node, links.links, nodeWeight);
+      });
+    } else {
+      const integratingBranches = getIntersectingBranches(
+        tree,
+        integrationTime,
+      );
+
+      integratingBranches.forEach(({ parent, child, childWeight }) => {
+        if (isEqual(childWeight, 1)) {
+          const links = getLinksFromTreeNode(child);
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.numLinks, network.numGridCellNodes);
+          return addLinks(child, links.links, nodeWeight);
+        }
+        if (isEqual(childWeight, 0)) {
+          const links = getLinksFromTreeNode(parent);
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.numLinks, network.numGridCellNodes);
+          return addLinks(child, links.links, nodeWeight);
+        }
+        const parentLinks = getLinksFromTreeNode(parent);
+        const childLinks = getLinksFromTreeNode(child);
+
+        if (childLinks.numLinks === 0) {
+          // console.warn('No links from child', child.name);
+          // Happens when integration time is more than leaf time
+          // TODO: Adjust tree times to reach 1.0 at leafs if close?
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(parentLinks.numLinks, network.numGridCellNodes);
+          return addLinks(parent, parentLinks.links, nodeWeight);
+        }
+
+        const degreeRatio = parentLinks.numLinks / childLinks.numLinks;
+        const relativeDegreeDifference = degreeRatio - 1;
+        const adjustedChildWeight =
+          parentLinks.numLinks === 0
+            ? 1
+            : (childWeight * degreeRatio) /
+            (1 + childWeight * relativeDegreeDifference);
+        const adjustedParentWeight = 1 - adjustedChildWeight;
+
+        const parentNodeWeight = this.getTaxonLinkWeightOnTimeSlice(parentLinks.numLinks, network.numGridCellNodes);
+        const childNodeWeight = this.getTaxonLinkWeightOnTimeSlice(childLinks.numLinks, network.numGridCellNodes);
+        addLinks(parent, parentLinks.links, adjustedParentWeight * parentNodeWeight);
+        addLinks(child, childLinks.links, adjustedChildWeight * childNodeWeight);
+      });
+    }
+
+    // treeStrength / (treeStrength + speciesStrength) = treeWeightBalance
+    // => treeStrength * (1 - treeWeightBalance) = speciesStrength * treeWeightBalance
+    // => treeStrength / treeWeightBalance = speciesStrength / (1 - treeWeightBalance)
+    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+      ? sumTreeLinkWeight
+      : (treeWeightBalance * sumNonTreeLinkWeight) / (1 - treeWeightBalance);
+
+    // sumTreeLinkWeight * scale = totalTreeStrength
+    const scale = totalTreeStrength / sumTreeLinkWeight;
+    console.log(
+      `Sum non-tree link weight: ${sumNonTreeLinkWeight
+      }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
+      } => balance: ${(sumTreeLinkWeight * scale) /
+      (sumTreeLinkWeight * scale + sumNonTreeLinkWeight)
+      }`,
+    );
+    network.sumTreeLinkWeight = sumTreeLinkWeight * scale;
+
+    for (const [treeNodeName, treeOutLinks] of treeLinks.entries()) {
+      // Aggregate to link map
+      const outLinks = linkMap.get(treeNodeName) ?? new Map<string, number>();
+      if (outLinks.size === 0) {
+        // network.numTreeNodes++;
+        linkMap.set(treeNodeName, outLinks);
+      }
+
+      // Aggregate links from tree (overlaps on tree leaf nodes)
+      for (const [cellId, weight] of treeOutLinks.entries()) {
+        if (outLinks.size === 0) {
+          // network.numTreeLinks++;
+        }
+        outLinks.set(cellId, (outLinks.get(cellId) ?? 0) + weight * scale);
+      }
+    }
+
+    // Add links to network
+    for (const [treeNodeName, treeOutLinks] of linkMap.entries()) {
+      for (const [cellId, weight] of treeOutLinks.entries()) {
+        addLink(treeNodeName, cellId, weight);
+      }
+    }
+
+    console.log(`${missing.size} nodes missing in network:`, Array.from(missing));
+    console.log('Network:', network);
+
+    return network;
+  }
+
+  public createMultilayerNetwork(): BioregionsMultilayerNetwork {
+    console.log('Generate multilayer network...');
+    console.time('createMultilayerNetwork');
+
+    const { numLayers } = this;
+    const layerIds = Array.from(range(numLayers));
+    // const integrationTimes = layerIds.map(
+    //   (n) => (n + 1) / numLayers,
+    // );
+    const integrationTimes: number[] = [];
+    if (this.multilayerLogTime) {
+      let t = 0;
+      let dt = 0.5;
+      layerIds.forEach(() => {
+        t += dt;
+        dt /= 2;
+        integrationTimes.push(t);
+      });
+    } else {
+      let t = 0;
+      let dt = 1 / numLayers;
+      layerIds.forEach(() => {
+        t += dt;
+        integrationTimes.push(t);
+      });
+    }
+    const { timeFormatter } = this.rootStore.treeStore;
+    const layers = integrationTimes.map((t, id) => ({
+      id,
+      name: timeFormatter(t),
+    }));
+
+    const multilayerNetwork: BioregionsMultilayerNetwork = {
+      nodes: [],
+      intra: [],
+      nodeIdMap: {}, // name -> id
+      numLeafTaxonNodes: 0,
+      numInternalTaxonNodes: 0,
+      numGridCellNodes: 0,
+      numLeafTaxonLinks: 0,
+      numInternalTaxonLinks: 0,
+      sumLeafTaxonLinkWeight: 0,
+      sumInternalTaxonLinkWeight: 0,
+      sumLinkWeight: 0,
+      sumTreeLinkWeight: 0,
+      isDirected: false,
+      includeTree: true,
+      layers,
+    };
+
+    // const integrationTimes = [0.5, 0.7, 0.8, 0.9, 1];
+    console.log('Multilayer integration times:', integrationTimes);
+    let nodeIdCounter = 0;
+
+    integrationTimes.forEach((t, layerId) => {
+      console.log(`=== Creating layer ${layerId} at time ${t}`);
+      const network = this.createStandardNetwork(t);
+      network.nodes.forEach((node) => {
+        if (multilayerNetwork.nodeIdMap[node.name!] === undefined) {
+          const id = nodeIdCounter++;
+          multilayerNetwork.nodeIdMap[node.name!] = id;
+          multilayerNetwork.nodes!.push({ id, name: node.name! });
+        }
+      });
+      network.links.forEach((link) => {
+        const sourceName = network.nodes[link.source].name!;
+        const targetName = network.nodes[link.target].name!;
+        const intraLink = {
+          layerId,
+          source: multilayerNetwork.nodeIdMap[sourceName],
+          target: multilayerNetwork.nodeIdMap[targetName],
+          weight: link.weight!,
+        }
+        multilayerNetwork.intra.push(intraLink);
+        // console.log(`${sourceName} -> ${targetName} (w: ${link.weight})`)
+      });
+      multilayerNetwork.numLeafTaxonNodes += network.numLeafTaxonNodes;
+      multilayerNetwork.numInternalTaxonNodes += network.numInternalTaxonNodes;
+      multilayerNetwork.numGridCellNodes += network.numGridCellNodes;
+      multilayerNetwork.numLeafTaxonLinks += network.numLeafTaxonLinks;
+      multilayerNetwork.numInternalTaxonLinks += network.numInternalTaxonLinks;
+      multilayerNetwork.sumLeafTaxonLinkWeight +=
+        network.sumLeafTaxonLinkWeight;
+      multilayerNetwork.sumInternalTaxonLinkWeight +=
+        network.sumInternalTaxonLinkWeight;
+      multilayerNetwork.sumLinkWeight += network.sumLinkWeight;
+      multilayerNetwork.sumTreeLinkWeight += network.sumTreeLinkWeight;
+    });
+
+    console.timeEnd('createMultilayerNetwork');
+    console.log('Multilayer network:', multilayerNetwork);
+    return multilayerNetwork;
+  }
+
+  public createStateNetwork(): BioregionsStateNetwork {
+    const isDirected = false;
+    /*
+    Starts with cells as nodes up until the bipartiteStartId.
+    Then the feature nodes are added.
+    */
+    const network: BioregionsStateNetwork = {
+      nodes: [],
+      links: [],
+      states: [],
+      nodeIdMap: {}, // name -> id
+      numLeafTaxonNodes: 0,
+      numInternalTaxonNodes: 0,
+      numGridCellNodes: 0,
+      numLeafTaxonLinks: 0,
+      numInternalTaxonLinks: 0,
+      sumLeafTaxonLinkWeight: 0,
+      sumInternalTaxonLinkWeight: 0,
+      sumLinkWeight: 0,
+      sumTreeLinkWeight: 0,
+      isDirected: false,
+      includeTree: true,
+      numStateGridCellNodes: 0,
+    };
+    const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
+    const { tree } = this.rootStore.treeStore;
+
+    if (!tree) {
+      throw new Error("Can't create state network without a tree");
+    }
+    if (!this.includeTreeInNetwork) {
+      throw new Error("Can't create state network without including the tree");
+    }
+
+    console.log('Create state network!');
+
+    // Clear existing memory
+    visitTreeDepthFirstPreOrder(tree, (node) => {
+      node.memory = undefined;
+    });
+
+    const segregationBranches = getIntersectingBranches(
+      tree,
+      this.segregationTime,
+    );
+    for (const branch of segregationBranches) {
+      visitTreeDepthFirstPreOrder(branch.child, (node) => {
+        node.memory = branch;
+      });
+    }
+
+    let physicalId = 0;
+    const nameToPhysicalId = new Map<string, number>();
+
+    // const addPhysicalCellNode = (cellId: string) => {
+    //   let id = nameToPhysicalId.get(cellId);
+    //   if (id === undefined) {
+    //     id = physicalId++;
+    //     nameToPhysicalId.set(cellId, id);
+    //     network.nodes.push({ id, name: cellId });
+    //     ++network.numGridCellNodes;
+    //   }
+    //   return id;
+    // }
+    // TODO: If only tree, some grid cells may be empty, better to not add them to network?
+    // Create physical cell nodes
+    for (const cell of cells) {
+      const id = physicalId++;
+      nameToPhysicalId.set(cell.id, id);
+      network.nodes.push({ id, name: cell.id });
+      ++network.numGridCellNodes;
+    }
+
+    const { treeWeightBalance } = this;
+    const { treeNodeMap } = this.rootStore.treeStore;
+
+    type StateNode = typeof network.states[number];
+    const cellStateNodes = new Map<string, StateNode>(); // stateName -> stateNode
+    const phyloStateNodes = new Map<string, StateNode>(); // name -> stateNode
+
+    const getCellStateName = (cellId: string, memTaxonName: string) =>
+      `${cellId}_${memTaxonName}`;
+
+    let stateIdCounter = 0;
+    const addCellStateNode = (cellId: string, memTaxonName: string) => {
+      const cellPhysId = nameToPhysicalId.get(cellId)!;
+      const stateName = getCellStateName(cellId, memTaxonName);
+      let stateNode = cellStateNodes.get(stateName);
+      if (stateNode == null) {
+        const stateId = stateIdCounter++;
+        stateNode = { id: cellPhysId, name: stateName, stateId };
+        cellStateNodes.set(stateName, stateNode);
+        network.nodeIdMap[stateName] = stateId;
+        network.states.push(stateNode);
+        ++network.numStateGridCellNodes;
+      }
+      return stateNode;
+    };
+
+    const isInternalTaxonNode = (taxonName: string) => {
+      const treeNode = this.rootStore.treeStore.treeNodeMap.get(taxonName);
+      return treeNode && !treeNode.data.isLeaf;
+    };
+
+    const addTaxonNode = (taxonName: string) => {
+      // Add physical node
+      let taxonId = nameToPhysicalId.get(taxonName);
+      if (taxonId == null) {
+        taxonId = physicalId++;
+        nameToPhysicalId.set(taxonName, taxonId);
+        network.nodes.push({ id: taxonId, name: taxonName });
+        if (isInternalTaxonNode(taxonName)) {
+          ++network.numInternalTaxonNodes;
+        } else {
+          ++network.numLeafTaxonNodes;
+        }
+      }
+      // Add state node
+      let stateNode = phyloStateNodes.get(taxonName);
+      if (stateNode == null) {
+        const stateId = stateIdCounter++;
+        stateNode = { id: taxonId, name: taxonName, stateId };
+        phyloStateNodes.set(taxonName, stateNode);
+        network.nodeIdMap[taxonName] = stateId;
+        network.states.push(stateNode);
+      }
+      return stateNode;
+    };
+
+    type CellId = string;
+    type Weight = number;
+    type StateCellName = string;
+    type TaxonName = string;
+    type StateCellOutLinks = Map<StateCellName, Weight>;
+    type StateLinkMap = Map<TaxonName, StateCellOutLinks>;
+
+    const linkMap = new Map<TaxonName, StateCellOutLinks>();
+    const linkWeightThreshold = Math.pow(10, this.linkWeightThresholdExponent);
+
+    const addStateLink = (
+      taxonName: string,
+      cellId: string,
+      memTaxonName: string,
+      weight: number,
+      linkMap: StateLinkMap,
+    ) => {
+      const cellStateNode = addCellStateNode(cellId, memTaxonName);
+      const taxonNode = addTaxonNode(taxonName);
+
+      const outLinks =
+        linkMap.get(taxonNode.name!) ??
+        linkMap.set(taxonNode.name!, new Map()).get(taxonNode.name!)!;
+      outLinks.set(
+        cellStateNode.name!,
+        (outLinks.get(cellStateNode.name!) ?? 0) + weight,
+      );
+    };
+
+    const addLinksToNetwork = () => {
+      for (const [taxonName, outLinks] of linkMap.entries()) {
+        for (const [stateCellName, weight] of outLinks) {
+          if (weight < linkWeightThreshold) { return; }
+
+          const taxonNode = phyloStateNodes.get(taxonName)!;
+          const cellStateNode = cellStateNodes.get(stateCellName)!;
+
+          network.links.push({
+            source: taxonNode.stateId,
+            target: cellStateNode.stateId,
+            weight,
+          });
+          if (isDirected) {
+            // TODO: Uniform link weight back?
+            network.links.push({
+              target: taxonNode.stateId,
+              source: cellStateNode.stateId,
+              weight,
+            });
+          }
+          const totWeight = (isDirected ? 2 : 1) * weight;
+          network.sumLinkWeight += totWeight;
+
+          if (isInternalTaxonNode(taxonName)) {
+            ++network.numInternalTaxonLinks;
+            network.sumInternalTaxonLinkWeight += totWeight;
+          } else {
+            ++network.numLeafTaxonLinks;
+            network.sumLeafTaxonLinkWeight += totWeight;
+          }
+        }
+      }
+    };
+
+    let unscaledNonTreeStrength = 0;
+
+    if (treeWeightBalance < 1) {
+      // Create physical species nodes
+      for (let [name, cells] of Object.entries(nameToCellIds)) {
+        // Create state cell nodes and links from species
+        const treeNode = treeNodeMap.get(name);
+        if (!treeNode) {
+          // Use root node as memory if species not part of tree
+          const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+          const weight = (1 - treeWeightBalance) * unscaledWeight;
+          unscaledNonTreeStrength += unscaledWeight * cells.size;
+
+          for (const cellId of cells.values()) {
+            addStateLink(name, cellId, tree.name, weight, linkMap);
+          }
+          continue;
+        }
+        const memBranch = treeNode.data.memory!;
+
+        const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+        const weight = (1 - treeWeightBalance) * unscaledWeight;
+        // TODO: Don't aggregate weight if below threshold or weight aggregated?
+        unscaledNonTreeStrength += unscaledWeight * cells.size;
+
+        for (const cellId of cells.values()) {
+          if (!isEqual(1 - memBranch.childWeight, 0)) {
+            addStateLink(
+              name,
+              cellId,
+              memBranch.parent.name,
+              weight * (1 - memBranch.childWeight),
+              linkMap,
+            );
+          }
+          if (!isEqual(memBranch.childWeight, 0)) {
+            addStateLink(
+              name,
+              cellId,
+              memBranch.child.name,
+              weight * memBranch.childWeight,
+              linkMap,
+            );
+          }
+        }
+      }
+    }
+
+    if (treeWeightBalance === 0) {
+      addLinksToNetwork();
+      return network;
+    }
+
+    const { integrationTime } = this;
+
+    // Add internal nodes
+    const missing = new Set<string>();
+
+    const treeLinks = new Map<TaxonName, Map<StateCellName, Weight>>();
+
+    let sumTreeLinkWeight = 0;
+
+    // Include internal tree nodes into network
+    visitTreeDepthFirstPostOrder(tree, (node) => {
+      if (node.isLeaf) {
+        node.speciesSet = new Set([node.name]);
+      } else {
+        node.speciesSet = new Set();
+        if (
+          this.useWholeTree ||
+          node.children.some((child) => child.time > integrationTime)
+        ) {
+          node.children.forEach((child) => {
+            if (child.speciesSet) {
+              for (const each of child.speciesSet) {
+                node.speciesSet?.add(each);
+              }
+            }
+          });
+        }
+      }
+    });
+
+    const getMemLinksFromTreeNode = (node: PhyloNode) => {
+      const links = new Map<TaxonName, Map<CellId, Weight>>();
+      let sumWeight = 0;
+
+      for (const speciesName of node.speciesSet!) {
+        if (!nameToCellIds[speciesName]) {
+          missing.add(speciesName);
+          continue;
+        }
+        const memBranch = treeNodeMap.get(speciesName)?.data.memory!;
+        for (const memNode of [memBranch.parent, memBranch.child]) {
+          const memTaxonName = memNode.name;
+          const memWeight =
+            memNode === memBranch.child
+              ? memBranch.childWeight
+              : 1 - memBranch.childWeight;
+          if (isEqual(memWeight, 0)) {
+            continue;
+          }
+          const memLinks = links.get(memTaxonName) ?? new Map();
+          if (memLinks.size === 0) {
+            links.set(memTaxonName, memLinks);
+          }
+
+          for (const cellId of nameToCellIds[speciesName]) {
+            const currentWeight = memLinks.get(cellId) ?? 0;
+
+            if (currentWeight === 0 || !this.uniformTreeLinks) {
+              memLinks.set(cellId, currentWeight + memWeight);
+              sumWeight += memWeight;
+            }
+          }
+        }
+      }
+
+      return { links, sumWeight };
+    };
+
+    const addLinks = (
+      treeNode: PhyloNode,
+      links: Map<TaxonName, Map<CellId, Weight>>,
+      interpolationWeight: number,
+    ) => {
+      // TODO: Make sure internal tree nodes don't have same name as leaf nodes
+      const taxonName = treeNode.name;
+
+      for (const [memTaxonName, memLinks] of links.entries()) {
+        for (const [cellId, memWeight] of memLinks.entries()) {
+          const weight = (memWeight * interpolationWeight);
+          // TODO: Limit links here due to linkWeightThreshold or can be aggregated?
+          sumTreeLinkWeight += weight;
+          addStateLink(taxonName, cellId, memTaxonName, weight, treeLinks);
+        }
+      }
+    };
+
+    if (this.useWholeTree) {
+      visitTreeDepthFirstPostOrder(tree, (node) => {
+        if (node.parent === null) {
+          return;
+        }
+        const links = getMemLinksFromTreeNode(node);
+        // const q = this.spatialNormalizationOrder;
+        const nodeWeight = this.getTaxonLinkWeight(links.sumWeight, network.numGridCellNodes);
+        addLinks(node, links.links, nodeWeight);
+      });
+    } else {
+      const integratingBranches = getIntersectingBranches(tree, integrationTime);
+
+      integratingBranches.forEach(({ parent, child, childWeight }) => {
+        if (isEqual(childWeight, 1)) {
+          const links = getMemLinksFromTreeNode(child);
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.sumWeight, network.numGridCellNodes);
+          return addLinks(child, links.links, nodeWeight);
+        }
+        if (isEqual(childWeight, 0)) {
+          const links = getMemLinksFromTreeNode(parent);
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.sumWeight, network.numGridCellNodes);
+          return addLinks(parent, links.links, nodeWeight);
+        }
+        const parentLinks = getMemLinksFromTreeNode(parent);
+        const childLinks = getMemLinksFromTreeNode(child);
+
+        if (isEqual(childLinks.sumWeight, 0)) {
+          // console.warn('No links from child', child.name);
+          // Happens when integration time is more than leaf time
+          // TODO: Adjust tree times to reach 1.0 at leafs if close?
+          const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(parentLinks.sumWeight, network.numGridCellNodes);
+          return addLinks(parent, parentLinks.links, nodeWeight);
+        }
+
+        const degreeRatio = isEqual(parentLinks.sumWeight, 0)
+          ? 1
+          : parentLinks.sumWeight / childLinks.sumWeight;
+        const relativeDegreeDifference = degreeRatio - 1;
+        const adjustedChildWeight =
+          (childWeight * degreeRatio) /
+          (1 + childWeight * relativeDegreeDifference);
+        const adjustedParentWeight = 1 - adjustedChildWeight;
+
+        const parentNodeWeight = this.getTaxonLinkWeightOnTimeSlice(parentLinks.sumWeight, network.numGridCellNodes);
+        const childNodeWeight = this.getTaxonLinkWeightOnTimeSlice(childLinks.sumWeight, network.numGridCellNodes);
+
+        addLinks(parent, parentLinks.links, adjustedParentWeight * parentNodeWeight);
+        addLinks(child, childLinks.links, adjustedChildWeight * childNodeWeight);
+      });
+    }
+
+    // treeStrength / (treeStrength + speciesStrength) = treeWeightBalance
+    // => treeStrength * (1 - treeWeightBalance) = speciesStrength * treeWeightBalance
+    // => treeStrength / treeWeightBalance = speciesStrength / (1 - treeWeightBalance)
+    // const totalTreeStrength = isEqual(treeWeightBalance, 1)
+    //   ? sumTreeLinkWeight
+    //   : (treeWeightBalance * sumNonTreeStrength) / (1 - treeWeightBalance);
+    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+      ? sumTreeLinkWeight
+      : treeWeightBalance * unscaledNonTreeStrength;
+
+    const scale = totalTreeStrength / sumTreeLinkWeight;
+
+    console.log(
+      `Sum non-tree link weight: ${unscaledNonTreeStrength * (1 - treeWeightBalance)
+      }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
+      } => balance: ${(sumTreeLinkWeight * scale) /
+      (sumTreeLinkWeight * scale +
+        unscaledNonTreeStrength * (1 - treeWeightBalance))
+      }`,
+    );
+
+    network.sumTreeLinkWeight = sumTreeLinkWeight * scale;
+
+    for (const [treeNodeName, treeOutLinks] of treeLinks.entries()) {
+      // Aggregate to link map
+      const outLinks = linkMap.get(treeNodeName) ?? new Map<string, number>();
+      if (outLinks.size === 0) {
+        // network.numTreeNodes++;
+        linkMap.set(treeNodeName, outLinks);
+      }
+
+      // Aggregate links from tree (overlaps on tree leaf nodes)
+      for (const [stateCellName, weight] of treeOutLinks.entries()) {
+        if (outLinks.size === 0) {
+          // network.numTreeLinks++;
+        }
+        outLinks.set(
+          stateCellName,
+          (outLinks.get(stateCellName) ?? 0) + weight * scale,
+        );
+      }
+    }
+
+    addLinksToNetwork();
+
+    console.log('Nodes missing in network', Array.from(missing));
+    console.log('Network:', network);
+
+    return network;
+  }
+
+  serializeNetwork(
+    network?: BioregionsNetwork | BioregionsStateNetwork | null,
+  ): string | undefined {
+    if (!network) {
+      network = this.network;
+    }
+    if (!network) {
+      return;
+    }
+    const lines = ['*vertices'];
+    for (const node of network.nodes) {
+      lines.push(`${node.id} "${node.name}"`);
+    }
+    if ('states' in network) {
+      lines.push('*states');
+      for (const node of network.states) {
+        lines.push(`${node.stateId} ${node.id} "${node.name}"`);
+      }
+    }
+    lines.push('*links');
+    for (const link of network.links) {
+      lines.push(`${link.source} ${link.target} ${link.weight}`);
+    }
+    return lines.join('\n');
+  }
+
+  serializeMultilayerNetwork(
+    network?: BioregionsMultilayerNetwork | null,
+  ): string | undefined {
+    if (!network) {
+      network = this.multilayerNetwork;
+    }
+    if (!network) {
+      return;
+    }
+    const lines = ['*vertices'];
+    for (const node of network.nodes!) {
+      lines.push(`${node.id} "${node.name}"`);
+    }
+    lines.push('*intra');
+    for (const link of network.intra) {
+      lines.push(
+        `${link.layerId} ${link.source} ${link.target} ${link.weight}`,
+      );
+    }
+    return lines.join('\n');
+  }
+
+  createBioregions(tree?: Tree | StateTree | null) {
+    if (!tree) {
+      tree = this.tree;
+    }
+    this.clearBioregions();
+    if (!tree || !tree.nodes || tree.nodes.length === 0) {
+      return;
+    }
+    const haveStates = 'stateId' in tree.nodes[0];
+    if (haveStates) {
+      this.createStateBioregions(tree as StateTree);
+    } else {
+      this.createNonStateBioregions(tree as Tree);
+    }
+  }
+
+  createNonStateBioregions(tree: Tree) {
+    const { speciesStore, treeStore } = this.rootStore;
+    const { cells, moduleLevel } = this;
+    this.rootStore.clearBioregions();
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+    // TODO: Some modules may have only tree nodes, reduce to number of modules containing grid cells
+    console.log(`Create ${numModules} bioregions on level ${moduleLevel}`);
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: numModules },
+      () => new Bioregion(),
+    );
+
+    if (!tree.nodes) {
+      console.error('No nodes!');
+      console.log(tree);
+      this.addError(`Infomap output error, please report.`);
+      return;
+    }
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      // const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      if (node.id >= tree.bipartiteStartId!) {
+        bioregion.species.push(node.name);
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = bioregionId;
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = bioregionId;
+        }
+        return;
+      }
+
+      const cell = cells[node.id];
+      if (!cell) {
+        console.warn(`Can't find cell for node ${node.id}`, node);
+      }
+      bioregion.addCell(cell);
+
+      // set the bioregion id to the top mulitlevel module of the node
+      // different from the node path!
+      cell.bioregionId = bioregionId;
+    });
+
+    console.time("Connected bioregions");
+    const network: BioregionsNetwork = this.network as BioregionsNetwork;
+    network.links.forEach(link => {
+      const w = link.weight ?? 1.0;
+      const cellId = network.nodes[link.target].id;
+      const taxonName = network.nodes[link.source].name!;
+      let speciesBioregionId = 0;
+      const species = speciesStore.speciesMap.get(taxonName);
+      if (species) {
+        speciesBioregionId = species.bioregionId!;
+      } else {
+        const treeNode = treeStore.treeNodeMap.get(taxonName);
+        speciesBioregionId = treeNode?.bioregionId ?? 0;
+      }
+      const cell = cells[cellId];
+      cell.connectedBioregions.addLink(speciesBioregionId, w);
+    })
+    cells.forEach(cell => {
+      cell.connectedBioregions.setOwnBioregion(cell.bioregionId);
+      cell.connectedBioregions.calcTopBioregions();
+    })
+    console.timeEnd("Connected bioregions");
+
+    console.time("Calc bioregion stats")
+    for (const bioregion of bioregions) {
+      bioregion.calcStats(speciesStore, treeStore);
+    }
+    console.timeEnd("Calc bioregion stats")
+
+    this.setBioregions(bioregions);
+  }
+
+  createStateBioregions(tree: StateTree) {
+    if (tree.args.includes('multilayer-relax-limit')) {
+      this.createMultilayerBioregions(tree);
+      return;
+    }
+    const { speciesStore, treeStore } = this.rootStore;
+    const { cells, moduleLevel } = this;
+    this.rootStore.clearBioregions();
+    console.log(tree);
+
+    if (!tree.nodes) {
+      console.error('No nodes!');
+      console.log(tree);
+      this.addError(`Infomap output error, please report.`);
+      return;
+    }
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: numModules },
+      () => new Bioregion(),
+    );
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not! Still issue?
+      // const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      // Physical cell nodes are first
+      const isTaxon = node.id >= cells.length;
+      if (isTaxon) {
+        bioregion.species.push(node.name);
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = bioregionId;
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = bioregionId;
+        }
+        return;
+      }
+
+      const cell = cells[node.id];
+      // TODO: Add state name to Infomap output?
+      const stateName = (this.network as BioregionsStateNetwork).states[
+        node.stateId
+      ].name!;
+      node.name = stateName;
+      const memTaxonName = stateName.split('_')[1]!;
+
+      cell.bioregionId = bioregionId;
+      cell.overlappingBioregions.addStateNode(
+        bioregionId,
+        node.flow,
+        memTaxonName,
+      );
+      bioregion.addCell(cell);
+    });
+    for (const cell of cells) {
+      cell.overlappingBioregions.calcTopBioregions();
+    }
+
+    console.time("Calc bioregion stats")
+    for (const bioregion of bioregions) {
+      bioregion.calcStats(speciesStore, treeStore);
+    }
+    console.timeEnd("Calc bioregion stats")
+
+    this.setStateBioregions(bioregions);
+  }
+
+  createMultilayerBioregions(tree: StateTree) {
+    const { speciesStore, treeStore } = this.rootStore;
+    const { cells } = this;
+    this.rootStore.clearBioregions();
+    console.log(
+      'Create multilayer bioregions... network:',
+      this.multilayerNetwork,
+    );
+    // @ts-ignore
+    tree.layers = this.multilayerNetwork!.layers;
+    console.log(tree);
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: tree.numTopModules },
+      () => new Bioregion(),
+    );
+
+    if (!tree.nodes) {
+      console.error('No nodes!');
+      console.log(tree);
+      this.addError(`Infomap output error, please report.`);
+      return;
+    }
+    // Tree nodes are sorted on flow, loop through all to find grid cell nodes
+    tree.nodes.forEach((node) => {
+      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
+      // const bioregionId = node.modules[0];
+      const bioregionId = node.path[0];
+      const bioregion = bioregions[bioregionId - 1];
+      bioregion.bioregionId = bioregionId;
+      bioregion.flow += node.flow;
+
+      // Physical cell nodes are first
+      const isTaxon = node.id >= cells.length;
+      if (isTaxon) {
+        bioregion.species.push(node.name);
+        const species = speciesStore.speciesMap.get(node.name);
+        if (species) {
+          species.bioregionId = bioregionId;
+        }
+        const treeNode = treeStore.treeNodeMap.get(node.name);
+        if (treeNode) {
+          treeNode.bioregionId = bioregionId;
+        }
+        return;
+      }
+
+      const cell = cells[node.id];
+      const memTaxonName = `layer-${node.layerId}`;
+
+      cell.bioregionId = bioregionId;
+      cell.overlappingBioregions.addStateNode(
+        bioregionId,
+        node.flow,
+        memTaxonName,
+      );
+      bioregion.addCell(cell);
+    });
+    for (const cell of cells) {
+      cell.overlappingBioregions.calcTopBioregions();
+    }
+
+    console.time("Calc bioregion stats")
+    for (const bioregion of bioregions) {
+      bioregion.calcStats(speciesStore, treeStore);
+    }
+    console.timeEnd("Calc bioregion stats")
+
+    this.setStateBioregions(bioregions);
+  }
+}
