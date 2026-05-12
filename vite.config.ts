@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from "node:url";
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/bioregions2',
+  base: '/bioregions',
   plugins: [react(), tsconfigPaths()],
   define: {
     '__APP_VERSION__': JSON.stringify(process.env.npm_package_version),
