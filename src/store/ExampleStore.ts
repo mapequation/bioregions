@@ -1,4 +1,5 @@
 import type RootStore from './RootStore';
+import examplesData from '../examples.json';
 
 interface ExampleSettings {
   minCellSize?: number;
@@ -15,7 +16,6 @@ export interface Example {
   size: string;
   settings: ExampleSettings;
 }
-
 export default class ExampleStore {
   rootStore: RootStore;
   examples: Example[] = this.initExamples();
@@ -30,65 +30,16 @@ export default class ExampleStore {
     // }
   }
 
-  initExamples() {
-    const examples = [];
-    if (process.env.NODE_ENV === 'development') {
-      examples.push({
-        name: 'Demo',
-        speciesFile: '/bioregions/data/demo.csv',
-        treeFile: '/bioregions/data/demo.nwk',
-        size: '140 B',
-        settings: {
-          minCellSize: 0,
-          maxCellSize: 1,
-          minCellCapacity: 0,
-          maxCellCapacity: 100,
-        },
-      });
-
-      examples.push({
-        name: 'Sample',
-        speciesFile: '/bioregions/data/head.csv',
-        treeFile: '/bioregions/data/head.nwk',
-        size: '370 B',
-        settings: {
-          minCellSize: 0,
-          maxCellSize: 1,
-          minCellCapacity: 0,
-          maxCellCapacity: 100,
-        },
-      });
-
-      examples.push({
-        name: 'Birches',
-        speciesFile: '/bioregions/data/BIRCHES.zip',
-        size: '2.3 MB',
-        settings: {
-          minCellSize: 0,
-          maxCellSize: 1,
-          minCellCapacity: 0,
-          maxCellCapacity: 100,
-        },
-      });
-    }
-
-    examples.push({
-      name: 'Neotropical mammal occurrences',
-      speciesFile: '/bioregions/data/mammals_neotropics.csv',
-      treeFile: '/bioregions/data/mammals_neotropics.nwk',
-      size: '2.8 MB',
-      settings: {},
-    });
-
-    examples.push({
-      name: 'Global mammal occurrences',
-      speciesFile: '/bioregions/data/mammals_global.tsv',
-      treeFile: '/bioregions/data/mammals_global.nwk',
-      size: '56 MB',
-      settings: { includeTree: false },
-    });
-
-    return examples;
+  initExamples(): Example[] {
+    return examplesData
+      .filter((e) => !e.devOnly || process.env.NODE_ENV === 'development')
+      .map((e) => ({
+        name: e.name,
+        speciesFile: `/bioregions/${e.speciesFile}`,
+        treeFile: e.treeFile ? `/bioregions/${e.treeFile}` : undefined,
+        size: e.size,
+        settings: e.settings,
+      }));
   }
 
   async loadExample(example: Example) {

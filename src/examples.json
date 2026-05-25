@@ -1,0 +1,54 @@
+[
+  {
+    "name": "Demo",
+    "speciesFile": "data/demo.csv",
+    "treeFile": "data/demo.nwk",
+    "size": "140 B",
+    "devOnly": true,
+    "settings": {
+      "minCellSize": 0,
+      "maxCellSize": 1,
+      "minCellCapacity": 0,
+      "maxCellCapacity": 100
+    }
+  },
+  {
+    "name": "Sample",
+    "speciesFile": "data/head.csv",
+    "treeFile": "data/head.nwk",
+    "size": "370 B",
+    "devOnly": true,
+    "settings": {
+      "minCellSize": 0,
+      "maxCellSize": 1,
+      "minCellCapacity": 0,
+      "maxCellCapacity": 100
+    }
+  },
+  {
+    "name": "Birches",
+    "speciesFile": "data/BIRCHES.zip",
+    "size": "2.3 MB",
+    "devOnly": true,
+    "settings": {
+      "minCellSize": 0,
+      "maxCellSize": 1,
+      "minCellCapacity": 0,
+      "maxCellCapacity": 100
+    }
+  },
+  {
+    "name": "Neotropical mammal occurrences",
+    "speciesFile": "data/mammals_neotropics.csv",
+    "treeFile": "data/mammals_neotropics.nwk",
+    "size": "2.8 MB",
+    "settings": {}
+  },
+  {
+    "name": "Global mammal occurrences",
+    "speciesFile": "data/mammals_global.tsv",
+    "treeFile": "data/mammals_global.nwk",
+    "size": "56 MB",
+    "settings": { "includeTree": false }
+  }
+]
