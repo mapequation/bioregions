@@ -23,7 +23,7 @@ export default function Logo() {
             alt="MapEquation"
             width="32px"
             height="32px"
-            src="//www.mapequation.org/assets/img/twocolormapicon_whiteboarder.svg"
+            src="/bioregions/twocolormapicon_whiteboarder.svg"
           />
         </a>
       </Box>
