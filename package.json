@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "styleguide": "styleguidist server",
     "styleguide:build": "styleguidist build",
+    "prebuild": "node scripts/fetch-data.mjs",
+    "fetch-data": "node scripts/fetch-data.mjs",
     "predeploy": "npm run build",
     "deploy": "rsync -avzh dist/* mapequation:/var/www/bioregions2"
   },
