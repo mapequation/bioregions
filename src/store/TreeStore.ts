@@ -1,22 +1,68 @@
-import { makeObservable, observable, action, computed } from 'mobx';
+import {
+  makeObservable,
+  observable,
+  action,
+  computed,
+  autorun,
+  type IReactionDisposer,
+} from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
+import {
+  reconstructAncestralRanges,
+  type AncestralMap,
+  type AncestralData,
+  type ClustersPerSpecies,
+} from '../utils/tree/parsimony';
+import {
+  layoutTree,
+  nodeXY,
+  makeLinkDraw,
+  labelTransform,
+  labelOffset,
+  type LayoutNode,
+  type LayoutLink,
+  type LayoutMode,
+  type CurveMode,
+  type SizeMode,
+} from '../utils/tree/treeLayout';
 import { format } from 'd3-format';
 import { scaleLinear } from 'd3-scale';
+// d3 umbrella has the shape/scale helpers (d3-shape, d3-scale are transitive via `d3`).
+import { scaleSqrt } from 'd3';
 import { isEqual } from '../utils/math';
-// @ts-ignore
-import PhylocanvasGL from '@phylocanvas/phylocanvas.gl';
-
+import { plot, type Plot, type BackendType } from '@mapequation/d3gl/map';
+import { LabelLayer, type LabelAnchor } from '@mapequation/d3gl/labels';
+import type { ViewTransform } from '@mapequation/d3gl/geo';
 
 export type TreeNode = {
   data: PhyloNode;
   bioregionId?: number;
-  // count: number;
-  // countPerRegion: Map<number, number>;
 };
+
+// Tree viewport (the d3gl plot is laid out in these world coordinates).
+const TREE_WIDTH = 760;
+const TREE_HEIGHT = 520;
+const LINE_MIN = 0.6;
+const LINE_MAX = 9; // branch-width range when scaling by subtended terminals
+const PIE_MIN = 3;
+const PIE_MAX = 11;
+const LABEL_GAP = 6;
+const LABEL_H = 14;
+const NEUTRAL_STROKE = '#999999';
+
+interface Wedge {
+  cx: number;
+  cy: number;
+  r: number;
+  a0: number;
+  a1: number;
+  clusterId: number;
+  single: boolean;
+}
 
 export default class TreeStore {
   rootStore: RootStore;
@@ -27,6 +73,23 @@ export default class TreeStore {
   numLeafNodes: number = 0;
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
   treeNodeMap = new Map<string, TreeNode>(); // name -> { data: PhyloNode, bioregionId: number }
+
+  width = TREE_WIDTH;
+  height = TREE_HEIGHT;
+  // Canvas2D default for an instant first frame; WebGL is smoother for very large trees.
+  backend: BackendType = 'canvas';
+  // Display options (mirroring the d3gl ancestral-ranges example).
+  layout: LayoutMode = 'rectangular';
+  curve: CurveMode = 'step';
+  coords: SizeMode = 'screen';
+
+  // d3gl plot engine + HTML label overlay, driven imperatively from a MobX autorun.
+  private engine: Plot | null = null;
+  private labelEl: HTMLDivElement | null = null;
+  private labels: LabelLayer | null = null;
+  private anchors: LabelAnchor[] = [];
+  private view: ViewTransform = { k: 1, x: 0, y: 0 };
+  private renderDisposer: IReactionDisposer | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -39,6 +102,14 @@ export default class TreeStore {
       treeString: observable,
       weightParameter: observable,
       numLeafNodes: observable,
+      backend: observable,
+      setBackend: action,
+      layout: observable,
+      curve: observable,
+      coords: observable,
+      setLayout: action,
+      setCurve: action,
+      setCoords: action,
       haveTree: computed,
       numNodes: computed,
       lineagesThroughTime: computed,
@@ -46,6 +117,26 @@ export default class TreeStore {
       timeFormatter: computed,
     });
   }
+
+  setBackend = action((backend: BackendType) => {
+    if (backend === this.backend) return;
+    this.backend = backend;
+    // Swap the backend in place; the Scene and zoom are preserved.
+    this.engine?.setBackend(backend);
+    this.engine?.render();
+    this.updateLabels();
+  });
+
+  // Display-option setters. The render autorun tracks these reads, so it re-runs on change.
+  setLayout = action((layout: LayoutMode) => {
+    this.layout = layout;
+  });
+  setCurve = action((curve: CurveMode) => {
+    this.curve = curve;
+  });
+  setCoords = action((coords: SizeMode) => {
+    this.coords = coords;
+  });
 
   clearData = action(() => {
     this.isLoaded = false;
@@ -66,7 +157,8 @@ export default class TreeStore {
       return [];
     }
     return getAccumulatedTreeData(this.tree, {
-      getNodeData: (node) => !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
+      getNodeData: (node) =>
+        !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
       initialValue: 1,
     });
   }
@@ -76,12 +168,12 @@ export default class TreeStore {
       return {};
     }
     const { colorBioregion } = this.rootStore.colorStore;
-    const styles: { [key: string]: { fillColour: string, shape?: any } } = {};
+    const styles: { [key: string]: { fillColour: string; shape?: any } } = {};
     this.treeNodeMap.forEach((value, name) => {
       if (name && value.bioregionId) {
         styles[name] = {
           fillColour: colorBioregion(value.bioregionId),
-        }
+        };
       }
     });
     return styles;
@@ -159,4 +251,252 @@ export default class TreeStore {
     this.treeNodeMap = treeNodeMap;
     this.numLeafNodes = numLeafNodes;
   });
+
+  // --- d3gl rendering ---
+
+  /**
+   * For each leaf, the set of bioregions its occurrences fall in (with counts), built from
+   * `species.countPerRegion` (maintained by InfomapStore once bioregions are computed). This is
+   * the per-species input to the Fitch ancestral-range reconstruction.
+   */
+  private getClustersPerSpecies(): ClustersPerSpecies {
+    const { speciesMap } = this.rootStore.speciesStore;
+    const result: ClustersPerSpecies = {};
+    this.treeNodeMap.forEach((node, name) => {
+      if (!node.data.isLeaf) return;
+      const species = speciesMap.get(name);
+      if (!species || species.countPerRegion.size === 0) return;
+      const clusters = Array.from(species.countPerRegion, ([clusterId, count]) => ({
+        clusterId,
+        count,
+      }));
+      result[name] = {
+        totCount: clusters.reduce((s, r) => s + r.count, 0),
+        clusters,
+      };
+    });
+    return result;
+  }
+
+  setHost(host: HTMLElement) {
+    this.disposeEngine();
+
+    const engine = plot(host, {
+      width: this.width,
+      height: this.height,
+      backend: this.backend,
+    });
+    this.engine = engine;
+
+    // HTML label overlay above the canvas (pointer-events none so zoom passes through).
+    const labelEl = document.createElement('div');
+    labelEl.style.position = 'absolute';
+    labelEl.style.inset = '0';
+    labelEl.style.pointerEvents = 'none';
+    labelEl.style.overflow = 'hidden';
+    labelEl.style.fontSize = '11px';
+    labelEl.style.lineHeight = '14px';
+    host.appendChild(labelEl);
+    this.labelEl = labelEl;
+    this.labels = new LabelLayer(labelEl, (a) => a.text);
+
+    engine.enableZoom([0.5, 40], (t) => {
+      this.view = t;
+      this.updateLabels();
+    });
+
+    // Rebuild whenever the tree, bioregions, or colors change (autorun tracks the reads).
+    this.renderDisposer = autorun(() => this.renderTree());
+  }
+
+  disposeEngine = () => {
+    this.renderDisposer?.();
+    this.renderDisposer = null;
+    this.labels?.destroy();
+    this.labels = null;
+    if (this.labelEl && this.labelEl.parentNode) {
+      this.labelEl.parentNode.removeChild(this.labelEl);
+    }
+    this.labelEl = null;
+    this.engine?.destroy();
+    this.engine = null;
+  };
+
+  private updateLabels() {
+    this.labels?.update(this.anchors, this.view, {
+      width: this.width,
+      height: this.height,
+    });
+  }
+
+  /** Dominant region of a node's displayed range (highest-count slice within the set). */
+  private regionColor = (bioregionId: number): string =>
+    this.rootStore.colorStore.colorBioregion(bioregionId) ?? NEUTRAL_STROKE;
+
+  /** Slices for a node's pie: regions in the reconstructed range, sized by occurrence count. */
+  private pieSlices(data: AncestralData) {
+    const counts = new Map(data.clusters.clusters.map((r) => [r.clusterId, r.count]));
+    const regs = data.ranges.clusters
+      .map((r) => ({ clusterId: r.clusterId, count: counts.get(r.clusterId) ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.clusterId - b.clusterId);
+    if (regs.length === 0) return [];
+    const tot = regs.reduce((s, r) => s + r.count, 0);
+    let a = -Math.PI / 2;
+    return regs.map((r) => {
+      const frac = tot > 0 ? r.count / tot : 1 / regs.length;
+      const a0 = a;
+      const a1 = a + frac * 2 * Math.PI;
+      a = a1;
+      return { clusterId: r.clusterId, count: r.count, a0, a1 };
+    });
+  }
+
+  private renderTree() {
+    const engine = this.engine;
+    if (engine === null) return;
+
+    const tree = this.tree;
+    if (tree === null) {
+      engine.layer('links', [], { draw: () => {} });
+      engine.layer('pies', [], { draw: () => {} });
+      this.anchors = [];
+      this.updateLabels();
+      engine.render();
+      return;
+    }
+
+    const { haveBioregions } = this.rootStore.infomapStore;
+    const { layout: mode, curve, coords: sizeMode } = this;
+
+    const { root, center } = layoutTree(tree, mode, this.width, this.height);
+    const links = root.links();
+    const leaves = root.leaves();
+    const xy = (n: LayoutNode): [number, number] => nodeXY(n, mode, center);
+    const drawLink = makeLinkDraw(mode, curve, center);
+
+    // Reconstruct ancestral ranges only once bioregions exist; otherwise draw a plain tree.
+    let ancestral: AncestralMap | null = null;
+    let widthScale: ((n: number) => number) | null = null;
+    let screenRadius: ((n: number) => number) | null = null;
+    if (haveBioregions) {
+      ancestral = reconstructAncestralRanges(tree, this.getClustersPerSpecies());
+      const total = ancestral.get(tree)?.speciesCount ?? 1;
+      const ws = scaleSqrt().domain([1, total]).range([LINE_MIN, LINE_MAX]);
+      const rs = scaleSqrt().domain([1, total]).range([PIE_MIN, PIE_MAX]);
+      widthScale = (n) => ws(n);
+      screenRadius = (n) => rs(n);
+    }
+
+    const dataOf = (n: LayoutNode): AncestralData | undefined => ancestral?.get(n.data);
+    const topRegion = (n: LayoutNode): number | undefined => {
+      const d = dataOf(n);
+      return d ? this.pieSlices(d)[0]?.clusterId : undefined;
+    };
+    const branchWidth = (n: LayoutNode): number => {
+      const d = dataOf(n);
+      return widthScale && d ? widthScale(d.speciesCount) : 0.8;
+    };
+    // World coords: pie diameter = the incoming branch width (scales with zoom). Screen coords:
+    // a fixed pixel size so small-clade nodes stay visible.
+    const pieRadius = (n: LayoutNode): number => {
+      const d = dataOf(n);
+      if (sizeMode === 'screen') return d && screenRadius ? screenRadius(d.speciesCount) : PIE_MIN;
+      return branchWidth(n) / 2;
+    };
+
+    // Links (branches): colored by the child clade's dominant region, width by terminals.
+    engine.layer('links', links, {
+      draw: (ctx, l) => drawLink(ctx, l),
+      stroke: (l: LayoutLink) => {
+        const t = topRegion(l.target);
+        return t == null ? NEUTRAL_STROKE : this.regionColor(t);
+      },
+      lineWidth: (l: LayoutLink) => branchWidth(l.target),
+      sizeMode,
+    });
+
+    // Pies (ancestral-range distribution at each node) — only with bioregions.
+    if (ancestral) {
+      const wedges: Wedge[] = [];
+      for (const n of root.descendants()) {
+        const d = dataOf(n);
+        if (!d) continue;
+        const slices = this.pieSlices(d);
+        if (slices.length === 0) continue;
+        const [cx, cy] = xy(n);
+        const r = pieRadius(n);
+        const single = slices.length === 1;
+        for (const s of slices) {
+          wedges.push({ cx, cy, r, a0: s.a0, a1: s.a1, clusterId: s.clusterId, single });
+        }
+      }
+      engine.layer('pies', wedges, {
+        draw: (ctx, w) => {
+          if (w.single) {
+            ctx.moveTo(w.cx + w.r, w.cy);
+            ctx.arc(w.cx, w.cy, w.r, 0, 2 * Math.PI);
+            ctx.closePath();
+          } else {
+            ctx.moveTo(w.cx, w.cy);
+            ctx.arc(w.cx, w.cy, w.r, w.a0, w.a1);
+            ctx.closePath();
+          }
+        },
+        fill: (w: Wedge) => this.regionColor(w.clusterId),
+        stroke: '#ffffff',
+        lineWidth: (w: Wedge) => (w.single ? 0 : Math.min(0.5, w.r * 0.16)),
+        anchor: (w: Wedge) => [w.cx, w.cy],
+        sizeMode,
+        // Screen mode: declutter overlapping fixed-size pies on zoom (bigger clades win).
+        declutter: sizeMode === 'screen' ? 2 * PIE_MAX + 2 : undefined,
+        id: (_w, i) => i,
+      });
+    } else {
+      engine.layer('pies', [], { draw: () => {} });
+    }
+
+    // Leaf labels (outward of each tip).
+    this.anchors = leaves.map((n, i) => {
+      const [px, py] = xy(n);
+      const name = n.data.name;
+      const a = n.x - Math.PI / 2; // screen-direction angle for radial placement
+      return {
+        id: `t${i}`,
+        refX: px,
+        refY: py,
+        text: name,
+        width: name.length * 6.2 + 6,
+        height: LABEL_H,
+        priority: dataOf(n)?.speciesCount ?? 1,
+        offset: labelOffset(mode, a, LABEL_GAP, LABEL_H),
+        transform: labelTransform(mode, a),
+        transformOrigin: '0 0',
+      } as LabelAnchor;
+    });
+
+    engine.render();
+    this.updateLabels();
+  }
+
+  /** File extension for the current export format (SVG when the SVG backend is selected). */
+  get imageExtension(): '.svg' | '.png' {
+    return this.backend === 'svg' ? '.svg' : '.png';
+  }
+
+  /** Export the current tree as an SVG (svg backend) or PNG (canvas/webgl) blob. */
+  async getImageBlob(): Promise<Blob> {
+    if (this.engine === null) {
+      throw new Error('No tree engine to export');
+    }
+    if (this.backend === 'svg') {
+      const svg = this.engine.toSVG();
+      if (!svg) throw new Error("Can't export tree image");
+      return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    }
+    const dataUrl = this.engine.toPNG();
+    if (!dataUrl) {
+      throw new Error("Can't export tree image");
+    }
+    return (await fetch(dataUrl)).blob();
+  }
 }

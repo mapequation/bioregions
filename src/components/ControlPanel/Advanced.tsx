@@ -19,7 +19,6 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import Stat from '../Stat';
 import Modal from './Modal';
-import { saveCanvas } from '../../utils/exporter';
 import { rangeArray } from '../../utils/range';
 import IntervalSlider from './IntervalSlider';
 import {
@@ -62,7 +61,7 @@ export default observer(function Advanced() {
 
         const name = `${timeFormatter(t)} Ma`;
 
-        await saveCanvas(mapStore.canvas!, `${name}.png`);
+        saveAs(await mapStore.getImageBlob(), `${name}.png`);
         //@ts-ignore
         infomapStore.tree!.name = name;
         const filename = `${name}.json`;

@@ -120,6 +120,17 @@ export default observer(function Map() {
         />
       </Field.Root>
       <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
+        <Field.Label htmlFor="fineLand" mb="0">
+          Detailed land
+        </Field.Label>
+        <Spacer />
+        <Switch
+          id="fineLand"
+          checked={mapStore.useFineLand}
+          onCheckedChange={() => mapStore.setUseFineLand(!mapStore.useFineLand)}
+        />
+      </Field.Root>
+      <Field.Root display="flex" flexDir="row" w="100%" alignItems="center">
         <Field.Label htmlFor="colorModuleParticipation" mb="0">
           Show inter-connected bioregions
         </Field.Label>

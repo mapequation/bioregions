@@ -2,7 +2,7 @@ import { Button, VStack } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
-import { saveBlob, saveCanvas, stringToBlob } from '../../utils/exporter';
+import { saveBlob, stringToBlob } from '../../utils/exporter';
 import JSZip from 'jszip';
 //@ts-ignore
 import shpWrite from 'shp-write';
@@ -13,6 +13,8 @@ interface ExportProps {
 
 type DownloadItem = {
   title: string;
+  /** Optional button text (defaults to `title`); used to show the dynamic image extension. */
+  label?: string;
   description?: string;
   extension: string;
   getBlob: () => Promise<Blob>;
@@ -22,7 +24,8 @@ type DownloadItem = {
 
 export default observer(function Export({ rootStore }: ExportProps) {
   const _rootStore = useStore();
-  const { infomapStore, mapStore, speciesStore } = rootStore ?? _rootStore;
+  const { infomapStore, mapStore, speciesStore, treeStore } =
+    rootStore ?? _rootStore;
   const { parameterName } = infomapStore;
 
   const download = async (item: DownloadItem) => {
@@ -34,9 +37,18 @@ export default observer(function Export({ rootStore }: ExportProps) {
   const downloadItems: DownloadItem[] = [
     {
       title: 'Map',
-      extension: '.png',
+      label: `Map (${mapStore.imageExtension})`,
+      extension: mapStore.imageExtension,
       disabled: false,
-      getBlob: async () => saveCanvas(mapStore.canvas!),
+      getBlob: async () => mapStore.getImageBlob(),
+    },
+    {
+      title: 'Phylogenetic tree',
+      label: `Phylogenetic tree (${treeStore.imageExtension})`,
+      extension: `_tree${treeStore.imageExtension}`,
+      disabled: !treeStore.haveTree,
+      hide: !treeStore.haveTree,
+      getBlob: async () => treeStore.getImageBlob(),
     },
     {
       title: 'Shapefile',
@@ -168,7 +180,7 @@ export default observer(function Export({ rootStore }: ExportProps) {
             disabled={item.disabled}
             onClick={() => download(item)}
           >
-            {item.title}
+            {item.label ?? item.title}
           </Button>
         ))}
     </VStack>
