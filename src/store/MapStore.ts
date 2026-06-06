@@ -2,76 +2,60 @@ import * as d3 from 'd3';
 import { action, makeObservable, observable, computed } from 'mobx';
 import { type Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
-import * as d3Zoom from 'd3-zoom';
-import { select } from 'd3-selection';
-import { zoomProjection, zoomFixed } from '../utils/zoom';
 import { MultiPoint } from '../types/geojson';
-import { GeometryFeature } from './SpeciesStore';
-// import * as c3 from '@mapequation/c3';
-// import type { SchemeName } from '@mapequation/c3';
+import { geoMap, type GeoMap, type BackendType } from '@mapequation/d3gl/map';
+import { lonLatFromScreen, type ViewTransform } from '@mapequation/d3gl/geo';
+
+export const BACKENDS: BackendType[] = ['canvas', 'webgl', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
-interface CanvasDatum {
-  width: number;
-  height: number;
-  radius: number;
-}
-
-export interface IMapRenderer { }
+export interface IMapRenderer {}
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
 type GetGridColor = (cell: Cell) => string;
 
-export const PROJECTIONS = [
-  'geoNaturalEarth1',
-  'geoOrthographic',
-  'geoMercator',
-] as const;
+// d3gl's GeoMap projects features once and pans/zooms in screen space, which suits flat
+// projections. The rotatable orthographic globe was dropped in the d3gl migration (it would
+// need re-projection per frame / GPU-side rotation).
+export const PROJECTIONS = ['geoNaturalEarth1', 'geoMercator'] as const;
 
-export type Projection = typeof PROJECTIONS[number];
+export type Projection = (typeof PROJECTIONS)[number];
 
 export const PROJECTIONNAME: Record<Projection, string> = {
   geoNaturalEarth1: 'Natural Earth',
-  geoOrthographic: 'Orthographic',
   geoMercator: 'Mercator',
 } as const;
 
 export const HEATMAP_TARGETS = [
-  "records",
-  "richness",
-  "relativeRichness",
-  "overlap",
-  "endemicity",
-  "occupancy",
+  'records',
+  'richness',
+  'relativeRichness',
+  'overlap',
+  'endemicity',
+  'occupancy',
 ] as const;
 
-export type HeatmapTarget = typeof HEATMAP_TARGETS[number];
+export type HeatmapTarget = (typeof HEATMAP_TARGETS)[number];
 
 export const HEATMAP_TARGET_NAME: Record<HeatmapTarget, string> = {
-  records: "Records",
-  richness: "Species richness",
-  relativeRichness: "Relative species richness",
-  overlap: "Biota overlap",
-  endemicity: "Endemicity",
-  occupancy: "Occupancy",
+  records: 'Records',
+  richness: 'Species richness',
+  relativeRichness: 'Relative species richness',
+  overlap: 'Biota overlap',
+  endemicity: 'Endemicity',
+  occupancy: 'Occupancy',
 } as const;
 
-export const HEATMAP_TARGET_SCALE: Record<HeatmapTarget, "linear" | "log"> = {
-  records: "log",
-  richness: "log",
-  relativeRichness: "linear",
-  overlap: "linear",
-  endemicity: "linear",
-  occupancy: "linear",
+export const HEATMAP_TARGET_SCALE: Record<HeatmapTarget, 'linear' | 'log'> = {
+  records: 'log',
+  richness: 'log',
+  relativeRichness: 'linear',
+  overlap: 'linear',
+  endemicity: 'linear',
+  occupancy: 'linear',
 } as const;
-
-// type TooltipData = {
-//   x: number,
-//   y: number,
-//   active: boolean,
-// }
 
 export default class MapStore {
   rootStore: RootStore;
@@ -82,23 +66,26 @@ export default class MapStore {
   }
 
   projectionName: Projection = PROJECTIONS[0];
-  projection = d3[this.projectionName]().precision(0.1)!;
-  rotation: [number, number] = [40, 0]; // for orthographic projection
-  // translation: [number, number] = [480, 250]; // Places the 0˚,0˚ point at the center of a 960x500 area
-  translation: [number, number] = [600, 450];
+  projection: d3.GeoProjection = d3[this.projectionName]().precision(0.1);
 
-  canvas: HTMLCanvasElement | null = null;
-  svg: SVGSVGElement | null = null;
-  context2d: CanvasRenderingContext2D | null = null;
+  // Canvas2D is the default: it paints synchronously, so the first frame appears immediately
+  // (WebGL needs an async luma.gl device + GPU tessellation). Switch to WebGL for smooth
+  // pan/zoom on large datasets.
+  backend: BackendType = 'canvas';
 
-  geoPath: d3.GeoPath | null = null;
+  host: HTMLElement | null = null;
+  engine: GeoMap | null = null;
+  // Current d3gl view transform (screen-space pan/zoom), kept in sync via enableZoom so that
+  // hover can invert screen → lon/lat through the projection.
+  transform: ViewTransform = { k: 1, x: 0, y: 0 };
 
   width: number = 1200;
   height: number = 900;
 
-  renderBatchIndex: number = 0;
   renderType: RenderType = 'records';
   clipToLand: boolean = true;
+  // Use the coarse 110m land by default (fast); the detailed 50m is loaded on demand.
+  useFineLand: boolean = false;
   colorModuleParticipation: boolean = true;
   colorModuleParticipationStrength: number = 1.0;
 
@@ -109,10 +96,9 @@ export default class MapStore {
   tooltipPos: [number, number] = [0, 0];
   tooltipCell: Cell | null = null;
 
-  heatmapTarget: HeatmapTarget = "records";
-  // heatmapScale: "linear" | "log" = "linear";
-  get heatmapScale(): "linear" | "log" {
-    return HEATMAP_TARGET_SCALE[this.heatmapTarget]
+  heatmapTarget: HeatmapTarget = 'records';
+  get heatmapScale(): 'linear' | 'log' {
+    return HEATMAP_TARGET_SCALE[this.heatmapTarget];
   }
 
   constructor(rootStore: RootStore) {
@@ -125,6 +111,8 @@ export default class MapStore {
       projectionName: observable,
       renderType: observable,
       clipToLand: observable,
+      useFineLand: observable,
+      setUseFineLand: action,
       colorModuleParticipation: observable,
       colorModuleParticipationStrength: observable,
       waterColor: observable,
@@ -134,59 +122,60 @@ export default class MapStore {
       tooltipCell: observable.ref,
       heatmapTarget: observable,
       heatmapScale: computed,
-      onZoom: action,
-      onZoomEnd: action,
+      backend: observable,
+      setBackend: action,
       setProjection: action,
       setRenderType: action,
     });
-
-    if (this.projectionName === 'geoOrthographic') {
-      this.projection.rotate(this.rotation);
-    }
-
-    if (this.projectionName === 'geoNaturalEarth1') {
-      this.projection.translate(this.translation);
-    }
   }
 
   setRenderType(type: RenderType) {
     this.renderType = type;
+    this.render();
   }
 
   setClipToLand = action((value: boolean) => {
-    if (value === this.clipToLand) { return; }
+    if (value === this.clipToLand) return;
     this.clipToLand = value;
     this.render();
-  })
+  });
+
+  setUseFineLand = action((value: boolean) => {
+    if (value === this.useFineLand) return;
+    this.useFineLand = value;
+    // Lazily fetch the detailed 50m geometry the first time it's requested.
+    if (value) this.rootStore.landStore.ensureFineLand();
+    this.render();
+  });
 
   setWaterColor = action((value: string) => {
-    if (value === this.waterColor) { return; }
+    if (value === this.waterColor) return;
     this.waterColor = value;
-  })
+    this.render();
+  });
 
   setLandColor = action((value: string) => {
-    if (value === this.landColor) { return; }
+    if (value === this.landColor) return;
     this.landColor = value;
-  })
+    this.render();
+  });
 
   setColorModuleParticipation = action((value: boolean) => {
     this.colorModuleParticipation = value;
     this.render();
-  })
+  });
 
-  setColorModuleParticipationStrength = action((value: number, render: boolean = false) => {
-    this.colorModuleParticipationStrength = value;
-    if (render) {
-      this.render();
-    }
-  })
+  setColorModuleParticipationStrength = action(
+    (value: number, render: boolean = false) => {
+      this.colorModuleParticipationStrength = value;
+      if (render) this.render();
+    },
+  );
 
   setHeatmapTarget = action((value: HeatmapTarget, render: boolean = false) => {
     this.heatmapTarget = value;
-    if (render) {
-      this.render();
-    }
-  })
+    if (render) this.render();
+  });
 
   get multiPoints() {
     return this.rootStore.speciesStore.multiPointCollection
@@ -197,130 +186,21 @@ export default class MapStore {
     return this.rootStore.speciesStore.binner;
   }
 
-  renderLand({ clip = true } = {}) {
-    if (this.context2d === null || !this.rootStore.landStore.loaded) {
-      return;
-    }
-    const { land110m, land50m } = this.rootStore.landStore;
-    const land = (
-      this.isZooming ? land110m : land50m
-    ) as d3.GeoPermissibleObjects;
-
-    const path = this.geoPath!;
-
-    const ctx = this.context2d;
-    ctx.clearRect(0, 0, this.width, this.height);
-    ctx.beginPath();
-    path(sphere);
-    ctx.fillStyle = this.waterColor;
-    ctx.fill();
-
-    ctx.beginPath();
-    path(land);
-    ctx.fillStyle = this.landColor;
-    ctx.fill();
-
-    if (clip) {
-      ctx.clip();
-    }
-  }
-
-  private _renderShape(shape: GeometryFeature, ctx: CanvasRenderingContext2D) {
-    const path = this.geoPath!;
-    ctx.beginPath();
-    path(shape);
-    ctx.fillStyle = 'red';
-    ctx.fill();
-  }
-
-  renderShape(shape: GeometryFeature) {
-    if (this.context2d === null) {
-      return;
-    }
-
-    this._renderShape(shape, this.context2d);
-  }
-
-  private _renderMultiPoint(point: MultiPoint, ctx: CanvasRenderingContext2D) {
-    const path = this.geoPath!;
-    ctx.beginPath();
-    path(point);
-    ctx.fillStyle = 'red';
-    ctx.fill();
-  }
-
-  renderMultiPoint(point: MultiPoint) {
-    if (this.context2d === null) {
-      return;
-    }
-
-    this._renderMultiPoint(point, this.context2d);
-  }
-
-  private _renderPoints() {
-    if (this.renderType !== 'records') return;
-
-    const { multiPoints } = this;
-    if (this.renderBatchIndex === 0) {
-      console.time('renderPoints');
-    }
-
-    // TODO: Adapt the number of batches to what can be run within 60 fps
-    const numBatches = 4;
-    const batchSize = Math.min(
-      multiPoints.length,
-      this.renderBatchIndex + numBatches,
-    );
-
-    for (let i = this.renderBatchIndex; i < batchSize; i++) {
-      this._renderMultiPoint(multiPoints[i], this.context2d!);
-    }
-
-    this.renderBatchIndex += numBatches;
-
-    if (this.renderBatchIndex >= multiPoints.length) {
-      console.timeEnd('renderPoints');
-    }
-
-    if (this.renderBatchIndex < multiPoints.length) {
-      requestAnimationFrame(() => this._renderPoints());
-    }
-  }
-
-  renderPoints() {
-    if (this.context2d === null || this.multiPoints.length === 0) {
-      return;
-    }
-
-    this.renderBatchIndex = 0;
-    this._renderPoints();
-  }
-
-  private _renderGridCell(
-    node: Cell,
-    ctx: CanvasRenderingContext2D,
-    color: string,
-  ) {
-    const path = this.geoPath!;
-    ctx.beginPath();
-    path(node.geometry);
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
+  // --- Color accessors (unchanged logic, now used as d3gl fill accessors) ---
 
   private _getHeatmapColorTargetGetter(): (n: Cell) => number {
     switch (this.heatmapTarget) {
-      case "records":
+      case 'records':
         return (n: Cell) => n.recordsPerArea;
-      case "richness":
+      case 'richness':
         return (n: Cell) => n.speciesRichness;
-      case "relativeRichness":
+      case 'relativeRichness':
         return (n: Cell) => n.bioregionMetrics.relativeRichness;
-      case "overlap":
+      case 'overlap':
         return (n: Cell) => n.bioregionMetrics.overlap;
-      case "endemicity":
+      case 'endemicity':
         return (n: Cell) => n.bioregionMetrics.endemicity;
-      case "occupancy":
+      case 'occupancy':
         return (n: Cell) => n.bioregionMetrics.occupancy;
       default:
         console.warn(`Heatmap target '${this.heatmapTarget}' lacks implementation.`);
@@ -329,20 +209,13 @@ export default class MapStore {
   }
 
   private _heatmapColor(cells: Cell[]): GetGridColor {
-    //TODO: Cache domain extent in QuadTreeGeoBinner as cells are cached
-
     const getTarget = this._getHeatmapColorTargetGetter();
 
-    const domainExtent = d3.extent(cells, getTarget) as [
-      number,
-      number,
-    ];
-    const domainMax = domainExtent[1];
+    const domainExtent = d3.extent(cells, getTarget) as [number, number];
 
-    const domain = d3.range(0, domainMax, domainMax / 8); // Exact doesn't include the end for some reason
-    domain.push(domainMax);
-
-    const heatmapColorIndexScale = (this.heatmapScale === "log" ? d3.scaleLog() : d3.scaleLinear())
+    const heatmapColorIndexScale = (
+      this.heatmapScale === 'log' ? d3.scaleLog() : d3.scaleLinear()
+    )
       .domain(domainExtent)
       .range([0, 8]);
 
@@ -357,90 +230,143 @@ export default class MapStore {
       '#bd0026',
       '#800026',
     ]; // Colorbrewer YlOrRd
-    console.log(heatmapColorIndexScale)
 
     return (cell: Cell) =>
-      colorRange[Math.floor(heatmapColorIndexScale(getTarget(cell)))];
+      colorRange[Math.floor(heatmapColorIndexScale(getTarget(cell)))] ?? colorRange[0];
   }
-
-  // private _bioregionColor(): GetGridColor {
-  //   const { bioregionColors } = this.rootStore.colorStore;
-  //   return (cell: Cell) => bioregionColors[cell.bioregionId - 1];
-  // }
 
   private cellColor(): GetGridColor {
     return this.rootStore.colorStore.colorCell;
   }
 
-  renderGrid() {
-    if (this.context2d === null) {
-      return;
-    }
+  // --- d3gl engine lifecycle ---
 
-    const { cells } = this.binner;
-    const { tree } = this.rootStore.infomapStore;
+  setBackend = action((backend: BackendType) => {
+    if (backend === this.backend) return;
+    this.backend = backend;
+    // Swaps the backend in place — the projected/tessellated Scene and the current zoom are
+    // preserved, so no re-projection is needed.
+    this.engine?.setBackend(backend);
+    this.render();
+  });
 
-    const getGridColor =
-      this.renderType === 'heatmap' || !tree
-        ? this._heatmapColor(cells)
-        : this.cellColor();
-
-    cells.forEach((cell: Cell) =>
-      this._renderGridCell(cell, this.context2d!, getGridColor(cell)),
-    );
+  setHost(host: HTMLElement) {
+    this.host = host;
+    this.initEngine();
   }
 
-  renderData() {
+  disposeEngine = () => {
+    this.engine?.destroy();
+    this.engine = null;
+  };
+
+  private initEngine() {
+    if (this.host === null) return;
+    this.disposeEngine();
+
+    this.adjustHeight();
+    // Size the host element to match the engine (height depends on the projection fit).
+    this.host.style.width = `${this.width}px`;
+    this.host.style.height = `${this.height}px`;
+
+    const engine = geoMap(this.host, {
+      width: this.width,
+      height: this.height,
+      projection: this.projection,
+      backend: this.backend,
+    });
+    this.engine = engine;
+
+    engine.enableZoom([1, 32], (t) => {
+      this.transform = t;
+    });
+
+    this.buildLayers();
+    engine.render();
+    engine.whenReady().then(() => {
+      // Re-apply once the backend is live (initial layers/render queue before ready).
+      this.buildLayers();
+      engine.render();
+    });
+  }
+
+  /** (Re)register all layers in paint order from current data + color accessors. */
+  private buildLayers() {
+    const engine = this.engine;
+    if (engine === null) return;
+
+    // Coarse 110m by default (fast); the detailed 50m is used only when toggled on (and loaded).
+    const { land50m, land110m } = this.rootStore.landStore;
+    const land = this.useFineLand ? (land50m ?? land110m) : land110m;
+    const clipTo = this.clipToLand && land ? 'land' : undefined;
+
+    engine.layer('sphere', [sphere], { fill: this.waterColor });
+    if (land) {
+      engine.layer('land', [land as GeoJSON.Feature], { fill: this.landColor });
+    }
+
     if (this.renderType === 'records') {
-      this.renderPoints();
+      const { multiPoints } = this;
+      if (multiPoints.length > 0) {
+        engine.layer('points', multiPoints, {
+          fill: 'red',
+          pointRadius: 0.5,
+          clipTo,
+        });
+      }
     } else {
-      this.renderGrid();
+      const { cells } = this.binner;
+      const { tree } = this.rootStore.infomapStore;
+      const getGridColor =
+        this.renderType === 'heatmap' || !tree
+          ? this._heatmapColor(cells)
+          : this.cellColor();
+      engine.layer('cells', cells, {
+        fill: (cell: Cell) => getGridColor(cell),
+        clipTo,
+        id: (cell: Cell) => cell.id,
+      });
     }
   }
 
   render() {
-    if (this.context2d === null) {
-      return;
-    }
-
-    this.context2d.save();
-
-    this.renderLand({ clip: this.clipToLand });
-    this.renderData();
-
-    this.context2d.restore();
+    if (this.engine === null) return;
+    this.buildLayers();
+    this.engine.render();
   }
+
+  /** File extension for the current export format (SVG when the SVG backend is selected). */
+  get imageExtension(): '.svg' | '.png' {
+    return this.backend === 'svg' ? '.svg' : '.png';
+  }
+
+  /** Export the current map as an SVG (svg backend) or PNG (canvas/webgl) blob. */
+  async getImageBlob(): Promise<Blob> {
+    if (this.engine === null) {
+      throw new Error('No map engine to export');
+    }
+    if (this.backend === 'svg') {
+      const svg = this.engine.toSVG();
+      if (!svg) throw new Error("Can't export map image");
+      return new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    }
+    const dataUrl = this.engine.toPNG();
+    if (!dataUrl) {
+      throw new Error("Can't export map image");
+    }
+    return (await fetch(dataUrl)).blob();
+  }
+
+  // Incremental draw hooks from the streaming loader. d3gl has no cheap per-chunk append yet
+  // (re-registering a layer re-projects all features), so we defer to the full rebuild that
+  // `render()` performs at load end. See the d3gl streaming-append gap noted in the plan.
+  renderShape(_shape: unknown) {}
+  renderMultiPoint(_point: MultiPoint) {}
 
   setProjection(projection: Projection) {
     this.projectionName = projection;
-    this.projection = d3[projection]().precision(0.1)!;
-    this.setGeoPath(this.projection, this.context2d!);
-    this.adjustHeight();
-    this.applyZoom();
-    this.render();
-  }
-
-  setGeoPath(projection: d3.GeoProjection, ctx: CanvasRenderingContext2D) {
-    this.geoPath = d3.geoPath(projection, ctx);
-    this.geoPath.pointRadius(0.5);
-  }
-
-  setSVG(svg: SVGSVGElement) {
-    this.svg = svg;
-  }
-
-  setCanvas(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
-    this.context2d = canvas.getContext('2d')!;
-
-    if (!this.context2d) {
-      console.warn('Failed to create context');
-      return;
-    }
-
-    this.setGeoPath(this.projection, this.context2d);
-    this.adjustHeight();
-    this.applyZoom();
+    this.projection = d3[projection]().precision(0.1);
+    this.initEngine();
   }
 
   adjustHeight() {
@@ -452,75 +378,41 @@ export default class MapStore {
     const l = Math.min(Math.ceil(x1 - x0), height);
     projection.scale((projection.scale() * (l - 1)) / l).precision(0.2);
     this.height = height;
-    if (this.canvas !== null) {
-      this.canvas.height = height;
-    }
     projection.translate([width / 2, height / 2]);
   }
 
-  applyZoom() {
-    const zoomBehavior = this.projectionName === "geoOrthographic" ? zoomProjection : zoomFixed;
-    const canvasZoom = zoomBehavior(this.projection) as d3Zoom.ZoomBehavior<
-      HTMLCanvasElement,
-      CanvasDatum
-    >;
+  // --- Tooltip / hover (React mouse handlers on the host div) ---
 
-    canvasZoom
-      .on('zoom.render', () => this.onZoom())
-      .on('end.render', () => this.onZoomEnd());
-
-    if (this.canvas != null) {
-      const canvasSelection = select<HTMLCanvasElement, CanvasDatum>(
-        this.canvas,
-      );
-      canvasZoom(canvasSelection);
-    }
-  }
-
-  onZoom() {
-    this.isZooming = true;
-    if (this.renderDataWhileZooming && this.renderType !== 'records') {
-      this.render();
-    } else {
-      this.renderLand({ clip: false });
-    }
-  }
-
-  onZoomEnd() {
-    this.isZooming = false;
-    this.render();
-  }
-
-  getPosFromEvent(event: React.MouseEvent<HTMLCanvasElement>): [number, number] {
+  getPosFromEvent(event: React.MouseEvent<HTMLElement>): [number, number] {
     const { offsetX, offsetY } = event.nativeEvent;
     return [offsetX, offsetY];
   }
 
-  setTooltipPos = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+  setTooltipPos = action((event: React.MouseEvent<HTMLElement>) => {
     this.tooltipPos = this.getPosFromEvent(event);
-  })
+  });
 
-  onMouseEnter = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+  onMouseEnter = action((event: React.MouseEvent<HTMLElement>) => {
     this.tooltipActive = true;
     this.setTooltipPos(event);
-  })
+  });
 
   onMouseLeave = action(() => {
     this.tooltipActive = false;
     this.tooltipCell = null;
-  })
+  });
 
-  onMouseMove = action((event: React.MouseEvent<HTMLCanvasElement>) => {
+  onMouseMove = action((event: React.MouseEvent<HTMLElement>) => {
     this.setTooltipPos(event);
-    const longlat = this.projection.invert!(this.tooltipPos);
+    const [x, y] = this.tooltipPos;
+    const longlat = lonLatFromScreen(this.projection, this.transform, x, y);
     if (!longlat) {
+      this.tooltipCell = null;
       return;
     }
     const cell = this.rootStore.speciesStore.binner.find(...longlat) ?? null;
     this.tooltipCell = cell?.visible ? cell : null;
-  })
+  });
 
-  onMouseClick = action((event: React.MouseEvent<HTMLCanvasElement>) => {
-    console.log(event)
-  })
+  onMouseClick = action((_event: React.MouseEvent<HTMLElement>) => {});
 }

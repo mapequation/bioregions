@@ -3,6 +3,7 @@ import { observer } from 'mobx-react';
 import { useStore } from '../store/';
 import { Badge, Box, Card, Heading, Text } from '@chakra-ui/react';
 import { formatThousands } from '../utils/formats';
+import BackendSelect from './BackendSelect';
 
 const Tooltip = observer(function _Tooltip() {
   const { mapStore, infomapStore, treeStore } = useStore();
@@ -52,24 +53,25 @@ const Tooltip = observer(function _Tooltip() {
 });
 
 export default observer(function WorldMap() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const { mapStore } = useStore();
   const { width, height } = mapStore;
 
   useEffect(() => {
-    if (canvasRef.current === null) {
+    if (hostRef.current === null) {
       return;
     }
 
-    mapStore.setCanvas(canvasRef.current);
+    mapStore.setHost(hostRef.current);
+    return () => mapStore.disposeEngine();
   }, [mapStore]);
 
   return (
-    <Box ml={4} position="relative">
-      <canvas
-        width={width}
-        height={height}
-        ref={canvasRef}
+    <Box ml={4} position="relative" width={width}>
+      <BackendSelect value={mapStore.backend} onChange={mapStore.setBackend} />
+      <div
+        ref={hostRef}
+        style={{ position: 'relative', width, height }}
         onMouseMove={mapStore.onMouseMove}
         onMouseOver={mapStore.onMouseEnter}
         onMouseOut={mapStore.onMouseLeave}

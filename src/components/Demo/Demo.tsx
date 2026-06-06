@@ -19,7 +19,6 @@ import Modal from '../ControlPanel/Modal';
 import Export from '../ControlPanel/Export';
 // import TreeHistogram from '../TreeHistogram';
 import DualTreeHistogram from '../DualTreeHistogram';
-// import PhylocanvasTree from '../Tree';
 // import TreeHistogram from '../TreeHistogram';
 import { saveSvg } from '../../utils/exporter';
 import { Slider } from '../ui/slider';
@@ -276,21 +275,6 @@ export default observer(() => {
             stepRight={false}
             yTickFormatRight=".2~p"
           />
-          {/* {treeStore.treeString != null && infomapStore.haveBioregions && (
-            <PhylocanvasTree
-              source={treeStore.treeString}
-              size={{ width: 600, height: 400 }}
-              showLabels
-              showLeafLabels
-              interactive
-              nodeSize={20}
-              styleNodeEdges={true}
-              // fillColour={treeColor}
-              // strokeColour={treeColor}
-              // fontColour={treeColor}
-              styles={treeStore.nodeStyles}
-            />
-          )} */}
         </Box>
       </Flex>
 
