@@ -20,7 +20,7 @@
     "@fontsource/open-sans": "^5.2.7",
     "@fontsource/philosopher": "^5.2.8",
     "@mapequation/c3": "^1.1.1",
-    "@mapequation/d3gl": "^0.2.0",
+    "@mapequation/d3gl": "^0.3.0",
     "@mapequation/infomap": "2.11.0",
     "@turf/boolean-intersects": "^7.3.5",
     "@turf/turf": "^7.3.5",

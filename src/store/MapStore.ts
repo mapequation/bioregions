@@ -3,8 +3,17 @@ import { action, makeObservable, observable, computed } from 'mobx';
 import { type Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import { MultiPoint } from '../types/geojson';
-import { geoMap, type GeoMap, type BackendType } from '@mapequation/d3gl/map';
-import { lonLatFromScreen, type ViewTransform } from '@mapequation/d3gl/geo';
+import {
+  geoMap,
+  type GeoMap,
+  type BackendType,
+  type LayerHandle,
+} from '@mapequation/d3gl/map';
+import {
+  fitProjection,
+  lonLatFromScreen,
+  type ViewTransform,
+} from '@mapequation/d3gl/geo';
 
 export const BACKENDS: BackendType[] = ['canvas', 'webgl', 'svg'];
 
@@ -16,15 +25,20 @@ export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
 type GetGridColor = (cell: Cell) => string;
 
-// d3gl's GeoMap projects features once and pans/zooms in screen space, which suits flat
-// projections. The rotatable orthographic globe was dropped in the d3gl migration (it would
-// need re-projection per frame / GPU-side rotation).
-export const PROJECTIONS = ['geoNaturalEarth1', 'geoMercator'] as const;
+// Flat projections pan/zoom in screen space; the orthographic projection becomes a
+// drag-to-rotate globe (versor rotation on CPU, GPU-accelerated on the WebGL backend) —
+// d3gl's enableZoom auto-dispatches the right interaction per projection.
+export const PROJECTIONS = [
+  'geoNaturalEarth1',
+  'geoOrthographic',
+  'geoMercator',
+] as const;
 
 export type Projection = (typeof PROJECTIONS)[number];
 
 export const PROJECTIONNAME: Record<Projection, string> = {
   geoNaturalEarth1: 'Natural Earth',
+  geoOrthographic: 'Orthographic',
   geoMercator: 'Mercator',
 } as const;
 
@@ -75,8 +89,17 @@ export default class MapStore {
 
   host: HTMLElement | null = null;
   engine: GeoMap | null = null;
-  // Current d3gl view transform (screen-space pan/zoom), kept in sync via enableZoom so that
-  // hover can invert screen → lon/lat through the projection.
+  // Persistent handle to the species-points layer, so streamed records can be appended
+  // incrementally (only the new points project) rather than re-registering the whole layer.
+  private pointsHandle: LayerHandle<MultiPoint> | null = null;
+  // How many of `multiPoints` have been appended so far, and the pending rAF drain. Points
+  // are appended a frame-budget at a time so the browser stays responsive while data streams
+  // in (each MultiPoint chunk can hold tens of thousands of points).
+  private appendIndex = 0;
+  private drainRaf: number | null = null;
+  // Current d3gl view transform (screen-space pan/zoom for flat projections), kept in sync via
+  // enableZoom so hover can invert screen → lon/lat. Orthographic keeps rotation in the
+  // projection itself, so the transform stays at identity there.
   transform: ViewTransform = { k: 1, x: 0, y: 0 };
 
   width: number = 1200;
@@ -256,6 +279,9 @@ export default class MapStore {
   }
 
   disposeEngine = () => {
+    this.cancelDrain();
+    this.pointsHandle = null;
+    this.appendIndex = 0;
     this.engine?.destroy();
     this.engine = null;
   };
@@ -277,7 +303,9 @@ export default class MapStore {
     });
     this.engine = engine;
 
-    engine.enableZoom([1, 32], (t) => {
+    // One call for every projection: d3gl auto-dispatches drag-to-rotate (versor) for the
+    // orthographic globe and affine pan/zoom for flat projections.
+    engine.enableZoom([1, 12], (t) => {
       this.transform = t;
     });
 
@@ -290,7 +318,12 @@ export default class MapStore {
     });
   }
 
-  /** (Re)register all layers in paint order from current data + color accessors. */
+  /**
+   * (Re)register all layers in paint order from current data + color accessors. The unused data
+   * layer (cells in records mode, points otherwise) is registered empty so it's cleared.
+   * Dense layers are flagged `hideOnInteraction` so only the cheap land re-projects per rotation
+   * frame. The points layer handle is retained for incremental streaming via `append`.
+   */
   private buildLayers() {
     const engine = this.engine;
     if (engine === null) return;
@@ -301,19 +334,14 @@ export default class MapStore {
     const clipTo = this.clipToLand && land ? 'land' : undefined;
 
     engine.layer('sphere', [sphere], { fill: this.waterColor });
-    if (land) {
-      engine.layer('land', [land as GeoJSON.Feature], { fill: this.landColor });
-    }
+    engine.layer('land', land ? [land as GeoJSON.Feature] : [], {
+      fill: this.landColor,
+    });
 
-    if (this.renderType === 'records') {
-      const { multiPoints } = this;
-      if (multiPoints.length > 0) {
-        engine.layer('points', multiPoints, {
-          fill: 'red',
-          pointRadius: 0.5,
-          clipTo,
-        });
-      }
+    const records = this.renderType === 'records';
+
+    if (records) {
+      engine.layer('cells', [] as Cell[], {});
     } else {
       const { cells } = this.binner;
       const { tree } = this.rootStore.infomapStore;
@@ -325,9 +353,71 @@ export default class MapStore {
         fill: (cell: Cell) => getGridColor(cell),
         clipTo,
         id: (cell: Cell) => cell.id,
+        // hideOnInteraction: true,
       });
     }
+
+    if (records) {
+      // Register the points layer EMPTY and stream the accumulated points in over successive
+      // animation frames (see `drainPoints`) so a large dataset never blocks the main thread.
+      this.pointsHandle = engine.layer('points', [] as MultiPoint[], {
+        fill: 'red',
+        pointRadius: 0.5,
+        clipTo,
+        pickable: false, // potentially millions of points — skip the hit index
+        // hideOnInteraction: true,
+      });
+      this.appendIndex = 0;
+      this.scheduleDrain();
+    } else {
+      this.cancelDrain();
+      this.pointsHandle = null;
+      this.appendIndex = 0;
+      engine.layer('points', [] as MultiPoint[], { pickable: false });
+    }
   }
+
+  // --- Incremental points streaming ---
+  // Append at most this many points per animation frame, then yield to the browser (≈30ms of
+  // projection work per frame, so streaming stays responsive even for millions of points).
+  private static readonly POINT_BUDGET = 20_000;
+
+  private scheduleDrain() {
+    if (this.drainRaf === null) {
+      this.drainRaf = requestAnimationFrame(this.drainPoints);
+    }
+  }
+
+  private cancelDrain() {
+    if (this.drainRaf !== null) {
+      cancelAnimationFrame(this.drainRaf);
+      this.drainRaf = null;
+    }
+  }
+
+  /** Append the next frame's worth of `multiPoints` (bounded by POINT_BUDGET), then reschedule
+   *  until the index has caught up with the (growing) collection. */
+  private drainPoints = () => {
+    this.drainRaf = null;
+    const handle = this.pointsHandle;
+    if (this.engine === null || handle === null || this.renderType !== 'records') {
+      return;
+    }
+    const all = this.multiPoints;
+    const batch: MultiPoint[] = [];
+    let n = 0;
+    while (this.appendIndex < all.length && n < MapStore.POINT_BUDGET) {
+      const mp = all[this.appendIndex++];
+      batch.push(mp);
+      n += mp.coordinates.length;
+    }
+    if (batch.length > 0) {
+      handle.append(batch); // paints only the appended delta — no full re-render
+    }
+    if (this.appendIndex < all.length) {
+      this.scheduleDrain();
+    }
+  };
 
   render() {
     if (this.engine === null) return;
@@ -357,16 +447,30 @@ export default class MapStore {
     return (await fetch(dataUrl)).blob();
   }
 
-  // Incremental draw hooks from the streaming loader. d3gl has no cheap per-chunk append yet
-  // (re-registering a layer re-projects all features), so we defer to the full rebuild that
-  // `render()` performs at load end. See the d3gl streaming-append gap noted in the plan.
+  // Incremental draw hook from the streaming loader. The chunk's MultiPoint is already in
+  // `multiPoints`; just make sure the rAF drain is running so it (and any backlog) gets appended
+  // a frame-budget at a time. Only meaningful in records mode.
+  renderMultiPoint(_point: MultiPoint) {
+    if (this.engine === null || this.renderType !== 'records' || this.pointsHandle === null) {
+      return;
+    }
+    this.scheduleDrain();
+  }
+
   renderShape(_shape: unknown) {}
-  renderMultiPoint(_point: MultiPoint) {}
 
   setProjection(projection: Projection) {
     this.projectionName = projection;
-    this.projection = d3[projection]().precision(0.1);
-    this.initEngine();
+    // Re-fit the new projection to the (fixed) viewport and swap it in place: d3gl re-projects
+    // the existing layers and re-dispatches the right interaction (globe rotation vs pan/zoom).
+    this.projection = fitProjection(
+      d3[projection]().precision(0.1),
+      sphere as GeoJSON.GeoJSON,
+      this.width,
+      this.height,
+    );
+    this.transform = { k: 1, x: 0, y: 0 };
+    this.engine?.setProjection(this.projection);
   }
 
   adjustHeight() {
@@ -405,7 +509,13 @@ export default class MapStore {
   onMouseMove = action((event: React.MouseEvent<HTMLElement>) => {
     this.setTooltipPos(event);
     const [x, y] = this.tooltipPos;
-    const longlat = lonLatFromScreen(this.projection, this.transform, x, y);
+    // Orthographic keeps its rotation in the projection (transform stays identity), so invert
+    // directly; flat projections invert through the affine view transform. invert() returns
+    // null off the globe / outside the sphere.
+    const longlat =
+      this.projectionName === 'geoOrthographic'
+        ? (this.projection.invert?.([x, y]) ?? null)
+        : lonLatFromScreen(this.projection, this.transform, x, y);
     if (!longlat) {
       this.tooltipCell = null;
       return;
