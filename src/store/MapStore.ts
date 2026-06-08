@@ -19,7 +19,7 @@ export const BACKENDS: BackendType[] = ['canvas', 'webgl', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
-export interface IMapRenderer {}
+export interface IMapRenderer { }
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
@@ -85,7 +85,7 @@ export default class MapStore {
   // Canvas2D is the default: it paints synchronously, so the first frame appears immediately
   // (WebGL needs an async luma.gl device + GPU tessellation). Switch to WebGL for smooth
   // pan/zoom on large datasets.
-  backend: BackendType = 'canvas';
+  backend: BackendType = 'webgl';
 
   host: HTMLElement | null = null;
   engine: GeoMap | null = null;
@@ -309,13 +309,6 @@ export default class MapStore {
       this.transform = t;
     });
 
-    this.buildLayers();
-    engine.render();
-    engine.whenReady().then(() => {
-      // Re-apply once the backend is live (initial layers/render queue before ready).
-      this.buildLayers();
-      engine.render();
-    });
   }
 
   /**
@@ -457,7 +450,7 @@ export default class MapStore {
     this.scheduleDrain();
   }
 
-  renderShape(_shape: unknown) {}
+  renderShape(_shape: unknown) { }
 
   setProjection(projection: Projection) {
     this.projectionName = projection;
@@ -524,5 +517,5 @@ export default class MapStore {
     this.tooltipCell = cell?.visible ? cell : null;
   });
 
-  onMouseClick = action((_event: React.MouseEvent<HTMLElement>) => {});
+  onMouseClick = action((_event: React.MouseEvent<HTMLElement>) => { });
 }
