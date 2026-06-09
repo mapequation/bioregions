@@ -82,9 +82,8 @@ export default class MapStore {
   projectionName: Projection = PROJECTIONS[0];
   projection: d3.GeoProjection = d3[this.projectionName]().precision(0.1);
 
-  // Canvas2D is the default: it paints synchronously, so the first frame appears immediately
-  // (WebGL needs an async luma.gl device + GPU tessellation). Switch to WebGL for smooth
-  // pan/zoom on large datasets.
+  // WebGL by default: smooth pan/zoom and a GPU-accelerated globe for large datasets. Canvas2D
+  // paints the first frame sooner (no async luma.gl device / GPU tessellation); SVG exports vectors.
   backend: BackendType = 'webgl';
 
   host: HTMLElement | null = null;
