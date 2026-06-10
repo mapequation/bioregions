@@ -97,3 +97,12 @@ Theming lives in `src/theme.ts`.
 - Prettier: single quotes, trailing commas everywhere.
 - `__APP_VERSION__` is injected from `package.json` at build time (see `vite.config.ts`).
 - `base` is `/bioregions` — the app is served from a subpath, not root.
+
+## Git workflow
+
+- Always delete the feature branch after a PR is merged — use `gh pr merge --delete-branch`
+  (removes the local + remote branch), then `git remote prune origin` to drop stale
+  remote-tracking refs.
+- Prefer a **squash merge** (`gh pr merge --squash`) so each PR lands as a single commit.
+  Use a plain merge only for a multi-phase plan where each phase is its own meaningful
+  commit that should be preserved in history.
