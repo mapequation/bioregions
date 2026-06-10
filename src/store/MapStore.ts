@@ -15,7 +15,7 @@ import {
   type ViewTransform,
 } from '@mapequation/d3gl/geo';
 
-export const BACKENDS: BackendType[] = ['canvas', 'webgl', 'svg'];
+export const BACKENDS: BackendType[] = ['auto', 'webgl', 'canvas', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
@@ -84,18 +84,15 @@ export default class MapStore {
 
   // WebGL by default: smooth pan/zoom and a GPU-accelerated globe for large datasets. Canvas2D
   // paints the first frame sooner (no async luma.gl device / GPU tessellation); SVG exports vectors.
-  backend: BackendType = 'webgl';
+  backend: BackendType = 'auto';
 
   host: HTMLElement | null = null;
   engine: GeoMap | null = null;
-  // Persistent handle to the species-points layer, so streamed records can be appended
-  // incrementally (only the new points project) rather than re-registering the whole layer.
+  // Persistent handle to the species-points pass-through layer, so each streamed chunk can be
+  // drawn immediately via `append` (an O(chunk) draw-on-top) without re-projecting the whole set.
+  // The layer is registered with a `() => multiPoints` callback, so pan/zoom/projection repaints
+  // re-read and re-project everything (time-sliced by d3gl) — append only covers the new delta.
   private pointsHandle: LayerHandle<MultiPoint> | null = null;
-  // How many of `multiPoints` have been appended so far, and the pending rAF drain. Points
-  // are appended a frame-budget at a time so the browser stays responsive while data streams
-  // in (each MultiPoint chunk can hold tens of thousands of points).
-  private appendIndex = 0;
-  private drainRaf: number | null = null;
   // Current d3gl view transform (screen-space pan/zoom for flat projections), kept in sync via
   // enableZoom so hover can invert screen → lon/lat. Orthographic keeps rotation in the
   // projection itself, so the transform stays at identity there.
@@ -278,9 +275,7 @@ export default class MapStore {
   }
 
   disposeEngine = () => {
-    this.cancelDrain();
     this.pointsHandle = null;
-    this.appendIndex = 0;
     this.engine?.destroy();
     this.engine = null;
   };
@@ -350,66 +345,26 @@ export default class MapStore {
     }
 
     if (records) {
-      // Register the points layer EMPTY and stream the accumulated points in over successive
-      // animation frames (see `drainPoints`) so a large dataset never blocks the main thread.
-      this.pointsHandle = engine.layer('points', [] as MultiPoint[], {
+      // Pass-through path: the engine re-reads `() => this.multiPoints` on every repaint
+      // (pan/zoom, projection switch, settle), so the full set re-projects each time with
+      // no retained-geometry ceiling — the right fit for potentially millions of records.
+      // Registering the layer already draws whatever has loaded so far (time-sliced by the
+      // engine); newly streamed chunks are drawn immediately via `append` (see `renderMultiPoint`).
+      // Pass-through layers aren't pickable (no hit index) and ignore `clipTo`.
+      this.pointsHandle = engine.layer('points', () => this.multiPoints, {
         fill: 'red',
         pointRadius: 0.5,
-        clipTo,
-        pickable: false, // potentially millions of points — skip the hit index
-        // hideOnInteraction: true,
+        passThrough: true,
       });
-      this.appendIndex = 0;
-      this.scheduleDrain();
     } else {
-      this.cancelDrain();
+      // Re-register `points` as an empty pass-through layer to CLEAR the previous one: d3gl keeps
+      // pass-through specs keyed by name and repaints them on every render, and registering a
+      // retained layer of the same name would not remove that spec — so the points would persist.
+      // An empty pass-through repaint does a `replace-first` that clears the layer's pixels.
       this.pointsHandle = null;
-      this.appendIndex = 0;
-      engine.layer('points', [] as MultiPoint[], { pickable: false });
+      engine.layer('points', [] as MultiPoint[], { passThrough: true });
     }
   }
-
-  // --- Incremental points streaming ---
-  // Append at most this many points per animation frame, then yield to the browser (≈30ms of
-  // projection work per frame, so streaming stays responsive even for millions of points).
-  private static readonly POINT_BUDGET = 20_000;
-
-  private scheduleDrain() {
-    if (this.drainRaf === null) {
-      this.drainRaf = requestAnimationFrame(this.drainPoints);
-    }
-  }
-
-  private cancelDrain() {
-    if (this.drainRaf !== null) {
-      cancelAnimationFrame(this.drainRaf);
-      this.drainRaf = null;
-    }
-  }
-
-  /** Append the next frame's worth of `multiPoints` (bounded by POINT_BUDGET), then reschedule
-   *  until the index has caught up with the (growing) collection. */
-  private drainPoints = () => {
-    this.drainRaf = null;
-    const handle = this.pointsHandle;
-    if (this.engine === null || handle === null || this.renderType !== 'records') {
-      return;
-    }
-    const all = this.multiPoints;
-    const batch: MultiPoint[] = [];
-    let n = 0;
-    while (this.appendIndex < all.length && n < MapStore.POINT_BUDGET) {
-      const mp = all[this.appendIndex++];
-      batch.push(mp);
-      n += mp.coordinates.length;
-    }
-    if (batch.length > 0) {
-      handle.append(batch); // paints only the appended delta — no full re-render
-    }
-    if (this.appendIndex < all.length) {
-      this.scheduleDrain();
-    }
-  };
 
   render() {
     if (this.engine === null) return;
@@ -439,14 +394,14 @@ export default class MapStore {
     return (await fetch(dataUrl)).blob();
   }
 
-  // Incremental draw hook from the streaming loader. The chunk's MultiPoint is already in
-  // `multiPoints`; just make sure the rAF drain is running so it (and any backlog) gets appended
-  // a frame-budget at a time. Only meaningful in records mode.
-  renderMultiPoint(_point: MultiPoint) {
+  // Incremental draw hook from the streaming loader. The chunk is already in `multiPoints` (so a
+  // later full repaint re-projects it via the layer callback); draw just this delta on top now
+  // via the pass-through layer's `append` (O(chunk)). Only meaningful in records mode.
+  renderMultiPoint(point: MultiPoint) {
     if (this.engine === null || this.renderType !== 'records' || this.pointsHandle === null) {
       return;
     }
-    this.scheduleDrain();
+    this.pointsHandle.append(point);
   }
 
   renderShape(_shape: unknown) { }
