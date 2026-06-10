@@ -15,7 +15,7 @@ import {
   type ViewTransform,
 } from '@mapequation/d3gl/geo';
 
-export const BACKENDS: BackendType[] = ['canvas', 'webgl', 'svg'];
+export const BACKENDS: BackendType[] = ['auto', 'webgl', 'canvas', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
@@ -84,7 +84,7 @@ export default class MapStore {
 
   // WebGL by default: smooth pan/zoom and a GPU-accelerated globe for large datasets. Canvas2D
   // paints the first frame sooner (no async luma.gl device / GPU tessellation); SVG exports vectors.
-  backend: BackendType = 'webgl';
+  backend: BackendType = 'auto';
 
   host: HTMLElement | null = null;
   engine: GeoMap | null = null;
