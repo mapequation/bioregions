@@ -76,6 +76,11 @@ Rendering is driven imperatively from MobX `autorun`s rather than React re-rende
 `MapStore` also computes several heatmap layers (`HEATMAP_TARGETS`: richness,
 endemicity, occupancy, etc.).
 
+The d3gl source is checked out locally at `../d3gl` (repo-relative) — consult it for
+the current API, the `.d.ts` types, and the runnable examples under
+`../d3gl/website/src/examples/` (e.g. `streaming-passthrough/` shows the pass-through
+points path used for the occurrence-record layer in `MapStore.ts`).
+
 ### UI
 
 `src/components/ControlPanel/` holds the settings UI (one section per pipeline stage:
