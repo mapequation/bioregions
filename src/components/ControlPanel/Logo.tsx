@@ -1,6 +1,7 @@
 import { Box, HStack, Text, VStack } from '@chakra-ui/react';
 import { useColorModeValue } from '../ui/color-mode';
 import Infomap from '@mapequation/infomap';
+import { version as d3glVersion } from '@mapequation/d3gl';
 
 export default function Logo() {
   const color = useColorModeValue('hsl(0, 0%, 33%)', 'hsl(0, 0%, 60%)');
@@ -34,7 +35,9 @@ export default function Logo() {
           <span style={{ ...styles.version }}>{' v' + __APP_VERSION__}</span>
         </Text>
         <Text fontSize="xs" lineHeight="shorter" fontWeight={300}>
-          Powered by Infomap v{Infomap.__version__}
+          Powered by{' '}
+          <a href="//mapequation.org/infomap">Infomap v{Infomap.__version__}</a>{' '}
+          and <a href="//mapequation.org/d3gl">d3gl v{d3glVersion}</a>
         </Text>
       </VStack>
     </HStack>
