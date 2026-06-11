@@ -12,7 +12,7 @@ export default function BackendSelect({ value, onChange }: BackendSelectProps) {
   return (
     <ButtonGroup
       attached
-      size="xs"
+      size="2xs"
       variant="outline"
       position="absolute"
       top={1}
@@ -28,7 +28,7 @@ export default function BackendSelect({ value, onChange }: BackendSelectProps) {
           variant={value === backend ? 'solid' : 'outline'}
           onClick={() => onChange(backend)}
         >
-          {backend}
+          {backend === 'auto' ? 'WebGL' : backend.toUpperCase()}
         </Button>
       ))}
     </ButtonGroup>

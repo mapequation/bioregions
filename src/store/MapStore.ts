@@ -15,7 +15,7 @@ import {
   type ViewTransform,
 } from '@mapequation/d3gl/geo';
 
-export const BACKENDS: BackendType[] = ['auto', 'webgl', 'canvas', 'svg'];
+export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 

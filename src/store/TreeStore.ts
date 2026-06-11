@@ -77,7 +77,7 @@ export default class TreeStore {
   width = TREE_WIDTH;
   height = TREE_HEIGHT;
   // Canvas2D default for an instant first frame; WebGL is smoother for very large trees.
-  backend: BackendType = 'canvas';
+  backend: BackendType = 'auto';
   // Display options (mirroring the d3gl ancestral-ranges example).
   layout: LayoutMode = 'rectangular';
   curve: CurveMode = 'step';
