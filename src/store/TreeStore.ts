@@ -34,7 +34,12 @@ import { scaleLinear } from 'd3-scale';
 // d3 umbrella has the shape/scale helpers (d3-shape, d3-scale are transitive via `d3`).
 import { scaleSqrt } from 'd3';
 import { isEqual } from '../utils/math';
-import { plot, type Plot, type BackendType } from '@mapequation/d3gl/map';
+import {
+  plot,
+  type Plot,
+  type BackendType,
+  type HoverHit,
+} from '@mapequation/d3gl/map';
 import { LabelLayer, type LabelAnchor } from '@mapequation/d3gl/labels';
 import type { ViewTransform } from '@mapequation/d3gl/geo';
 
@@ -62,6 +67,24 @@ interface Wedge {
   a1: number;
   clusterId: number;
   single: boolean;
+  node: LayoutNode;
+}
+
+/** One reconstructed-range slice for the hover tooltip: a bioregion, its share of the
+ *  clade's occurrences, and the bioregion color. */
+export interface HoverRegion {
+  clusterId: number;
+  count: number;
+  fraction: number;
+  color: string;
+}
+
+/** Ancestral-range summary of the hovered tree node/branch, shown in the tree tooltip
+ *  while the matching bioregions are emphasized on the map. */
+export interface TreeHoverInfo {
+  name: string;
+  speciesCount: number;
+  regions: HoverRegion[];
 }
 
 export default class TreeStore {
@@ -91,6 +114,16 @@ export default class TreeStore {
   private view: ViewTransform = { k: 1, x: 0, y: 0 };
   private renderDisposer: IReactionDisposer | null = null;
 
+  // Latest ancestral-range reconstruction (node → ranges/distribution), looked up on hover.
+  // Kept off the observable graph: it's rebuilt by `renderTree` and read by `onHover`.
+  private ancestral: AncestralMap | null = null;
+  // The tree layer currently showing a manual hover outline, so it can be cleared on hover-out.
+  private hoverLayer: string | null = null;
+
+  // Hover state for the React tooltip (set from the d3gl `hover` event).
+  hoverInfo: TreeHoverInfo | null = null;
+  hoverPos: [number, number] = [0, 0];
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -107,6 +140,9 @@ export default class TreeStore {
       layout: observable,
       curve: observable,
       coords: observable,
+      hoverInfo: observable.ref,
+      hoverPos: observable.ref,
+      setHoverInfo: action,
       setLayout: action,
       setCurve: action,
       setCoords: action,
@@ -305,11 +341,16 @@ export default class TreeStore {
       this.updateLabels();
     });
 
+    // Native d3gl picking (clip-aware): hovering a branch or node pie reads out that clade's
+    // reconstructed ancestral range — shown in the tree tooltip and cross-highlighted on the map.
+    engine.on('hover', this.onHover);
+
     // Rebuild whenever the tree, bioregions, or colors change (autorun tracks the reads).
     this.renderDisposer = autorun(() => this.renderTree());
   }
 
   disposeEngine = () => {
+    this.clearHover();
     this.renderDisposer?.();
     this.renderDisposer = null;
     this.labels?.destroy();
@@ -357,6 +398,8 @@ export default class TreeStore {
 
     const tree = this.tree;
     if (tree === null) {
+      this.clearHover();
+      this.ancestral = null;
       engine.layer('links', [], { draw: () => {} });
       engine.layer('pies', [], { draw: () => {} });
       this.anchors = [];
@@ -380,6 +423,7 @@ export default class TreeStore {
     let screenRadius: ((n: number) => number) | null = null;
     if (haveBioregions) {
       ancestral = reconstructAncestralRanges(tree, this.getClustersPerSpecies());
+      this.ancestral = ancestral;
       const total = ancestral.get(tree)?.speciesCount ?? 1;
       const ws = scaleSqrt().domain([1, total]).range([LINE_MIN, LINE_MAX]);
       const rs = scaleSqrt().domain([1, total]).range([PIE_MIN, PIE_MAX]);
@@ -427,7 +471,16 @@ export default class TreeStore {
         const r = pieRadius(n);
         const single = slices.length === 1;
         for (const s of slices) {
-          wedges.push({ cx, cy, r, a0: s.a0, a1: s.a1, clusterId: s.clusterId, single });
+          wedges.push({
+            cx,
+            cy,
+            r,
+            a0: s.a0,
+            a1: s.a1,
+            clusterId: s.clusterId,
+            single,
+            node: n,
+          });
         }
       }
       engine.layer('pies', wedges, {
@@ -452,6 +505,9 @@ export default class TreeStore {
         id: (_w, i) => i,
       });
     } else {
+      // No bioregions yet: no ancestral ranges to hover, so drop any stale reconstruction/hover.
+      this.ancestral = null;
+      this.clearHover();
       engine.layer('pies', [], { draw: () => {} });
     }
 
@@ -477,6 +533,79 @@ export default class TreeStore {
     engine.render();
     this.updateLabels();
   }
+
+  // --- Hover: show a node's ancestral range (tree tooltip + map cross-highlight) ---
+
+  /** Resolve the tree node behind a hover hit: a branch (`links` → its child node) or a node pie. */
+  private nodeFromHit(hit: HoverHit | null): LayoutNode | undefined {
+    if (!hit) return undefined;
+    if (hit.layer === 'pies') return (hit.datum as Wedge | null)?.node;
+    if (hit.layer === 'links') return (hit.datum as LayoutLink | null)?.target;
+    return undefined;
+  }
+
+  private onHover = (hit: HoverHit | null, ev: PointerEvent) => {
+    const node = this.nodeFromHit(hit);
+    const data = node ? this.ancestral?.get(node.data) : undefined;
+    if (!hit || !node || !data) {
+      this.clearHover();
+      return;
+    }
+    const slices = this.pieSlices(data);
+    if (slices.length === 0) {
+      this.clearHover();
+      return;
+    }
+
+    // Outline the hovered branch/pie in the tree's overlay layer (clearing a previous one on
+    // another layer first); the base geometry is untouched, so this is one feature per change.
+    // Branches: black overdraw at the branch's own width. Pies: a 1.5px black outline (their
+    // base lineWidth is 0 for single-region nodes, so the default white outline would vanish).
+    if (this.hoverLayer && this.hoverLayer !== hit.layer) {
+      this.engine?.highlight(this.hoverLayer, null);
+    }
+    this.hoverLayer = hit.layer;
+    this.engine?.highlight(
+      hit.layer,
+      hit.id,
+      hit.layer === 'pies'
+        ? { stroke: '#000000', lineWidth: 1.5 }
+        : { stroke: '#000000' },
+    );
+
+    // Light up the same bioregions on the map (dims the rest via the cells' `selection`).
+    this.rootStore.mapStore.highlightBioregions(
+      new Set(slices.map((s) => s.clusterId)),
+    );
+
+    const regions: HoverRegion[] = slices.map((s) => ({
+      clusterId: s.clusterId,
+      count: s.count,
+      // The slice already encodes the count-weighted share as its arc (with an equal-slice
+      // fallback when every region has zero count), so derive the fraction from the angle.
+      fraction: (s.a1 - s.a0) / (2 * Math.PI),
+      color: this.regionColor(s.clusterId),
+    }));
+    this.setHoverInfo(
+      { name: node.data.name, speciesCount: data.speciesCount, regions },
+      [ev.offsetX, ev.offsetY],
+    );
+  };
+
+  /** Clear the hover overlay, the map cross-highlight, and the tooltip. */
+  clearHover = () => {
+    if (this.hoverLayer) {
+      this.engine?.highlight(this.hoverLayer, null);
+      this.hoverLayer = null;
+    }
+    this.rootStore.mapStore.highlightBioregions(null);
+    if (this.hoverInfo !== null) this.setHoverInfo(null, this.hoverPos);
+  };
+
+  setHoverInfo = action((info: TreeHoverInfo | null, pos: [number, number]) => {
+    this.hoverInfo = info;
+    this.hoverPos = pos;
+  });
 
   /** File extension for the current export format (SVG when the SVG backend is selected). */
   get imageExtension(): '.svg' | '.png' {
