@@ -8,12 +8,9 @@ import {
   type GeoMap,
   type BackendType,
   type LayerHandle,
+  type HoverHit,
 } from '@mapequation/d3gl/map';
-import {
-  fitProjection,
-  lonLatFromScreen,
-  type ViewTransform,
-} from '@mapequation/d3gl/geo';
+import { fitProjection } from '@mapequation/d3gl/geo';
 
 export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
@@ -93,10 +90,6 @@ export default class MapStore {
   // The layer is registered with a `() => multiPoints` callback, so pan/zoom/projection repaints
   // re-read and re-project everything (time-sliced by d3gl) — append only covers the new delta.
   private pointsHandle: LayerHandle<MultiPoint> | null = null;
-  // Current d3gl view transform (screen-space pan/zoom for flat projections), kept in sync via
-  // enableZoom so hover can invert screen → lon/lat. Orthographic keeps rotation in the
-  // projection itself, so the transform stays at identity there.
-  transform: ViewTransform = { k: 1, x: 0, y: 0 };
 
   width: number = 1200;
   height: number = 900;
@@ -111,14 +104,16 @@ export default class MapStore {
   waterColor: string = '#f0f8ff';
   landColor: string = '#ffffff';
 
-  tooltipActive: boolean = false;
-  tooltipPos: [number, number] = [0, 0];
-  tooltipCell: Cell | null = null;
-
   heatmapTarget: HeatmapTarget = 'records';
   get heatmapScale(): 'linear' | 'log' {
     return HEATMAP_TARGET_SCALE[this.heatmapTarget];
   }
+
+  // Hover state for the React tooltip, set from d3gl's native `hover` event (clip-aware
+  // picking on the cells layer). The tooltip content is a React component (see WorldMap),
+  // not built imperatively here.
+  hoverCell: Cell | null = null;
+  hoverPos: [number, number] = [0, 0];
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -136,9 +131,9 @@ export default class MapStore {
       colorModuleParticipationStrength: observable,
       waterColor: observable,
       landColor: observable,
-      tooltipActive: observable,
-      tooltipPos: observable,
-      tooltipCell: observable.ref,
+      hoverCell: observable.ref,
+      hoverPos: observable.ref,
+      setHover: action,
       heatmapTarget: observable,
       heatmapScale: computed,
       backend: observable,
@@ -298,11 +293,12 @@ export default class MapStore {
     this.engine = engine;
 
     // One call for every projection: d3gl auto-dispatches drag-to-rotate (versor) for the
-    // orthographic globe and affine pan/zoom for flat projections.
-    engine.enableZoom([1, 12], (t) => {
-      this.transform = t;
-    });
+    // orthographic globe and affine pan/zoom for flat projections. Hover/click picking
+    // inverts screen → data internally, so we no longer track the transform ourselves.
+    engine.enableZoom([1, 18]);
 
+    // Clip-aware picking on the cells layer drives the React tooltip (see WorldMap.MapTooltip).
+    engine.on('hover', this.onHover);
   }
 
   /**
@@ -340,6 +336,12 @@ export default class MapStore {
         fill: (cell: Cell) => getGridColor(cell),
         clipTo,
         id: (cell: Cell) => cell.id,
+        // Native d3gl interaction (clip-aware): outline the hovered cell into a tiny overlay
+        // (the grid's buffers are untouched), and let `select()` dim non-members — driven from
+        // the tree's ancestral-range hover (see `highlightBioregions`). The hover *event*
+        // (engine.on('hover')) feeds the React tooltip; the tooltip content lives in WorldMap.
+        hover: { stroke: '#000000', lineWidth: 1.5 },
+        selection: { others: { opacity: 0.25 } },
         // hideOnInteraction: true,
       });
     }
@@ -416,7 +418,6 @@ export default class MapStore {
       this.width,
       this.height,
     );
-    this.transform = { k: 1, x: 0, y: 0 };
     this.engine?.setProjection(this.projection);
   }
 
@@ -432,44 +433,32 @@ export default class MapStore {
     projection.translate([width / 2, height / 2]);
   }
 
-  // --- Tooltip / hover (React mouse handlers on the host div) ---
+  // --- Hover tooltip + cross-highlight (native d3gl interaction) ---
 
-  getPosFromEvent(event: React.MouseEvent<HTMLElement>): [number, number] {
-    const { offsetX, offsetY } = event.nativeEvent;
-    return [offsetX, offsetY];
-  }
+  /** Track the hovered grid cell + pointer position for the React tooltip. Fires from d3gl's
+   *  clip-aware `hover` event; `null` (off a cell / off the painted grid) hides the tooltip. */
+  private onHover = (hit: HoverHit | null, ev: PointerEvent) => {
+    this.setHover(
+      hit?.layer === 'cells' ? (hit.datum as Cell) : null,
+      [ev.offsetX, ev.offsetY],
+    );
+  };
 
-  setTooltipPos = action((event: React.MouseEvent<HTMLElement>) => {
-    this.tooltipPos = this.getPosFromEvent(event);
+  setHover = action((cell: Cell | null, pos: [number, number]) => {
+    this.hoverCell = cell;
+    this.hoverPos = pos;
   });
 
-  onMouseEnter = action((event: React.MouseEvent<HTMLElement>) => {
-    this.tooltipActive = true;
-    this.setTooltipPos(event);
-  });
-
-  onMouseLeave = action(() => {
-    this.tooltipActive = false;
-    this.tooltipCell = null;
-  });
-
-  onMouseMove = action((event: React.MouseEvent<HTMLElement>) => {
-    this.setTooltipPos(event);
-    const [x, y] = this.tooltipPos;
-    // Orthographic keeps its rotation in the projection (transform stays identity), so invert
-    // directly; flat projections invert through the affine view transform. invert() returns
-    // null off the globe / outside the sphere.
-    const longlat =
-      this.projectionName === 'geoOrthographic'
-        ? (this.projection.invert?.([x, y]) ?? null)
-        : lonLatFromScreen(this.projection, this.transform, x, y);
-    if (!longlat) {
-      this.tooltipCell = null;
+  /** Emphasize a set of bioregions on the map by dimming every cell that isn't a member
+   *  (one style-table write via `select`, no re-tessellation). Driven by the tree's
+   *  ancestral-range hover so a clade's reconstructed range lights up geographically.
+   *  `null` (or an empty set) clears the selection. No-op in records mode (no cells layer). */
+  highlightBioregions = action((regionIds: Set<number> | null) => {
+    if (this.engine === null) return;
+    if (regionIds === null || regionIds.size === 0) {
+      this.engine.select('cells', null);
       return;
     }
-    const cell = this.rootStore.speciesStore.binner.find(...longlat) ?? null;
-    this.tooltipCell = cell?.visible ? cell : null;
+    this.engine.select('cells', (cell: Cell) => regionIds.has(cell.bioregionId));
   });
-
-  onMouseClick = action((_event: React.MouseEvent<HTMLElement>) => { });
 }
