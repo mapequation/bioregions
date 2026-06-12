@@ -84,7 +84,7 @@ export default observer(function WorldMap() {
   }, [mapStore]);
 
   return (
-    <Box ml={4} width={width}>
+    <Box ml={4} position="relative" width={width}>
       <BackendSelect value={mapStore.backend} onChange={mapStore.setBackend} />
       {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
           coordinate space as the d3gl pointer offsets. Hover outline + selection dimming are

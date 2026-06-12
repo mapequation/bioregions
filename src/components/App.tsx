@@ -81,7 +81,7 @@ const PhyloTree = observer(function _PhyloTree() {
   }
 
   return (
-    <Box ml={4} width={treeStore.width}>
+    <Box ml={4} position="relative" width={treeStore.width}>
       <BackendSelect value={treeStore.backend} onChange={treeStore.setBackend} />
       {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
           coordinate space as the d3gl pointer offsets. */}
