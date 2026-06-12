@@ -30,6 +30,100 @@ The dev server, build, and styleguide depend on example data under `public/data/
 `mapequation/bioregions-data` GitHub repo plus world-atlas land TopoJSON, and skips
 the download if the files required by `src/examples.json` already exist.
 
+## Issue-tracking workflow (do this for non-trivial work)
+
+The expensive part of a session is the reasoning — hypotheses tried, tests run to
+*rule things out*, the eventual root cause. None of it survives in a merged PR.
+Capture it in GitHub issues so a future session can resume. Knowledge tiers, by how
+long it stays useful:
+
+- **Repo (`CLAUDE.md` / `docs/`)** — recurs across tasks (architectural gotcha,
+  non-obvious constraint, recurring failure mode). The only tier re-read
+  automatically next session → durable learnings go here, not in a closed issue.
+  `docs/specs` + `docs/plans` (superpowers skills) hold a task's spec/plan.
+- **Issue** — *this problem's* understanding. Body = current answer (living doc:
+  repro, confirmed root cause, ruled-out paths); edit as understanding changes.
+  Comment thread = chronological work log; post negative results explicitly ("tried
+  X, ruled out by Y") — most expensive thing to rediscover. End of session: summarize
+  with `gh issue comment` or edit the body.
+- **PR** — only diff-shaped reasoning (why this approach, tradeoffs, review replies).
+  Dies at merge; inline comments detach on rebase. Put **`Fixes #N`** in the PR body
+  to auto-close + link issue ↔ PR ↔ commits.
+- **New / sub-issues** — a *genuinely new* problem → its own issue, linked
+  (`Related to #N`). Same problem getting deeper → stays on the original. Multi-phase
+  work → **sub-issues** under a parent (board tracks `Sub-issues progress`).
+
+### Lifecycle (per task)
+
+1. **Open the issue first**, before branching. Create it in the repo, then add it to
+   the project — don't rely on the project's "default repository" auto-create.
+2. Add to the board: `gh project item-add 5 --owner mapequation --url <issue-url>`
+   (lands in **Backlog**). Needs `project,read:project` scopes
+   (`gh auth refresh -s project,read:project`).
+3. Move **Backlog → Ready** when triaged (manual — see below), **→ In progress** when
+   you start, **→ In review** when the PR is open, **→ Done** on merge/close.
+4. Branch (worktree under `.claude/worktrees/`), open PR with `Fixes #N`.
+5. **Merge with squash** (see below), then **delete the feature branch** (local +
+   remote) once it's in `main`.
+
+### Merge strategy & branch cleanup
+
+**Squash-merge feature PRs** (`gh pr merge <N> --squash --delete-branch`). It's the
+default best practice here: one commit per PR keeps `main`'s history linear and
+readable, makes revert/bisect trivial, and the messy work-in-progress commits stay in
+the PR (where, per the issue-tracking rule above, throwaway reasoning belongs). Earlier
+PRs used merge commits or rebase-merges — those preserve ancestry but clutter `main`
+with intermediate commits and lose the one-PR-one-commit grouping, so don't carry that
+pattern forward. Reserve plain merge commits for genuine long-lived branches (none
+exist here today).
+
+**Delete the branch on merge.** `--delete-branch` removes it remotely; also prune
+locally:
+
+```sh
+git checkout main && git pull --ff-only
+git fetch --prune origin           # drop stale remote-tracking refs
+git branch -d <branch>             # delete local copy (safe; refuses if unmerged)
+```
+
+Caveat: a squash-merged branch is **not** an ancestor of `main`, so
+`git branch --merged` / `git branch -d` won't recognize it — confirm via the PR
+(`gh pr list --state merged`) and use `git branch -D` / `git push origin --delete` for those. **Never delete** `changeset-release/main` (the Changesets release bot branch) or any branch with an open PR.
+
+### Issue body template
+For a complex issue, including these sections is helpful.
+
+```md
+## Context        # what's wrong / the situation, why it matters
+## Goal           # one-sentence outcome
+## Scope          # what's in — bullets, concrete
+## Files / pointers   # repo-relative paths + symbols to start from
+## Acceptance criteria  # how we know it's done (testable)
+## Dependencies   # blocking issues (#N), prerequisites
+## Non-goals      # explicitly out of scope
+## Effort         # Small / Medium / Large
+```
+
+### Project board (`Infomap Bioregions`, org project #5)
+
+Status field: **Backlog → Ready → In progress → In review → Done.** Built-in
+workflows (Project ▸ ⋯ ▸ Workflows) automate entry/exit only — *Item added* →
+Backlog, *PR merged* / *Issue closed* → Done. **Backlog → Ready and In progress / In
+review have no built-in automation**: move them manually (Ready = deliberate
+"groomed & prioritized" triage signal). Automate only via a label-driven GitHub
+Action if wanted — not a built-in workflow.
+
+
+### Worktrees & shell cwd (avoid committing to the wrong repo)
+
+Feature work happens in a worktree under `.claude/worktrees/<name>/`, which is a SECOND checkout of the same repo. The shell's working directory can silently reset to the **primary** repo between commands (e.g. after a `cd /…/bioregions && …`, a `cd /tmp`, or a tool that resets cwd). If you then run `git add -A && git commit && git push` assuming you're in the worktree, you'll commit to the **primary checkout's branch (usually `main`)** instead — and `git add -A` there will even add `.claude/worktrees/<name>` as an embedded-repo gitlink.
+
+Defenses (do these):
+- Run every git/build command with an explicit path — `git -C <worktree> …` — instead of relying on the current directory.
+- Stage scoped paths (`git add src/`), never a bare `git add -A`, so a
+  wrong-cwd add can't sweep in `.claude/`.
+- A `git push` that prints `main -> main` (or warns about an *embedded git repository*) means you're in the wrong checkout — stop and fix before pushing.
+
 ## Architecture
 
 ### Store graph (MobX)
