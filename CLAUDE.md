@@ -12,18 +12,24 @@ no backend server.
 
 ## Commands
 
+The package manager is **pnpm** (pinned via the `packageManager` field; use
+`corepack` so the pinned version is used). There is no `package-lock.json` — the
+lockfile is `pnpm-lock.yaml`.
+
 ```bash
-npm run dev          # Vite dev server
-npm run build        # tsc -b (typecheck, project references) then vite build
-npm run lint         # eslint over the repo
-npm run preview      # serve the production build
-npm run fetch-data   # download example datasets (also runs automatically via prebuild)
-npm run styleguide   # react-styleguidist component explorer
+pnpm install         # install deps (CI uses --frozen-lockfile)
+pnpm dev             # Vite dev server
+pnpm build           # tsc -b (typecheck, project references) then vite build
+pnpm lint            # eslint over the repo
+pnpm preview         # serve the production build
+pnpm fetch-data      # download example datasets (also runs automatically via prebuild)
+pnpm styleguide      # react-styleguidist component explorer
+pnpm changeset       # record a change for the changelog (see Releases below)
 ```
 
 There is no configured test runner in `package.json` despite `src/**/*.test.ts`
 files existing (e.g. `src/utils/tree/tree.test.ts`) and `src/setupTests.ts`. Don't
-assume `npm test` works.
+assume `pnpm test` works.
 
 The dev server, build, and styleguide depend on example data under `public/data/`.
 `scripts/fetch-data.mjs` (run as `prebuild`) downloads it from the
@@ -200,3 +206,25 @@ Theming lives in `src/theme.ts`.
 - Prefer a **squash merge** (`gh pr merge --squash`) so each PR lands as a single commit.
   Use a plain merge only for a multi-phase plan where each phase is its own meaningful
   commit that should be preserved in history.
+
+## Releases (Changesets)
+
+Versioning and the changelog are managed with [Changesets](https://github.com/changesets/changesets).
+`bioregions` is a **private app** — it is *not* published to npm. Changesets is used
+only to bump the version in `package.json` and maintain `CHANGELOG.md`; releasing
+ships via the GitHub Pages deploy (`.github/workflows/pages.yml`).
+
+- **Record a change:** run `pnpm changeset`, pick a bump type, write a user-facing
+  summary. This writes a markdown file under `.changeset/`. Commit it with your PR.
+- **Pre-release mode:** the app is in `alpha` pre-release mode (`.changeset/pre.json`),
+  so version runs produce `2.0.0-alpha.N`. Run `pnpm exec changeset pre exit` to
+  graduate to a stable `2.0.0` (then the next version run finalizes it).
+- **The release PR:** `.github/workflows/release.yml` runs `changesets/action@v1` on
+  every push to `main`. When unreleased changesets exist, it opens/updates a
+  **"Version Packages"** PR (branch `changeset-release/main`) that applies them —
+  bumping the version and updating `CHANGELOG.md`. Merging that PR *is* the release;
+  there is no `publish` step. (Requires the repo setting *Allow GitHub Actions to
+  create and approve pull requests*.)
+
+Do not hand-edit the version in `package.json` or `CHANGELOG.md` — let the Version
+Packages PR do it. Never delete the `changeset-release/main` branch.

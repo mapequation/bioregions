@@ -22,15 +22,17 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
+          cache: pnpm
 
-      - run: npm install --package-lock-only
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
-      - run: npm run build
+      - run: pnpm run build
         env:
           NODE_OPTIONS: --openssl-legacy-provider
 
