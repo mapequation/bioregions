@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # When changesets exist on main, this opens/updates a "Version Packages" PR
+      # that bumps the version in package.json and updates CHANGELOG.md. bioregions
+      # is a private app, so no `publish:` is configured — merging the PR is the
+      # release, and pages.yml deploys it. Nothing is pushed to npm.
+      - name: Create Release Pull Request
+        uses: changesets/action@v1
+        with:
+          version: pnpm run version
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

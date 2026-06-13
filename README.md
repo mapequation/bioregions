@@ -1,46 +1,45 @@
-# Getting Started with Create React App
+# Infomap Bioregions 2.0
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A browser app that computes biogeographical regions from species occurrence data
+(and optional phylogenetic trees) using [the map equation](https://www.mapequation.org/).
+React 19 + TypeScript, bundled with Vite, state managed with MobX, UI built on
+Chakra UI v3. All computation runs client-side ([Infomap](https://github.com/mapequation/infomap)
+is a WASM module) — there is no backend server.
 
-## Available Scripts
+## Development
 
-In the project directory, you can run:
+The package manager is [pnpm](https://pnpm.io/) (the version is pinned via the
+`packageManager` field; `corepack` will pick it up automatically).
 
-### `npm start`
+```bash
+corepack enable      # one-time: lets corepack manage the pinned pnpm version
+pnpm install         # install dependencies
+pnpm dev             # start the Vite dev server
+pnpm build           # typecheck (tsc -b) and build for production into dist/
+pnpm lint            # run eslint
+pnpm preview         # serve the production build locally
+pnpm styleguide      # react-styleguidist component explorer
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+The dev server, build, and styleguide depend on example datasets under
+`public/data/`. `scripts/fetch-data.mjs` (run automatically as `prebuild`, or
+explicitly via `pnpm fetch-data`) downloads them from the
+[`mapequation/bioregions-data`](https://github.com/mapequation/bioregions-data)
+repo plus world-atlas land TopoJSON, skipping the download if the files are already
+present.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Releases
 
-### `npm test`
+Versioning and the changelog are managed with
+[Changesets](https://github.com/changesets/changesets). This is a private app — it is
+not published to npm; Changesets only bumps the version and maintains `CHANGELOG.md`,
+and the app ships via the GitHub Pages deploy.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+When a change should appear in the changelog, run `pnpm changeset`, choose a bump
+type, and write a short user-facing summary; commit the generated file under
+`.changeset/` with your PR. On push to `main`, CI opens a **"Version Packages"** pull
+request that applies the accumulated changesets — merging it is the release. The app
+is currently in `alpha` pre-release mode, so versions are `2.0.0-alpha.N`.
 
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+See [`CLAUDE.md`](./CLAUDE.md) for architecture, conventions, and the full
+issue-tracking / release workflow.
