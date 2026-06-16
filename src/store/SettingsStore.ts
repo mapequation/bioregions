@@ -11,11 +11,19 @@ export default class SettingsStore {
 
     makeObservable(this, {
       statisticsBy: observable,
+      showStatusBarLabels: observable,
     });
   }
 
   statisticsBy: StatisticsBy = 'bioregions';
   setStatisticsBy = action((value: StatisticsBy) => {
     this.statisticsBy = value;
+  });
+
+  // Whether the view status bars show the small text caption beneath each control.
+  // Off by default — the icons are self-explanatory; labels are an opt-in aid.
+  showStatusBarLabels: boolean = false;
+  setShowStatusBarLabels = action((value: boolean) => {
+    this.showStatusBarLabels = value;
   });
 }

@@ -2,6 +2,7 @@ import { observer } from 'mobx-react';
 import { useStore } from '../../store';
 import { BACKENDS, PROJECTIONS, PROJECTIONNAME } from '../../store/MapStore';
 import { StatusBar, StatusGroup, StatusButton, StatusDivider } from './StatusBar';
+import StatusBarSettings from './StatusBarSettings';
 import {
   bioregionIconColors,
   ProjectionIcon,
@@ -20,13 +21,13 @@ const BACKEND_HELP: Record<string, string> = {
 };
 
 export default observer(function MapStatusBar() {
-  const { mapStore, infomapStore, colorStore } = useStore();
+  const { mapStore, infomapStore, colorStore, settingsStore } = useStore();
   const [r1, r2] = bioregionIconColors(colorStore);
   const isBioregions = mapStore.renderType === 'bioregions';
   const levelCount = infomapStore.numLevels - 1; // selectable levels (slider was 0..numLevels-2)
 
   return (
-    <StatusBar>
+    <StatusBar showLabels={settingsStore.showStatusBarLabels}>
       <StatusGroup caption="backend">
         {BACKENDS.map((b) => (
           <StatusButton
@@ -139,6 +140,8 @@ export default observer(function MapStatusBar() {
           <ClipOnIcon r1={r1} r2={r2} ocean={mapStore.waterColor} />
         </StatusButton>
       </StatusGroup>
+
+      <StatusBarSettings />
     </StatusBar>
   );
 });

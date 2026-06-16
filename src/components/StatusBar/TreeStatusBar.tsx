@@ -5,6 +5,7 @@ import type { LayoutMode, CurveMode, SizeMode } from '../../utils/tree/treeLayou
 import type { BackendType } from '@mapequation/d3gl/map';
 import { BACKENDS } from '../../store/MapStore';
 import { StatusBar, StatusGroup, StatusButton, StatusDivider } from './StatusBar';
+import StatusBarSettings from './StatusBarSettings';
 import {
   LayoutRectangularIcon,
   LayoutRadialIcon,
@@ -37,9 +38,9 @@ const COORDS: { value: SizeMode; icon: ReactElement; help: string }[] = [
 ];
 
 export default observer(function TreeStatusBar() {
-  const { treeStore } = useStore();
+  const { treeStore, settingsStore } = useStore();
   return (
-    <StatusBar>
+    <StatusBar showLabels={settingsStore.showStatusBarLabels}>
       <StatusGroup caption="backend">
         {BACKENDS.map((b: BackendType) => (
           <StatusButton
@@ -93,6 +94,8 @@ export default observer(function TreeStatusBar() {
           </StatusButton>
         ))}
       </StatusGroup>
+
+      <StatusBarSettings />
     </StatusBar>
   );
 });

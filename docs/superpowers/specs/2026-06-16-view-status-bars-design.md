@@ -81,13 +81,19 @@ New folder `src/components/StatusBar/`:
   - `StatusBar` — flex-row container styled like the approved mock (bg `#f8fafc`,
     `1px` border, radius on top corners, wraps on narrow widths).
   - `StatusGroup({ caption, children })` — a segmented `ButtonGroup`-like wrapper with
-    the small uppercase caption beneath. Captions are kept (user wants them).
+    the small uppercase caption beneath. The caption renders only when labels are
+    enabled (see below); the icons are self-explanatory, so labels are **off by
+    default** and toggled on as an opt-in aid.
   - `StatusButton({ active, disabled, title, children })` — uniform **34×34** square
     cell; supports text or a 24×24 icon child; active style = bg `#e0ecff` +
     `inset 0 -2px 0 #2563eb`; text-active = `#1d4ed8`. Wrapped in a Chakra
     `Tooltip` (from `ui/tooltip`) carrying the longer hover explanation.
-- **`MapStatusBar.tsx`** — `observer` reading `mapStore`/`infomapStore`/`colorStore`;
-  composes the six map groups per the table above.
+  - `StatusBarSettings` — a gear `IconButton` (`ml="auto"`, right edge of the bar)
+    opening a popover with a single **"Show labels"** `Switch`, bound to
+    `settingsStore.showStatusBarLabels` (default `false`). `StatusBar` provides that
+    flag to its `StatusGroup`s via React context.
+- **`MapStatusBar.tsx`** — `observer` reading `mapStore`/`infomapStore`/`colorStore`/`settingsStore`;
+  composes the six map groups per the table above, plus the settings gear.
 - **`TreeStatusBar.tsx`** — `observer` reading `treeStore`; composes the four tree
   groups.
 - **`icons.tsx`** — small presentational SVG components (24×24), listed in the
@@ -149,7 +155,8 @@ after a change (render type, projection, module level), the bar handlers do the 
   and still work.
 - Changing a control in the bar updates the view exactly as the old panel control did
   (verified by toggling each); changing the kept strength slider still works.
-- Each button has a hover tooltip; group captions are visible.
+- Each button has a hover tooltip; group captions are hidden by default and appear
+  when "Show labels" is toggled on via the bar's settings gear.
 - Buttons are uniform 34×34 squares with the approved active styling.
 - `pnpm build` (tsc + vite) and `pnpm lint` pass.
 

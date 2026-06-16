@@ -1,28 +1,39 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { Box, chakra } from '@chakra-ui/react';
 import { Tooltip } from '../ui/tooltip';
 
+/** Whether groups render their caption. Provided by `StatusBar`, consumed by `StatusGroup`. */
+const ShowLabelsContext = createContext(false);
+
 /** The bar container: a wrapping flex row that sits above a view. */
-export function StatusBar({ children }: { children: ReactNode }) {
+export function StatusBar({
+  showLabels = false,
+  children,
+}: {
+  showLabels?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <Box
-      display="flex"
-      alignItems="flex-start"
-      flexWrap="wrap"
-      gap={3}
-      px={3}
-      py={2}
-      mb={2}
-      bg="bg.panel"
-      borderWidth="1px"
-      borderColor="border"
-      borderRadius="md"
-      boxShadow="xs"
-      fontSize="11px"
-      lineHeight="1.2"
-    >
-      {children}
-    </Box>
+    <ShowLabelsContext.Provider value={showLabels}>
+      <Box
+        display="flex"
+        alignItems="flex-start"
+        flexWrap="wrap"
+        gap={3}
+        px={3}
+        py={2}
+        mb={2}
+        bg="bg.panel"
+        borderWidth="1px"
+        borderColor="border"
+        borderRadius="md"
+        boxShadow="xs"
+        fontSize="11px"
+        lineHeight="1.2"
+      >
+        {children}
+      </Box>
+    </ShowLabelsContext.Provider>
   );
 }
 
@@ -39,6 +50,7 @@ export function StatusGroup({
   caption: string;
   children: ReactNode;
 }) {
+  const showLabels = useContext(ShowLabelsContext);
   return (
     <Box display="flex" flexDirection="column" alignItems="center" gap="5px">
       <Box
@@ -53,14 +65,16 @@ export function StatusGroup({
       >
         {children}
       </Box>
-      <Box
-        fontSize="9px"
-        textTransform="uppercase"
-        letterSpacing="0.05em"
-        color="fg.subtle"
-      >
-        {caption}
-      </Box>
+      {showLabels && (
+        <Box
+          fontSize="9px"
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+          color="fg.subtle"
+        >
+          {caption}
+        </Box>
+      )}
     </Box>
   );
 }
