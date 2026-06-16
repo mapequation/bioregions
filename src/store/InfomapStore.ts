@@ -19,7 +19,7 @@ import {
 import type { PhyloNode } from '../utils/tree';
 import { calculateStats, isEqual, uniformTsallisEntropy } from '../utils/math';
 import { range } from '../utils/range';
-import { max, min } from 'd3-array';
+import { max } from 'd3-array';
 import type { Cell } from '../utils/QuadTree';
 import type SpeciesStore from './SpeciesStore';
 import type TreeStore from './TreeStore';
@@ -107,9 +107,12 @@ export class Bioregion {
         continue;
       }
       for (const { count, name } of cell.speciesTopList) {
-        const species = speciesStore.speciesMap.get(name)!;
+        const species = speciesStore.speciesMap.get(name);
+        if (species == null) {
+          throw new Error(`InfomapStore: missing species '${name}'`);
+        }
 
-        const bioregionId = species.bioregionId!;
+        const bioregionId = species.bioregionId;
         if (!bioregionId) {
           // console.warn(`No bioregion id for species ${name}: ${bioregionId}`);
           ++numSpeciesWithoutBioregions;
@@ -137,7 +140,10 @@ export class Bioregion {
       this.mostIndicative.push({ name, score, count });
       this.mostCommon.push({ name, score, count });
 
-      const species = speciesStore.speciesMap.get(name)!;
+      const species = speciesStore.speciesMap.get(name);
+      if (species == null) {
+        throw new Error(`InfomapStore: missing species '${name}'`);
+      }
       species.countPerRegion.set(
         this.bioregionId,
         (species.countPerRegion.get(this.bioregionId) ?? 0) + count,
@@ -191,7 +197,7 @@ export class Bioregion {
       }
       const treeNode = treeStore.treeNodeMap.get(speciesName);
       if (treeNode) {
-        minTime = min([minTime, treeNode.data.time])!;
+        minTime = Math.min(minTime, treeNode.data.time);
       }
     }
     this.oldestPhyloNodeTime = minTime;
@@ -571,7 +577,10 @@ export default class InfomapStore {
     const phyloNodeWeights: Map<string, number> = new Map();
     const nodes = 'states' in network ? network.states : network.nodes;
     network.links.forEach(link => {
-      const taxonName = nodes[link.source].name!;
+      const taxonName = nodes[link.source].name;
+      if (taxonName == null) {
+        throw new Error(`InfomapStore: network node ${link.source} has no name`);
+      }
       phyloNodeWeights.set(taxonName, (link.weight ?? 0) / network.sumLinkWeight + (phyloNodeWeights.get(taxonName) ?? 0));
     })
     return getAccumulatedTreeData(phyloTree, {
@@ -614,7 +623,7 @@ export default class InfomapStore {
     console.log(`Infomap with id ${id} finished`)
 
     const { moduleLevel: _moduleLevel } = this;
-    const moduleLevel = tree ? min([_moduleLevel, tree.numLevels - 2])! : 0;
+    const moduleLevel = tree ? Math.min(_moduleLevel, tree.numLevels - 2) : 0;
     if (moduleLevel !== _moduleLevel) {
       this.setModuleLevel(moduleLevel, false);
     }
@@ -654,7 +663,10 @@ export default class InfomapStore {
     this.setIsRunning();
     this.setCurrentTrial(0);
 
-    const network = this.updateNetwork()!;
+    const network = this.updateNetwork();
+    if (network == null) {
+      throw new Error('InfomapStore: updateNetwork returned no network');
+    }
 
     const args = { ...this.args };
     // const isStateNetwork = 'states' in network;
@@ -734,7 +746,7 @@ export default class InfomapStore {
 
     try {
       await this.infomap.terminate(this.infomapId, 0);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Worker error', e);
     }
     this.infomapId = null;
@@ -882,9 +894,10 @@ export default class InfomapStore {
           }
           sumNonTreeLinkWeight += weight;
           // TODO: No need to use the map here if not include tree, will not aggregate on species level
-          const outLinks = linkMap.has(name)
-            ? linkMap.get(name)!
-            : linkMap.set(name, new Map()).get(name)!;
+          const outLinks = linkMap.get(name) ?? new Map<CellId, Weight>();
+          if (!linkMap.has(name)) {
+            linkMap.set(name, outLinks);
+          }
           // if (!outLinks.has(cellId)) {
           //   ++network.numNonTreeLinks;
           // }
@@ -956,7 +969,10 @@ export default class InfomapStore {
       const links = new Map<CellId, Weight>();
       let numLinks = 0;
 
-      for (const species of node.speciesSet!) {
+      if (node.speciesSet == null) {
+        throw new Error(`InfomapStore: tree node '${node.name}' has no speciesSet`);
+      }
+      for (const species of node.speciesSet) {
         if (!nameToCellIds[species]) {
           missing.add(species);
           continue;
@@ -982,9 +998,10 @@ export default class InfomapStore {
     ) => {
       // TODO: Make sure internal tree nodes don't have same name as leaf nodes
 
-      const outLinks = treeLinks.has(node.name)
-        ? treeLinks.get(node.name)!
-        : treeLinks.set(node.name, new Map()).get(node.name)!;
+      const outLinks = treeLinks.get(node.name) ?? new Map<CellId, Weight>();
+      if (!treeLinks.has(node.name)) {
+        treeLinks.set(node.name, outLinks);
+      }
 
       for (const [cellId, count] of links.entries()) {
         const weight = count * interpolationWeight;
@@ -1165,20 +1182,27 @@ export default class InfomapStore {
       console.log(`=== Creating layer ${layerId} at time ${t}`);
       const network = this.createStandardNetwork(t);
       network.nodes.forEach((node) => {
-        if (multilayerNetwork.nodeIdMap[node.name!] === undefined) {
+        const { name } = node;
+        if (name == null) {
+          throw new Error(`InfomapStore: network node ${node.id} has no name`);
+        }
+        if (multilayerNetwork.nodeIdMap[name] === undefined) {
           const id = nodeIdCounter++;
-          multilayerNetwork.nodeIdMap[node.name!] = id;
-          multilayerNetwork.nodes?.push({ id, name: node.name! });
+          multilayerNetwork.nodeIdMap[name] = id;
+          multilayerNetwork.nodes?.push({ id, name });
         }
       });
       network.links.forEach((link) => {
-        const sourceName = network.nodes[link.source].name!;
-        const targetName = network.nodes[link.target].name!;
+        const sourceName = network.nodes[link.source].name;
+        const targetName = network.nodes[link.target].name;
+        if (sourceName == null || targetName == null) {
+          throw new Error('InfomapStore: network link references unnamed node');
+        }
         const intraLink = {
           layerId,
           source: multilayerNetwork.nodeIdMap[sourceName],
           target: multilayerNetwork.nodeIdMap[targetName],
-          weight: link.weight!,
+          weight: link.weight,
         }
         multilayerNetwork.intra.push(intraLink);
         // console.log(`${sourceName} -> ${targetName} (w: ${link.weight})`)
@@ -1286,7 +1310,10 @@ export default class InfomapStore {
 
     let stateIdCounter = 0;
     const addCellStateNode = (cellId: string, memTaxonName: string) => {
-      const cellPhysId = nameToPhysicalId.get(cellId)!;
+      const cellPhysId = nameToPhysicalId.get(cellId);
+      if (cellPhysId == null) {
+        throw new Error(`InfomapStore: missing physical id for cell '${cellId}'`);
+      }
       const stateName = getCellStateName(cellId, memTaxonName);
       let stateNode = cellStateNodes.get(stateName);
       if (stateNode == null) {
@@ -1349,13 +1376,22 @@ export default class InfomapStore {
     ) => {
       const cellStateNode = addCellStateNode(cellId, memTaxonName);
       const taxonNode = addTaxonNode(taxonName);
+      const taxonNodeName = taxonNode.name;
+      const cellStateNodeName = cellStateNode.name;
+      if (taxonNodeName == null || cellStateNodeName == null) {
+        throw new Error('InfomapStore: state node missing name');
+      }
 
       const outLinks =
-        linkMap.get(taxonNode.name!) ??
-        linkMap.set(taxonNode.name!, new Map()).get(taxonNode.name!)!;
+        linkMap.get(taxonNodeName) ??
+        (() => {
+          const m: StateCellOutLinks = new Map();
+          linkMap.set(taxonNodeName, m);
+          return m;
+        })();
       outLinks.set(
-        cellStateNode.name!,
-        (outLinks.get(cellStateNode.name!) ?? 0) + weight,
+        cellStateNodeName,
+        (outLinks.get(cellStateNodeName) ?? 0) + weight,
       );
     };
 
@@ -1364,8 +1400,11 @@ export default class InfomapStore {
         for (const [stateCellName, weight] of outLinks) {
           if (weight < linkWeightThreshold) { return; }
 
-          const taxonNode = phyloStateNodes.get(taxonName)!;
-          const cellStateNode = cellStateNodes.get(stateCellName)!;
+          const taxonNode = phyloStateNodes.get(taxonName);
+          const cellStateNode = cellStateNodes.get(stateCellName);
+          if (taxonNode == null || cellStateNode == null) {
+            throw new Error('InfomapStore: missing state node for link');
+          }
 
           network.links.push({
             source: taxonNode.stateId,
@@ -1412,7 +1451,10 @@ export default class InfomapStore {
           }
           continue;
         }
-        const memBranch = treeNode.data.memory!;
+        const memBranch = treeNode.data.memory;
+        if (memBranch == null) {
+          throw new Error(`InfomapStore: tree node '${name}' has no memory branch`);
+        }
 
         const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
         const weight = (1 - treeWeightBalance) * unscaledWeight;
@@ -1481,12 +1523,19 @@ export default class InfomapStore {
       const links = new Map<TaxonName, Map<CellId, Weight>>();
       let sumWeight = 0;
 
-      for (const speciesName of node.speciesSet!) {
+      if (node.speciesSet == null) {
+        throw new Error(`InfomapStore: tree node '${node.name}' has no speciesSet`);
+      }
+      for (const speciesName of node.speciesSet) {
         if (!nameToCellIds[speciesName]) {
           missing.add(speciesName);
           continue;
         }
-        const memBranch = treeNodeMap.get(speciesName)!.data.memory!;
+        const speciesTreeNode = treeNodeMap.get(speciesName);
+        const memBranch = speciesTreeNode?.data.memory;
+        if (memBranch == null) {
+          throw new Error(`InfomapStore: tree node '${speciesName}' has no memory branch`);
+        }
         for (const memNode of [memBranch.parent, memBranch.child]) {
           const memTaxonName = memNode.name;
           const memWeight =
@@ -1675,7 +1724,10 @@ export default class InfomapStore {
       return;
     }
     const lines = ['*vertices'];
-    for (const node of network.nodes!) {
+    if (network.nodes == null) {
+      throw new Error('InfomapStore: multilayer network has no nodes');
+    }
+    for (const node of network.nodes) {
       lines.push(`${node.id} "${node.name}"`);
     }
     lines.push('*intra');
@@ -1707,7 +1759,7 @@ export default class InfomapStore {
     const { speciesStore, treeStore } = this.rootStore;
     const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
-    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
     // TODO: Some modules may have only tree nodes, reduce to number of modules containing grid cells
     console.log(`Create ${numModules} bioregions on level ${moduleLevel}`);
 
@@ -1730,7 +1782,7 @@ export default class InfomapStore {
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;
 
-      if (node.id >= tree.bipartiteStartId!) {
+      if (node.id >= (tree.bipartiteStartId ?? Infinity)) {
         bioregion.species.push(node.name);
         const species = speciesStore.speciesMap.get(node.name);
         if (species) {
@@ -1759,11 +1811,14 @@ export default class InfomapStore {
     network.links.forEach(link => {
       const w = link.weight ?? 1.0;
       const cellId = network.nodes[link.target].id;
-      const taxonName = network.nodes[link.source].name!;
+      const taxonName = network.nodes[link.source].name;
+      if (taxonName == null) {
+        throw new Error(`InfomapStore: network node ${link.source} has no name`);
+      }
       let speciesBioregionId = 0;
       const species = speciesStore.speciesMap.get(taxonName);
       if (species) {
-        speciesBioregionId = species.bioregionId!;
+        speciesBioregionId = species.bioregionId ?? 0;
       } else {
         const treeNode = treeStore.treeNodeMap.get(taxonName);
         speciesBioregionId = treeNode?.bioregionId ?? 0;
@@ -1802,7 +1857,7 @@ export default class InfomapStore {
       this.addError(`Infomap output error, please report.`);
       return;
     }
-    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel])!;
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
 
     const bioregions: Bioregion[] = Array.from(
       { length: numModules },
@@ -1836,9 +1891,15 @@ export default class InfomapStore {
       // TODO: Add state name to Infomap output?
       const stateName = (this.network as BioregionsStateNetwork).states[
         node.stateId
-      ].name!;
+      ].name;
+      if (stateName == null) {
+        throw new Error(`InfomapStore: state node ${node.stateId} has no name`);
+      }
       node.name = stateName;
-      const memTaxonName = stateName.split('_')[1]!;
+      const memTaxonName = stateName.split('_')[1];
+      if (memTaxonName == null) {
+        throw new Error(`InfomapStore: state name '${stateName}' has no memory part`);
+      }
 
       cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(
@@ -1869,7 +1930,7 @@ export default class InfomapStore {
       'Create multilayer bioregions... network:',
       this.multilayerNetwork,
     );
-    // @ts-ignore
+    // @ts-expect-error layers is an extra property attached to the multilayer tree
     tree.layers = this.multilayerNetwork?.layers;
     console.log(tree);
 
