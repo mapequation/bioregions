@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Box, Heading, Spinner, Flex } from '@chakra-ui/react';
 import { useColorModeValue } from '../ui/color-mode';
 

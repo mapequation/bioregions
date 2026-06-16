@@ -13,7 +13,7 @@ function _visitTreeDepthFirst(opts, node, callback, depth, childIndex, parent) {
     callback(node, depth, childIndex, parent)
   )
     return true;
-  let childExit = !_.every(
+  const childExit = !_.every(
     node.children || [],
     (child, i) =>
       !_visitTreeDepthFirst(opts, child, callback, depth + 1, i, node),
@@ -80,7 +80,9 @@ export function visitTreeBreadthFirst(opts, root, callback) {
     x = q.shift();
     if (opts.include && !opts.include(x)) continue;
     if (callback(x)) return true;
-    (x.children || []).forEach((child) => q.push(child));
+    (x.children || []).forEach((child) => {
+      q.push(child);
+    });
   }
   return false;
 }
@@ -111,7 +113,7 @@ export function getLeafNodes(root) {
 }
 
 export function setParents(tree) {
-  visitTreeDepthFirst(tree, (node, depth, childIndex, parent) => {
+  visitTreeDepthFirst(tree, (node, _depth, _childIndex, parent) => {
     node.parent = parent;
   });
   return tree;
@@ -401,7 +403,7 @@ export function prepareTree(tree) {
   });
 
   // Traverse from root to leaf nodes to set accumulative root distance
-  visitTreeDepthFirst(tree, (node, depth, childIndex, parent) => {
+  visitTreeDepthFirst(tree, (node, _depth, _childIndex, parent) => {
     node.parent = parent;
     if (!parent) {
       node.rootDistance = 0;

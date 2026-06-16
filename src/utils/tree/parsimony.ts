@@ -61,7 +61,9 @@ function visitPreOrder(
   parent: PhyloNode | null = null,
 ): void {
   cb(node, parent);
-  node.children.forEach((c) => visitPreOrder(c, cb, node));
+  node.children.forEach((c) => {
+    visitPreOrder(c, cb, node);
+  });
 }
 
 /** Bottom-up pass: leaves presence-count their regions; each internal node takes the
@@ -129,7 +131,9 @@ function aggregateClusters(
     const agg = new Map<number, number>();
     let totCount = 0;
     for (const child of node.children) {
-      for (const r of clusters.get(child)!.clusters) {
+      const childEntry = clusters.get(child);
+      if (!childEntry) continue;
+      for (const r of childEntry.clusters) {
         agg.set(r.clusterId, (agg.get(r.clusterId) ?? 0) + r.count);
         totCount += r.count;
       }

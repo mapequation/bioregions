@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, mkdirSync, mkdtempSync, rmSync } from "fs";
-import { execSync } from "child_process";
-import { tmpdir } from "os";
-import { join, dirname } from "path";
+import { existsSync, readFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join, dirname } from "node:path";
 
 const DATA_REPO = "mapequation/bioregions-data";
 const BRANCH = "main";

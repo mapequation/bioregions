@@ -131,7 +131,10 @@ const BioregionInfo = observer(function Bioregion({
             ) => {
               const indicativeSpecies = mostIndicative[index]!;
               return (
-                <Table.Row key={index} w="100%">
+                <Table.Row
+                  key={`${commonSpecies.name}|${indicativeSpecies.name}`}
+                  w="100%"
+                >
                   <Table.Cell>{commonSpecies.name}</Table.Cell>
                   <Table.Cell textAlign="right">
                     {commonSpecies.count.toLocaleString()}

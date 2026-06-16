@@ -4,7 +4,7 @@ import { saveAs } from 'file-saver';
 export function base64toData(content: string) {
   // const binary = Buffer.from(content, 'base64');
   const binary = atob(content);
-  let array: number[] = [];
+  const array: number[] = [];
   for (let i = 0; i < binary.length; i++) {
     // array.push(binary.at(i) as number);
     array.push(binary.charCodeAt(i) as number);

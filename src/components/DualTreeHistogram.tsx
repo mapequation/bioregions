@@ -47,7 +47,7 @@ export default observer(function DualTreeHistogram({
   const maxValueLeft = max(dataLeft ?? [{ value: 1 }], (d) => d.value);
   const minValueLeft = yLogLeft
     ? min(dataLeft ?? [{ value: 1 }], (d) =>
-        d.value == 0 ? Number.MAX_VALUE : d.value,
+        d.value === 0 ? Number.MAX_VALUE : d.value,
       )
     : min(dataLeft ?? [{ value: 1 }], (d) => d.value);
   const yDomainLeft = [minValueLeft, maxValueLeft] as [number, number];
@@ -58,7 +58,7 @@ export default observer(function DualTreeHistogram({
       ? yMinRight
       : yLogRight
       ? min(dataRight ?? [{ value: 1 }], (d) =>
-          d.value == 0 ? Number.MAX_VALUE : d.value,
+          d.value === 0 ? Number.MAX_VALUE : d.value,
         )
       : min(dataRight ?? [{ value: 1 }], (d) => d.value);
   const yDomainRight = [minValueRight, maxValueRight] as [number, number];
@@ -88,6 +88,7 @@ export default observer(function DualTreeHistogram({
   return (
     <Box textAlign="center" h={300}>
       <svg
+        aria-hidden="true"
         xmlns="http://www.w3.org/2000/svg"
         width="100%"
         height="100%"

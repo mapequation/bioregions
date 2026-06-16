@@ -9,6 +9,20 @@ type SliderProps = {
   valueFormat?: (value: number) => string;
   disabled?: boolean;
 };
+
+const calcLimits = (values: number[], [start, stop]: [number, number]) => {
+  const startIndex = values.indexOf(start);
+  const stopIndex = values.indexOf(stop);
+
+  if (startIndex === -1 || stopIndex === -1) {
+    throw new Error(
+      `Start or end value in (${[start, stop]}) not in domain (${values})`,
+    );
+  }
+
+  return [startIndex, stopIndex];
+};
+
 export default function Slider({
   values,
   value,
@@ -17,19 +31,6 @@ export default function Slider({
   disabled,
   ...props
 }: SliderProps) {
-  const calcLimits = (values: number[], [start, stop]: [number, number]) => {
-    const startIndex = values.indexOf(start);
-    const stopIndex = values.indexOf(stop);
-
-    if (startIndex === -1 || stopIndex === -1) {
-      throw new Error(
-        `Start or end value in (${[start, stop]}) not in domain (${values})`,
-      );
-    }
-
-    return [startIndex, stopIndex];
-  };
-
   const [limits, setLimits] = useState(calcLimits(values, value));
 
   useEffect(() => setLimits(calcLimits(values, value)), [values, value]);

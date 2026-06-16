@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { BBox } from 'geojson';
+import type { BBox } from 'geojson';
 
 // Distances in km of one degree lat/long
 const longDegreeAtEquator = 111.321;

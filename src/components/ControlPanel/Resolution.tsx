@@ -35,7 +35,7 @@ export default observer(function Resolution() {
           render();
         }}
         valueFormat={(value) =>
-          value < 0 ? `1/${Math.pow(2, -value)}˚` : `${Math.pow(2, value)}˚`
+          value < 0 ? `1/${2 ** -value}˚` : `${2 ** value}˚`
         }
         disabled={speciesStore.isLoading}
       />

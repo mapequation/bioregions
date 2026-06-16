@@ -32,7 +32,7 @@ export default function Logo() {
         <Text fontFamily="brand" fontSize="22px" fontWeight={700}>
           <span style={{ color }}>Infomap</span>{' '}
           <span style={{ color: brand }}>Bioregions</span>
-          <span style={{ ...styles.version }}>{' v' + __APP_VERSION__}</span>
+          <span style={{ ...styles.version }}>{` v${__APP_VERSION__}`}</span>
         </Text>
         <Text fontSize="xs" lineHeight="shorter" fontWeight={300}>
           Powered by{' '}

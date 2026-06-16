@@ -63,11 +63,11 @@ export function rangeArrayOneSignificant(
   }
   for (const order of range(start, stop)) {
     for (const d of range(1, 10)) {
-      values.push(d * Math.pow(10, order));
+      values.push(d * 10 ** order);
     }
   }
   if (options.inclusive) {
-    values.push(Math.pow(10, stop!));
+    values.push(10 ** stop!);
   }
   return values;
 }

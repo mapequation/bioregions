@@ -355,7 +355,7 @@ export default class TreeStore {
     this.renderDisposer = null;
     this.labels?.destroy();
     this.labels = null;
-    if (this.labelEl && this.labelEl.parentNode) {
+    if (this.labelEl?.parentNode) {
       this.labelEl.parentNode.removeChild(this.labelEl);
     }
     this.labelEl = null;
