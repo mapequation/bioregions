@@ -1,5 +1,6 @@
 import { parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
 import type { PhyloNode } from '.';
+import type { ITree } from './newick';
 
 export function testSimpleTree() {
   const tree: PhyloNode = prepareTree({
@@ -43,10 +44,10 @@ export function testSimpleTree() {
 
 export function testNewickTree() {
   const nwk = '(a1,a2,((a311,a312)a31,a32)a3)root;';
-  let tree: any = parseTree(nwk);
+  const parsed: ITree = parseTree(nwk);
 
-  console.log(tree);
-  tree = prepareTree(tree);
+  console.log(parsed);
+  const tree: PhyloNode = prepareTree(parsed);
   console.log(tree);
 
   console.log('Test visit tree');

@@ -204,7 +204,7 @@ export default class TreeStore {
       return {};
     }
     const { colorBioregion } = this.rootStore.colorStore;
-    const styles: { [key: string]: { fillColour: string; shape?: any } } = {};
+    const styles: { [key: string]: { fillColour: string; shape?: string } } = {};
     this.treeNodeMap.forEach((value, name) => {
       if (name && value.bioregionId) {
         styles[name] = {
@@ -258,7 +258,6 @@ export default class TreeStore {
     this.setIsLoading();
     const tree = await loadText(file);
     this.setTreeString(tree);
-    // @ts-ignore
     this.setTree(prepareTree(parseTree(tree)));
     this.setIsLoaded();
   }

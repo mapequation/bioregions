@@ -16,7 +16,7 @@ export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
-export type IMapRenderer = {}
+export type IMapRenderer = Record<string, never>;
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 
@@ -38,6 +38,14 @@ export const PROJECTIONNAME: Record<Projection, string> = {
   geoOrthographic: 'Orthographic',
   geoMercator: 'Mercator',
 } as const;
+
+// Static lookup of the d3 projection factories keyed by projection name. Equivalent to
+// `d3[name]()` but uses explicit named references so the projections can be tree-shaken.
+const PROJECTION_FACTORIES: Record<Projection, () => d3.GeoProjection> = {
+  geoNaturalEarth1: d3.geoNaturalEarth1,
+  geoOrthographic: d3.geoOrthographic,
+  geoMercator: d3.geoMercator,
+};
 
 export const HEATMAP_TARGETS = [
   'records',
@@ -77,7 +85,7 @@ export default class MapStore {
   }
 
   projectionName: Projection = PROJECTIONS[0];
-  projection: d3.GeoProjection = d3[this.projectionName]().precision(0.1);
+  projection: d3.GeoProjection = PROJECTION_FACTORIES[this.projectionName]().precision(0.1);
 
   // WebGL by default: smooth pan/zoom and a GPU-accelerated globe for large datasets. Canvas2D
   // paints the first frame sooner (no async luma.gl device / GPU tessellation); SVG exports vectors.
@@ -413,7 +421,7 @@ export default class MapStore {
     // Re-fit the new projection to the (fixed) viewport and swap it in place: d3gl re-projects
     // the existing layers and re-dispatches the right interaction (globe rotation vs pan/zoom).
     this.projection = fitProjection(
-      d3[projection]().precision(0.1),
+      PROJECTION_FACTORIES[projection]().precision(0.1),
       sphere as GeoJSON.GeoJSON,
       this.width,
       this.height,

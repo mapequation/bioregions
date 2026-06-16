@@ -29,6 +29,17 @@ type Pos = [number, number];
 
 const layout = d3.tree<PhyloNode>();
 
+/**
+ * Assert that a value derived from the network/maps is present, throwing at the
+ * same point a non-null assertion would have failed on a null/undefined access.
+ */
+const required = <T,>(value: T | null | undefined, message: string): T => {
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+};
+
 export default observer(
   ({
     beta,
@@ -193,7 +204,10 @@ export default observer(
         return '';
       }
       const physId = 'states' in network ? network.states[nodeId].id : nodeId;
-      return network.nodes[physId].name!;
+      return required(
+        network.nodes[physId].name,
+        `Network node ${physId} has no name`,
+      );
     };
 
     const { nameToCellIds } = binner;
@@ -201,8 +215,11 @@ export default observer(
       // source: tree node, target: grid cell
       const taxonName = getPhysName(link.source);
       const cellName = getPhysName(link.target);
-      const treeNode = nodeMap.get(taxonName)!;
-      const cell = cellMap.get(cellName)!;
+      const treeNode = required(
+        nodeMap.get(taxonName),
+        `No tree node for ${taxonName}`,
+      );
+      const cell = required(cellMap.get(cellName), `No cell for ${cellName}`);
       const weight = link.weight ?? 0;
 
       return { treeNode, cell, weight };
@@ -244,15 +261,20 @@ export default observer(
         .forEach(({ name: cellStateName }) => {
           // const cellId = network.nodes[id].name!;
           const [cellId, memTaxonId] = (cellStateName ?? '_').split('_');
-          const memTreeNode = nodeMap.get(memTaxonId)!;
-          const cell = cellMap.get(cellId)!;
+          const memTreeNode = required(
+            nodeMap.get(memTaxonId),
+            `No tree node for ${memTaxonId}`,
+          );
+          const cell = required(cellMap.get(cellId), `No cell for ${cellId}`);
           const cellPos = projection(cell.center) ?? [0, 0];
           const stateCells = cellIdToStates.get(cellId) ?? [];
           if (stateCells.length === 0) {
             cellIdToStates.set(cellId, stateCells);
           }
-          const bioregionId =
-            cell.overlappingBioregions.memoryIdToBioregion.get(memTaxonId)!;
+          const bioregionId = required(
+            cell.overlappingBioregions.memoryIdToBioregion.get(memTaxonId),
+            `No bioregion for memory taxon ${memTaxonId}`,
+          );
           stateCells.push({
             cellStateName: cellStateName ?? '',
             cellId,
@@ -271,25 +293,37 @@ export default observer(
       });
 
       network.links.forEach(({ source, target, weight }) => {
-        const treeNodeName = network.states[source].name!;
-        const treeNode = nodeMap.get(treeNodeName)!;
-        const cellStateName = network.states[target].name!;
+        const treeNodeName = required(
+          network.states[source].name,
+          `Source state ${source} has no name`,
+        );
+        const treeNode = required(
+          nodeMap.get(treeNodeName),
+          `No tree node for ${treeNodeName}`,
+        );
+        const cellStateName = network.states[target].name;
         const [cellId, memTaxonId] = (cellStateName ?? '_').split('_');
-        const stateCells = cellIdToStates.get(cellId)!;
-        const stateCell = stateCells.find(
-          (stateCell) => stateCell.memTaxonId === memTaxonId,
-        )!;
+        const stateCells = required(
+          cellIdToStates.get(cellId),
+          `No state cells for ${cellId}`,
+        );
+        const stateCell = required(
+          stateCells.find(
+            (stateCell) => stateCell.memTaxonId === memTaxonId,
+          ),
+          `No state cell for memory taxon ${memTaxonId}`,
+        );
         stateLinks.push({
           treeNode,
           stateCell,
-          weight: weight!,
+          weight: required(weight, 'State link has no weight'),
         });
       });
 
       // Set internal y pos based on memory taxon position
       cellIdToStates.forEach((stateCells) => {
         const numStates = stateCells.length;
-        const { cellPos } = stateCells[0]!;
+        const { cellPos } = stateCells[0];
         const startY = cellPos[1] - cellSize / 2;
         const dy = cellSize / (numStates + 1);
         stateCells.forEach((stateCell, i) => {

@@ -109,7 +109,11 @@ export default function TangleInput({
       const lastX = e.screenX;
 
       // const pixelChange = lastX - startX;
-      const pixelChange = lastX - refState.current.lastX!;
+      const { lastX: prevX } = refState.current;
+      if (prevX === undefined) {
+        throw new Error('TangleInput: lastX not initialized on mouse move');
+      }
+      const pixelChange = lastX - prevX;
       const numSteps =
         pixelChange > 0
           ? Math.floor(speed * pixelChange)

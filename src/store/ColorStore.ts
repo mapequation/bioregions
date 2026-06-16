@@ -5,6 +5,19 @@ import type RootStore from './RootStore';
 import type { Cell } from '../utils/QuadTree';
 import { color as Color, interpolateRgb } from 'd3';
 
+// `d3.color` returns null for an unparseable color specifier. The call sites below
+// previously used a non-null assertion (`!`) and would have thrown on the subsequent
+// property access; this helper preserves that "throw on null" behavior with a clearer
+// message while keeping a non-nullable return type.
+type D3Color = NonNullable<ReturnType<typeof Color>>;
+const requireColor = (specifier: string): D3Color => {
+  const color = Color(specifier);
+  if (color == null) {
+    throw new Error(`Invalid color specifier: ${specifier}`);
+  }
+  return color;
+};
+
 export type SchemeName = c3SchemeName | 'Mural';
 
 export const COLOR_SCHEMES = [
@@ -90,7 +103,7 @@ export class CellColor {
   }
 
   generateColor(colorModuleParticipationStrength = 1) {
-    const color = Color(interpolateRgb(this.secondColor, this.firstColor)(this.t ** colorModuleParticipationStrength))!;
+    const color = requireColor(interpolateRgb(this.secondColor, this.firstColor)(this.t ** colorModuleParticipationStrength));
     color.opacity = this.opacity ** colorModuleParticipationStrength;
     return color.toString();
   }
@@ -216,13 +229,13 @@ export default class ColorStore {
           const firstColor = colorBioregion(cell.bioregionId);
           const secondColor = colorBioregion(topBioregionId);
           t = ownProportion / (ownProportion + topBioregionProportion)
-          const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+          const color = requireColor(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength));
           color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
           return new CellColor(firstColor, secondColor, t, color.opacity);
         }
         const firstColor = colorBioregion(topBioregionId);
         const secondColor = colorBioregion(secondBioregionId);
-        const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+        const color = requireColor(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength));
         color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
         return color.toString();
       }
@@ -235,7 +248,7 @@ export default class ColorStore {
         secondBioregionProportion,
       } = cell.overlappingBioregions;
       if (this.hideDominantOverlappingModule) {
-        const color = Color(colorBioregion(secondBioregionId))!;
+        const color = requireColor(colorBioregion(secondBioregionId));
         color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
         return color.toString();
       }
@@ -244,7 +257,7 @@ export default class ColorStore {
         (topBioregionProportion + secondBioregionProportion);
       const firstColor = colorBioregion(topBioregionId);
       const secondColor = colorBioregion(secondBioregionId);
-      const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+      const color = requireColor(interpolateRgb(secondColor, firstColor)(t));
       color.opacity = topBioregionProportion;
       return color.toString();
     }
@@ -261,7 +274,7 @@ export default class ColorStore {
       secondBioregionProportion,
     } = cell.overlappingBioregions;
     if (this.hideDominantOverlappingModule) {
-      const color = Color(colorBioregion(secondBioregionId))!;
+      const color = requireColor(colorBioregion(secondBioregionId));
       color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
       return color.toString();
     }
@@ -270,7 +283,7 @@ export default class ColorStore {
       (topBioregionProportion + secondBioregionProportion);
     const firstColor = colorBioregion(topBioregionId);
     const secondColor = colorBioregion(secondBioregionId);
-    const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+    const color = requireColor(interpolateRgb(secondColor, firstColor)(t));
     color.opacity = topBioregionProportion;
     return color.toString();
   }
@@ -302,14 +315,14 @@ export default class ColorStore {
             const firstColor = colorBioregion(cell.bioregionId);
             const secondColor = colorBioregion(topBioregionId);
             t = ownProportion / (ownProportion + topBioregionProportion)
-            const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+            const color = requireColor(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength));
             color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
             cell.color = color.toString();
             return cell.color;
           }
           const firstColor = colorBioregion(topBioregionId);
           const secondColor = colorBioregion(secondBioregionId);
-          const color = Color(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength))!;
+          const color = requireColor(interpolateRgb(secondColor, firstColor)(t ** colorModuleParticipationStrength));
           color.opacity = topBioregionProportion ** colorModuleParticipationStrength;
           cell.color = color.toString();
           return cell.color;
@@ -323,7 +336,7 @@ export default class ColorStore {
           secondBioregionProportion,
         } = cell.overlappingBioregions;
         if (this.hideDominantOverlappingModule) {
-          const color = Color(colorBioregion(secondBioregionId))!;
+          const color = requireColor(colorBioregion(secondBioregionId));
           color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
           cell.color = color.toString();
           return cell.color;
@@ -333,7 +346,7 @@ export default class ColorStore {
           (topBioregionProportion + secondBioregionProportion);
         const firstColor = colorBioregion(topBioregionId);
         const secondColor = colorBioregion(secondBioregionId);
-        const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+        const color = requireColor(interpolateRgb(secondColor, firstColor)(t));
         color.opacity = topBioregionProportion;
         cell.color = color.toString();
         return cell.color;
@@ -353,7 +366,7 @@ export default class ColorStore {
         secondBioregionProportion,
       } = cell.overlappingBioregions;
       if (this.hideDominantOverlappingModule) {
-        const color = Color(colorBioregion(secondBioregionId))!;
+        const color = requireColor(colorBioregion(secondBioregionId));
         color.opacity = secondBioregionProportion;// / (1 - topBioregionProportion);
         cell.color = color.toString();
         return cell.color;
@@ -363,7 +376,7 @@ export default class ColorStore {
         (topBioregionProportion + secondBioregionProportion);
       const firstColor = colorBioregion(topBioregionId);
       const secondColor = colorBioregion(secondBioregionId);
-      const color = Color(interpolateRgb(secondColor, firstColor)(t))!;
+      const color = requireColor(interpolateRgb(secondColor, firstColor)(t));
       color.opacity = topBioregionProportion;
       cell.color = color.toString();
       return cell.color;

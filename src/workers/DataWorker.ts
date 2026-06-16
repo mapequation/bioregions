@@ -17,7 +17,7 @@ import { normalizeSpeciesName } from '../utils/names';
 
 async function load(
   file: string | File,
-  args: Omit<ParseAsyncConfig<any, File | string>, 'complete'> = {},
+  args: Omit<ParseAsyncConfig<unknown, File | string>, 'complete'> = {},
 ) {
   console.log('Loading...');
 
@@ -29,7 +29,7 @@ async function load(
         postMessage({ type: "status", status: "complete" });
         resolve('Loading finished');
       },
-      chunk(chunk: ParseResult<any>) {
+      chunk(chunk: ParseResult<unknown>) {
         // dataStream.next(chunk.data);
         chunk.errors.forEach(e => {
           console.log(e)
@@ -98,7 +98,7 @@ async function loadShapefiles(files: File[], nameKey?: string) {
   const getNameKey = (() => {
     const keysToTest = ['binomial', 'species', 'name', 'id'] as const;
     let nameKey: string | undefined;
-    return (properties: any) => {
+    return (properties: Record<string, unknown> | null | undefined) => {
       if (nameKey != null) return nameKey;
       const keys = Object.keys(properties ?? {});
       nameKey = keysToTest.find((key) => keys.includes(key));
@@ -162,7 +162,7 @@ async function loadShapefiles(files: File[], nameKey?: string) {
 
       result = await source.read();
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('!! shp error:', error);
   }
 

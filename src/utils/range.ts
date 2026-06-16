@@ -67,7 +67,7 @@ export function rangeArrayOneSignificant(
     }
   }
   if (options.inclusive) {
-    values.push(10 ** stop!);
+    values.push(10 ** stop);
   }
   return values;
 }

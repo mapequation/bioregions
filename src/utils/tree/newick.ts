@@ -60,6 +60,11 @@
 
 const regMatchQuoted = new RegExp(/[['"]*['"]([^']+?)'/g);
 
+// Hoisted reference to Object.prototype.hasOwnProperty so call sites read it via
+// `.call` without accessing the prototype builtin on the target object directly
+// (Object.hasOwn is ES2022; this lib targets ES2020).
+const hasOwn = Object.prototype.hasOwnProperty;
+
 export interface ITree {
   name: string;
   branchLength: number | null;
@@ -149,7 +154,7 @@ function read(newickString: string) {
       default: {
         const x: string = tokens[i - 1];
         if (x === ')' || x === '(' || x === ',') {
-          if (Object.prototype.hasOwnProperty.call(exceptionHashTable, token)) {
+          if (hasOwn.call(exceptionHashTable, token)) {
             const [str1, str2] = exceptionHashTable[token].split(':');
             if (str2) {
               tree.name = str2;
@@ -193,20 +198,20 @@ function write(json: ITree) {
         });
       }
       const substring = newChildren.join();
-      if (Object.prototype.hasOwnProperty.call(nest, 'name')) {
+      if (hasOwn.call(nest, 'name')) {
         subtree = `(${substring})${nest.name}`;
       }
-      if (Object.prototype.hasOwnProperty.call(nest, 'branchLength')) {
+      if (hasOwn.call(nest, 'branchLength')) {
         if (nest.branchLength) {
           subtree = `${subtree}:${nest.branchLength}`;
         }
       }
     } else {
       let leaf: string = '';
-      if (Object.prototype.hasOwnProperty.call(nest, 'name') && nest.name) {
+      if (hasOwn.call(nest, 'name') && nest.name) {
         leaf = nest.name;
       }
-      if (Object.prototype.hasOwnProperty.call(nest, 'branchLength') && nest.branchLength) {
+      if (hasOwn.call(nest, 'branchLength') && nest.branchLength) {
         leaf = `${leaf}:${nest.branchLength}`;
       }
       subtree = subtree + leaf;

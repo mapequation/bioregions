@@ -4,7 +4,7 @@ import { useStore } from '../../store';
 import type RootStore from '../../store/RootStore';
 import { saveBlob, stringToBlob } from '../../utils/exporter';
 import JSZip from 'jszip';
-//@ts-ignore
+// @ts-expect-error - shp-write ships no type declarations
 import shpWrite from 'shp-write';
 
 interface ExportProps {
@@ -120,7 +120,11 @@ export default observer(function Export({ rootStore }: ExportProps) {
       extension: '.treee',
       disabled: !infomapStore.treeString,
       getBlob: async () => {
-        return stringToBlob(infomapStore.treeString!);
+        const { treeString } = infomapStore;
+        if (treeString == null) {
+          throw new Error('No Infomap tree string available');
+        }
+        return stringToBlob(treeString);
       },
     },
     {

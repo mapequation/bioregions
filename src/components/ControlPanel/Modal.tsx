@@ -12,7 +12,7 @@ import type { Dialog } from '@chakra-ui/react';
 
 type MyModalProps = {
   header: string;
-  footer?: React.ReactElement<any>;
+  footer?: React.ReactElement;
 } & Dialog.RootProps;
 
 export default function Modal({

@@ -24,7 +24,7 @@ export default class MaxMap<K extends Key> extends Map<K, number> {
 
   set(key: K, value: number): this {
     super.set(key, value);
-    const val = super.get(key)!;
+    const val = value;
     if (val > this.#maxValue) {
       this.#maxKey = key;
       this.#maxValue = val;

@@ -5,9 +5,9 @@ import Papa, {
   type ParseError,
 } from 'papaparse';
 
-export type ParseAsyncConfig<T = any, TInput = undefined> = ParseLocalConfig<T, TInput> | ParseRemoteConfig<T>;
+export type ParseAsyncConfig<T = unknown, TInput = undefined> = ParseLocalConfig<T, TInput> | ParseRemoteConfig<T>;
 
-function loadLocalFile<T = any>(
+function loadLocalFile<T = unknown>(
   file: File,
   args: ParseLocalConfig<T, File> = { complete: () => { } },
 ) {
@@ -21,11 +21,11 @@ function loadLocalFile<T = any>(
   });
 }
 
-function loadRemoteFile<T = any>(
+function loadRemoteFile<T = unknown>(
   url: string,
   args: Omit<ParseRemoteConfig<T>, 'download'> = { complete: () => { } },
 ) {
-  //@ts-ignore
+  // @ts-expect-error Papa.parse's overloads don't model the (url, config) remote form precisely
   Papa.parse<T, string>(url, {
     download: true,
     dynamicTyping: true,
@@ -39,18 +39,18 @@ function loadRemoteFile<T = any>(
 
 export function loadFile(
   file: string | File,
-  args: ParseAsyncConfig<any, File | string> = { complete: () => { } },
+  args: ParseAsyncConfig<unknown, File | string> = { complete: () => { } },
 ) {
   if (typeof file === 'string') {
-    loadRemoteFile(file, args as ParseRemoteConfig<any>);
+    loadRemoteFile(file, args as ParseRemoteConfig<unknown>);
   } else {
-    loadLocalFile(file, args as ParseLocalConfig<any, File>);
+    loadLocalFile(file, args as ParseLocalConfig<unknown, File>);
   }
 }
 
 export function preview(
   file: string | File,
-  args: ParseAsyncConfig<any, File | string> = { complete: () => { } },
+  args: ParseAsyncConfig<unknown, File | string> = { complete: () => { } },
 ) {
   loadFile(file, {
     preview: 10,
@@ -60,13 +60,13 @@ export function preview(
 
 export function loadPreview(
   file: string | File,
-  args: Omit<ParseAsyncConfig<any, File | string>, 'complete'> = {},
+  args: Omit<ParseAsyncConfig<unknown, File | string>, 'complete'> = {},
 ) {
-  const data: Array<any> = [];
+  const data: Array<unknown> = [];
   const errors: ParseError[] = [];
   let header: string[] = [];
 
-  return new Promise<any>((resolve, reject) => {
+  return new Promise<{ data: unknown[]; header: string[] }>((resolve, reject) => {
     preview(file, {
       complete() {
         if (errors.length > 0) {
@@ -74,7 +74,7 @@ export function loadPreview(
         }
         resolve({ data, header });
       },
-      chunk(chunk: ParseResult<any>) {
+      chunk(chunk: ParseResult<unknown>) {
         if (chunk.meta.fields) {
           header = chunk.meta.fields;
         }
