@@ -23,7 +23,7 @@ import { normalizeSpeciesName } from '../utils/names';
 // };
 export interface FeatureProperties {
   name: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type PointFeature = Feature<Point, FeatureProperties>;
@@ -91,7 +91,7 @@ export default class SpeciesStore {
   timer = new Timer();
   speed: number = 0;
   seconds: number = 0;
-  dataWorker: any = null;
+  dataWorker: Worker | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -261,7 +261,7 @@ export default class SpeciesStore {
           { type: 'module' }
         );
 
-        dataWorker.addEventListener("message", (event: any) => {
+        dataWorker.addEventListener("message", (event: MessageEvent) => {
           if (event.data.type === "status") {
             if (event.data.status === "complete") {
               dataWorker.terminate();
@@ -306,7 +306,7 @@ export default class SpeciesStore {
           { type: 'module' }
         );
 
-        dataWorker.addEventListener("message", (event: any) => {
+        dataWorker.addEventListener("message", (event: MessageEvent) => {
           if (event.data.type === "status") {
             if (event.data.status === "complete") {
               dataWorker.terminate();
@@ -408,7 +408,7 @@ export default class SpeciesStore {
       nameHistogram[name]++;
     };
 
-    const ignoredRows: any[] = [];
+    const ignoredRows: { [key: string]: string | number }[] = [];
 
     await this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
@@ -486,7 +486,12 @@ export default class SpeciesStore {
 
   generateGeojsonFromBins = () => {
     const features = this.binner.cells.map((cell, index) => {
-      const c = Color(cell.color)!;
+      const c = Color(cell.color);
+      if (c == null) {
+        // `d3.color` returns null for an unparseable specifier; a bare `!` here would
+        // have thrown on the property access below, so fail explicitly instead.
+        throw new Error(`Invalid cell color: ${cell.color}`);
+      }
       return {
         type: "Feature",
         geometry: cell.geometry,
@@ -517,7 +522,11 @@ export default class SpeciesStore {
     });
     this.binner.cells.forEach((cell, i) => {
       cell.speciesTopList.forEach(d => {
-        data.get(d.name)![i] = "1";
+        const presenceAbsence = data.get(d.name);
+        if (presenceAbsence === undefined) {
+          throw new Error(`No presence/absence row for species: ${d.name}`);
+        }
+        presenceAbsence[i] = "1";
       })
     })
     return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
@@ -531,7 +540,11 @@ export default class SpeciesStore {
     });
     this.binner.cells.forEach(cell => {
       cell.speciesTopList.forEach(d => {
-        data.get(d.name)![cell.bioregionId - 1] = "1";
+        const presenceAbsence = data.get(d.name);
+        if (presenceAbsence === undefined) {
+          throw new Error(`No presence/absence row for species: ${d.name}`);
+        }
+        presenceAbsence[cell.bioregionId - 1] = "1";
       })
     })
     return Array.from(data, ([name, value]) => `${name}\t${value.join("")}`).join("\n");
@@ -572,7 +585,7 @@ export default class SpeciesStore {
           commonSpecies: { name: string; count: number; score: number },
           index: number,
         ) => {
-          const indicativeSpecies = mostIndicative[index]!;
+          const indicativeSpecies = mostIndicative[index];
           data.push([
             bioregion.bioregionId,
             index + 1,
@@ -633,7 +646,7 @@ function createMapper<ItemType = string | number>(
 ) {
   return (item: { [key: string]: ItemType }) => ({
     name: `${item[nameColumn]}`,
-    longitude: +item[longColumn]!,
-    latitude: +item[latColumn]!,
+    longitude: +item[longColumn],
+    latitude: +item[latColumn],
   });
 }
