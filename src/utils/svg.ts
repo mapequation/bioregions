@@ -10,7 +10,7 @@ export function getSVGRenderer(projection: GeoProjection) {
       [d.x2, d.y2],
       [d.x1, d.y2],
     ]
-      // @ts-ignore
+      // @ts-expect-error projection accepts a [lon, lat] tuple, not the inferred number[]
       .map((point) => projection(point))
       .join('L') +
     'Z';

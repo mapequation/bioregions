@@ -137,8 +137,7 @@ export function makeLinkDraw(
   const [ox, oy] = center;
   if (mode === 'rectangular') {
     const factory = curve === 'linear' ? curveLinear : curve === 'step' ? curveStepBefore : curveBumpX;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gen: any = (d3link(factory) as any).x((d: LayoutNode) => d.y).y((d: LayoutNode) => d.x);
+    const gen = d3link<LayoutLink, LayoutNode>(factory).x((d) => d.y).y((d) => d.x);
     return (ctx, l) => {
       gen.context(ctx);
       gen(l);
@@ -146,8 +145,7 @@ export function makeLinkDraw(
   }
   if (curve === 'bump') {
     // linkRadial applies the −π/2 internally, so the angle accessor is the raw cluster angle.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gen: any = (linkRadial() as any).angle((d: LayoutNode) => d.x).radius((d: LayoutNode) => d.y);
+    const gen = linkRadial<LayoutLink, LayoutNode>().angle((d) => d.x).radius((d) => d.y);
     return (ctx, l) => {
       gen.context(offsetCtx(ctx, ox, oy));
       gen(l);

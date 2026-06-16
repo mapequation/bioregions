@@ -38,7 +38,7 @@ export default observer(function ColorSettings() {
     renderType: typeof mapStore.renderType,
   ) => {
     return (e: { value: number[] }) => {
-      setValue([e.value[0]!, e.value[1]!]);
+      setValue([e.value[0], e.value[1]]);
       if (mapStore.renderType === renderType) {
         mapStore.render();
       }
@@ -95,7 +95,7 @@ export default observer(function ColorSettings() {
               label="Color scheme"
               value={[colorStore.scheme as string]}
               onValueChange={(e) => {
-                colorStore.setScheme(e.value[0]! as SchemeName);
+                colorStore.setScheme(e.value[0] as SchemeName);
                 if (mapStore.renderType === 'bioregions') {
                   mapStore.render();
                 }

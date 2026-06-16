@@ -1,7 +1,7 @@
 // import { isEqual } from '../math';
 
 //import _ from 'lodash';
-// @ts-ignore
+// @ts-expect-error treeUtilsJS is plain JS without type declarations
 export { prepareTree } from './treeUtilsJS';
 
 export interface Branch {

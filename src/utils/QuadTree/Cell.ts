@@ -43,7 +43,7 @@ export default class Cell
   private _recalcStats: boolean = true;
   private _speciesTopList: { count: number; name: string }[] = [];
   private _speciesRichness: number = 0;
-  // @ts-ignore
+  // @ts-expect-error narrows ExtendedFeature's `type?: string` to the literal 'Feature'
   type = 'Feature';
 
   constructor(extent: BBox, maxCellSizeLog2: number) {
@@ -416,7 +416,6 @@ export default class Cell
     });
 
     if (doPatch) {
-      // @ts-ignore
       this.features = aggregatedFeatures; // FIXME
     }
 
@@ -505,12 +504,20 @@ export default class Cell
     this.bioregionMetrics.relativeRichness = stddevNumSpeciesWithin < 1e-10 ? 0 : (numSpeciesWithin - meanNumSpeciesWithin) / stddevNumSpeciesWithin;
 
     const endemicity = this.speciesTopList.map(({ name }) => {
-      const species = speciesMap.get(name)!
-      return species.numGridCellsWithinModule! / species.numGridCells!;
+      const species = speciesMap.get(name);
+      if (species === undefined) {
+        throw new Error(`calcBioregionStats: species '${name}' not found in speciesMap`);
+      }
+      // `?? NaN` preserves the prior `!`-then-arithmetic behavior: an unset count
+      // yielded `undefined`, and `undefined / x` is already NaN.
+      return (species.numGridCellsWithinModule ?? NaN) / (species.numGridCells ?? NaN);
     })
     const occupancy = this.speciesTopList.map(({ name }) => {
-      const species = speciesMap.get(name)!
-      return (species.numGridCellsWithinModule! - meanSpeciesExtentWithin) / sddevSpeciesExtentWithin;
+      const species = speciesMap.get(name);
+      if (species === undefined) {
+        throw new Error(`calcBioregionStats: species '${name}' not found in speciesMap`);
+      }
+      return ((species.numGridCellsWithinModule ?? NaN) - meanSpeciesExtentWithin) / sddevSpeciesExtentWithin;
     })
     this.bioregionMetrics.endemicity = calcMedian(endemicity);
     this.bioregionMetrics.occupancy = calcMedian(occupancy);

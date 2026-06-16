@@ -42,7 +42,10 @@ function distinctFills(r1: string, r2: string) {
  */
 function fuzzyFills(r1: string, r2: string) {
   const blend = (t: number, opacity: number) => {
-    const c = d3color(interpolateRgb(r2, r1)(t))!; // interpolateRgb(secondColor, firstColor)
+    const c = d3color(interpolateRgb(r2, r1)(t)); // interpolateRgb(secondColor, firstColor)
+    if (!c) {
+      throw new Error('Failed to parse interpolated color');
+    }
     c.opacity = opacity;
     return c.toString();
   };
