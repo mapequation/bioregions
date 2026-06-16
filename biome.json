@@ -1,0 +1,42 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": ["**", "!dist", "!public", "!coverage"]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "noSvgWithoutTitle": "warn"
+      },
+      "correctness": {
+        "noChildrenProp": "warn",
+        "noSwitchDeclarations": "warn",
+        "noUnreachable": "warn",
+        "useExhaustiveDependencies": "warn"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "warn",
+        "noAssignInExpressions": "warn",
+        "noDoubleEquals": "warn",
+        "noEmptyInterface": "warn",
+        "noGlobalAssign": "warn",
+        "noImplicitAnyLet": "warn",
+        "noNonNullAssertedOptionalChain": "warn",
+        "noRedeclare": "warn",
+        "noShadowRestrictedNames": "warn",
+        "useIterableCallbackReturn": "warn"
+      }
+    }
+  }
+}
