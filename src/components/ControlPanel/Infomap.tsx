@@ -5,8 +5,6 @@ import {
   VStack,
   Spacer,
   HStack,
-  Flex,
-  Box,
   Field,
 } from '@chakra-ui/react';
 import { format } from 'd3-format';
@@ -242,38 +240,7 @@ export default observer(function Infomap() {
       </Stat>
 
       {infomapStore.numLevels > 2 && (
-        <>
-          <Stat label="Hierarchical levels">{infomapStore.numLevels - 1}</Stat>
-
-          <Flex
-            w="100%"
-            mt={4}
-            gap={2}
-            alignItems="center"
-            style={{ display: 'flex' }}
-          >
-            <Box minW={110}>Module level</Box>
-            <Slider
-              mx={1}
-              // focusThumbOnChange={false}
-              w="100px"
-              value={[infomapStore.moduleLevel]}
-              onValueChange={(e) => infomapStore.setModuleLevel(e.value[0])}
-              onValueChangeEnd={(e) => {
-                infomapStore.setModuleLevel(e.value[0], true);
-                if (mapStore.renderType === 'bioregions') {
-                  mapStore.render();
-                }
-              }}
-              min={0}
-              max={Math.max(0, infomapStore.numLevels - 2)}
-              step={1}
-            ></Slider>
-            <Tag.Root size="sm" minW={50}>
-              <Tag.Label>{infomapStore.moduleLevel}</Tag.Label>
-            </Tag.Root>
-          </Flex>
-        </>
+        <Stat label="Hierarchical levels">{infomapStore.numLevels - 1}</Stat>
       )}
     </VStack>
   );

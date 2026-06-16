@@ -3,7 +3,7 @@ import { observer } from 'mobx-react';
 import { useStore } from '../store/';
 import { Box, Text } from '@chakra-ui/react';
 import { formatThousands } from '../utils/formats';
-import BackendSelect from './BackendSelect';
+import MapStatusBar from './StatusBar/MapStatusBar';
 
 // Tooltip for the hovered grid cell: id, size/area, and — once bioregions are computed — a
 // colored bioregion badge and the clade's oldest tree-node time. Driven by d3gl's native
@@ -85,7 +85,7 @@ export default observer(function WorldMap() {
 
   return (
     <Box ml={4} position="relative" width={width}>
-      <BackendSelect value={mapStore.backend} onChange={mapStore.setBackend} />
+      <MapStatusBar />
       {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
           coordinate space as the d3gl pointer offsets. Hover outline + selection dimming are
           handled natively by d3gl on the cells layer (see MapStore.buildLayers). */}

@@ -8,7 +8,7 @@ import { useStore } from '../store';
 import Statistics from './Statistics';
 import Documentation from './Documentation';
 import ColorMode from './ControlPanel/ColorMode';
-import BackendSelect from './BackendSelect';
+import TreeStatusBar from './StatusBar/TreeStatusBar';
 import { formatThousands } from '../utils/formats';
 
 // Tooltip for the hovered tree branch/node: the clade's reconstructed ancestral range,
@@ -82,7 +82,7 @@ const PhyloTree = observer(function _PhyloTree() {
 
   return (
     <Box ml={4} position="relative" width={treeStore.width}>
-      <BackendSelect value={treeStore.backend} onChange={treeStore.setBackend} />
+      <TreeStatusBar />
       {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
           coordinate space as the d3gl pointer offsets. */}
       <Box
