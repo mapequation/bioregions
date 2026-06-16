@@ -1,4 +1,5 @@
-import { Box, Popover, Table, Text } from '@chakra-ui/react';
+import { Box, Button, Popover, Table, Text } from '@chakra-ui/react';
+import { useState } from 'react';
 import {
   PopoverArrow,
   PopoverBody,
@@ -28,11 +29,42 @@ export default observer(function Bioregions() {
     return null;
   }
 
+  return <BioregionList bioregions={infomapStore.bioregions} />;
+});
+
+// Default number of bioregions to render. Each `BioregionInfo` mounts a Chakra Table plus
+// up to 20 Popover-backed pie charts, so rendering every module at deep hierarchical levels
+// (hundreds of modules) stalls the main thread for many seconds. Cap the default render and
+// let the user opt in to the rest.
+const DEFAULT_VISIBLE = 5;
+
+const BioregionList = observer(function BioregionList({
+  bioregions,
+}: {
+  bioregions: Bioregion[];
+}) {
+  const [showAll, setShowAll] = useState(false);
+
+  // Bioregions are ordered by Infomap flow (largest first), so the head is the top-N.
+  const visible = showAll ? bioregions : bioregions.slice(0, DEFAULT_VISIBLE);
+
   return (
     <>
-      {infomapStore.bioregions.map((bioregion: Bioregion) => (
+      {visible.map((bioregion: Bioregion) => (
         <BioregionInfo bioregion={bioregion} key={bioregion.bioregionId} />
       ))}
+      {bioregions.length > DEFAULT_VISIBLE && (
+        <Button
+          variant="outline"
+          size="sm"
+          alignSelf="center"
+          onClick={() => setShowAll((v) => !v)}
+        >
+          {showAll
+            ? `Show top ${DEFAULT_VISIBLE}`
+            : `Show all ${bioregions.length} bioregions`}
+        </Button>
+      )}
     </>
   );
 });
