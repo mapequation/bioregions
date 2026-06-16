@@ -1,6 +1,6 @@
 'use client';
 
-import { ChakraProvider, defaultSystem, SystemContext } from '@chakra-ui/react';
+import { ChakraProvider, defaultSystem, type SystemContext } from '@chakra-ui/react';
 import { ColorModeProvider, type ColorModeProviderProps } from './color-mode';
 
 interface ProviderProps extends ColorModeProviderProps {

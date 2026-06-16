@@ -1,4 +1,4 @@
-import { Field, Flex, Spacer, Tag, TagRootProps } from '@chakra-ui/react';
+import { Field, Flex, Spacer, Tag, type TagRootProps } from '@chakra-ui/react';
 
 type StatProps = {
   label: string;

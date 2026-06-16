@@ -8,7 +8,7 @@ import {
   DialogRoot,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Dialog } from '@chakra-ui/react';
+import type { Dialog } from '@chakra-ui/react';
 
 type MyModalProps = {
   header: string;

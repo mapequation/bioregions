@@ -1,16 +1,16 @@
-import React from 'react';
+import type React from 'react';
 import { observer } from 'mobx-react';
 import { Box } from '@chakra-ui/react';
 import { useColorModeValue } from '../ui/color-mode';
 import {
   getIntersectingBranches,
-  PhyloNode,
+  type PhyloNode,
   visitTreeDepthFirstPreOrder,
 } from '../../utils/tree';
 import type { Branch } from '../../utils/tree';
 import * as d3 from 'd3';
 import { useDemoStore } from '../../store';
-import { Cell } from '../../utils/QuadTree';
+import type { Cell } from '../../utils/QuadTree';
 import { range } from '../../utils/range';
 import { GrMap as GridCellIcon } from 'react-icons/gr';
 import { ImLeaf as SpeciesIcon } from 'react-icons/im';
@@ -297,9 +297,7 @@ export default observer(
         });
       });
     }
-    const stateCells = Array.from(cellIdToStates.values()).flatMap(
-      (stateCells) => stateCells,
-    );
+    const stateCells = Array.from(cellIdToStates.values()).flat();
     // console.log('State cells:', stateCells);
 
     const networkPhysLinks = networkLinks.map(getPhysLink);
@@ -323,7 +321,7 @@ export default observer(
       }
 
       const controlPathways: [number, number][][] = [];
-      let path: string[] = [];
+      const path: string[] = [];
       let lastDepth = treeNode.data.depth - 1;
       visitTreeDepthFirstPreOrder(treeNode.data, (node: PhyloNode) => {
         if (node.depth <= lastDepth) {
@@ -349,7 +347,7 @@ export default observer(
     const networkPhysLinksBundle = !useBundledCurves
       ? []
       : networkPhysLinks
-          .map(({ treeNode, cell, weight }) => {
+          .flatMap(({ treeNode, cell, weight }) => {
             const cellLinkPoint = projection(cell.center) ?? [0, 0];
             // cellLinkPoint[0] -= cellSize / 2 - 0.5;
             const controlPathways = getControlPathways(
@@ -363,13 +361,12 @@ export default observer(
               weight: weight / controlPathways.length,
               controlPoints,
             }));
-          })
-          .flatMap((links) => links);
+          });
 
     const stateTreeLinksBundle = !useBundledCurves
       ? []
       : stateLinks
-          .map(({ stateCell, treeNode, weight }) => {
+          .flatMap(({ stateCell, treeNode, weight }) => {
             const stateCellPos = [stateCell.x, stateCell.y] as [number, number];
             const controlPathways = getControlPathways(
               treeNode,
@@ -382,15 +379,15 @@ export default observer(
               weight: weight / controlPathways.length,
               controlPoints,
             }));
-          })
-          .flatMap((links) => links);
+          });
 
-    const speciesX = nodeMap.get('A')!.x;
-    const cellsX = projection(cells![0].center)![0];
+    const speciesX = nodeMap.get('A')?.x;
+    const cellsX = projection(cells?.[0].center)?.[0];
 
     return (
       <Box textAlign="center" pt={4}>
         <svg
+          aria-hidden="true"
           width="100%"
           height="100%"
           viewBox={crop ? '-4 -5 144 100' : '-4 -4 144 144'}
@@ -425,7 +422,7 @@ export default observer(
                   strokeWidth={0.5}
                   fill="none"
                 >
-                  {networkPhysLinks.map(({ treeNode, cell, weight }, i) => {
+                  {networkPhysLinks.map(({ treeNode, cell, weight }) => {
                     const cellPos = projection(cell.center) ?? [0, 0];
                     const cellX = cellPos[0] - cellSize / 2 + 0.5;
                     const cellY = cellPos[1];
@@ -436,7 +433,7 @@ export default observer(
                     ) {
                       return (
                         <line
-                          key={i}
+                          key={`${treeNode.data.name}-${cell.id}`}
                           x1={treeNode.x}
                           y1={treeNode.y}
                           x2={cellX}
@@ -452,7 +449,7 @@ export default observer(
                     // prettier-ignore
                     const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
                     return (
-                      <g key={i}>
+                      <g key={`${treeNode.data.name}-${cell.id}`}>
                         <title>
                           {treeNode.data.name} - {cell.id}, weight: {weight}
                         </title>
@@ -470,7 +467,7 @@ export default observer(
                   fill="none"
                 >
                   {networkPhysLinksBundle.map(
-                    ({ treeNode, cell, weight, controlPoints }, i) => {
+                    ({ treeNode, cell, weight, controlPoints }) => {
                       const path = d3.path();
                       const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
                         path,
@@ -482,7 +479,7 @@ export default observer(
                       curveBundle.lineEnd();
                       const d = path.toString();
                       return (
-                        <g key={i}>
+                        <g key={`${treeNode.data.name}-${cell.id}`}>
                           <title>
                             {treeNode.data.name} - {cell.id}, weight: {weight}
                           </title>
@@ -510,14 +507,12 @@ export default observer(
                   fill={colorCell(cell)}
                 >
                   {infomapStore.isRunning && (
-                    <>
-                      <animate
+                    <animate
                         attributeName="stroke-dashoffset"
                         values="0;40;0"
                         dur="5s"
                         repeatCount="indefinite"
                       />
-                    </>
                   )}
                 </path>
               </g>
@@ -533,7 +528,7 @@ export default observer(
                   fill="none"
                 >
                   {stateTreeLinksBundle.map(
-                    ({ treeNode, stateCell, weight, controlPoints }, i) => {
+                    ({ treeNode, stateCell, weight, controlPoints }) => {
                       const path = d3.path();
                       const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
                         path,
@@ -545,7 +540,9 @@ export default observer(
                       curveBundle.lineEnd();
                       const d = path.toString();
                       return (
-                        <g key={i}>
+                        <g
+                          key={`${treeNode.data.name}-${stateCell.cellId}_${stateCell.memTaxonId}`}
+                        >
                           <title>
                             {treeNode.data.name} - {stateCell.cellId}_
                             {stateCell.memTaxonId}, weight: {weight}
@@ -564,7 +561,8 @@ export default observer(
                   strokeWidth={0.5}
                   fill="none"
                 >
-                  {stateLinks.map(({ treeNode, stateCell, weight }, i) => {
+                  {stateLinks.map(({ treeNode, stateCell, weight }) => {
+                    const linkKey = `${treeNode.data.name}-${stateCell.cellId}_${stateCell.memTaxonId}`;
                     const cellX = stateCell.x - stateCellRadius;
                     const cellY = stateCell.y;
                     if (
@@ -573,7 +571,7 @@ export default observer(
                     ) {
                       return (
                         <line
-                          key={i}
+                          key={linkKey}
                           x1={treeNode.x}
                           y1={treeNode.y}
                           x2={stateCell.x}
@@ -588,7 +586,7 @@ export default observer(
                     const cp2 = [xMid, yMid];
                     // prettier-ignore
                     const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
-                    return <path key={i} d={d} opacity={weight ?? 0} />;
+                    return <path key={linkKey} d={d} opacity={weight ?? 0} />;
                   })}
                 </g>
               )}

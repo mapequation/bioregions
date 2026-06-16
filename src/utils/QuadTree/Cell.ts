@@ -1,4 +1,4 @@
-import { BBox, Polygon, Position } from '../../types/geojson';
+import type { BBox, Polygon, Position } from '../../types/geojson';
 import { area } from '../geomath';
 import type {
   PointFeature,
@@ -136,7 +136,7 @@ export default class Cell
   }
 
   get sizeString() {
-    return this.sizeLog2 < 0 ? `1/${Math.round(Math.pow(2, -this.sizeLog2))}˚` : `${this.size}˚`;
+    return this.sizeLog2 < 0 ? `1/${Math.round(2 ** -this.sizeLog2)}˚` : `${this.size}˚`;
   }
 
   get speciesTopList() {
@@ -154,16 +154,8 @@ export default class Cell
   }
 
   get overlap() {
-    const {
-      topBioregionProportion,
-      secondBioregionProportion,
-      ownProportion
-    } = this.connectedBioregions;
+    const { ownProportion } = this.connectedBioregions;
     return ownProportion;
-    let t =
-      topBioregionProportion /
-      (topBioregionProportion + secondBioregionProportion);
-    return t;
   }
 
   add(
@@ -200,9 +192,9 @@ export default class Cell
 
     // In-between size bounds, create children if overflowing density threshold
     if (this.features.length === nodeCapacity) {
-      this.features.forEach((feature) =>
-        this.addChild(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity),
-      );
+      this.features.forEach((feature) => {
+        this.addChild(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
+      });
       this.features = [];
     } else {
       this.features.push(feature);
@@ -279,9 +271,10 @@ export default class Cell
     if (isBelow) y1 = yMid;
     else y2 = yMid;
 
-    const child =
-      this.children[i] ??
-      (this.children[i] = new Cell([x1, y1, x2, y2], maxCellSizeLog2));
+    if (this.children[i] === undefined) {
+      this.children[i] = new Cell([x1, y1, x2, y2], maxCellSizeLog2);
+    }
+    const child = this.children[i];
 
     child.parent = this;
     child.id = `${this.id}${i}`;
@@ -414,11 +407,13 @@ export default class Cell
       nonEmptyChildren.length < 4;
 
     const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
-    nonEmptyChildren.forEach((child: Cell) =>
+    nonEmptyChildren.forEach((child: Cell) => {
       child
         ?.patchPartiallyEmptyNodes(maxCellSizeLog2)
-        ?.forEach((feature) => aggregatedFeatures.push(feature)),
-    );
+        ?.forEach((feature) => {
+          aggregatedFeatures.push(feature);
+        });
+    });
 
     if (doPatch) {
       // @ts-ignore
@@ -448,11 +443,13 @@ export default class Cell
       (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
 
     const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
-    nonEmptyChildren.forEach((child) =>
+    nonEmptyChildren.forEach((child) => {
       child
         ?.patchSparseNodes(maxCellSizeLog2, lowerThreshold)
-        ?.forEach((feature) => aggregatedFeatures.push(feature)),
-    );
+        ?.forEach((feature) => {
+          aggregatedFeatures.push(feature);
+        });
+    });
 
     if (doPatch) {
       this.features = aggregatedFeatures;
@@ -466,7 +463,7 @@ export default class Cell
     type FeatureCount = number;
 
     const speciesMap: Map<FeatureName, FeatureCount> = new Map();
-    for (let feature of this.features) {
+    for (const feature of this.features) {
       const { name } = feature.properties;
       speciesMap.set(name, (speciesMap.get(name) ?? 0) + 1);
     }

@@ -4,7 +4,7 @@ import Bioregions from './Bioregions';
 import SpeciesList from './SpeciesList';
 import { useStore } from '../../store';
 import { Radio, RadioGroup } from '../ui/radio';
-import { StatisticsBy } from '@/store/SettingsStore';
+import type { StatisticsBy } from '@/store/SettingsStore';
 
 export default observer(function Statistics() {
   const { infomapStore, settingsStore } = useStore();
@@ -21,7 +21,7 @@ export default observer(function Statistics() {
   );
 });
 
-const SelectStatisticsBy = observer(function () {
+const SelectStatisticsBy = observer(() => {
   const { settingsStore } = useStore();
   return (
     <Flex>

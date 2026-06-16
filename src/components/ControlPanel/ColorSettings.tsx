@@ -8,7 +8,7 @@ import Select from './Select';
 import { Slider } from '../ui/slider';
 import { COLOR_SCHEMES, type SchemeName } from '@/store/ColorStore';
 
-export default observer(function Map() {
+export default observer(function ColorSettings() {
   const { mapStore, colorStore, infomapStore } = useStore();
   const [showColorSettings, setShowColorSettings] = useState(false);
   // const [showWaterColor, setShowWaterColor] = useState(false);

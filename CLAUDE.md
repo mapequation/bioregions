@@ -20,7 +20,7 @@ lockfile is `pnpm-lock.yaml`.
 pnpm install         # install deps (CI uses --frozen-lockfile)
 pnpm dev             # Vite dev server
 pnpm build           # tsc -b (typecheck, project references) then vite build
-pnpm lint            # eslint over the repo
+pnpm lint            # biome lint over the repo (config: biome.json)
 pnpm preview         # serve the production build
 pnpm fetch-data      # download example datasets (also runs automatically via prebuild)
 pnpm styleguide      # react-styleguidist component explorer

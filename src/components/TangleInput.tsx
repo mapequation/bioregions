@@ -57,8 +57,8 @@ const getStep = (
   if (logScale) {
     return value === 0
       ? 1
-      : Math.pow(
-          10,
+      : 
+          10 ** 
           Math.floor(
             Math.log10(
               Math.max(
@@ -66,8 +66,8 @@ const getStep = (
                 Math.abs(value) + (sign * Math.sign(value) < 0 ? -1 : 0),
               ),
             ),
-          ),
-        ) * step;
+          )
+         * step;
   }
   return step;
 };
@@ -129,8 +129,8 @@ export default function TangleInput({
       // Adjust current step size if log step
       if (logScale) {
         let nextStep = getStep(nextValue, step, logScale, numSteps);
-        let oldLog = Math.floor(Math.log10(currentValue));
-        let newLog = Math.floor(Math.log10(nextValue));
+        const oldLog = Math.floor(Math.log10(currentValue));
+        const newLog = Math.floor(Math.log10(nextValue));
 
         if (newLog !== oldLog) {
           if (newLog < oldLog) {

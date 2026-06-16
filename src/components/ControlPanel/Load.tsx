@@ -4,7 +4,7 @@ import {
   Tag,
   Icon,
   Button,
-  FileUploadFileAcceptDetails,
+  type FileUploadFileAcceptDetails,
 } from '@chakra-ui/react';
 import { BsArrowRight } from 'react-icons/bs';
 import { FiUpload } from 'react-icons/fi';
@@ -42,7 +42,6 @@ const guessColumnNames = (cols: string[]) => {
     }
     if (!long && reLong.test(col)) {
       long = col;
-      continue;
     }
   }
   if (name === '') {
@@ -79,10 +78,10 @@ export const LoadData = observer(function LoadData() {
 
     let occurrenceData: File | null = null;
     let tree: File | null = null;
-    let shpFiles: File[] = [];
+    const shpFiles: File[] = [];
     let zipFile: File | null = null;
 
-    for (let file of files) {
+    for (const file of files) {
       const fileExt = extension(file.name);
 
       if (['csv', 'tsv'].includes(fileExt) && occurrenceData === null) {
@@ -172,20 +171,20 @@ export const LoadData = observer(function LoadData() {
         onOpenChange={onClose}
         scrollBehavior="inside"
         size="xl"
-        footer={<Button children={'Finish'} onClick={onSubmit} />}
+        footer={<Button onClick={onSubmit}>Finish</Button>}
       >
         <Table.Root size="sm" variant="line">
           <Table.Caption>File preview</Table.Caption>
           <Table.Header>
             <Table.Row>
-              {header.map((cell, i) => (
-                <Table.ColumnHeader key={i}>{cell}</Table.ColumnHeader>
+              {header.map((cell) => (
+                <Table.ColumnHeader key={cell}>{cell}</Table.ColumnHeader>
               ))}
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {lines.slice(0, visibleRows).map((_, i) => (
-              <Table.Row key={i}>
+            {lines.slice(0, visibleRows).map((line, i) => (
+              <Table.Row key={header.map((field) => line[field]).join('')}>
                 {header.map((field) => (
                   <Table.Cell key={field}>{lines[i][field]}</Table.Cell>
                 ))}
@@ -209,7 +208,7 @@ export const LoadData = observer(function LoadData() {
           </Table.Header>
           <Table.Body>
             {columns.map((column, i) => (
-              <Table.Row key={i}>
+              <Table.Row key={column}>
                 <Table.Cell>
                   <Tag.Root textTransform="capitalize">
                     <Tag.Label>{column}</Tag.Label>

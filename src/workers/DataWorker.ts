@@ -1,7 +1,7 @@
 // import { expose } from 'threads/worker';
 // import { Observable, Subject } from 'threads/observable';
-import { ParseResult } from 'papaparse';
-import { loadFile, ParseAsyncConfig } from '../utils/loader';
+import type { ParseResult } from 'papaparse';
+import { loadFile, type ParseAsyncConfig } from '../utils/loader';
 import { extension } from '../utils/filename';
 import jszip from 'jszip';
 import * as shapefile from 'shapefile';
@@ -144,13 +144,13 @@ async function loadShapefiles(files: File[], nameKey?: string) {
       });
 
       if (shp.geometry.type === 'MultiPolygon') {
-        shp.geometry.coordinates.forEach((coords) =>
-          addFeature(turf.polygon(coords, shp.properties) as PolygonFeature),
-        );
+        shp.geometry.coordinates.forEach((coords) => {
+          addFeature(turf.polygon(coords, shp.properties) as PolygonFeature);
+        });
       } else if (shp.geometry.type === 'MultiPoint') {
-        shp.geometry.coordinates.forEach((coords) =>
-          addFeature(turf.point(coords, shp.properties) as PointFeature),
-        );
+        shp.geometry.coordinates.forEach((coords) => {
+          addFeature(turf.point(coords, shp.properties) as PointFeature);
+        });
       } else if (
         shp.geometry.type === 'Polygon' ||
         shp.geometry.type === 'Point'
@@ -186,7 +186,7 @@ async function loadShapefiles(files: File[], nameKey?: string) {
 // });
 
 
-onmessage = function (event) {
+self.onmessage = (event) => {
   const { type } = event.data;
   console.log("[DataWorker]: got message of type:", type);
   try {

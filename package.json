@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "biome lint .",
     "preview": "vite preview",
     "styleguide": "styleguidist server",
     "styleguide:build": "styleguidist build",
@@ -53,8 +53,8 @@
     "web-vitals": "^5.3.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.0",
     "@changesets/cli": "^2.31.0",
-    "@eslint/js": "^10.0.1",
     "@types/d3": "^7.4.3",
     "@types/d3-array": "^3.2.2",
     "@types/d3-format": "^3.0.4",
@@ -68,12 +68,7 @@
     "@types/shapefile": "^0.6.4",
     "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^6.0.2",
-    "eslint": "^10.4.1",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.6.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
     "vite-tsconfig-paths": "^6.1.1"
   }

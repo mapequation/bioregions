@@ -8,17 +8,20 @@ interface CanvasDatum {
   radius: number;
 }
 
+// Capture (and memoize on the projection) its original scale, before any zooming.
+function capturedScale(projection: d3.GeoProjection) {
+  if (projection._scale === undefined) {
+    projection._scale = projection.scale();
+  }
+  return projection._scale;
+}
+
 export function zoomProjection(
   projection: d3.GeoProjection,
-  {
-    // Capture the projection’s original scale, before any zooming.
-    scale = projection._scale === undefined
-      ? (projection._scale = projection.scale())
-      : projection._scale,
-    scaleExtent = [0.8, 1000],
-  } = {},
+  { scale = capturedScale(projection), scaleExtent = [0.8, 1000] } = {},
 ) {
-  let v0, q0, r0, a0, tl;
+  let v0: number[], q0: number[], r0: number[], a0: number;
+  let tl: number;
 
   const zoom = d3
     .zoom()
@@ -46,7 +49,8 @@ export function zoomProjection(
 
   function zoomstarted(event) {
     v0 = versor.cartesian(projection.invert(point(event, this)));
-    q0 = versor((r0 = projection.rotate()));
+    r0 = projection.rotate();
+    q0 = versor(r0);
   }
 
   function zoomed(event) {
@@ -87,13 +91,7 @@ export function zoomProjection(
 
 export function zoomFixed(
   projection: d3.GeoProjection,
-  {
-    // Capture the projection’s original scale, before any zooming.
-    scale = projection._scale === undefined
-      ? (projection._scale = projection.scale())
-      : projection._scale,
-    scaleExtent = [0.8, 1000],
-  } = {},
+  { scale = capturedScale(projection), scaleExtent = [0.8, 1000] } = {},
 ) {
   const zoom = d3
     .zoom()

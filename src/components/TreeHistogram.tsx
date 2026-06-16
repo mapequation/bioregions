@@ -29,9 +29,9 @@ export default observer(function TreeHistogram({
 
   const maxValue = max(data ?? [{ value: 1 }], (d) => d.value);
   let minValue = data.length > 0 ? data[0].value : 0;
-  if (yLog && data.length > 0 && data[0].value == 0) {
+  if (yLog && data.length > 0 && data[0].value === 0) {
     let i = 1;
-    while (data[i].value == 0) {
+    while (data[i].value === 0) {
       ++i;
     }
     minValue = data[i].value;
@@ -53,6 +53,7 @@ export default observer(function TreeHistogram({
   return (
     <Box textAlign="center" h={300}>
       <svg
+        aria-hidden="true"
         xmlns="http://www.w3.org/2000/svg"
         width="100%"
         height="100%"

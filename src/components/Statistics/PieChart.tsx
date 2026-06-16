@@ -36,7 +36,9 @@ export default function PieChart({
   const [key, count] = [0, 1];
   const sorted = [...values].sort((a, b) => b[count] - a[count]);
   const total = sorted.reduce((tot, value) => tot + value[count], 0);
-  sorted.forEach((value) => (value[count] /= total));
+  sorted.forEach((value) => {
+    value[count] /= total;
+  });
 
   const minFraction = 0.1;
   const aggregated = sorted.filter((value) => value[count] >= minFraction);
@@ -60,6 +62,7 @@ export default function PieChart({
     <PopoverRoot>
       <PopoverTrigger>
         <svg
+          aria-hidden="true"
           width="30px"
           height="30px"
           viewBox="-100 -100 200 200"
@@ -86,7 +89,7 @@ export default function PieChart({
             />
           )}
           {aggregated.length > 1 &&
-            aggregated.map((value, i) => {
+            aggregated.map((value) => {
               const x0 = radius * Math.cos(theta);
               const y0 = radius * Math.sin(theta);
               const x1 = radius * Math.cos(theta + 2 * Math.PI * value[count]);
@@ -95,7 +98,7 @@ export default function PieChart({
               const largeArcFlag = value[count] > 0.5 ? 1 : 0;
               return (
                 <path
-                  key={i}
+                  key={value[key]}
                   d={`M ${x0} ${y0} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x1} ${y2} L 0 0 Z`}
                   fill={value[key] === -1 ? restColor : color(value[key])}
                   stroke="white"
@@ -116,9 +119,9 @@ export default function PieChart({
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {aggregated.map((value, i) => (
+              {aggregated.map((value) => (
                 <Table.Row
-                  key={i}
+                  key={value[key]}
                   bg={value[key] === -1 ? restColor : color(value[key])}
                   color={value[key] === -1 ? 'black' : 'white'}
                 >

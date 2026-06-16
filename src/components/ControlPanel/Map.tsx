@@ -16,7 +16,7 @@ import Select from './Select';
 import { Switch } from '../ui/switch';
 import { Slider } from '../ui/slider';
 
-export default observer(function Map() {
+export default observer(function MapSettings() {
   const { mapStore } = useStore();
 
   return (
