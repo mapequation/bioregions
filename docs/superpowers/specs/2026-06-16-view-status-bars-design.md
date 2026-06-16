@@ -104,8 +104,21 @@ they match the user's current scheme:
 colors = colorStore.bioregionColors           // c3, scheme-dependent
 r1 = colors[0] ?? '#c63968'                    // fallback = Turbo defaults (mock)
 r2 = colors[1] ?? '#71c738'
-// fuzzy blend matches CellColor: interpolateRgb(r1, r2)(t), t = 0.33 and 0.66
 ```
+
+Fuzzy boundary cells reuse the exact `ColorStore` recipe (see `ColorStore.ts` ~L218),
+blending **and** fading by the dominant-region proportion so the transition zone
+softens into the background:
+
+```
+const color = Color(interpolateRgb(secondColor, firstColor)(t ** strength))!;
+color.opacity = topBioregionProportion ** strength;   // proportion-driven fade
+```
+
+For the icon, the boundary band uses a monotonic ramp (t ≈ 0.33, 0.66) with opacity
+< 1 on the transition cells (e.g. ~0.55–0.8), so the tile background shows through the
+fuzzy zone exactly as the map renders it. `strength` maps to
+`colorModuleParticipationStrength` (icon uses its default of 1).
 
 Records icon uses `red` (matches the points layer `fill: 'red'`); heatmap icon uses
 the YlOrRd ramp from `MapStore._heatmapColor`; ocean (clip "outside") uses
@@ -162,7 +175,8 @@ the YlOrRd ramp, hot center. `Bioregions`: 3×3 cells split — region 1 (`r1`) 
 **Boundaries** — `distinct` = the bioregions grid (hard edges). `fuzzy` = same grid
 but the boundary band blends smoothly along the diagonal: cores stay `r1`/`r2`, the
 two boundary bands use `interpolateRgb(r1,r2)` at t≈0.33 and t≈0.66 (monotonic ramp,
-no checkerboard).
+no checkerboard) **and** carry opacity < 1 (proportion-driven fade, per the helper
+above) so the background shows through the transition zone.
 
 **Clip** — `off` = the bioregions grid filling the whole tile. `on` = ocean
 (`waterColor`) tile with the bioregions grid clipped to a land path that carves ~25%
