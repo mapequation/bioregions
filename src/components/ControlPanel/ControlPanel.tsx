@@ -3,7 +3,7 @@ import { observer } from 'mobx-react';
 import Section from './Section';
 import Resolution from './Resolution';
 import Infomap from './Infomap';
-import Map from './Map';
+import MapSettings from './Map';
 import Data from './Data';
 import Export from './Export';
 import Advanced from './Advanced';
@@ -42,7 +42,7 @@ export default observer(function ControlPanel() {
         <Infomap />
       </Section>
       <Section label="Map">
-        <Map />
+        <MapSettings />
       </Section>
       <Section label="Export">
         <Export />

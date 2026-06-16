@@ -48,7 +48,7 @@ export function uniformTsallisEntropy(k: number, q: number) {
   if (isEqual(q, 1)) {
     return Math.log(k);
   }
-  return 1 / (q - 1) * (1 - Math.pow(k, 1 - q));
+  return 1 / (q - 1) * (1 - k ** (1 - q));
 }
 
 /**

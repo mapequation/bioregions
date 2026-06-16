@@ -113,7 +113,7 @@ function read(newickString: string) {
   for (let i = 0; i < tokens.length; i++) {
     const token: string = tokens[i];
     switch (token) {
-      case '(':
+      case '(': {
         const newChildren: ITree = {
           branchLength: null,
           children: [],
@@ -123,7 +123,8 @@ function read(newickString: string) {
         ancestors.push(tree);
         tree = newChildren;
         break;
-      case ',':
+      }
+      case ',': {
         const anotherBranch: ITree = {
           branchLength: null,
           children: [],
@@ -135,18 +136,20 @@ function read(newickString: string) {
           tree = anotherBranch;
         }
         break;
-      case ')': // optional name next
+      }
+      case ')': { // optional name next
         const lastAncestor = ancestors.pop();
         if (lastAncestor) {
           tree = lastAncestor;
         }
         break;
+      }
       case ':': // optional length next
         break;
-      default:
+      default: {
         const x: string = tokens[i - 1];
         if (x === ')' || x === '(' || x === ',') {
-          if (exceptionHashTable.hasOwnProperty(token)) {
+          if (Object.prototype.hasOwnProperty.call(exceptionHashTable, token)) {
             const [str1, str2] = exceptionHashTable[token].split(':');
             if (str2) {
               tree.name = str2;
@@ -160,7 +163,7 @@ function read(newickString: string) {
               tree.name = token;
             } else {
               tree.name = '';
-              if (!isNaN(parseFloat(token))) {
+              if (!Number.isNaN(parseFloat(token))) {
                 tree.bs = parseFloat(token);
               }
             }
@@ -171,6 +174,7 @@ function read(newickString: string) {
         } else if (x === ':') {
           tree.branchLength = parseFloat(token);
         }
+      }
     }
   }
   return tree;
@@ -189,20 +193,20 @@ function write(json: ITree) {
         });
       }
       const substring = newChildren.join();
-      if (nest.hasOwnProperty('name')) {
-        subtree = '(' + substring + ')' + nest.name;
+      if (Object.prototype.hasOwnProperty.call(nest, 'name')) {
+        subtree = `(${substring})${nest.name}`;
       }
-      if (nest.hasOwnProperty('branchLength')) {
+      if (Object.prototype.hasOwnProperty.call(nest, 'branchLength')) {
         if (nest.branchLength) {
-          subtree = subtree + ':' + nest.branchLength;
+          subtree = `${subtree}:${nest.branchLength}`;
         }
       }
     } else {
       let leaf: string = '';
-      if (nest.hasOwnProperty('name') && nest.name) {
+      if (Object.prototype.hasOwnProperty.call(nest, 'name') && nest.name) {
         leaf = nest.name;
       }
-      if (nest.hasOwnProperty('branchLength') && nest.branchLength) {
+      if (Object.prototype.hasOwnProperty.call(nest, 'branchLength') && nest.branchLength) {
         leaf = `${leaf}:${nest.branchLength}`;
       }
       subtree = subtree + leaf;

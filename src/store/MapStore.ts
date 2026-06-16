@@ -1,8 +1,8 @@
 import * as d3 from 'd3';
 import { action, makeObservable, observable, computed } from 'mobx';
-import { type Cell } from '../utils/QuadTree';
+import type { Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
-import { MultiPoint } from '../types/geojson';
+import type { MultiPoint } from '../types/geojson';
 import {
   geoMap,
   type GeoMap,
@@ -16,7 +16,7 @@ export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
 const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
 
-export interface IMapRenderer { }
+export type IMapRenderer = {}
 
 export type RenderType = 'records' | 'heatmap' | 'bioregions';
 

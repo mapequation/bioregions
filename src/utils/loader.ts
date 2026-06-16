@@ -1,8 +1,8 @@
 import Papa, {
-  ParseLocalConfig,
-  ParseRemoteConfig,
-  ParseResult,
-  ParseError,
+  type ParseLocalConfig,
+  type ParseRemoteConfig,
+  type ParseResult,
+  type ParseError,
 } from 'papaparse';
 
 export type ParseAsyncConfig<T = any, TInput = undefined> = ParseLocalConfig<T, TInput> | ParseRemoteConfig<T>;

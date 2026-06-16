@@ -1,4 +1,4 @@
-import * as d3 from 'd3';
+import type * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { makeObservable, observable, action } from 'mobx';
 import type RootStore from './RootStore';

@@ -19,9 +19,16 @@ const XY: [number, number][] = [
 
 function Cells({ fills, clipId }: { fills: string[]; clipId?: string }) {
   const rects = fills.map((f, i) => (
-    <rect key={i} x={XY[i][0]} y={XY[i][1]} width="8" height="8" fill={f} />
+    <rect
+      key={`${XY[i][0]}-${XY[i][1]}`}
+      x={XY[i][0]}
+      y={XY[i][1]}
+      width="8"
+      height="8"
+      fill={f}
+    />
   ));
-  return clipId ? <g clipPath={`url(#${clipId})`}>{rects}</g> : <>{rects}</>;
+  return clipId ? <g clipPath={`url(#${clipId})`}>{rects}</g> : rects;
 }
 
 /** region 1 = top row + first two of middle row; region 2 = the rest. */
@@ -50,9 +57,9 @@ export function RecordsIcon() {
     [6, 7], [12, 5], [17, 9], [8, 14], [15, 16], [19, 14], [11, 11],
   ];
   return (
-    <svg width="24" height="24" viewBox={VB}>
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r="1.7" fill="red" />
+    <svg aria-hidden="true" width="24" height="24" viewBox={VB}>
+      {pts.map((p) => (
+        <circle key={`${p[0]}-${p[1]}`} cx={p[0]} cy={p[1]} r="1.7" fill="red" />
       ))}
     </svg>
   );
@@ -65,7 +72,7 @@ export function HeatmapIcon() {
     '#ffffcc', '#feb24c', '#fd8d3c',
   ];
   return (
-    <svg width="24" height="24" viewBox={VB}>
+    <svg aria-hidden="true" width="24" height="24" viewBox={VB}>
       <Cells fills={ramp} />
     </svg>
   );
@@ -73,7 +80,7 @@ export function HeatmapIcon() {
 
 export function BioregionsIcon({ r1, r2 }: { r1: string; r2: string }) {
   return (
-    <svg width="24" height="24" viewBox={VB}>
+    <svg aria-hidden="true" width="24" height="24" viewBox={VB}>
       <Cells fills={distinctFills(r1, r2)} />
     </svg>
   );
@@ -81,7 +88,7 @@ export function BioregionsIcon({ r1, r2 }: { r1: string; r2: string }) {
 
 export function BoundariesFuzzyIcon({ r1, r2 }: { r1: string; r2: string }) {
   return (
-    <svg width="24" height="24" viewBox={VB}>
+    <svg aria-hidden="true" width="24" height="24" viewBox={VB}>
       <Cells fills={fuzzyFills(r1, r2)} />
     </svg>
   );
@@ -92,7 +99,7 @@ let clipSeq = 0;
 export function ClipOnIcon({ r1, r2, ocean }: { r1: string; r2: string; ocean: string }) {
   const id = `sbland${clipSeq++}`;
   return (
-    <svg width="24" height="24" viewBox={VB}>
+    <svg aria-hidden="true" width="24" height="24" viewBox={VB}>
       <rect width="24" height="24" fill={ocean} />
       <clipPath id={id}>
         <path d={LAND} />
@@ -106,6 +113,7 @@ export function ClipOnIcon({ r1, r2, ocean }: { r1: string; r2: string; ocean: s
 function Stroke({ children }: { children: React.ReactNode }) {
   return (
     <svg
+      aria-hidden="true"
       width="24"
       height="24"
       viewBox={VB}

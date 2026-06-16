@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import type React from 'react';
+import { useMemo } from 'react';
 import { scaleLinear, scaleLog } from 'd3';
 
 type AxisProps = {
@@ -45,9 +46,9 @@ export function AxisBottom({
         // display="none"
         strokeWidth={0.5}
       />
-      {ticks.map(({ value, offset }, i) => (
+      {ticks.map(({ value, offset }) => (
         <g
-          key={`bottom-${i}`}
+          key={`bottom-${value}`}
           transform={`translate(${offset}, 0)`}
           style={{ fontSize: '4px' }}
         >
@@ -182,9 +183,9 @@ export function AxisRight({
         // display="none"
         strokeWidth={0.5}
       />
-      {ticks.map(({ value, offset }, i) => (
+      {ticks.map(({ value, offset }) => (
         <g
-          key={`right-${i}`}
+          key={`right-${value}`}
           transform={`translate(0, ${offset})`}
           style={{ fontSize: '4px' }}
         >

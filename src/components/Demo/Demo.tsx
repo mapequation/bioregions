@@ -111,7 +111,7 @@ export default observer(() => {
 
   const showDeveloperStuff = false;
   const hideIntegration =
-    infomapStore.useWholeTree || infomapStore.treeWeightBalance == 0;
+    infomapStore.useWholeTree || infomapStore.treeWeightBalance === 0;
 
   return (
     <Box>

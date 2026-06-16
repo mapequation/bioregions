@@ -1,4 +1,4 @@
-import { createListCollection, SelectRootProps } from '@chakra-ui/react';
+import { createListCollection, type SelectRootProps } from '@chakra-ui/react';
 import {
   SelectContent,
   SelectItem,
@@ -8,13 +8,13 @@ import {
   SelectValueText,
 } from '../ui/select';
 
-type SelectItem = {
+type SelectOption = {
   label: string;
   value: string;
 };
 
 interface SelectProps extends Omit<SelectRootProps, 'collection'> {
-  items: SelectItem[];
+  items: SelectOption[];
   label?: string;
   placeholder?: string;
 }

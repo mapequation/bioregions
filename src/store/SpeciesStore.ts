@@ -1,6 +1,6 @@
 import { action, makeObservable, observable, computed } from 'mobx';
 // import { spawn, Thread, Worker } from 'threads';
-import { ParseConfig } from 'papaparse';
+import type { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
 import { csvParse, tsvFormatRows, color as Color } from 'd3';
 import type RootStore from './RootStore';
@@ -363,7 +363,7 @@ export default class SpeciesStore {
       latColumn,
     );
 
-    for (let item of records) {
+    for (const item of records) {
       const mappedItem = mapper(item);
       const pointFeature = createPointFeature(
         [mappedItem.longitude, mappedItem.latitude],
@@ -413,7 +413,7 @@ export default class SpeciesStore {
     await this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
 
-      for (let item of items) {
+      for (const item of items) {
         const mappedItem = mapper(item);
         const name = normalizeSpeciesName(mappedItem.name);
         if (!name || name === 'NA') {

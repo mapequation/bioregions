@@ -66,11 +66,11 @@ const SliderMarks = React.forwardRef<HTMLDivElement, SliderMarksProps>(
 
     return (
       <ChakraSlider.MarkerGroup ref={ref}>
-        {marks.map((mark, index) => {
+        {marks.map((mark) => {
           const value = typeof mark === 'number' ? mark : mark.value;
           const label = typeof mark === 'number' ? undefined : mark.label;
           return (
-            <ChakraSlider.Marker key={index} value={value}>
+            <ChakraSlider.Marker key={value} value={value}>
               <ChakraSlider.MarkerIndicator />
               {label}
             </ChakraSlider.Marker>

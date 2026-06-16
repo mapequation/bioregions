@@ -1,4 +1,4 @@
-import { SVGProps } from 'react';
+import type { SVGProps } from 'react';
 import { scaleLinear, scaleLog } from 'd3';
 
 type CurveProps<T> = {
@@ -33,7 +33,7 @@ export default function Curve<T>({
   const xScale = scaleLinear().domain(xDomain).range(xRange);
   const _yScale = yLog ? scaleLog : scaleLinear;
   const yScale = _yScale().domain(yDomain).range(yRange).clamp(true); //.nice();
-  let iStart = 0;
+  const iStart = 0;
   // while (yLog && iStart < data.length && yAccessor(data[iStart]) == 0) {
   //   ++iStart;
   // }

@@ -342,7 +342,7 @@ export default observer(function Advanced() {
               <Tag.Root size="sm" minW={50}>
                 <Tag.Label>
                   {format('.0e')(
-                    Math.pow(10, infomapStore.linkWeightThresholdExponent),
+                    10 ** infomapStore.linkWeightThresholdExponent,
                   )}
                 </Tag.Label>
               </Tag.Root>

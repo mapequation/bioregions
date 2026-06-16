@@ -1,11 +1,11 @@
 import { action, makeObservable, observable, computed } from 'mobx';
-import { BBox, GeoJsonProperties } from '../../types/geojson';
+import type { BBox, GeoJsonProperties } from '../../types/geojson';
 import type { GeoFeature } from '../../store/SpeciesStore';
 import type SpeciesStore from '../../store/SpeciesStore';
 import { rangeArray, rangeArrayOneSignificant } from '../range';
 import Cell from './Cell';
 
-export type VisitCallback = (node: Cell) => true | void;
+export type VisitCallback = (node: Cell) => true | undefined;
 
 export type QuadtreeNodeProperties = GeoJsonProperties & {
   numRecords: number;
@@ -56,7 +56,7 @@ export default class QuadtreeGeoBinner {
 
   private _initExtent() {
     // power of 2 from unscaled unit
-    let size = Math.pow(2, this.maxCellSizeLog2) / this.scale;
+    let size = 2 ** this.maxCellSizeLog2 / this.scale;
     while (size <= 180) {
       size *= 2;
     }
@@ -93,7 +93,7 @@ export default class QuadtreeGeoBinner {
     let [x1, y1, x2, y2] = extent;
     const dx = x2 - x1;
     const dy = y2 - y1;
-    if (isFinite(dx) && isFinite(dy)) {
+    if (Number.isFinite(dx) && Number.isFinite(dy)) {
       if (dx > dy) {
         y2 = y1 + dx;
       } else {
@@ -211,7 +211,9 @@ export default class QuadtreeGeoBinner {
   }
 
   addFeatures(features: GeoFeature[]) {
-    features.forEach((feature) => this.addFeature(feature));
+    features.forEach((feature) => {
+      this.addFeature(feature);
+    });
     return this;
   }
 
