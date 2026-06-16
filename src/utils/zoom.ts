@@ -81,9 +81,11 @@ export function zoomProjection(
         .call(zoom),
     {
       on(type, ...options) {
-        return options.length
-          ? (zoom.on(type, ...options), this)
-          : zoom.on(type);
+        if (options.length) {
+          zoom.on(type, ...options);
+          return this;
+        }
+        return zoom.on(type);
       },
     },
   );
@@ -113,9 +115,11 @@ export function zoomFixed(
         .call(zoom),
     {
       on(type, ...options) {
-        return options.length
-          ? (zoom.on(type, ...options), this)
-          : zoom.on(type);
+        if (options.length) {
+          zoom.on(type, ...options);
+          return this;
+        }
+        return zoom.on(type);
       },
     },
   );

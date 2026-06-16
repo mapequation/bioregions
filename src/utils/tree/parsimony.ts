@@ -38,6 +38,19 @@ export interface AncestralData {
 }
 export type AncestralMap = Map<PhyloNode, AncestralData>;
 
+/**
+ * Read a value that the traversal order guarantees is already present. Throws if it
+ * is missing — same fail-fast behavior a bare `!` would give on the following access,
+ * but with a clearer message.
+ */
+function mustGet<K, V>(map: Map<K, V>, key: K): V {
+  const value = map.get(key);
+  if (value === undefined) {
+    throw new Error('parsimony: expected node entry not found in map');
+  }
+  return value;
+}
+
 const idSet = (s: Region[]): Set<number> => new Set(s.map((r) => r.clusterId));
 /** Regions of `a` also present in `b` (by clusterId), preserving `a`'s order. */
 const intersectBy = (a: Region[], b: Region[]): Region[] => {
@@ -82,7 +95,7 @@ function preliminaryPhase(
       );
       return;
     }
-    const childSets = node.children.map((c) => ranges.get(c)!.clusters);
+    const childSets = node.children.map((c) => mustGet(ranges, c).clusters);
     let anc = childSets.reduce((acc, s) => intersectBy(acc, s));
     const byUnion = anc.length === 0;
     if (byUnion) anc = childSets.reduce((acc, s) => unionBy(acc, s), [] as Region[]);
@@ -95,16 +108,16 @@ function preliminaryPhase(
 function finalPhase(root: PhyloNode, ranges: Map<PhyloNode, RegionSet>): void {
   visitPreOrder(root, (node, parent) => {
     if (!parent || node.isLeaf) return;
-    const prelim = ranges.get(node)!.clusters;
-    const pfinal = ranges.get(parent)!.clusters;
+    const prelim = mustGet(ranges, node).clusters;
+    const pfinal = mustGet(ranges, parent).clusters;
     if (intersectBy(prelim, pfinal).length === pfinal.length) {
       ranges.set(node, set(intersectBy(prelim, pfinal))); // I → II (diminished)
-    } else if (ranges.get(node)!.byUnion) {
+    } else if (mustGet(ranges, node).byUnion) {
       ranges.set(node, set(unionBy(prelim, pfinal))); // III → IV (expanded)
     } else {
       // III → V (encompassing): add parent regions present in ≥1 child's preliminary set.
       const childrenUnion = node.children
-        .map((c) => ranges.get(c)!.clusters)
+        .map((c) => mustGet(ranges, c).clusters)
         .reduce((a, b) => unionBy(a, b), [] as Region[]);
       ranges.set(node, set(unionBy(prelim, intersectBy(pfinal, childrenUnion))));
     }
@@ -177,9 +190,9 @@ export function reconstructAncestralRanges(
   const result: AncestralMap = new Map();
   visitTreeDepthFirstPostOrder(root, (node) => {
     result.set(node, {
-      ranges: ranges.get(node)!,
-      clusters: clusters.get(node)!,
-      speciesCount: speciesCount.get(node)!,
+      ranges: mustGet(ranges, node),
+      clusters: mustGet(clusters, node),
+      speciesCount: mustGet(speciesCount, node),
     });
   });
   return result;
