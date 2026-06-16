@@ -61,7 +61,7 @@ export const LoadData = observer(function LoadData() {
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
-  const [lines, setLines] = useState<any[]>([]);
+  const [lines, setLines] = useState<Record<string, string>[]>([]);
 
   const [nameColumn, setNameColumn] = useState<string>('');
   const [latColumn, setLatColumn] = useState<string>('');
@@ -110,7 +110,7 @@ export const LoadData = observer(function LoadData() {
         setNameColumn(name);
         setLatColumn(lat);
         setLongColumn(long);
-        setLines(data);
+        setLines(data as Record<string, string>[]);
       } catch (e) {
         console.error(e);
       }

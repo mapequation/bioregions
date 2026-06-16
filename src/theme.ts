@@ -1,58 +1,57 @@
-import { createSystem, defaultConfig, defineRecipe } from '@chakra-ui/react';
+import {
+  createSystem,
+  defaultConfig,
+  defineRecipe,
+  type SystemStyleObject,
+} from '@chakra-ui/react';
 // import { tableAnatomy as parts } from '@chakra-ui/anatomy';
 // import type {
 //   PartsStyleFunction,
 //   SystemStyleObject,
 // } from '@chakra-ui/theme-tools';
 
-// const numericStyles: SystemStyleObject = {
-const numericStyles: any = {
+const numericStyles: SystemStyleObject = {
   '&[data-is-numeric=true]': {
     textAlign: 'end',
   },
 };
 
-// const tableVariantSimpler: PartsStyleFunction<typeof parts> = () => {
-const tableVariantSimpler: any = () => {
-  const paddingTop = '5px !important';
+const paddingTop = '5px !important';
 
-  return {
-    thead: {
-      th: {
-        textAlign: 'center !important',
-        paddingTop,
-        paddingBottom: paddingTop,
-      },
+const tableVariantSimpler: SystemStyleObject = {
+  '& thead th': {
+    textAlign: 'center !important',
+    paddingTop,
+    paddingBottom: paddingTop,
+  },
+  '& td': {
+    '&:first-of-type': {
+      paddingInlineStart: '0 !important',
+      textAlign: 'start',
     },
-    td: {
-      '&:first-of-type': {
-        paddingInlineStart: '0 !important',
-        textAlign: 'start',
-      },
-      '&:last-of-type': {
-        paddingInlineEnd: '0 !important',
-      },
-      textAlign: 'end',
-      paddingTop,
-      paddingBottom: paddingTop,
+    '&:last-of-type': {
+      paddingInlineEnd: '0 !important',
     },
-    tfoot: {
-      td: {
-        borderColor: 'var(--chakra-colors-gray-100) !important',
-        borderTop: '1px',
-        paddingTop,
-        paddingBottom: paddingTop,
-        ...numericStyles,
-      },
-    },
-  };
+    textAlign: 'end',
+    paddingTop,
+    paddingBottom: paddingTop,
+  },
+  '& tfoot td': {
+    borderColor: 'var(--chakra-colors-gray-100) !important',
+    borderTop: '1px',
+    paddingTop,
+    paddingBottom: paddingTop,
+    ...numericStyles,
+  },
 };
 
 const tableRecipe = defineRecipe({
   variants: {
-    simpler: tableVariantSimpler,
+    simpler: {
+      true: tableVariantSimpler,
+    },
   },
-})
+});
 
 const theme = createSystem(defaultConfig, {
   globalCss: {

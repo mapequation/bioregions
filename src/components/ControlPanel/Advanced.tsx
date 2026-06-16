@@ -62,10 +62,14 @@ export default observer(function Advanced() {
         const name = `${timeFormatter(t)} Ma`;
 
         saveAs(await mapStore.getImageBlob(), `${name}.png`);
-        //@ts-ignore
-        infomapStore.tree!.name = name;
+        const { tree } = infomapStore;
+        if (!tree) {
+          throw new Error('Infomap run produced no tree');
+        }
+        // @ts-expect-error - tree.name is not part of the public type but is set here for export
+        tree.name = name;
         const filename = `${name}.json`;
-        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+        zip.file(filename, JSON.stringify(tree));
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
@@ -97,7 +101,7 @@ export default observer(function Advanced() {
         }
 
         const filename = `N ${N}.json`;
-        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+        zip.file(filename, JSON.stringify(infomapStore.tree));
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
@@ -129,7 +133,7 @@ export default observer(function Advanced() {
         }
 
         const filename = `${seed}.json`;
-        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+        zip.file(filename, JSON.stringify(infomapStore.tree));
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });
@@ -164,7 +168,7 @@ export default observer(function Advanced() {
         }
 
         const filename = `Markov-time-${markovTime}.json`;
-        zip.file(filename, JSON.stringify(infomapStore.tree)!);
+        zip.file(filename, JSON.stringify(infomapStore.tree));
       }
 
       const zipFile = await zip.generateAsync({ type: 'blob' });

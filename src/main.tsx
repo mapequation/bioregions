@@ -9,7 +9,12 @@ import { Provider } from '@/components/ui/provider';
 import theme from './theme';
 import store, { StoreContext } from './store';
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error('Root element #root not found');
+}
+
+createRoot(rootElement).render(
   <StrictMode>
     <Provider system={theme}>
       <StoreContext.Provider value={store}>

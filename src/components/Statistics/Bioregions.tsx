@@ -129,7 +129,7 @@ const BioregionInfo = observer(function Bioregion({
               commonSpecies: { name: string; count: number; score: number },
               index: number,
             ) => {
-              const indicativeSpecies = mostIndicative[index]!;
+              const indicativeSpecies = mostIndicative[index];
               return (
                 <Table.Row
                   key={`${commonSpecies.name}|${indicativeSpecies.name}`}
