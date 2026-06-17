@@ -4,5 +4,11 @@
   "initialVersions": {
     "bioregions": "2.0.0-alpha.18"
   },
-  "changesets": []
+  "changesets": [
+    "bioregion-list-top-n",
+    "migrate-pnpm-changesets",
+    "responsive-map-tree",
+    "view-reset-and-label-spacing",
+    "view-status-bars"
+  ]
 }
