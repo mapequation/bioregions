@@ -4,6 +4,7 @@ import { useStore } from '../store/';
 import { Box, Text } from '@chakra-ui/react';
 import { formatThousands } from '../utils/formats';
 import MapStatusBar from './StatusBar/MapStatusBar';
+import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
 // Tooltip for the hovered grid cell: id, size/area, and — once bioregions are computed — a
 // colored bioregion badge and the clade's oldest tree-node time. Driven by d3gl's native
@@ -72,7 +73,6 @@ const MapTooltip = observer(function _MapTooltip() {
 export default observer(function WorldMap() {
   const hostRef = useRef<HTMLDivElement>(null);
   const { mapStore } = useStore();
-  const { width, height } = mapStore;
 
   useEffect(() => {
     if (hostRef.current === null) {
@@ -84,12 +84,13 @@ export default observer(function WorldMap() {
   }, [mapStore]);
 
   return (
-    <Box ml={4} position="relative" width={width}>
+    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
       <MapStatusBar />
-      {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
-          coordinate space as the d3gl pointer offsets. Hover outline + selection dimming are
-          handled natively by d3gl on the cells layer (see MapStore.buildLayers). */}
-      <Box position="relative" width={width} height={height}>
+      {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a
+          2:1 box via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the
+          hover tooltip lives in the same coordinate space as the d3gl pointer offsets. Hover
+          outline + selection dimming are handled natively by d3gl on the cells layer. */}
+      <Box position="relative" width="100%" aspectRatio={ASPECT_RATIO}>
         <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
         <MapTooltip />
       </Box>

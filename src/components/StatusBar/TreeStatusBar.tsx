@@ -14,6 +14,7 @@ import {
   LinkBumpIcon,
   CoordsWorldIcon,
   CoordsScreenIcon,
+  ResetViewIcon,
 } from './icons';
 
 const BACKEND_LABEL: Record<string, string> = { auto: 'GL', canvas: '2D', svg: 'SVG' };
@@ -93,6 +94,16 @@ export default observer(function TreeStatusBar() {
             {o.icon}
           </StatusButton>
         ))}
+      </StatusGroup>
+
+      <StatusGroup caption="view">
+        <StatusButton
+          disabled={treeStore.isViewDefault}
+          content="Reset zoom & pan"
+          onClick={() => treeStore.resetView()}
+        >
+          <ResetViewIcon />
+        </StatusButton>
       </StatusGroup>
 
       <StatusBarSettings />

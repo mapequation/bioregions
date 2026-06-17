@@ -11,6 +11,7 @@ import {
   BioregionsIcon,
   BoundariesFuzzyIcon,
   ClipOnIcon,
+  ResetViewIcon,
 } from './icons';
 
 const BACKEND_LABEL: Record<string, string> = { auto: 'GL', canvas: '2D', svg: 'SVG' };
@@ -138,6 +139,15 @@ export default observer(function MapStatusBar() {
           onClick={() => mapStore.setClipToLand(true)}
         >
           <ClipOnIcon r1={r1} r2={r2} ocean={mapStore.waterColor} />
+        </StatusButton>
+      </StatusGroup>
+
+      <StatusGroup caption="view">
+        <StatusButton
+          content="Reset view — pan, zoom & rotation"
+          onClick={() => mapStore.resetView()}
+        >
+          <ResetViewIcon />
         </StatusButton>
       </StatusGroup>
 

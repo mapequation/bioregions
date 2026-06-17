@@ -42,15 +42,18 @@ import {
 } from '@mapequation/d3gl/map';
 import { LabelLayer, type LabelAnchor } from '@mapequation/d3gl/labels';
 import type { ViewTransform } from '@mapequation/d3gl/geo';
+import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
 export type TreeNode = {
   data: PhyloNode;
   bioregionId?: number;
 };
 
-// Tree viewport (the d3gl plot is laid out in these world coordinates).
-const TREE_WIDTH = 760;
-const TREE_HEIGHT = 520;
+// Tree viewport (the d3gl plot is laid out in these world coordinates). Responsive: the plot
+// fills the available width up to MAX_WIDTH at ASPECT_RATIO; the layout is recomputed for the
+// live box on resize (the render autorun tracks width/height).
+const TREE_WIDTH = MAX_WIDTH;
+const TREE_HEIGHT = MAX_WIDTH / ASPECT_RATIO;
 const LINE_MIN = 0.6;
 const LINE_MAX = 9; // branch-width range when scaling by subtended terminals
 const PIE_MIN = 3;
@@ -97,6 +100,8 @@ export default class TreeStore {
   weightParameter: number = 0.5; // Domain [0,1] for tree weight
   treeNodeMap = new Map<string, TreeNode>(); // name -> { data: PhyloNode, bioregionId: number }
 
+  // World-coordinate viewport, mirrored from the responsive host. Observable so the render
+  // autorun re-lays-out the tree (and re-culls labels) when the container resizes.
   width = TREE_WIDTH;
   height = TREE_HEIGHT;
   // Canvas2D default for an instant first frame; WebGL is smoother for very large trees.
@@ -111,8 +116,9 @@ export default class TreeStore {
   private labelEl: HTMLDivElement | null = null;
   private labels: LabelLayer | null = null;
   private anchors: LabelAnchor[] = [];
-  private view: ViewTransform = { k: 1, x: 0, y: 0 };
+  view: ViewTransform = { k: 1, x: 0, y: 0 };
   private renderDisposer: IReactionDisposer | null = null;
+  private sizeObserver: ResizeObserver | null = null;
 
   // Latest ancestral-range reconstruction (node → ranges/distribution), looked up on hover.
   // Kept off the observable graph: it's rebuilt by `renderTree` and read by `onHover`.
@@ -135,6 +141,13 @@ export default class TreeStore {
       treeString: observable,
       weightParameter: observable,
       numLeafNodes: observable,
+      width: observable,
+      height: observable,
+      setSize: action,
+      view: observable.ref,
+      setView: action,
+      resetView: action,
+      isViewDefault: computed,
       backend: observable,
       setBackend: action,
       layout: observable,
@@ -313,12 +326,59 @@ export default class TreeStore {
     return result;
   }
 
+  setSize = action((width: number, height: number) => {
+    this.width = width;
+    this.height = height;
+  });
+
+  // Mirror the responsive host's CSS width into width/height (height = width / aspect). Unlike
+  // GeoMap, a Plot keeps fixed world coords on resize (no auto-refit), so the render autorun
+  // re-lays-out the tree to the new box when these observables change. d3gl runs its own
+  // ResizeObserver on the same host to resize the canvas surface.
+  private observeSize(host: HTMLElement) {
+    const measure = () => {
+      const w = Math.round(host.getBoundingClientRect().width);
+      if (w > 0) this.setSize(w, Math.round(w / ASPECT_RATIO));
+    };
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      this.sizeObserver = new ResizeObserver(measure);
+      this.sizeObserver.observe(host);
+    }
+  }
+
+  setView = action((t: ViewTransform) => {
+    this.view = t;
+  });
+
+  /** True when the view is at its default (no pan/zoom) — drives the reset button's disabled state. */
+  get isViewDefault() {
+    const { k, x, y } = this.view;
+    return k === 1 && x === 0 && y === 0;
+  }
+
+  /** Wire d3-zoom; also re-seeds its internal transform from the current `view`, so calling this
+   *  after a programmatic setTransform keeps the gesture state in sync. */
+  private enableTreeZoom() {
+    this.engine?.enableZoom([0.5, 40], (t) => {
+      this.setView(t);
+      this.updateLabels();
+    });
+  }
+
+  /** Reset zoom/pan to identity and re-align d3-zoom + the label overlay. */
+  resetView = action(() => {
+    this.setView({ k: 1, x: 0, y: 0 });
+    this.engine?.setTransform(this.view);
+    this.enableTreeZoom();
+    this.updateLabels();
+  });
+
   setHost(host: HTMLElement) {
     this.disposeEngine();
 
     const engine = plot(host, {
-      width: this.width,
-      height: this.height,
+      aspectRatio: ASPECT_RATIO,
       backend: this.backend,
     });
     this.engine = engine;
@@ -335,21 +395,23 @@ export default class TreeStore {
     this.labelEl = labelEl;
     this.labels = new LabelLayer(labelEl, (a) => a.text);
 
-    engine.enableZoom([0.5, 40], (t) => {
-      this.view = t;
-      this.updateLabels();
-    });
+    this.enableTreeZoom();
 
     // Native d3gl picking (clip-aware): hovering a branch or node pie reads out that clade's
     // reconstructed ancestral range — shown in the tree tooltip and cross-highlighted on the map.
     engine.on('hover', this.onHover);
 
-    // Rebuild whenever the tree, bioregions, or colors change (autorun tracks the reads).
+    // Set the initial size from the laid-out host before the first render, then track resizes.
+    this.observeSize(host);
+
+    // Rebuild whenever the tree, bioregions, colors, or size change (autorun tracks the reads).
     this.renderDisposer = autorun(() => this.renderTree());
   }
 
   disposeEngine = () => {
     this.clearHover();
+    this.sizeObserver?.disconnect();
+    this.sizeObserver = null;
     this.renderDisposer?.();
     this.renderDisposer = null;
     this.labels?.destroy();

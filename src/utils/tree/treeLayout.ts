@@ -36,11 +36,14 @@ function layoutRectangular(
   width: number,
   height: number,
   pad = 40,
+  // Wider right margin than the other edges: leaf labels are drawn outward of the youngest
+  // tips (time = 1), so the tips stop short of the right edge to leave room for the names.
+  padRight = 150,
 ): LayoutNode {
   const h = cluster<PhyloNode>().size([height - 2 * pad, 1])(
     hierarchy(root, (d) => d.children),
   );
-  const time = scaleLinear().domain([0, 1]).range([pad, width - pad]);
+  const time = scaleLinear().domain([0, 1]).range([pad, width - padRight]);
   h.each((n) => {
     n.x += pad;
     n.y = time(n.data.time);
