@@ -1,0 +1,6 @@
+# Exclude first-party @mapequation packages from the `minimumReleaseAge` supply-chain
+# gate. The environment (local dev + CI) rejects lockfile entries newer than a 24h
+# cutoff; our own freshly-published packages (e.g. @mapequation/d3gl) are trusted, so
+# allow them through without waiting. pnpm reads this setting from pnpm-workspace.yaml.
+minimumReleaseAgeExclude:
+  - '@mapequation/*'
