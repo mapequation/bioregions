@@ -10,6 +10,7 @@ import Documentation from './Documentation';
 import ColorMode from './ControlPanel/ColorMode';
 import TreeStatusBar from './StatusBar/TreeStatusBar';
 import { formatThousands } from '../utils/formats';
+import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
 // Tooltip for the hovered tree branch/node: the clade's reconstructed ancestral range,
 // each bioregion sized by its share of the clade's occurrences. The matching bioregions are
@@ -81,15 +82,12 @@ const PhyloTree = observer(function _PhyloTree() {
   }
 
   return (
-    <Box ml={4} position="relative" width={treeStore.width}>
+    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
       <TreeStatusBar />
-      {/* Relative wrapper sized to the canvas: the hover tooltip is positioned in the same
-          coordinate space as the d3gl pointer offsets. */}
-      <Box
-        position="relative"
-        width={treeStore.width}
-        height={treeStore.height}
-      >
+      {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a 2:1 box
+          via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the hover
+          tooltip lives in the same coordinate space as the d3gl pointer offsets. */}
+      <Box position="relative" width="100%" aspectRatio={ASPECT_RATIO}>
         <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
         <TreeTooltip />
       </Box>

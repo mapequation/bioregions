@@ -250,3 +250,14 @@ export function CoordsScreenIcon() {
     </Stroke>
   );
 }
+
+// --- reset zoom/pan (magnifier with reset corner brackets) ---------------------
+export function ResetViewIcon() {
+  return (
+    <Stroke>
+      <circle cx="10.5" cy="10.5" r="9" />
+      <path d="M17.25 17.25 L22.5 22.5" />
+      <path d="M6.75 9 L6.75 6.75 9 6.75 M12 6.75 L14.25 6.75 14.25 9 M6.75 12 L6.75 14.25 9 14.25 M14.25 12 L14.25 14.25 12 14.25" />
+    </Stroke>
+  );
+}

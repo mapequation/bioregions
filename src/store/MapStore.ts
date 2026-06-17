@@ -11,6 +11,7 @@ import {
   type HoverHit,
 } from '@mapequation/d3gl/map';
 import { fitProjection } from '@mapequation/d3gl/geo';
+import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
 export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
@@ -99,8 +100,12 @@ export default class MapStore {
   // re-read and re-project everything (time-sliced by d3gl) — append only covers the new delta.
   private pointsHandle: LayerHandle<MultiPoint> | null = null;
 
-  width: number = 1200;
-  height: number = 900;
+  // Current CSS pixel size, mirrored from the responsive host so projection re-fits
+  // (setProjection) use the live box. The host is the single source of truth (d3gl owns
+  // resize); these are kept in sync by `sizeObserver`.
+  width: number = MAX_WIDTH;
+  height: number = MAX_WIDTH / ASPECT_RATIO;
+  private sizeObserver: ResizeObserver | null = null;
 
   renderType: RenderType = 'records';
   clipToLand: boolean = true;
@@ -147,6 +152,7 @@ export default class MapStore {
       backend: observable,
       setBackend: action,
       setProjection: action,
+      resetView: action,
       setRenderType: action,
     });
   }
@@ -278,23 +284,50 @@ export default class MapStore {
   }
 
   disposeEngine = () => {
+    this.sizeObserver?.disconnect();
+    this.sizeObserver = null;
     this.pointsHandle = null;
     this.engine?.destroy();
     this.engine = null;
   };
 
+  // Mirror the responsive host's CSS width into this.width/height (height = width / aspect).
+  // d3gl runs its own ResizeObserver to resize+refit the engine; this one only keeps the
+  // store's size in sync so setProjection re-fits to the current box. Sharing the host means
+  // both observers see the same value.
+  private observeSize() {
+    const host = this.host;
+    if (host === null) return;
+    const measure = () => {
+      const w = Math.round(host.getBoundingClientRect().width);
+      if (w > 0) {
+        this.width = w;
+        this.height = Math.round(w / ASPECT_RATIO);
+      }
+    };
+    measure();
+    if (typeof ResizeObserver !== 'undefined') {
+      this.sizeObserver = new ResizeObserver(measure);
+      this.sizeObserver.observe(host);
+    }
+  }
+
   private initEngine() {
     if (this.host === null) return;
     this.disposeEngine();
 
-    this.adjustHeight();
-    // Size the host element to match the engine (height depends on the projection fit).
-    this.host.style.width = `${this.width}px`;
-    this.host.style.height = `${this.height}px`;
+    this.observeSize();
+    // Fit the projection to the measured box so the first paint is correct; the engine refits
+    // on every later resize via its own ResizeObserver (GeoMap.onResize).
+    this.projection = fitProjection(
+      PROJECTION_FACTORIES[this.projectionName]().precision(0.1),
+      sphere as GeoJSON.GeoJSON,
+      this.width,
+      this.height,
+    );
 
     const engine = geoMap(this.host, {
-      width: this.width,
-      height: this.height,
+      aspectRatio: ASPECT_RATIO,
       projection: this.projection,
       backend: this.backend,
     });
@@ -429,16 +462,11 @@ export default class MapStore {
     this.engine?.setProjection(this.projection);
   }
 
-  adjustHeight() {
-    const { projection, width } = this;
-    const [[x0, y0], [x1, y1]] = d3
-      .geoPath(projection.fitWidth(width, sphere))
-      .bounds(sphere);
-    const height = Math.ceil(y1 - y0);
-    const l = Math.min(Math.ceil(x1 - x0), height);
-    projection.scale((projection.scale() * (l - 1)) / l).precision(0.2);
-    this.height = height;
-    projection.translate([width / 2, height / 2]);
+  // Reset pan/zoom (flat) or rotation (globe) to the default view. Re-fitting the current
+  // projection re-projects the layers, resets the affine transform to identity, and re-seeds
+  // the interaction — the same path setProjection takes, with the projection unchanged.
+  resetView() {
+    this.setProjection(this.projectionName);
   }
 
   // --- Hover tooltip + cross-highlight (native d3gl interaction) ---

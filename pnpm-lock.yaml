@@ -24,8 +24,8 @@ importers:
         specifier: ^1.1.1
         version: 1.1.1
       '@mapequation/d3gl':
-        specifier: ^0.5.0
-        version: 0.5.0(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: ^0.6.0
+        version: 0.6.0(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@mapequation/infomap':
         specifier: 2.12.0
         version: 2.12.0(react@19.2.7)
@@ -459,8 +459,8 @@ packages:
   '@mapequation/c3@1.1.1':
     resolution: {integrity: sha512-zIaPZyRZ31rQfCxpBdkbSGieg+37hrCeeMxYgENZe2BlHO+3adpNVFMVAv2eKWs38exA77+SIXEq0Teay4D4vQ==, tarball: https://registry.npmjs.org/@mapequation/c3/-/c3-1.1.1.tgz}
 
-  '@mapequation/d3gl@0.5.0':
-    resolution: {integrity: sha512-dpuhZMxWIlHhaNBQSryIEdELK8ja1yn5uqGwQJdxkXAE1WBOJFBP060d12j+egfR2UY5R4C7mXixWuzIk/ZZMA==, tarball: https://registry.npmjs.org/@mapequation/d3gl/-/d3gl-0.5.0.tgz}
+  '@mapequation/d3gl@0.6.0':
+    resolution: {integrity: sha512-eRAbkxXT8OMG6JT69Gup//3vEMe2H8VtTBuju/MiYi55wBb9RZtLuCrt1O8IC3kh4+3oR8wdnLlloOmD8jpZVw==, tarball: https://registry.npmjs.org/@mapequation/d3gl/-/d3gl-0.6.0.tgz}
     peerDependencies:
       react: ^19
       react-dom: ^19
@@ -2972,7 +2972,7 @@ snapshots:
       d3-color: 3.1.0
       d3-scale-chromatic: 3.1.0
 
-  '@mapequation/d3gl@0.5.0(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@mapequation/d3gl@0.6.0(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@luma.gl/core': 9.3.3
       '@luma.gl/engine': 9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
