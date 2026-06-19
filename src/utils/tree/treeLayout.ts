@@ -108,29 +108,12 @@ export function nodeXY(
 }
 
 /**
- * Wrap a canvas-like context so every path call is shifted by (ox, oy). Used for the radial
- * `linkRadial` generator, which emits coordinates around the origin (the d3gl path context has
- * no `translate()`). Ported from the d3gl ancestral-ranges example.
- */
-function offsetCtx(ctx: CanvasRenderingContext2D, ox: number, oy: number): CanvasRenderingContext2D {
-  return {
-    beginPath: () => ctx.beginPath(),
-    closePath: () => ctx.closePath(),
-    moveTo: (x: number, y: number) => ctx.moveTo(x + ox, y + oy),
-    lineTo: (x: number, y: number) => ctx.lineTo(x + ox, y + oy),
-    quadraticCurveTo: (cx: number, cy: number, x: number, y: number) =>
-      ctx.quadraticCurveTo(cx + ox, cy + oy, x + ox, y + oy),
-    bezierCurveTo: (c1x: number, c1y: number, c2x: number, c2y: number, x: number, y: number) =>
-      ctx.bezierCurveTo(c1x + ox, c1y + oy, c2x + ox, c2y + oy, x + ox, y + oy),
-    arc: (x: number, y: number, r: number, a0: number, a1: number, ccw?: boolean) =>
-      ctx.arc(x + ox, y + oy, r, a0, a1, ccw),
-  } as unknown as CanvasRenderingContext2D;
-}
-
-/**
  * A link-drawing closure for the chosen layout + curve, ported from the d3gl ancestral-ranges
- * example. Radial layouts are origin-centred by d3-shape; `center` ([ox, oy]) is baked into the
- * emitted coordinates so the figure is centred at the identity transform.
+ * example. Radial layouts are origin-centred by d3-shape's `pointRadial`/`linkRadial`; each
+ * radial closure does `ctx.translate(ox, oy)` once (d3gl's path context supports the canonical
+ * canvas translate) to land the fan at the canvas centre `center` ([ox, oy]). The view transform
+ * stays at identity, so the user's zoom survives layout/curve toggles. Rectangular needs no
+ * offset (center is [0, 0]).
  */
 export function makeLinkDraw(
   mode: LayoutMode,
@@ -150,41 +133,32 @@ export function makeLinkDraw(
     // linkRadial applies the −π/2 internally, so the angle accessor is the raw cluster angle.
     const gen = linkRadial<LayoutLink, LayoutNode>().angle((d) => d.x).radius((d) => d.y);
     return (ctx, l) => {
-      gen.context(offsetCtx(ctx, ox, oy));
+      ctx.translate(ox, oy);
+      gen.context(ctx);
       gen(l);
     };
   }
   if (curve === 'linear') {
     return (ctx, l) => {
+      ctx.translate(ox, oy);
       const [sx, sy] = pointRadial(l.source.x, l.source.y);
       const [tx, ty] = pointRadial(l.target.x, l.target.y);
-      ctx.moveTo(sx + ox, sy + oy);
-      ctx.lineTo(tx + ox, ty + oy);
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(tx, ty);
     };
   }
   // radial "step": arc along the parent radius to the child angle, then a radial line out.
   // The arc angles use −π/2 to match pointRadial's orientation.
   return (ctx, l) => {
+    ctx.translate(ox, oy);
     const r0 = l.source.y;
     const sa = l.source.x - Math.PI / 2;
     const ta = l.target.x - Math.PI / 2;
-    ctx.moveTo(r0 * Math.cos(sa) + ox, r0 * Math.sin(sa) + oy);
-    ctx.arc(ox, oy, r0, sa, ta, ta < sa);
+    ctx.moveTo(r0 * Math.cos(sa), r0 * Math.sin(sa));
+    ctx.arc(0, 0, r0, sa, ta, ta < sa);
     const [tx, ty] = pointRadial(l.target.x, l.target.y);
-    ctx.lineTo(tx + ox, ty + oy);
+    ctx.lineTo(tx, ty);
   };
-}
-
-/**
- * Rotation/centering CSS transform for a radial leaf label. `a` is the node's screen-direction
- * angle (the cluster angle minus π/2, matching `pointRadial`). Empty for rectangular.
- */
-export function labelTransform(mode: LayoutMode, a: number): string {
-  if (mode !== 'radial') return '';
-  const deg = (a * 180) / Math.PI;
-  return Math.cos(a) < 0
-    ? `rotate(${deg + 180}deg) translate(-100%, -50%)`
-    : `rotate(${deg}deg) translate(0, -50%)`;
 }
 
 /**
