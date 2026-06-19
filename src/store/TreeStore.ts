@@ -21,7 +21,6 @@ import {
   layoutTree,
   nodeXY,
   makeLinkDraw,
-  labelTransform,
   labelOffset,
   type LayoutNode,
   type LayoutLink,
@@ -573,10 +572,11 @@ export default class TreeStore {
     }
 
     // Leaf labels (outward of each tip).
+    const radial = mode === 'radial';
     this.anchors = leaves.map((n, i) => {
       const [px, py] = xy(n);
       const name = n.data.name;
-      const a = n.x - Math.PI / 2; // screen-direction angle for radial placement
+      const a = n.x - Math.PI / 2; // reading-direction angle for radial placement
       return {
         id: `t${i}`,
         refX: px,
@@ -586,8 +586,14 @@ export default class TreeStore {
         height: LABEL_H,
         priority: dataOf(n)?.speciesCount ?? 1,
         offset: labelOffset(mode, a, LABEL_GAP, LABEL_H),
-        transform: labelTransform(mode, a),
-        transformOrigin: '0 0',
+        // Radial: declare the reading angle and let d3gl derive BOTH the CSS transform and the
+        // oriented collision box from it (with the upright flip), so rotated tips pack by their
+        // true on-screen footprint and fill the fan — instead of the old hand-written transform,
+        // which left d3gl colliding them as wide axis-aligned boxes and over-excluding neighbours
+        // toward the top of the tree. Rectangular labels stay plain axis-aligned (no transform).
+        ...(radial
+          ? { rotation: a, textAnchor: 'start' as const, keepUpright: true }
+          : {}),
       } as LabelAnchor;
     });
 
