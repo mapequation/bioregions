@@ -4,6 +4,7 @@ import {
   action,
   computed,
   autorun,
+  untracked,
   type IReactionDisposer,
 } from 'mobx';
 import type RootStore from './RootStore';
@@ -360,8 +361,11 @@ export default class TreeStore {
    *  after a programmatic setTransform keeps the gesture state in sync. */
   private enableTreeZoom() {
     this.engine?.enableZoom([0.5, 40], (t) => {
+      // Keep `view` in sync for the reset button (cheap: the render autorun no longer
+      // subscribes to it — see updateLabels). Reposition labels with the live transform,
+      // mirroring the d3gl ancestral-ranges example, instead of going through the observable.
       this.setView(t);
-      this.updateLabels();
+      this.updateLabels(t);
     });
   }
 
@@ -423,8 +427,12 @@ export default class TreeStore {
     this.engine = null;
   };
 
-  private updateLabels() {
-    this.labels?.update(this.anchors, this.view, {
+  // `view` is read untracked so the render autorun (which calls this at the end of renderTree)
+  // does NOT subscribe to the zoom transform — otherwise every pan/zoom tick would invalidate
+  // the autorun and re-run the full layout + ancestral reconstruction. The zoom callback passes
+  // the live transform `t` directly for real-time label placement.
+  private updateLabels(view: ViewTransform = untracked(() => this.view)) {
+    this.labels?.update(this.anchors, view, {
       width: this.width,
       height: this.height,
     });
@@ -460,8 +468,8 @@ export default class TreeStore {
     if (tree === null) {
       this.clearHover();
       this.ancestral = null;
-      engine.layer('links', [], { draw: () => {} });
-      engine.layer('pies', [], { draw: () => {} });
+      engine.layer('links', [], { draw: () => { } });
+      engine.layer('pies', [], { draw: () => { } });
       this.anchors = [];
       this.updateLabels();
       engine.render();
@@ -568,7 +576,7 @@ export default class TreeStore {
       // No bioregions yet: no ancestral ranges to hover, so drop any stale reconstruction/hover.
       this.ancestral = null;
       this.clearHover();
-      engine.layer('pies', [], { draw: () => {} });
+      engine.layer('pies', [], { draw: () => { } });
     }
 
     // Leaf labels (outward of each tip).
