@@ -190,8 +190,7 @@ Theming lives in `src/theme.ts`.
 
 ## Conventions
 
-- Path alias `@/` → `src/` (configured in both `tsconfig` and `vite.config.ts` via
-  `vite-tsconfig-paths`). Existing code mixes `@/...` and relative imports.
+- Path alias `@/` → `src/` (configured in both `tsconfig` and `vite.config.ts`). Existing code mixes `@/...` and relative imports.
 - TypeScript is `strict` with `noUnusedLocals`/`noUnusedParameters` — unused
   symbols fail the build.
 - Prettier: single quotes, trailing commas everywhere.
