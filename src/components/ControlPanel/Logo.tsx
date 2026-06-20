@@ -17,7 +17,7 @@ export default function Logo() {
   };
 
   return (
-    <HStack justify="flex-start" align="flex-start" gap={3}>
+    <HStack justify="flex-start" align="flex-start" gap={2}>
       <Box position="relative">
         <a href="//mapequation.org" style={{ display: 'block' }}>
           <img
