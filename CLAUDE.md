@@ -199,6 +199,19 @@ Theming lives in `src/theme.ts`.
 
 ## Git workflow
 
+### Commit messages — Conventional Commits
+
+This repo follows [Conventional Commits](https://www.conventionalcommits.org/):
+`type(scope): description`, with an optional `(#NN)` PR-number suffix. Keep the
+description short, imperative, and **lowercase** (recent commits do; older ones are
+inconsistent — match the recent style). Types in use here: `feat`, `fix`, `perf`,
+`refactor`, `build`, `ci`, `chore`, `docs`. Don't redundantly restate the type in the
+description (`fix: avoid version line breaking`, not `fix: Fix version line breaking`).
+
+Because PRs are **squash-merged**, the squash commit's subject defaults to the **PR
+title** — so the *PR title itself must be a valid Conventional Commit*, otherwise
+`main` gets a non-conventional commit. Set the PR title accordingly when opening it.
+
 - Always delete the feature branch after a PR is merged — use `gh pr merge --delete-branch`
   (removes the local + remote branch), then `git remote prune origin` to drop stale
   remote-tracking refs.
