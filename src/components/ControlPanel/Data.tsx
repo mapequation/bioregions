@@ -30,6 +30,10 @@ export default observer(function Data() {
         <Stat label="Point occurrences">{speciesStore.numPointsDebounced.toLocaleString()}</Stat>
       )}
 
+      {speciesStore.numSkippedRecords > 0 && (
+        <Stat label="Skipped records">{speciesStore.numSkippedRecords.toLocaleString()}</Stat>
+      )}
+
       {speciesStore.numPolygonsDebounced > 0 && (
         <Stat label="Polygons">{speciesStore.numPolygonsDebounced.toLocaleString()}</Stat>
       )}
