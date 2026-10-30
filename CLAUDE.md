@@ -25,11 +25,23 @@ pnpm preview         # serve the production build
 pnpm fetch-data      # download example datasets (also runs automatically via prebuild)
 pnpm styleguide      # react-styleguidist component explorer
 pnpm changeset       # record a change for the changelog (see Releases below)
+pnpm test            # vitest run (config: the `test` block in vite.config.ts)
+pnpm build-network   # headless network builder, see Headless harness below
 ```
 
-There is no configured test runner in `package.json` despite `src/**/*.test.ts`
-files existing (e.g. `src/utils/tree/tree.test.ts`) and `src/setupTests.ts`. Don't
-assume `pnpm test` works.
+Tests are `*.test.ts` next to the code they cover, plus network-builder regression
+tests in `harness/networks.test.ts`. `.claude/**` is excluded because agent worktrees
+there are full checkouts with their own copies of the tests.
+
+### Headless harness
+
+`harness/build-network.ts` runs the production `InfomapStore` network builders
+(bipartite, state, multilayer) from Node and writes the network as JSON, for
+parameter sweeps and validation analyses outside the browser. It swaps `RootStore`
+for `harness/stubRoot.ts`, which supplies only the members `InfomapStore` reads,
+because the real `RootStore` builds `MapStore` → d3gl → WebGL. When `InfomapStore`
+starts reading a new `rootStore` member, extend the stub. `pnpm build` typechecks
+`harness/` through `tsconfig.harness.json`.
 
 The dev server, build, and styleguide depend on example data under `public/data/`.
 `scripts/fetch-data.mjs` (run as `prebuild`) downloads it from the
