@@ -1014,7 +1014,7 @@ export default class InfomapStore {
     const includeTree =
       this.includeTreeInNetwork &&
       tree !== null &&
-      this.treeWeightBalance !== 0;
+      this.treeWeightBalance > 0;
 
     /*
     Starts with cells as nodes up until the bipartiteStartId.
@@ -1103,7 +1103,7 @@ export default class InfomapStore {
     let sumNonTreeLinkWeight = 0;
 
     const { treeWeightBalance } = this;
-    if (includeTree && isEqual(treeWeightBalance, 1)) {
+    if (includeTree && treeWeightBalance >= 1) {
       // At full tree weight the species loop below is skipped, so occurrence
       // species with no tip in the phylogeny contribute nothing at all. Count
       // them so callers can see how much of the data left the network, and so
@@ -1304,7 +1304,7 @@ export default class InfomapStore {
     // treeStrength / (treeStrength + speciesStrength) = treeWeightBalance
     // => treeStrength * (1 - treeWeightBalance) = speciesStrength * treeWeightBalance
     // => treeStrength / treeWeightBalance = speciesStrength / (1 - treeWeightBalance)
-    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+    const totalTreeStrength = treeWeightBalance >= 1
       ? sumTreeLinkWeight
       : (treeWeightBalance * sumNonTreeLinkWeight) / (1 - treeWeightBalance);
 
@@ -1715,7 +1715,7 @@ export default class InfomapStore {
       }
     }
 
-    if (treeWeightBalance === 0) {
+    if (treeWeightBalance <= 0) {
       addLinksToNetwork();
       network.numLinksBelowThreshold = numLinksBelowThreshold;
       if (numLinksBelowThreshold > 0) {
@@ -1874,7 +1874,7 @@ export default class InfomapStore {
     // const totalTreeStrength = isEqual(treeWeightBalance, 1)
     //   ? sumTreeLinkWeight
     //   : (treeWeightBalance * sumNonTreeStrength) / (1 - treeWeightBalance);
-    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+    const totalTreeStrength = treeWeightBalance >= 1
       ? sumTreeLinkWeight
       : treeWeightBalance * unscaledNonTreeStrength;
 

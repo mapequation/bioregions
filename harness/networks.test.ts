@@ -270,3 +270,15 @@ describe('whole-tree state network coefficients', () => {
     expect(Math.min(...network.links.map(({ weight = 1 }) => weight))).toBeGreaterThan(0);
   });
 });
+
+describe('tree weight balance just below 1', () => {
+  it('keeps the species links and does not report excluded species', () => {
+    const network = buildNetwork({
+      useWholeTree: true,
+      treeWeightBalance: 1 - 1e-7,
+      linkWeightThresholdExponent: -100,
+    });
+    expect(network.numSpeciesExcluded).toBeUndefined();
+    expect(network.nodeIdMap).toHaveProperty('G');
+  });
+});
