@@ -1968,11 +1968,14 @@ export default class InfomapStore {
         node.flow,
         memTaxonName,
       );
-      bioregion.addCell(cell);
     });
     for (const cell of cells) {
-      // A cell's states can sit in several modules: use the one with most flow
+      // A cell's states can sit in several modules: use the one with most flow,
+      // and count the cell (and its records) in that bioregion only
       cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
+      if (cell.bioregionId > 0) {
+        bioregions[cell.bioregionId - 1].addCell(cell);
+      }
       cell.overlappingBioregions.calcTopBioregions();
     }
 
@@ -2040,11 +2043,14 @@ export default class InfomapStore {
         node.flow,
         memTaxonName,
       );
-      bioregion.addCell(cell);
     });
     for (const cell of cells) {
-      // A cell's states can sit in several modules: use the one with most flow
+      // A cell's states can sit in several modules: use the one with most flow,
+      // and count the cell (and its records) in that bioregion only
       cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
+      if (cell.bioregionId > 0) {
+        bioregions[cell.bioregionId - 1].addCell(cell);
+      }
       cell.overlappingBioregions.calcTopBioregions();
     }
 

@@ -238,25 +238,34 @@ describe('vertices without links', () => {
   });
 });
 
+/**
+ * State result where cells `0320132` and `1231023` have states in modules 1 and 2;
+ * module 1 holds most of their flow (a tie for `1231023`).
+ */
+function splitStateCells() {
+  const root = setup();
+  const network = stateNetwork(root);
+  root.infomapStore.network = network;
+  const rest = stateNodes(network, { B: 2, C: 2, '3013201_B': 2, '3013201_C': 2 }).filter(
+    ([name]) => !['0320132_A', '0320132_B', '1231023_A', '1231023_C'].includes(name),
+  );
+  root.infomapStore.createBioregions(
+    stateTree(network, [
+      ['0320132_A', [1], 0.3],
+      ['1231023_A', [1], 0.1],
+      ...rest,
+      // the last state of each cell sits in module 2: the larger flow wins,
+      // and a tie goes to the lower module id
+      ['0320132_B', [2], 0.1],
+      ['1231023_C', [2], 0.1],
+    ]),
+  );
+  return root;
+}
+
 describe('state and multilayer cells', () => {
   it('belong to the bioregion holding most of their flow', () => {
-    const root = setup();
-    const network = stateNetwork(root);
-    root.infomapStore.network = network;
-    const rest = stateNodes(network, { B: 2, C: 2, '3013201_B': 2, '3013201_C': 2 }).filter(
-      ([name]) => !['0320132_A', '0320132_B', '1231023_A', '1231023_C'].includes(name),
-    );
-    root.infomapStore.createBioregions(
-      stateTree(network, [
-        ['0320132_A', [1], 0.3],
-        ['1231023_A', [1], 0.1],
-        ...rest,
-        // the last state of each cell sits in module 2: the larger flow wins,
-        // and a tie goes to the lower module id
-        ['0320132_B', [2], 0.1],
-        ['1231023_C', [2], 0.1],
-      ]),
-    );
+    const root = splitStateCells();
     expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 1, 1, 1, 2]);
   });
 
@@ -271,5 +280,27 @@ describe('state and multilayer cells', () => {
       ]),
     );
     expect(cells(root)[0].bioregionId).toBe(1);
+  });
+
+  it('count their records in their own bioregion only', () => {
+    const root = splitStateCells();
+    const [, second] = root.infomapStore.bioregions;
+    expect([...second.cellMap.keys()]).toEqual(['3013201']);
+    expect(second.numRecords).toBe(4);
+    const numCells = root.infomapStore.bioregions.map((bioregion) => bioregion.numGridCells);
+    expect(numCells).toEqual([4, 1]);
+  });
+
+  it('count their records in their own multilayer bioregion only', () => {
+    const root = setup();
+    root.infomapStore.createBioregions(
+      multilayerTree([
+        [0, 1, [1], 0.3],
+        [taxonId('A'), 1, [1], 0.3],
+        [taxonId('B'), 2, [2], 0.3],
+        [0, 2, [2], 0.1],
+      ]),
+    );
+    expect(root.infomapStore.bioregions[1].numGridCells).toBe(0);
   });
 });
