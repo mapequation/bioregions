@@ -84,8 +84,8 @@ describe('Cell polygon binning', () => {
     root.visit((cell) => {
       if (!cell.isLeaf) expect(cell.features).toEqual([]);
     });
-    // The split drops the record that triggers it, as it does for points, but
-    // every later range goes into the children instead of refilling the parent.
+    // Every range after the split goes into the children instead of refilling
+    // the parent.
     expect(cellsWith(root, ranges[3]).map((cell) => cell.sizeLog2)).toEqual([1]);
   });
 
