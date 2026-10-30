@@ -3,11 +3,26 @@
 import { otolCitation, type StudyTree, studyCitation, type SynthesisInfo } from '@/phylo/otol';
 import type { TreeCandidate } from '../explorer/types';
 
+/**
+ * A candidate tree row with display extras on top of the spec's TreeCandidate:
+ * a short second line (tree label or synthesis version) and the raw branch-length mode.
+ */
+export interface PhyloCandidate extends TreeCandidate {
+  /** Short muted second line: a cleaned tree label, 'tree 2 of 4', or the synthesis version. */
+  subtitle?: string;
+  /** Full curator label and tree id, for the subtitle tooltip. */
+  subtitleDetail?: string;
+  /** Open Tree branch-length mode, e.g. 'ot:time' or 'ot:substitutionCount'. */
+  lengthMode?: string;
+}
+
 export const SYNTHETIC_ID = 'synthetic';
 /** Exact coverage is computed for at most this many study trees. */
 export const MAX_COVERAGE_CHECKS = 15;
 /** Concurrent study-tree downloads. */
-export const COVERAGE_CONCURRENCY = 3;
+export const COVERAGE_CONCURRENCY = 6;
+/** A dated tree is pre-selected when it covers at least this share of the dataset species. */
+export const DATED_MIN_SHARE = 0.6;
 /** Below this many study trees for the clade, also search its largest genera. */
 export const FEW_STUDY_TREES = 5;
 
@@ -21,7 +36,8 @@ export function synthVersionLabel(synthId: string | undefined): string | undefin
   return match ? `v${match[1]}` : synthId;
 }
 
-export function syntheticCandidate(info: SynthesisInfo | null): TreeCandidate {
+export function syntheticCandidate(info: SynthesisInfo | null): PhyloCandidate {
+  const version = synthVersionLabel(info?.synthId);
   return {
     id: SYNTHETIC_ID,
     kind: 'synthetic',
@@ -29,7 +45,8 @@ export function syntheticCandidate(info: SynthesisInfo | null): TreeCandidate {
     citation: info?.citation ?? otolCitation(),
     // The table shows synthVersion in the Year column.
     year: null,
-    synthVersion: synthVersionLabel(info?.synthId),
+    synthVersion: version,
+    subtitle: version ? `Synthetic tree ${version} · all studies combined` : 'Synthetic tree · all studies combined',
     branchLengths: 'none',
     coverage: null,
     coverageState: 'pending',
@@ -82,18 +99,73 @@ export function studyCandidateId(tree: Pick<StudyTree, 'studyId' | 'treeId'>): s
   return `${tree.studyId}@${tree.treeId}`;
 }
 
-/** The tree's label, or its id when the label is missing or 'Untitled (tree6187)'. */
-function treeLabel(tree: StudyTree): string {
-  const label = tree.label?.trim();
-  return label && !/^untitled\b/i.test(label) ? label : tree.treeId;
+/**
+ * A curator's tree label without ids and boilerplate, or null when nothing readable
+ * is left ('Untitled (tree6187)', 'tree6187', '').
+ */
+export function cleanTreeLabel(label: string | undefined, treeId: string, surname?: string): string | null {
+  const quote = (text: string) => text.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
+  let text = (label ?? '').trim();
+  // 'Buckner et al., 2015 Bayesian Concatenated' repeats the row title: keep 'Bayesian Concatenated'.
+  if (surname) text = text.replace(new RegExp(`^${quote(surname)}\\b[^\\d]{0,24}\\b(?:19|20)\\d{2}\\b[,;:.)]*`), '');
+  text = text
+    .replace(new RegExp(`\\b${quote(treeId)}\\b`, 'g'), '')
+    .replace(/\btree\s*\d+\b/gi, '')
+    .replace(/^\s*untitled\b/i, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,;:.\-–]+|[\s,;:\-–]+$/g, '');
+  return text.length > 1 ? text : null;
 }
 
-export function studyCandidate(tree: StudyTree, multipleTreesInStudy = false): TreeCandidate {
+/** Open Tree branch-length mode and time unit -> short unit label and a sentence-ready long form. */
+export function lengthUnits(
+  c: Pick<PhyloCandidate, 'branchLengths' | 'lengthMode' | 'timeUnit'>,
+): { short: string; long: string } {
+  if (c.branchLengths === 'none') return { short: 'Grafen', long: 'relative ages (Grafen)' };
+  if (c.branchLengths === 'time') {
+    const unit = c.timeUnit?.trim();
+    if (!unit || /^(?:my|myr|mya|ma|million(?:s)? (?:of )?years?.*)$/i.test(unit)) return { short: 'Myr', long: 'Myr' };
+    return { short: unit, long: unit };
+  }
+  switch (c.lengthMode) {
+    case 'ot:substitutionCount':
+      return { short: 'subst./site', long: 'substitutions per site' };
+    case 'ot:changesCount':
+      return { short: 'changes', long: 'character changes' };
+    default:
+      return { short: 'unknown', long: 'unknown units' };
+  }
+}
+
+/** 'Springer et al. 2012', or the authors alone when the year is unknown. */
+export function studyTitle(tree: Pick<StudyTree, 'reference' | 'studyId' | 'year'>): string {
   const authors = shortAuthors(tree.reference) ?? `Study ${tree.studyId}`;
+  return tree.year != null ? `${authors} ${tree.year}` : authors;
+}
+
+/**
+ * One study tree row. `position` is the tree's place among the study's candidate
+ * trees ([index, count]); several trees from one study get a 'tree 2 of 4' fallback label.
+ */
+export function studyCandidate(tree: StudyTree, position: [number, number] = [1, 1]): PhyloCandidate {
+  const [index, count] = position;
+  // Last word of the first author ('Leandro Aristide et al.' -> 'Aristide').
+  const surname = shortAuthors(tree.reference)
+    ?.replace(/\s+et al\.$/, '')
+    .split(' & ')[0]
+    .split(/\s+/)
+    .pop();
+  const label = cleanTreeLabel(tree.label, tree.treeId, surname);
+  const fallback = count > 1 ? `tree ${index} of ${count}` : undefined;
+  const full = tree.label?.trim();
   return {
     id: studyCandidateId(tree),
     kind: 'study',
-    title: multipleTreesInStudy ? `${authors} (${treeLabel(tree)})` : authors,
+    title: studyTitle(tree),
+    subtitle: label ?? fallback,
+    subtitleDetail: `${full ? `${full} · ` : ''}${tree.studyId}/${tree.treeId}`,
+    lengthMode: tree.branchLengthMode,
     citation: studyCitation(tree),
     year: tree.year ?? null,
     doi: tree.doi,
@@ -107,7 +179,7 @@ export function studyCandidate(tree: StudyTree, multipleTreesInStudy = false): T
 }
 
 /** Study candidates from several find_trees results, deduplicated in order. */
-export function studyCandidates(lists: StudyTree[][]): TreeCandidate[] {
+export function studyCandidates(lists: StudyTree[][]): PhyloCandidate[] {
   const unique = new Map<string, StudyTree>();
   for (const list of lists) {
     for (const tree of list) {
@@ -117,19 +189,32 @@ export function studyCandidates(lists: StudyTree[][]): TreeCandidate[] {
   }
   const perStudy = new Map<string, number>();
   for (const tree of unique.values()) perStudy.set(tree.studyId, (perStudy.get(tree.studyId) ?? 0) + 1);
-  return [...unique.values()].map((tree) => studyCandidate(tree, (perStudy.get(tree.studyId) ?? 0) > 1));
+  const seen = new Map<string, number>();
+  return [...unique.values()].map((tree) => {
+    const index = (seen.get(tree.studyId) ?? 0) + 1;
+    seen.set(tree.studyId, index);
+    return studyCandidate(tree, [index, perStudy.get(tree.studyId) ?? 1]);
+  });
+}
+
+/** A checked study tree that shares no tips with the dataset. */
+export function hasNoOverlap(c: TreeCandidate): boolean {
+  return c.kind === 'study' && c.coverageState === 'ready' && c.coverage?.matched === 0;
 }
 
 /**
- * Table order: the synthetic tree first, then by coverage (unknown last) or year
- * (newest first, unknown last), ties broken by dated, then year. Dated only keeps
- * trees with time branch lengths.
+ * Table order: the synthetic tree first, then by coverage or year (newest first),
+ * ties broken by dated, then year. With coverage sort, unchecked or failed rows
+ * come after checked ones and trees with no overlap last. Dated only keeps trees
+ * with time branch lengths.
  */
-export function sortCandidates(
-  candidates: TreeCandidate[],
+export function sortCandidates<C extends TreeCandidate>(
+  candidates: C[],
   sort: 'coverage' | 'year',
   datedOnly: boolean,
-): TreeCandidate[] {
+): C[] {
+  const group = (c: TreeCandidate) =>
+    c.kind === 'synthetic' ? 0 : hasNoOverlap(c) ? 3 : sort === 'coverage' && !c.coverage ? 2 : 1;
   const cov = (c: TreeCandidate) => (c.coverage ? c.coverage.matched : -1);
   const year = (c: TreeCandidate) => c.year ?? -1;
   const dated = (c: TreeCandidate) => (c.branchLengths === 'time' ? 1 : 0);
@@ -138,13 +223,75 @@ export function sortCandidates(
     .map((c, i) => ({ c, i }))
     .sort(
       (a, b) =>
-        Number(b.c.kind === 'synthetic') - Number(a.c.kind === 'synthetic') ||
+        group(a.c) - group(b.c) ||
         (sort === 'coverage' ? cov(b.c) - cov(a.c) : year(b.c) - year(a.c)) ||
         dated(b.c) - dated(a.c) ||
         year(b.c) - year(a.c) ||
         a.i - b.i,
     )
     .map(({ c }) => c);
+}
+
+/** Order before coverage is known: the synthetic tree, dated trees newest first, then the rest newest first. */
+export function initialOrder(candidates: TreeCandidate[]): string[] {
+  const year = (c: TreeCandidate) => c.year ?? -1;
+  const rank = (c: TreeCandidate) => (c.kind === 'synthetic' ? 0 : c.branchLengths === 'time' ? 1 : 2);
+  return candidates
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rank(a.c) - rank(b.c) || year(b.c) - year(a.c) || a.i - b.i)
+    .map(({ c }) => c.id);
+}
+
+/** Row ids of the table and of the collapsed 'No overlap with your species' group. */
+export interface RowLayout {
+  order: string[];
+  noOverlap: string[];
+}
+
+/**
+ * Sort the rows and move trees with no overlap to their own group. A pinned row
+ * (the user's pick) keeps the position it had among the `previous` visible ids,
+ * so a re-sort never moves it under the cursor; it is never grouped away.
+ */
+export function arrangeRows(
+  candidates: TreeCandidate[],
+  sort: 'coverage' | 'year',
+  pin: { id: string; previous: string[]; visible: (id: string) => boolean } | null = null,
+): RowLayout {
+  const sorted = sortCandidates(candidates, sort, false);
+  const noOverlap = sorted.filter((c) => hasNoOverlap(c) && c.id !== pin?.id).map((c) => c.id);
+  const grouped = new Set(noOverlap);
+  let order = sorted.filter((c) => !grouped.has(c.id)).map((c) => c.id);
+  const at = pin ? pin.previous.indexOf(pin.id) : -1;
+  if (pin && at >= 0 && order.includes(pin.id)) {
+    const rest = order.filter((id) => id !== pin.id);
+    const visibleRest = rest.filter(pin.visible);
+    const before = visibleRest[at];
+    const index = before === undefined ? rest.length : rest.indexOf(before);
+    order = [...rest.slice(0, index), pin.id, ...rest.slice(index)];
+  }
+  return { order, noOverlap };
+}
+
+/**
+ * The dated study tree to pre-select: time branch lengths and coverage of at least
+ * DATED_MIN_SHARE of `total` dataset species; the most tips wins, then the newest.
+ */
+export function bestDatedCandidate<C extends TreeCandidate>(candidates: C[], total: number): C | null {
+  const min = Math.max(2, Math.ceil(total * DATED_MIN_SHARE));
+  let best: C | null = null;
+  for (const c of candidates) {
+    if (c.kind !== 'study' || c.branchLengths !== 'time' || c.coverageState !== 'ready' || !c.coverage) continue;
+    if (c.coverage.matched < min) continue;
+    if (
+      !best ||
+      c.coverage.matched > (best.coverage?.matched ?? 0) ||
+      (c.coverage.matched === best.coverage?.matched && (c.year ?? -1) > (best.year ?? -1))
+    ) {
+      best = c;
+    }
+  }
+  return best;
 }
 
 /** Citation paragraph for the methods text. */

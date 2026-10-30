@@ -15,11 +15,13 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { LuCheck, LuExternalLink, LuLoaderCircle, LuRotateCw, LuSearchX } from 'react-icons/lu';
+import { useState } from 'react';
+import { LuCheck, LuChevronRight, LuExternalLink, LuLoaderCircle, LuRotateCw, LuSearchX } from 'react-icons/lu';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '../../../store';
 import type { TreeCandidate } from '../../../store/explorer/types';
+import { lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
 
@@ -27,12 +29,6 @@ const OTOL_HOME = 'https://tree.opentreeoflife.org/';
 
 function doiUrl(doi: string): string {
   return /^https?:\/\//.test(doi) ? doi : `https://doi.org/${doi.replace(/^doi:\s*/i, '')}`;
-}
-
-/** Year column: the synthesis version for the synthetic tree, else the study year. */
-function yearLabel(c: TreeCandidate): string {
-  if (c.kind === 'synthetic') return c.synthVersion ? `v${c.synthVersion.replace(/^v/i, '')}` : '–';
-  return c.year != null ? String(c.year) : '–';
 }
 
 function CoverageCell({ c }: { c: TreeCandidate }) {
@@ -76,25 +72,87 @@ function CoverageCell({ c }: { c: TreeCandidate }) {
   );
 }
 
-function LengthsCell({ c }: { c: TreeCandidate }) {
-  if (c.branchLengths === 'none') {
-    return (
-      <Tooltip content="No branch lengths; Grafen lengths (relative ages) are added on load." showArrow>
-        <Text as="span" color="fg.muted" tabIndex={0}>
-          Grafen
-        </Text>
-      </Tooltip>
-    );
-  }
-  if (c.branchLengths === 'time') return <Text as="span">time</Text>;
+function LengthsCell({ c }: { c: PhyloCandidate }) {
+  const units = lengthUnits(c);
+  const tip =
+    c.branchLengths === 'none'
+      ? 'No branch lengths: Grafen lengths (relative ages, root = 1) are added on load.'
+      : c.branchLengths === 'time'
+        ? c.timeUnit
+          ? `Time-calibrated; branch lengths in ${units.long}.`
+          : 'Time-calibrated; Open Tree records no unit, so millions of years is assumed.'
+        : units.short === 'unknown'
+          ? 'Branch lengths are not time and Open Tree records no unit; they are used as relative time.'
+          : `Branch lengths in ${units.long}, used as relative time.`;
   return (
-    <Tooltip content="Branch lengths that are not time, e.g. substitutions per site." showArrow>
-      <Text as="span" tabIndex={0}>
-        other
+    <Tooltip content={tip} showArrow openDelay={300} contentProps={{ maxW: '280px' }}>
+      <Text as="span" display="block" truncate tabIndex={0} color={c.branchLengths === 'time' ? 'fg' : 'fg.muted'}>
+        {units.short}
       </Text>
     </Tooltip>
   );
 }
+
+/** Source cell: 'Springer et al. 2012' and a short muted tree label below it. */
+function SourceCell({ c, selected }: { c: PhyloCandidate; selected: boolean }) {
+  return (
+    <Stack gap={0} minW={0}>
+      <Tooltip content={c.citation || c.title} showArrow openDelay={400} contentProps={{ maxW: '360px' }}>
+        <Text truncate textStyle="sm" lineHeight="1.25rem" fontWeight={selected ? 'semibold' : 'medium'}>
+          {c.title}
+        </Text>
+      </Tooltip>
+      {c.subtitle ? (
+        <Tooltip
+          content={c.subtitleDetail ?? c.subtitle}
+          showArrow
+          openDelay={400}
+          disabled={!c.subtitleDetail}
+          contentProps={{ maxW: '360px' }}
+        >
+          <Text truncate textStyle="xs" lineHeight="1rem" color="fg.muted">
+            {c.subtitle}
+          </Text>
+        </Tooltip>
+      ) : (
+        <Box h="1rem" aria-hidden />
+      )}
+    </Stack>
+  );
+}
+
+function DatedCell({ c }: { c: TreeCandidate }) {
+  return c.branchLengths === 'time' ? (
+    <Icon as={LuCheck} color="fg" aria-label="dated" role="img" />
+  ) : (
+    <Text as="span" color="fg.muted" aria-label="not dated">
+      –
+    </Text>
+  );
+}
+
+function DoiCell({ c }: { c: TreeCandidate }) {
+  return c.doi ? (
+    <Link
+      href={doiUrl(c.doi)}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`DOI of ${c.title} (opens in a new tab)`}
+      color="fg.muted"
+      _hover={{ color: 'fg' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <LuExternalLink />
+    </Link>
+  ) : (
+    <Text as="span" color="fg.muted">
+      –
+    </Text>
+  );
+}
+
+const ROW_H = '52px';
+const COLS = 6;
 
 const SKELETON_ROWS = [0, 1, 2, 3];
 
@@ -103,6 +161,10 @@ export default observer(function TreeSourceTable() {
   const { phyloStore } = useStore();
   const { clade, candidates, candidatesState, sort, datedOnly, selectedId, matchProgress } = phyloStore;
   const rows = phyloStore.visibleCandidates;
+  const noOverlap = phyloStore.noOverlapCandidates;
+  const [showNoOverlap, setShowNoOverlap] = useState(false);
+  const checking = phyloStore.checkingCoverage;
+  const progress = phyloStore.coverageProgress;
   const waiting = matchProgress != null || (candidatesState === 'loading' && candidates.length === 0);
   const select = (id: string) => {
     if (id !== phyloStore.selectedId) phyloStore.select(id);
@@ -139,7 +201,7 @@ export default observer(function TreeSourceTable() {
         </Text>
       </Flex>
     );
-  } else if (!waiting && rows.length === 0 && candidates.length > 0) {
+  } else if (!waiting && rows.length === 0 && noOverlap.length === 0 && candidates.length > 0) {
     body = (
       <Flex direction="column" align="center" textAlign="center" gap={2} py={10} px={6}>
         <Text textStyle="sm" fontWeight="medium">
@@ -163,15 +225,14 @@ export default observer(function TreeSourceTable() {
         aria-label="Tree to load"
       >
         <Box borderWidth="1px" borderColor="border" borderRadius="md" overflow="hidden">
-          <Table.Root size="sm" tableLayout="fixed" w="full" aria-busy={waiting || undefined}>
+          <Table.Root size="sm" tableLayout="fixed" w="full" aria-busy={waiting || checking || undefined}>
             <Table.ColumnGroup>
               <Table.Column htmlWidth="36px" />
               <Table.Column />
-              <Table.Column htmlWidth="128px" />
-              <Table.Column htmlWidth="64px" />
-              <Table.Column htmlWidth="72px" />
-              <Table.Column htmlWidth="72px" />
-              <Table.Column htmlWidth="52px" />
+              <Table.Column htmlWidth="120px" />
+              <Table.Column htmlWidth="60px" />
+              <Table.Column htmlWidth="100px" />
+              <Table.Column htmlWidth="48px" />
             </Table.ColumnGroup>
             <Table.Header>
               <Table.Row bg="bg.subtle">
@@ -180,8 +241,7 @@ export default observer(function TreeSourceTable() {
                 </Table.ColumnHeader>
                 <Table.ColumnHeader>Source</Table.ColumnHeader>
                 <Table.ColumnHeader>Coverage</Table.ColumnHeader>
-                <Table.ColumnHeader>Year</Table.ColumnHeader>
-                <Table.ColumnHeader>Dated</Table.ColumnHeader>
+                <Table.ColumnHeader textAlign="center">Dated</Table.ColumnHeader>
                 <Table.ColumnHeader>Lengths</Table.ColumnHeader>
                 <Table.ColumnHeader textAlign="center">DOI</Table.ColumnHeader>
               </Table.Row>
@@ -189,21 +249,21 @@ export default observer(function TreeSourceTable() {
             <Table.Body>
               {waiting
                 ? SKELETON_ROWS.map((i) => (
-                    <Table.Row key={i} h="44px">
+                    <Table.Row key={i} h={ROW_H}>
                       <Table.Cell>
                         <Skeleton boxSize="14px" borderRadius="full" />
                       </Table.Cell>
                       <Table.Cell>
-                        <Skeleton h="3" w={`${80 - i * 12}%`} />
+                        <Stack gap={1.5}>
+                          <Skeleton h="3" w={`${80 - i * 12}%`} />
+                          <Skeleton h="2.5" w={`${50 - i * 8}%`} />
+                        </Stack>
                       </Table.Cell>
                       <Table.Cell>
                         <Skeleton h="3" w="70%" />
                       </Table.Cell>
                       <Table.Cell>
-                        <Skeleton h="3" w="70%" />
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Skeleton h="3" w="50%" />
+                        <Skeleton h="3" w="50%" mx="auto" />
                       </Table.Cell>
                       <Table.Cell>
                         <Skeleton h="3" w="60%" />
@@ -219,7 +279,7 @@ export default observer(function TreeSourceTable() {
                         data-testid="tree-row"
                         data-selected={selected || undefined}
                         aria-selected={selected}
-                        h="44px"
+                        h={ROW_H}
                         cursor="pointer"
                         bg={selected ? 'colorPalette.subtle' : undefined}
                         _hover={{ bg: selected ? 'colorPalette.subtle' : 'bg.subtle' }}
@@ -227,75 +287,100 @@ export default observer(function TreeSourceTable() {
                       >
                         <Table.Cell>
                           <RadioGroup.Item value={c.id} display="flex">
-                            <RadioGroup.ItemHiddenInput aria-label={c.title} />
+                            <RadioGroup.ItemHiddenInput aria-label={c.subtitle ? `${c.title}, ${c.subtitle}` : c.title} />
                             <RadioGroup.ItemIndicator />
                           </RadioGroup.Item>
                         </Table.Cell>
                         <Table.Cell>
-                          <Tooltip
-                            content={c.citation || c.title}
-                            showArrow
-                            openDelay={400}
-                            contentProps={{ maxW: '360px' }}
-                          >
-                            <Text truncate fontWeight={selected ? 'semibold' : 'medium'}>
-                              {c.title}
-                            </Text>
-                          </Tooltip>
+                          <SourceCell c={c} selected={selected} />
                         </Table.Cell>
                         <Table.Cell>
                           <CoverageCell c={c} />
                         </Table.Cell>
-                        <Table.Cell fontVariantNumeric="tabular-nums" color="fg.muted">
-                          {yearLabel(c)}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {c.branchLengths === 'time' ? (
-                            <HStack gap={1}>
-                              <Icon as={LuCheck} color="brand.fg" aria-label="dated" />
-                              <Text as="span" color="fg.muted">
-                                {c.timeUnit ?? 'time'}
-                              </Text>
-                            </HStack>
-                          ) : (
-                            <Text as="span" color="fg.muted" aria-label="not dated">
-                              –
-                            </Text>
-                          )}
+                        <Table.Cell textAlign="center">
+                          <DatedCell c={c} />
                         </Table.Cell>
                         <Table.Cell>
                           <LengthsCell c={c} />
                         </Table.Cell>
                         <Table.Cell textAlign="center">
-                          {c.doi ? (
-                            <Link
-                              href={doiUrl(c.doi)}
-                              target="_blank"
-                              rel="noreferrer"
-                              aria-label={`DOI of ${c.title} (opens in a new tab)`}
-                              color="fg.muted"
-                              _hover={{ color: 'fg' }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <LuExternalLink />
-                            </Link>
-                          ) : (
-                            <Text as="span" color="fg.muted">
-                              –
-                            </Text>
-                          )}
+                          <DoiCell c={c} />
                         </Table.Cell>
                       </Table.Row>
                     );
                   })}
+              {!waiting && noOverlap.length > 0 && (
+                <Table.Row bg="bg.subtle" _hover={{ bg: 'bg.muted' }}>
+                  <Table.Cell colSpan={COLS} p={0}>
+                    <chakra.button
+                      type="button"
+                      display="flex"
+                      alignItems="center"
+                      gap={2}
+                      w="full"
+                      px={3}
+                      py={2}
+                      textStyle="xs"
+                      color="fg.muted"
+                      textAlign="start"
+                      cursor="pointer"
+                      aria-expanded={showNoOverlap}
+                      aria-controls="phylo-no-overlap"
+                      onClick={() => setShowNoOverlap((v) => !v)}
+                      focusVisibleRing="inside"
+                    >
+                      <Icon
+                        as={LuChevronRight}
+                        transition="transform 0.15s"
+                        transform={showNoOverlap ? 'rotate(90deg)' : undefined}
+                      />
+                      <Text as="span" fontWeight="medium" color="fg">
+                        No overlap with your species
+                      </Text>
+                      <Text as="span" fontVariantNumeric="tabular-nums">
+                        ({fmtInt(noOverlap.length)})
+                      </Text>
+                      <Text as="span" ms="auto" truncate>
+                        These trees contain none of your species and can't be loaded.
+                      </Text>
+                    </chakra.button>
+                  </Table.Cell>
+                </Table.Row>
+              )}
+              {!waiting &&
+                showNoOverlap &&
+                noOverlap.map((c) => (
+                  <Table.Row
+                    key={c.id}
+                    data-testid="tree-row-no-overlap"
+                    h={ROW_H}
+                    color="fg.muted"
+                    aria-disabled
+                  >
+                    <Table.Cell />
+                    <Table.Cell>
+                      <SourceCell c={c} selected={false} />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <CoverageCell c={c} />
+                    </Table.Cell>
+                    <Table.Cell textAlign="center">
+                      <DatedCell c={c} />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <LengthsCell c={c} />
+                    </Table.Cell>
+                    <Table.Cell textAlign="center">
+                      <DoiCell c={c} />
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
             </Table.Body>
           </Table.Root>
         </Box>
       </RadioGroup.Root>
     );
   }
-
-  const checking = candidates.filter((c) => c.coverageState === 'pending').length;
 
   return (
     <Stack flex="1" minH={0} gap={3} p={4} overflowY="auto">
@@ -325,10 +410,24 @@ export default observer(function TreeSourceTable() {
             <Text as="span" textTransform="none" letterSpacing="normal" fontWeight="normal" fontVariantNumeric="tabular-nums">
               {' '}
               · {fmtInt(candidates.length)} {candidates.length === 1 ? 'tree' : 'trees'}
-              {checking > 0 && ` · checking coverage of ${fmtInt(checking)}`}
             </Text>
           )}
         </Text>
+        {checking && (
+          <HStack
+            gap={1.5}
+            textStyle="xs"
+            color="fg.muted"
+            fontVariantNumeric="tabular-nums"
+            flexShrink={0}
+            data-testid="phylo-coverage-progress"
+          >
+            <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" />
+            <Text as="span" minW="17ch">
+              Checking coverage {fmtInt(progress.done)}/{fmtInt(progress.total)}
+            </Text>
+          </HStack>
+        )}
         <HStack gap={2}>
           <chakra.label htmlFor="phylo-sort" textStyle="xs" color="fg.muted">
             Sort
@@ -359,7 +458,9 @@ export default observer(function TreeSourceTable() {
       {body}
       {!waiting && rows.length > 0 && (
         <Text textStyle="xs" color="fg.muted">
-          Coverage counts dataset species found among each tree's tips. Hover a source for its citation.
+          {checking
+            ? 'Rows keep their order while coverage is checked, then sort once.'
+            : "Coverage counts dataset species found among each tree's tips. Hover a source for its citation."}
         </Text>
       )}
     </Stack>

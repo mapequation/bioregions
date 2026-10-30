@@ -95,16 +95,42 @@ describe('buildLedger', () => {
       ],
       memory,
       speciesCounts: null,
+      base: 1500,
     });
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
-    expect(byId.uncertainty).toMatchObject({ label: 'Uncertainty ≤ 10 km', active: true, impact: 150 });
-    expect(byId.uncertainty.share).toBeCloseTo(150 / 1150);
+    expect(byId.uncertainty).toMatchObject({ label: 'Uncertainty ≤ 10 km', toggleable: true, active: true, impact: 150 });
+    // One common denominator: every share is impact / base.
+    expect(byId.uncertainty.share).toBeCloseTo(150 / 1500);
+    expect(byId.years.share).toBeCloseTo(100 / 1500);
     expect(byId.years).toMatchObject({ label: 'Years 1970–2025', impact: 100 });
     expect(byId.basisOfRecord).toMatchObject({ label: 'No fossil/living specimens', active: true, impact: null, share: null });
     expect(byId.datasets).toMatchObject({ label: 'Excluded datasets (0)', active: false });
     expect(byId.minRecords).toMatchObject({ label: 'Min. 5 records per species', active: false });
     expect(byId.depth.label).toBe('Depth 0–200 m');
-    expect(rows.map((r) => r.id)).toHaveLength(9);
+    expect(rows.map((r) => r.id)).toHaveLength(11);
+    expect(byId.speciesLevel).toMatchObject({ label: 'Not identified to species', toggleable: false, impact: null, share: null });
+    expect(byId.duplicates).toMatchObject({
+      label: 'Duplicates (same species at one site)',
+      toggleable: false,
+      impact: null,
+    });
+  });
+
+  it('fills the fixed rows and leaves shares null without a base', () => {
+    const rows = buildLedger({
+      query: explorerDefaultQuery(),
+      previews: [preview('gbif', { total: 800, filterImpact: { uncertainty: 150 } })],
+      memory,
+      speciesCounts: null,
+      base: 2000,
+      speciesLevel: 200,
+      duplicates: 50,
+    });
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect(byId.speciesLevel).toMatchObject({ impact: 200, share: 0.1, active: true });
+    expect(byId.duplicates).toMatchObject({ impact: 50, share: 0.025 });
+    const noBase = buildLedger({ query: explorerDefaultQuery(), previews: [], memory, speciesCounts: null, base: null });
+    expect(noBase.every((r) => r.share === null)).toBe(true);
   });
 
   it('derives the minimum-records impact from species counts and reads loaded impacts', () => {
@@ -119,7 +145,8 @@ describe('buildLedger', () => {
         { key: 'b', label: 'B', count: 4 },
         { key: 'c', label: 'C', count: 50 },
       ],
-      loaded: [{ id: 'minRecords', label: '', active: true, impact: 2, share: null }],
+      loaded: [{ id: 'minRecords', label: '', toggleable: true, active: true, impact: 2, share: null }],
+      base: null,
     });
     const row = rows.find((r) => r.id === 'minRecords');
     expect(row).toMatchObject({ active: true, impact: 7, loadedImpact: 2 });
@@ -242,6 +269,40 @@ describe('computeBiasFlags', () => {
     expect(a.excludeDataset).toHaveBeenCalledWith('ebird');
     byId.temporalSkew.action?.run();
     expect(a.narrowYears).toHaveBeenCalledWith(2011);
+    // Concrete action labels and legend text.
+    expect(byId.datasetDominance.action?.label).toBe('Exclude eBird');
+    expect(byId.temporalSkew.action?.label).toBe('Restrict to 2011');
+    expect(byId.humanObservation.action?.label).toBe('Compare: specimens only');
+    expect(byId.lowCountSpecies.action?.label).toBe('Set minimum 5 records per species');
+    expect(byId.countryConcentration.thresholdLabel).toBe('warns above 50 % of records');
+  });
+
+  it('names the year range it sets and drops actions that are already applied', () => {
+    const query = explorerDefaultQuery();
+    query.quality.basisOfRecord = ['PRESERVED_SPECIMEN', 'MATERIAL_SAMPLE'];
+    query.quality.minRecordsPerSpecies = 5;
+    const input = (years: [number | null, number | null]) => ({
+      query: { ...query, years },
+      previews: [
+        preview('gbif', {
+          total: 1000,
+          years: [
+            { year: 1990, count: 100 },
+            { year: 2024, count: 900 },
+          ],
+        }),
+      ],
+      speciesCounts: [{ key: 'a', label: 'A', count: 1 }],
+      currentYear: 2026,
+    });
+    const open = Object.fromEntries(computeBiasFlags(input([null, null]), actions()).map((f) => [f.id, f]));
+    expect(open.temporalSkew.action?.label).toBe('Restrict to 2012–2024');
+    expect(open.humanObservation.action).toBeUndefined();
+    expect(open.lowCountSpecies.action).toBeUndefined();
+    const bounded = Object.fromEntries(computeBiasFlags(input([1980, 2020]), actions()).map((f) => [f.id, f]));
+    expect(bounded.temporalSkew.action?.label).toBe('Restrict to 2012–2020');
+    const narrowed = Object.fromEntries(computeBiasFlags(input([2015, null]), actions()).map((f) => [f.id, f]));
+    expect(narrowed.temporalSkew.action).toBeUndefined();
   });
 
   it('skips the country check for a single-country area and offers no exclusion for OBIS datasets', () => {
@@ -328,6 +389,28 @@ describe('preview pipeline', () => {
 
     s.pinBaseline();
     expect(s.baseline?.total).toBe(1000);
+    s.dispose();
+  });
+
+  it('shares one ledger base and names only sources with records in the methods draft', async () => {
+    vi.mocked(previewGbif).mockResolvedValue(
+      preview('gbif', { total: 900, baseTotal: 1800, filterImpact: { uncertainty: 450 } }),
+    );
+    vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 0, baseTotal: 0 }));
+    const s = newStore();
+    s.addTaxon(felidae);
+    await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
+    expect(s.ledgerBase).toBe(1800);
+    expect(s.ledger.find((r) => r.id === 'uncertainty')?.share).toBeCloseTo(0.25);
+    expect(s.ledger.find((r) => r.id === 'speciesLevel')).toMatchObject({ toggleable: false, impact: null });
+    expect(s.countStory).toEqual({ matching: 900, speciesLevel: null, duplicates: null, loaded: null });
+    expect(s.loadedMatchesQuery).toBe(false);
+    expect(s.methodsSources).toEqual(['gbif']);
+    expect(s.methodsText).toContain('Global Biodiversity Information Facility');
+    expect(s.methodsText).not.toContain('OBIS');
+    expect(s.methodsText).toContain('Only records identified to species were used');
+    s.toggleFilter('speciesLevel');
+    expect(s.query.quality.maxUncertaintyMeters).toBe(10000);
     s.dispose();
   });
 

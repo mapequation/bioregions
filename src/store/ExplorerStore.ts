@@ -67,6 +67,7 @@ import type {
   Baseline,
   BiasFlag,
   BiasId,
+  CountStory,
   DownloadCredentials,
   Estimate,
   GbifDownload,
@@ -82,6 +83,7 @@ import type {
   SourceState,
   Tab,
   TaxonSuggestion,
+  ToggleableRowId,
   ZipImport,
 } from './explorer/types';
 import type RootStore from './RootStore';
@@ -93,8 +95,8 @@ export const MAX_RATE_LIMIT_ATTEMPTS = 5;
 export const DEFAULT_CAP = 500_000;
 export const MAX_SUGGESTIONS = 10;
 
-/** Ledger rows, in display order. */
-export const LEDGER_IDS: LedgerRowId[] = [
+/** Toggleable ledger rows, in display order (the fixed rules follow them). */
+export const LEDGER_IDS: ToggleableRowId[] = [
   'basisOfRecord',
   'uncertainty',
   'geospatialIssues',
@@ -113,6 +115,14 @@ export const BIAS_THRESHOLDS: Record<BiasId, number> = {
   temporalSkew: 0.6,
   countryConcentration: 0.5,
   lowCountSpecies: 0.2,
+};
+/** Legend text for each bias threshold. */
+export const BIAS_THRESHOLD_LABELS: Record<BiasId, string> = {
+  datasetDominance: 'warns above 30 % of records',
+  humanObservation: 'warns above 60 % of records',
+  temporalSkew: 'warns above 60 % of dated records',
+  countryConcentration: 'warns above 50 % of records',
+  lowCountSpecies: 'warns above 20 % of species',
 };
 /** "Recent" for the temporal-skew check: the last 15 years, inclusive. */
 export const RECENT_YEARS = 15;
@@ -268,6 +278,10 @@ export function isFilterActive(query: OccurrenceQuery, id: LedgerRowId): boolean
       return (q.excludeDatasets?.length ?? 0) > 0;
     case 'minRecords':
       return (q.minRecordsPerSpecies ?? 1) > 1;
+    case 'speciesLevel':
+      return true;
+    case 'duplicates':
+      return q.dedupe !== 'none';
   }
 }
 
@@ -303,6 +317,11 @@ export function ledgerLabel(query: OccurrenceQuery, id: LedgerRowId, memory: Tog
       return `Excluded datasets (${q.excludeDatasets?.length ?? 0})`;
     case 'minRecords':
       return `Min. ${active ? q.minRecordsPerSpecies : memory.minRecords} records per species`;
+    case 'speciesLevel':
+      return 'Not identified to species';
+    case 'duplicates':
+      if (q.dedupe === 'cell') return 'Duplicates (same species in one ~1 km cell)';
+      return q.dedupe === 'none' ? 'Duplicates (kept)' : 'Duplicates (same species at one site)';
   }
 }
 
@@ -320,12 +339,35 @@ export interface LedgerInput {
   speciesCounts: FacetBucket[] | null;
   /** Ledger frozen at the last load, for ghost ticks. */
   loaded?: LedgerRow[] | null;
+  /** Common denominator of every share (records matching taxa + area only); null when unknown. */
+  base: number | null;
+  /** Records not identified to species (preview totals minus plan totals); null before plans. */
+  speciesLevel?: number | null;
+  /** Duplicates removed by the last load of this query; null before a load. */
+  duplicates?: number | null;
 }
 
-/** One row per filter; impacts summed over the sources that report them. */
-export function buildLedger({ query, previews, memory, speciesCounts, loaded }: LedgerInput): LedgerRow[] {
-  const total = previews.reduce((sum, p) => sum + p.total, 0);
-  return LEDGER_IDS.map((id) => {
+/** Share of the ledger base, or null when either is unknown. */
+export function ledgerShare(impact: number | null, base: number | null): number | null {
+  if (impact == null || base == null) return null;
+  return base > 0 ? Math.min(1, impact / base) : 0;
+}
+
+/**
+ * One row per filter (impacts summed over the sources that report them), then the
+ * two fixed rules. Every share uses the same base, so shares are comparable.
+ */
+export function buildLedger({
+  query,
+  previews,
+  memory,
+  speciesCounts,
+  loaded,
+  base,
+  speciesLevel = null,
+  duplicates = null,
+}: LedgerInput): LedgerRow[] {
+  const filterRows = LEDGER_IDS.map((id): LedgerRow => {
     const active = isFilterActive(query, id);
     let impact: number | null = null;
     if (id === 'minRecords') {
@@ -336,11 +378,27 @@ export function buildLedger({ query, previews, memory, speciesCounts, loaded }: 
         if (typeof v === 'number') impact = (impact ?? 0) + v;
       }
     }
-    const share = impact == null ? null : total + impact > 0 ? impact / (total + impact) : 0;
-    const row: LedgerRow = { id, label: ledgerLabel(query, id, memory), active, impact, share };
-    if (loaded) row.loadedImpact = loaded.find((r) => r.id === id)?.impact ?? null;
-    return row;
+    return { id, label: ledgerLabel(query, id, memory), toggleable: true, active, impact, share: ledgerShare(impact, base) };
   });
+  const dedupe = query.quality.dedupe !== 'none';
+  const fixedRows: LedgerRow[] = (
+    [
+      ['speciesLevel', speciesLevel],
+      ['duplicates', dedupe ? duplicates : 0],
+    ] as const
+  ).map(([id, impact]) => ({
+    id,
+    label: ledgerLabel(query, id, memory),
+    toggleable: false,
+    active: isFilterActive(query, id),
+    impact,
+    share: ledgerShare(impact, base),
+  }));
+  const rows = [...filterRows, ...fixedRows];
+  if (loaded) {
+    for (const row of rows) row.loadedImpact = loaded.find((r) => r.id === row.id)?.impact ?? null;
+  }
+  return rows;
 }
 
 export interface BiasActions {
@@ -370,8 +428,9 @@ export function computeBiasFlags(
     triggered: value > BIAS_THRESHOLDS[id],
     value,
     threshold: BIAS_THRESHOLDS[id],
+    thresholdLabel: BIAS_THRESHOLD_LABELS[id],
     text,
-    action,
+    ...(action && { action }),
   });
 
   // Dataset dominance: the single largest dataset across sources.
@@ -387,7 +446,7 @@ export function computeBiasFlags(
     top
       ? `${pctLabel(topShare)} of records come from one dataset (${top.label}). Its sampling design can shape your regions.`
       : 'No single dataset dominates.',
-    top?.source === 'gbif' ? { label: 'Exclude dataset', run: () => actions.excludeDataset(topKey) } : undefined,
+    top?.source === 'gbif' ? { label: `Exclude ${top.label}`, run: () => actions.excludeDataset(topKey) } : undefined,
   );
 
   // Human observations.
@@ -398,7 +457,9 @@ export function computeBiasFlags(
     'humanObservation',
     humanShare,
     `${pctLabel(humanShare)} are human observations, often citizen science: dense near people and roads.`,
-    { label: 'Compare: specimens only', run: () => actions.specimensOnly() },
+    sameBasis(query.quality.basisOfRecord, SPECIMEN_BASIS)
+      ? undefined
+      : { label: 'Compare: specimens only', run: () => actions.specimensOnly() },
   );
 
   // Temporal skew: share of dated records from the last 15 years.
@@ -407,11 +468,15 @@ export function computeBiasFlags(
   const dated = years.reduce((sum, y) => sum + y.count, 0);
   const recent = years.reduce((sum, y) => sum + (y.year >= cutoff ? y.count : 0), 0);
   const recentShare = dated > 0 ? recent / dated : 0;
+  const [fromYear, toYear] = query.years;
+  const lastYear = toYear ?? (years.length > 0 ? years[years.length - 1].year : currentYear);
+  const canNarrow = (fromYear == null || fromYear < cutoff) && lastYear >= cutoff;
+  const narrowLabel = lastYear > cutoff ? `Restrict to ${cutoff}–${lastYear}` : `Restrict to ${cutoff}`;
   const temporalFlag = flag(
     'temporalSkew',
     recentShare,
     `${pctLabel(recentShare)} of records are from ${cutoff} or later; historical ranges may be missing.`,
-    { label: 'Narrow years', run: () => actions.narrowYears(cutoff) },
+    canNarrow ? { label: narrowLabel, run: () => actions.narrowYears(cutoff) } : undefined,
   );
 
   // Country concentration (not meaningful when the area is one country).
@@ -425,7 +490,7 @@ export function computeBiasFlags(
     topCountry && !oneCountry
       ? `${pctLabel(countryShare)} of records are from ${topCountry.label}; effort differs between countries.`
       : 'Records are not concentrated in one country.',
-    { label: 'Show countries', run: () => actions.showCountries() },
+    topCountry && !oneCountry ? { label: 'Show countries', run: () => actions.showCountries() } : undefined,
   );
 
   // Low-count species (needs per-species counts from the plan).
@@ -437,7 +502,9 @@ export function computeBiasFlags(
       'lowCountSpecies',
       lowShare,
       `${low.toLocaleString('en-US')} species (${pctLabel(lowShare)}) have fewer than ${LOW_COUNT} records and can form spurious regions.`,
-      { label: `Set minimum ${LOW_COUNT} records`, run: () => actions.setMinRecords(LOW_COUNT) },
+      (query.quality.minRecordsPerSpecies ?? 1) >= LOW_COUNT
+        ? undefined
+        : { label: `Set minimum ${LOW_COUNT} records per species`, run: () => actions.setMinRecords(LOW_COUNT) },
     );
   } else {
     lowFlag = flag('lowCountSpecies', 0, 'Records per species are known once the load is planned.');
@@ -769,6 +836,7 @@ export default class ExplorerStore {
 
   /** Flip one ledger filter between its recommended (or last) value and off. */
   toggleFilter(id: LedgerRowId) {
+    if (id === 'speciesLevel' || id === 'duplicates') return;
     const q = this.query.quality;
     const m = this.toggleMemory;
     const on = isFilterActive(this.query, id);
@@ -1100,7 +1168,60 @@ export default class ExplorerStore {
       memory: this.toggleMemory,
       speciesCounts: this.speciesCounts,
       loaded: this.lastLoad?.ledger ?? null,
+      base: this.ledgerBase,
+      speciesLevel: this.speciesLevelImpact,
+      duplicates: this.loadedForQuery?.funnel.dropped.duplicate ?? null,
     });
+  }
+
+  /** Records matching the taxa and area with no ledger filter, summed over contributing sources. */
+  get ledgerBase(): number | null {
+    const previews = this.previews;
+    if (previews.length === 0) return null;
+    let base = 0;
+    for (const p of previews) {
+      if (p.baseTotal == null) return null;
+      base += Math.max(p.baseTotal, p.total);
+    }
+    return base;
+  }
+
+  /**
+   * Records matching every filter that are not identified to species: preview totals
+   * minus the unfiltered plan totals (per source, never negative); null before plans.
+   */
+  get speciesLevelImpact(): number | null {
+    const raw = this.currentRawPlans;
+    if (this.plans.state !== 'ready' || !raw) return null;
+    let impact = 0;
+    for (const p of this.previews) {
+      const plan = raw[p.source];
+      if (plan && this.sources[p.source].supports.ok) impact += Math.max(0, p.total - plan.expectedRecords);
+    }
+    return impact;
+  }
+
+  /** The last load when it was made with the current query, else null. */
+  private get loadedForQuery(): LoadProvenance | null {
+    const load = this.lastLoad as LoadProvenance | null;
+    return load && this.dirty.size === 0 ? load : null;
+  }
+
+  /** Whether the loaded dataset is exactly what the current query describes. */
+  get loadedMatchesQuery(): boolean {
+    return this.lastLoad != null && this.dirty.size === 0 && !this.isLoading;
+  }
+
+  /** One derivation chain from matching records to the loaded dataset. */
+  get countStory(): CountStory {
+    const est = this.estimate;
+    const load = this.loadedForQuery;
+    return {
+      matching: this.kpis ? this.ledgerTotal : null,
+      speciesLevel: est?.exact ? est.records : null,
+      duplicates: load ? load.funnel.dropped.duplicate ?? 0 : null,
+      loaded: load ? load.funnel.accepted : null,
+    };
   }
 
   /** Records matching all filters, summed over sources. */
@@ -1150,17 +1271,18 @@ export default class ExplorerStore {
   get biggestRestriction(): { row: LedgerRow; relax(): void; relaxLabel: string } | null {
     let row: LedgerRow | null = null;
     for (const r of this.ledger) {
-      if (r.active && r.impact != null && r.impact > 0 && (!row || r.impact > (row.impact ?? 0))) row = r;
+      if (r.toggleable && r.active && r.impact != null && r.impact > 0 && (!row || r.impact > (row.impact ?? 0))) row = r;
     }
     if (!row) return null;
     const id = row.id;
+    if (id === 'speciesLevel' || id === 'duplicates') return null;
     if (id === 'uncertainty') {
       const m = this.query.quality.maxUncertaintyMeters ?? 0;
       return m < 10000
         ? { row, relaxLabel: 'Relax to 10 km', relax: () => this.setQuality({ maxUncertaintyMeters: 10000 }) }
         : { row, relaxLabel: 'Remove the uncertainty limit', relax: () => this.toggleFilter('uncertainty') };
     }
-    const labels: Record<Exclude<LedgerRowId, 'uncertainty'>, string> = {
+    const labels: Record<Exclude<ToggleableRowId, 'uncertainty'>, string> = {
       basisOfRecord: 'Allow every basis of record',
       geospatialIssues: 'Keep records with geospatial issues',
       introduced: 'Include introduced populations',
@@ -1224,9 +1346,20 @@ export default class ExplorerStore {
     return buildMethodsText({
       load,
       query: this.query,
+      sources: this.methodsSources,
       downloadDoi: load?.gbifDownloadDoi ?? this.citingDownload?.doi,
       treeCitation: this.rootStore.phyloStore?.citationText,
     });
+  }
+
+  /**
+   * Sources the draft methods text names: enabled, able to run the query and with
+   * matching records (all enabled and supported ones until a preview arrives).
+   */
+  get methodsSources(): SourceId[] {
+    const runnable = SOURCE_IDS.filter((id) => this.query.sources[id] && this.sources[id].supports.ok);
+    if (runnable.every((id) => !this.sources[id].preview)) return runnable;
+    return runnable.filter((id) => (this.sources[id].preview?.total ?? 0) > 0);
   }
 
   /** OBIS citation with dataset ids. */
@@ -1343,6 +1476,7 @@ export default class ExplorerStore {
     this.cancelMode = null;
     const startedAt = Date.now();
     const ledger = this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row }));
+    const ledgerBase = this.ledgerBase;
     const titles = new Map<string, string>();
     for (const p of this.previews) for (const d of p.topDatasets) titles.set(d.key, d.label);
     this.job = {
@@ -1439,7 +1573,21 @@ export default class ExplorerStore {
       if (finished) return;
       finished = true;
       flush(true);
-      this.finishLoad({ job, query, mode, controller, cleaner, seeded, tally, titles, ledger, planned, errors, plans });
+      this.finishLoad({
+        job,
+        query,
+        mode,
+        controller,
+        cleaner,
+        seeded,
+        tally,
+        titles,
+        ledger,
+        ledgerBase,
+        planned,
+        errors,
+        plans,
+      });
     };
 
     async function* accepted(): AsyncGenerator<RecordBatch['records']> {
@@ -1485,7 +1633,7 @@ export default class ExplorerStore {
         if (this.loadController === controller) this.loadController = null;
       });
       if (this.cancelMode === 'discard' && this.job === job) {
-        // loadRecords finishes (and runs Infomap) on what arrived; discard it again.
+        // loadRecords dropped what arrived without running Infomap; clear the rest of the app too.
         this.rootStore.clearData();
       }
     }
@@ -1502,6 +1650,7 @@ export default class ExplorerStore {
     tally: LoadTally;
     titles: Map<string, string>;
     ledger: LedgerRow[];
+    ledgerBase: number | null;
     planned: number;
     errors: string[];
     plans: StreamPlan[];
@@ -1534,7 +1683,12 @@ export default class ExplorerStore {
       retrievedAt: new Date().toISOString(),
       mode: ctx.mode,
       funnel,
-      ledger: ctx.ledger,
+      // The frozen ledger learns the duplicates the load removed.
+      ledger: ctx.ledger.map((r) =>
+        r.id === 'duplicates' && r.active
+          ? { ...r, impact: funnel.dropped.duplicate ?? 0, share: ledgerShare(funnel.dropped.duplicate ?? 0, ctx.ledgerBase) }
+          : r,
+      ),
       kpis,
       partial: cancelled || errors.length > 0 ? { planned: ctx.planned, accepted: funnel.accepted } : null,
       datasetCounts: tally.datasetCounts(ctx.titles),
@@ -1554,7 +1708,8 @@ export default class ExplorerStore {
     const controller = this.loadController;
     if (!controller || !this.isLoading) return;
     this.cancelMode = mode;
-    controller.abort();
+    // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
+    controller.abort(mode);
     if (this.job?.state === 'planning') this.job.state = 'cancelled';
     if (mode === 'discard') this.rootStore.clearData();
   }

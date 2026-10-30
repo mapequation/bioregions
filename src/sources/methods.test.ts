@@ -94,4 +94,18 @@ describe('methodsParagraph', () => {
     expect(text).toContain('5,000 matching records were not downloaded');
     expect(text).toContain('https://doi.org/10.15468/dl.x');
   });
+
+  it('states the species-level exclusion and the duplicate rule', () => {
+    const exact = methodsParagraph({ entries: [gbif], funnel: null, speciesCount: 3, query });
+    expect(exact).toContain('Only records identified to species were used');
+    expect(exact).toContain('identified only to genus or a higher rank');
+    expect(exact).toContain('Duplicate records of the same species at the same coordinates');
+    const kept = methodsParagraph({
+      entries: [gbif],
+      funnel: null,
+      speciesCount: 3,
+      query: { ...query, quality: { ...query.quality, dedupe: 'none' } },
+    });
+    expect(kept).toContain('Duplicate records were kept.');
+  });
 });

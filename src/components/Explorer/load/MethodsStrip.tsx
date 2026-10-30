@@ -12,7 +12,8 @@ export default observer(function MethodsStrip() {
   const panelId = useId();
   const text = ex.methodsText.trim();
   const expanded = ex.methodsExpanded;
-  const loaded = !!ex.lastLoad && ex.dirty.size === 0;
+  // Same text as the store (and the Cite tab); "draft" until it describes the loaded data.
+  const loaded = ex.loadedMatchesQuery;
   const title = loaded ? 'Methods' : 'Methods draft';
 
   return (
@@ -70,14 +71,26 @@ export default observer(function MethodsStrip() {
           </Box>
         </chakra.button>
         <Clipboard.Root value={text} timeout={2000}>
-          <Clipboard.Trigger asChild>
-            <Button size="xs" variant="ghost" disabled={!text} data-testid="copy-methods" flexShrink={0}>
-              <Clipboard.Indicator copied={<LuCheck />}>
-                <LuCopy />
-              </Clipboard.Indicator>
-              <Clipboard.Context>{(c) => (c.copied ? 'Copied' : 'Copy')}</Clipboard.Context>
-            </Button>
-          </Clipboard.Trigger>
+          <Clipboard.Context>
+            {(c) => (
+              <Clipboard.Trigger asChild>
+                <Button
+                  size="xs"
+                  variant={c.copied ? 'subtle' : 'ghost'}
+                  colorPalette={c.copied ? 'green' : undefined}
+                  disabled={!text}
+                  data-testid="copy-methods"
+                  data-copied={c.copied || undefined}
+                  flexShrink={0}
+                  minW="5.5rem"
+                  aria-label={c.copied ? 'Methods paragraph copied' : 'Copy the methods paragraph'}
+                >
+                  {c.copied ? <LuCheck /> : <LuCopy />}
+                  {c.copied ? 'Copied' : 'Copy'}
+                </Button>
+              </Clipboard.Trigger>
+            )}
+          </Clipboard.Context>
           <Clipboard.Context>
             {(c) => (
               <Box srOnly role="status">

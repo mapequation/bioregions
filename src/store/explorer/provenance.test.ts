@@ -31,7 +31,7 @@ function load(extra: Partial<LoadProvenance> = {}): LoadProvenance {
     retrievedAt: '2026-10-30T14:03:00.000Z',
     mode: 'replace',
     funnel: cleaner.funnel,
-    ledger: [{ id: 'years', label: 'Years 1970–2025', active: true, impact: 120, share: 0.1 }],
+    ledger: [{ id: 'years', label: 'Years 1970–2025', toggleable: true, active: true, impact: 120, share: 0.1 }],
     kpis: { records: 2, recordsUpperBound: false, species: 2, datasets: 2, yearRange: null, bySource: {} },
     partial: null,
     datasetCounts: { gbif: [{ key: 'd1', label: 'Dataset one', count: 1 }], obis: [{ key: 'o1', label: 'o1', count: 1 }] },

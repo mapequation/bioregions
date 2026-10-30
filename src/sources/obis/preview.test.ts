@@ -70,11 +70,13 @@ describe('previewObis', () => {
     const fetch = vi.fn(async (url: string) => respond(url));
     vi.stubGlobal('fetch', fetch);
     const preview = await previewObis(query);
-    // 5 summary calls + 3 impact calls (years, presentOnly, geospatialIssues).
-    expect(fetch).toHaveBeenCalledTimes(8);
+    // 5 summary calls + the ledger base + 3 impact calls (years, presentOnly, geospatialIssues).
+    expect(fetch).toHaveBeenCalledTimes(9);
     expect(preview).toMatchObject({
       source: 'obis',
       total: 920,
+      // Every filter omitted: 1000 + 200 + 50 + 30, basis of record included.
+      baseTotal: 1280,
       species: 24,
       datasets: 457,
       yearRange: [1970, 2026],

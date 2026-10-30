@@ -100,9 +100,17 @@ describe('PhyloStore', () => {
     ]);
     expect(store.candidates[0].synthVersion).toBe('v15.1');
 
+    // The dated tree covers 3 of 5 species (>= 60 %), so it replaces the synthesis default.
+    await when(() => store.selection !== null && store.selectedId === 'ot_1@tree1');
+    expect(store.selectionReason).toBe('dated');
+    expect(store.coverageProgress).toEqual({ done: 1, total: 1 });
+    expect(store.checkingCoverage).toBe(false);
+
+    store.select('synthetic');
+    expect(store.selectionReason).toBe('user');
     await when(() => store.selection !== null);
-    expect(store.selectedId).toBe('synthetic');
     expect(store.selection).toEqual({ kept: 4, absentFromTree: ['Fakeus name'], pruned: 0, broken: ['Mico argentatus'] });
+    expect(store.absentBreakdown).toEqual({ unmatched: ['Fakeus name'], notInTree: [] });
 
     store.setDatedOnly(true);
     expect(store.visibleCandidates.map((c) => c.id)).toEqual(['ot_1@tree1']);
@@ -133,12 +141,62 @@ describe('PhyloStore', () => {
     await when(() => store.matchState === 'ready');
     root.speciesStore.speciesMap = new Map(names.slice(0, 4).map((n) => [n, {}]));
     root.speciesStore.loaded = true;
-    await when(() => store.speciesSource === 'loaded' && store.matchState === 'ready' && store.selection !== null);
+    await when(
+      () => store.speciesSource === 'loaded' && store.matchState === 'ready' && store.selectionReason === 'dated',
+    );
     expect(store.matches).toHaveLength(4);
+    store.select('synthetic');
+    await when(() => store.selection !== null);
     await store.loadSelected();
     expect(root.infomapStore.run).toHaveBeenCalled();
     expect(root.mapStore.setRenderType).toHaveBeenCalledWith('bioregions');
     expect(store.citationText).toMatch(/Grafen/);
+    store.dispose();
+  });
+
+  it('keeps row order while coverage is checked and never replaces a user pick', async () => {
+    mockOtol();
+    const studies = [
+      { studyId: 'ot_1', treeId: 'tree1', reference: 'Perelman, P., et al. (2011). Primates.', year: 2011, isDated: true, branchLengthMode: 'ot:time' },
+      { studyId: 'ot_2', treeId: 'tree2', reference: 'Upham, N., et al. (2019). Mammals.', year: 2019, isDated: true, branchLengthMode: 'ot:time' },
+      { studyId: 'ot_3', treeId: 'tree3', reference: 'Del Risco, A., et al. (2024). Bats.', year: 2024, isDated: false },
+    ];
+    vi.mocked(otol.findStudyTrees).mockImplementation(async ({ taxonName }) => (taxonName === 'Callitrichidae' ? studies : []));
+    const gates: Record<string, () => void> = {};
+    const trees: Record<string, string> = {
+      tree1: '((1:2,4:2):1,(77:1,3:1):2);',
+      tree2: '((1:1,2:1):1,(4:1,3:1):1);',
+      tree3: '((70:1,71:1):1,72:2);',
+    };
+    vi.mocked(otol.fetchStudyTree).mockImplementation(
+      (_study, treeId) => new Promise((resolve) => (gates[treeId] = () => resolve(trees[treeId]))),
+    );
+    const root = fakeRoot();
+    root.explorerStore.isOpen = true;
+    root.explorerStore.tab = 'phylogeny';
+    const store = new PhyloStore(root as unknown as RootStore);
+    await vi.waitFor(() => expect(Object.keys(gates)).toHaveLength(3));
+
+    // Before coverage is known: synthesis, dated trees newest first, then the rest.
+    const initial = ['synthetic', 'ot_2@tree2', 'ot_1@tree1', 'ot_3@tree3'];
+    expect(store.visibleCandidates.map((c) => c.id)).toEqual(initial);
+    expect(store.visibleCandidates[1].title).toBe('Upham et al. 2019');
+    expect(store.coverageProgress).toEqual({ done: 0, total: 3 });
+
+    store.select('ot_1@tree1');
+    gates.tree3();
+    gates.tree1();
+    await when(() => store.coverageProgress.done === 2);
+    expect(store.visibleCandidates.map((c) => c.id)).toEqual(initial);
+
+    gates.tree2();
+    await when(() => !store.checkingCoverage && store.noOverlapIds.length === 1);
+    // Sorted once by coverage; the user's pick keeps its row and selection.
+    expect(store.visibleCandidates.map((c) => c.id)).toEqual(['synthetic', 'ot_2@tree2', 'ot_1@tree1']);
+    expect(store.noOverlapCandidates.map((c) => c.id)).toEqual(['ot_3@tree3']);
+    expect(store.selectedId).toBe('ot_1@tree1');
+    expect(store.selectionReason).toBe('user');
+    expect(store.bestDated?.id).toBe('ot_2@tree2');
     store.dispose();
   });
 });

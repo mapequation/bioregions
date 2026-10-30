@@ -1,6 +1,6 @@
 // Pure helper for the decision ledger's "Cleaning · in order" section.
 import type { Funnel } from '../../../sources/types';
-import { fmtCompact, fmtInt } from '../format';
+import { fmtInt } from '../format';
 
 const SOURCE_LABEL: Record<string, string> = { gbif: 'GBIF', obis: 'OBIS', file: 'File' };
 
@@ -20,7 +20,7 @@ export function cleaningSteps(funnel: Funnel, showLowCount: boolean): CleaningSt
   const extra = funnel as Funnel & { crossSourceDuplicates?: number };
   const split = Object.entries(funnel.bySource)
     .filter(([, v]) => v && v.received > 0)
-    .map(([k, v]) => `${SOURCE_LABEL[k] ?? k} ${fmtCompact(v?.received ?? 0)}`)
+    .map(([k, v]) => `${SOURCE_LABEL[k] ?? k} ${fmtInt(v?.received ?? 0)}`)
     .join(' · ');
   const drops: Omit<CleaningStep, 'start' | 'kind'>[] = [
     {

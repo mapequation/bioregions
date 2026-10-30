@@ -23,11 +23,17 @@ export function useCountdown(at: number | undefined): number | null {
   return Math.max(0, Math.ceil((at - now) / 1000));
 }
 
-type ChipStatus = 'off' | 'unsupported' | 'idle' | 'loading' | 'ready' | 'error' | 'rateLimited';
+type ChipStatus = 'off' | 'unsupported' | 'idle' | 'loading' | 'ready' | 'error' | 'rateLimited' | 'empty';
 
-function chipStatus(enabled: boolean, s: SourceState): ChipStatus {
+/**
+ * `empty`: on, but this source has nothing for the query (OBIS knows none of the taxa, or its
+ * preview counted 0 records). The chip stays toggleable; it only stops looking like a contributor.
+ */
+function chipStatus(enabled: boolean, s: SourceState, noTaxa: boolean): ChipStatus {
   if (!enabled) return 'off';
   if (!s.supports.ok) return 'unsupported';
+  if (noTaxa && s.state !== 'error' && s.state !== 'rateLimited') return 'empty';
+  if (s.state === 'ready' && s.preview?.total === 0) return 'empty';
   return s.state;
 }
 
@@ -39,6 +45,7 @@ const STATUS_WORD: Record<ChipStatus, string> = {
   ready: 'ready',
   error: 'preview failed',
   rateLimited: 'busy, retrying',
+  empty: 'no records for this query',
 };
 
 function StatusMark({ status }: { status: ChipStatus }) {
@@ -52,6 +59,7 @@ function StatusMark({ status }: { status: ChipStatus }) {
     case 'unsupported':
       return <Icon as={LuBan} color="fg.muted" boxSize={3.5} />;
     case 'off':
+    case 'empty':
       return <Box boxSize={2} borderRadius="full" borderWidth="1.5px" borderColor="fg.subtle" />;
     default:
       return <Box boxSize={2} borderRadius="full" bg={status === 'ready' ? 'green.solid' : 'fg.subtle'} />;
@@ -62,7 +70,12 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
   const { explorerStore } = useStore();
   const s = explorerStore.sources[id];
   const enabled = explorerStore.query.sources[id];
-  const status = chipStatus(enabled, s);
+  const taxa = explorerStore.query.taxa;
+  // Every selected taxon is GBIF only (no AphiaID), so OBIS cannot contribute a record.
+  const noTaxa =
+    id === 'obis' && taxa.length > 0 && taxa.every((t) => t.obisId == null || s.gbifOnlyTaxa.includes(t.name));
+  const status = chipStatus(enabled, s, noTaxa);
+  const muted = !enabled || status === 'empty';
   const seconds = useCountdown(status === 'rateLimited' ? s.retryAt : undefined);
   const label = SOURCES[id].label;
   const locked = explorerStore.job?.state === 'planning' || explorerStore.job?.state === 'streaming';
@@ -76,6 +89,7 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
       s.attempt ? ` (attempt ${s.attempt}/5)` : ''
     }.`;
   else if (status === 'loading') detail = `Updating the ${label} preview…`;
+  else if (status === 'empty') detail = `No ${label} records for this query. Click to leave it out.`;
   else detail = `${label} is on. Click to leave it out.`;
   const gbifOnly = id === 'obis' && enabled && s.gbifOnlyTaxa.length > 0;
 
@@ -107,7 +121,7 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
           aria-label={`${label}: ${STATUS_WORD[status]}`}
           disabled={locked}
           onClick={() => explorerStore.setSourceEnabled(id, !enabled)}
-          color={enabled ? 'fg' : 'fg.muted'}
+          color={muted ? 'fg.muted' : 'fg'}
           borderColor={status === 'error' ? 'red.muted' : status === 'rateLimited' ? 'orange.muted' : 'border'}
           bg={enabled ? 'bg' : 'bg.subtle'}
           borderStyle={enabled ? 'solid' : 'dashed'}
@@ -118,7 +132,7 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
           <Text as="span" fontWeight="semibold" textDecoration={enabled ? undefined : 'line-through'}>
             {label}
           </Text>
-          {enabled && status !== 'error' && status !== 'unsupported' && (
+          {enabled && status !== 'error' && status !== 'unsupported' && status !== 'empty' && (
             <Icon as={LuCheck} boxSize={3} color="fg.muted" />
           )}
           {status === 'rateLimited' && seconds != null && (

@@ -45,16 +45,40 @@ export interface Kpis {
   bySource: Partial<Record<SourceId, number>>;
 }
 
-export type LedgerRowId = FilterId | 'minRecords';
+/** Ledger rows the user can switch on and off (one per filter). */
+export type ToggleableRowId = FilterId | 'minRecords';
+
+/**
+ * Every ledger row: the toggleable filters plus two fixed rules that always apply,
+ * records not identified to species and duplicates removed while loading.
+ */
+export type LedgerRowId = ToggleableRowId | 'speciesLevel' | 'duplicates';
 
 export interface LedgerRow {
   id: LedgerRowId;
   label: string;
+  /** Whether the user can switch this row (false for 'speciesLevel' and 'duplicates'). */
+  toggleable: boolean;
+  /** Whether the rule restricts the current query (fixed rules are always active). */
   active: boolean;
+  /** Records the rule removes, or null when unknown (not yet planned or loaded). */
   impact: number | null;
-  /** impact / (total + impact) */
+  /** impact / ledgerBase: one common denominator for every row. */
   share: number | null;
   loadedImpact?: number | null;
+}
+
+/**
+ * How the record count shrinks from the query to the loaded dataset, each step
+ * null until known: matching all filters (previews) -> identified to species
+ * (plans; also after the minimum records per species) -> duplicates removed while
+ * loading -> loaded (accepted records of the last load).
+ */
+export interface CountStory {
+  matching: number | null;
+  speciesLevel: number | null;
+  duplicates: number | null;
+  loaded: number | null;
 }
 
 export type BiasId =
@@ -69,6 +93,8 @@ export interface BiasFlag {
   triggered: boolean;
   value: number;
   threshold: number;
+  /** Legend text for the threshold, e.g. "warns above 50 %". */
+  thresholdLabel?: string;
   text: string;
   action?: { label: string; run(): void };
 }

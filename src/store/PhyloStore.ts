@@ -13,14 +13,17 @@ import {
   synthesisInfo,
 } from '@/phylo/otol';
 import { isAbortError, queryKey } from '@/sources';
-import type { Clade, MatchStatus, NameMatchRow, ReqState, TreeCandidate, TreeSelection } from './explorer/types';
+import type { Clade, MatchStatus, NameMatchRow, ReqState, TreeSelection } from './explorer/types';
 import {
+  arrangeRows,
+  bestDatedCandidate,
   COVERAGE_CONCURRENCY,
   FEW_STUDY_TREES,
+  initialOrder,
   MAX_COVERAGE_CHECKS,
   mapLimit,
+  type PhyloCandidate,
   SYNTHETIC_ID,
-  sortCandidates,
   studyCandidates,
   syntheticCandidate,
   treeCitationText,
@@ -56,7 +59,7 @@ export default class PhyloStore {
   /** Most recent common ancestor of the matched taxa. */
   clade: Clade | null = null;
   /** Synthetic tree plus study trees for the clade. */
-  candidates: TreeCandidate[] = [];
+  candidates: PhyloCandidate[] = [];
   /** Status of the candidate search. */
   candidatesState: ReqState = 'idle';
   /** Candidate table sort order. */
@@ -86,6 +89,15 @@ export default class PhyloStore {
   studyTreesFound = 0;
   /** The loaded tree got Grafen branch lengths (it had none). */
   loadedGrafen = false;
+  /**
+   * Table row order (candidate ids). Fixed while coverage checks run so rows never
+   * move under the cursor; re-sorted once when the checks finish and on a sort change.
+   */
+  rowOrder: string[] = [];
+  /** Checked study trees with no dataset species, shown in a collapsed group. */
+  noOverlapIds: string[] = [];
+  /** Why the current tree is selected: the default, the best dated tree, or the user's pick. */
+  selectionReason: 'default' | 'dated' | 'user' | null = null;
 
   private controller: AbortController | null = null;
   private lastKey: unknown = null;
@@ -155,13 +167,65 @@ export default class PhyloStore {
     return matchCounts(this.matches);
   }
 
-  /** Candidates after the Dated only filter; synthetic first, then by coverage (or year), then dated. */
-  get visibleCandidates(): TreeCandidate[] {
-    return sortCandidates(this.candidates, this.sort, this.datedOnly);
+  private rowsOf(ids: string[]): PhyloCandidate[] {
+    const byId = new Map(this.candidates.map((c) => [c.id, c]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter((c): c is PhyloCandidate => c !== undefined && (!this.datedOnly || c.branchLengths === 'time'));
   }
 
-  get selectedCandidate(): TreeCandidate | null {
+  /** Selectable table rows in display order (see rowOrder), after the Dated only filter. */
+  get visibleCandidates(): PhyloCandidate[] {
+    const grouped = new Set(this.noOverlapIds);
+    return this.rowsOf(this.rowOrder.filter((id) => !grouped.has(id)));
+  }
+
+  /** Checked study trees with no overlap, after the Dated only filter (not selectable). */
+  get noOverlapCandidates(): PhyloCandidate[] {
+    return this.rowsOf(this.noOverlapIds);
+  }
+
+  get selectedCandidate(): PhyloCandidate | null {
     return this.candidates.find((c) => c.id === this.selectedId) ?? null;
+  }
+
+  get syntheticTree(): PhyloCandidate | null {
+    return this.candidates.find((c) => c.kind === 'synthetic') ?? null;
+  }
+
+  /** Study trees whose coverage is checked (ready or failed) out of all study trees. */
+  get coverageProgress(): { done: number; total: number } {
+    const studies = this.candidates.filter((c) => c.kind === 'study');
+    return { done: studies.filter((c) => c.coverageState !== 'pending').length, total: studies.length };
+  }
+
+  /** Coverage checks are still running. */
+  get checkingCoverage(): boolean {
+    const { done, total } = this.coverageProgress;
+    return done < total;
+  }
+
+  /** The dated tree with the best coverage, when it covers at least 60 % of the dataset species. */
+  get bestDated(): PhyloCandidate | null {
+    if (this.checkingCoverage) return null;
+    return bestDatedCandidate(this.candidates, this.datasetNames.length);
+  }
+
+  /**
+   * The selected tree's absent dataset species, split into names Open Tree could not
+   * match (or matched ambiguously) and matched species this tree does not contain.
+   */
+  get absentBreakdown(): { unmatched: string[]; notInTree: string[] } | null {
+    if (!this.selection) return null;
+    const status = new Map(this.matches.map((row) => [row.datasetName, row.status]));
+    const unmatched: string[] = [];
+    const notInTree: string[] = [];
+    for (const name of this.selection.absentFromTree) {
+      const s = status.get(name);
+      if (s === 'unmatched' || s === 'ambiguous' || s === undefined) unmatched.push(name);
+      else notInTree.push(name);
+    }
+    return { unmatched, notInTree };
   }
 
   /** Citation of the loaded tree, for the methods text. */
@@ -243,8 +307,11 @@ export default class PhyloStore {
     this.candidates = [];
     this.candidatesState = 'idle';
     this.selectedId = null;
+    this.selectionReason = null;
     this.selection = null;
     this.error = null;
+    this.rowOrder = [];
+    this.noOverlapIds = [];
     this.datasetNames = [];
     this.brokenTaxa = [];
     this.studyTreesFound = 0;
@@ -311,22 +378,31 @@ export default class PhyloStore {
     }
     const allStudies = studyCandidates(lists);
     const studies = allStudies.slice(0, MAX_COVERAGE_CHECKS);
+    const order = initialOrder([synthetic, ...studies]);
     runInAction(() => {
       this.brokenTaxa = this.built.get(SYNTHETIC_ID)?.broken ?? [];
       this.studyTreesFound = allStudies.length;
       this.candidates = [synthetic, ...studies];
+      this.rowOrder = order;
+      this.noOverlapIds = [];
       this.candidatesState = 'ready';
     });
     if (this.selectedId === null) {
-      this.select(synthetic.coverageState === 'ready' ? SYNTHETIC_ID : (studies[0]?.id ?? SYNTHETIC_ID));
+      this.select(synthetic.coverageState === 'ready' ? SYNTHETIC_ID : (studies[0]?.id ?? SYNTHETIC_ID), 'default');
     }
 
-    // Exact coverage runs in the background; rows show "checking…" until it is done.
-    void this.checkCoverage(studies, signal);
+    // Exact coverage runs in the background, in table order (dated trees first);
+    // rows show "checking…" until it is done.
+    const byId = new Map(studies.map((c) => [c.id, c]));
+    const queue = order.map((id) => byId.get(id)).filter((c): c is PhyloCandidate => c !== undefined);
+    void this.checkCoverage(queue, signal);
   }
 
-  /** Fetch study trees (COVERAGE_CONCURRENCY at a time) and count dataset species among their tips. */
-  private async checkCoverage(studies: TreeCandidate[], signal: AbortSignal) {
+  /**
+   * Fetch study trees (COVERAGE_CONCURRENCY at a time) and count dataset species among
+   * their tips. When all are checked, sort the table once and pre-select the best dated tree.
+   */
+  private async checkCoverage(studies: PhyloCandidate[], signal: AbortSignal) {
     const join = this.tipJoin;
     await mapLimit(studies, COVERAGE_CONCURRENCY, async (candidate) => {
       if (signal.aborted) return;
@@ -339,10 +415,39 @@ export default class PhyloStore {
         this.updateCandidate(candidate.id, null);
       }
     });
+    if (signal.aborted) return;
+    this.finishCoverage();
+  }
+
+  /** All coverage checks are done: re-sort once, keeping a user's pick in place, and pre-select. */
+  private finishCoverage() {
+    const userPick = this.selectionReason === 'user' ? this.selectedId : null;
+    this.arrange(userPick);
+    if (this.selectionReason !== 'user') {
+      const best = this.bestDated;
+      if (best && best.id !== this.selectedId) this.select(best.id, 'dated');
+    }
+  }
+
+  /** Lay out the rows for the current sort; `pinId` keeps its visible position. */
+  private arrange(pinId: string | null) {
+    const previous = this.visibleCandidates.map((c) => c.id);
+    const datedOnly = this.datedOnly;
+    const byId = new Map(this.candidates.map((c) => [c.id, c]));
+    const layout = arrangeRows(
+      this.candidates,
+      this.sort,
+      pinId
+        ? { id: pinId, previous, visible: (id) => !datedOnly || byId.get(id)?.branchLengths === 'time' }
+        : null,
+    );
+    this.rowOrder = layout.order;
+    this.noOverlapIds = layout.noOverlap;
   }
 
   /** Record exact coverage (null: failed) and the actual branch lengths of a study tree. */
   private updateCandidate(id: string, result: { matched: number; hasBranchLengths: boolean } | null) {
+    // Row order is not touched here: rows keep their place until all checks finish.
     const candidate = this.candidates.find((c) => c.id === id);
     if (!candidate) return;
     if (!result) {
@@ -356,7 +461,7 @@ export default class PhyloStore {
   }
 
   /** Newick of a candidate, fetched once (synthetic: from the induced subtree). */
-  private newick(candidate: TreeCandidate, signal: AbortSignal): Promise<string> {
+  private newick(candidate: PhyloCandidate, signal: AbortSignal): Promise<string> {
     const cached = this.newicks.get(candidate.id);
     if (cached) return cached;
     if (candidate.kind !== 'study' || !candidate.studyId || !candidate.treeId) {
@@ -370,7 +475,7 @@ export default class PhyloStore {
     return promise;
   }
 
-  private buildTree(candidate: TreeCandidate, newick: string): DatasetTree {
+  private buildTree(candidate: PhyloCandidate, newick: string): DatasetTree {
     const cached = this.built.get(candidate.id);
     if (cached) return cached;
     const built = buildDatasetTree(
@@ -383,15 +488,20 @@ export default class PhyloStore {
     return built;
   }
 
-  private async datasetTree(candidate: TreeCandidate): Promise<DatasetTree> {
+  private async datasetTree(candidate: PhyloCandidate): Promise<DatasetTree> {
     const signal = this.controller?.signal ?? new AbortController().signal;
     return this.buildTree(candidate, await this.newick(candidate, signal));
   }
 
-  /** Select a candidate tree and compute its kept, absent and pruned counts. */
-  select(id: string) {
+  /**
+   * Select a candidate tree and compute its kept, absent and pruned counts. A user's
+   * pick ('user', the default) is never replaced by the automatic dated pre-selection.
+   */
+  select(id: string, reason: 'default' | 'dated' | 'user' = 'user') {
     const candidate = this.candidates.find((c) => c.id === id);
     if (!candidate) return;
+    this.selectionReason = reason;
+    if (id === this.selectedId && this.selection) return;
     this.selectedId = id;
     this.selection = null;
     this.datasetTree(candidate).then(
@@ -414,9 +524,10 @@ export default class PhyloStore {
     );
   }
 
-  /** Set the candidate sort order. */
+  /** Set the candidate sort order and re-sort the rows (an explicit change may move rows). */
   setSort(sort: 'coverage' | 'year') {
     this.sort = sort;
+    this.arrange(null);
   }
 
   /** Show only dated trees. */

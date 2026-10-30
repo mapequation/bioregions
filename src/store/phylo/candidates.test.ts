@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { StudyTree } from '@/phylo/otol';
 import type { TreeCandidate } from '../explorer/types';
 import {
+  arrangeRows,
+  bestDatedCandidate,
   branchLengthKind,
+  cleanTreeLabel,
+  initialOrder,
+  lengthUnits,
   mapLimit,
   shortAuthors,
   sortCandidates,
@@ -41,9 +46,33 @@ describe('candidates', () => {
       [study('ot_1', 'tree1'), study('ot_2', 'tree1'), study('ot_2', 'tree2', { label: 'ML' }), study('ot_2', 'tree3', { label: 'Untitled (tree3)' })],
     ]);
     expect(rows.map((r) => r.id)).toEqual(['ot_1@tree1', 'ot_2@tree1', 'ot_2@tree2', 'ot_2@tree3']);
-    expect(rows[0]).toMatchObject({ title: 'Johnson et al.', branchLengths: 'time', year: 2006, coverageState: 'pending' });
-    expect(rows[2].title).toBe('Johnson et al. (ML)');
-    expect(rows[3].title).toBe('Johnson et al. (tree3)');
+    expect(rows[0]).toMatchObject({
+      title: 'Johnson et al. 2006',
+      subtitle: undefined,
+      branchLengths: 'time',
+      year: 2006,
+      coverageState: 'pending',
+    });
+    expect(rows[1]).toMatchObject({ title: 'Johnson et al.', subtitle: 'tree 1 of 3', subtitleDetail: 'ot_2/tree1' });
+    expect(rows[2]).toMatchObject({ subtitle: 'ML', subtitleDetail: 'ML · ot_2/tree2' });
+    expect(rows[3].subtitle).toBe('tree 3 of 3');
+  });
+
+  it('cleans tree labels and names branch-length units', () => {
+    expect(cleanTreeLabel('Untitled (tree6187)', 'tree6187')).toBeNull();
+    expect(cleanTreeLabel('tree6187', 'tree6187')).toBeNull();
+    expect(cleanTreeLabel('  Time-calibrated,  soft bounds (tree6185) ', 'tree6185')).toBe('Time-calibrated, soft bounds');
+    expect(cleanTreeLabel(undefined, 'tree1')).toBeNull();
+    expect(cleanTreeLabel('Buckner et al., 2015 Bayesian Concatenated', 'tree1', 'Buckner')).toBe('Bayesian Concatenated');
+    expect(cleanTreeLabel('Aristide et al., 2015 Bayesian', 'tree1', 'Aristide')).toBe('Bayesian');
+    const units = (branchLengths: TreeCandidate['branchLengths'], lengthMode?: string, timeUnit?: string) =>
+      lengthUnits({ branchLengths, lengthMode, timeUnit }).short;
+    expect(units('time')).toBe('Myr');
+    expect(units('time', 'ot:time', 'Myr')).toBe('Myr');
+    expect(units('other', 'ot:substitutionCount')).toBe('subst./site');
+    expect(units('other', 'ot:changesCount')).toBe('changes');
+    expect(units('other', 'ot:other')).toBe('unknown');
+    expect(units('none')).toBe('Grafen');
   });
 
   it('sorts with the synthetic tree first and filters dated', () => {
@@ -60,6 +89,34 @@ describe('candidates', () => {
     expect(sortCandidates(list, 'coverage', false).map((x) => x.id)).toEqual(['synthetic', 'b', 'a', 'c']);
     expect(sortCandidates(list, 'year', false).map((x) => x.id)).toEqual(['synthetic', 'c', 'a', 'b']);
     expect(sortCandidates(list, 'coverage', true).map((x) => x.id)).toEqual(['b']);
+
+    // Unchecked rows sort after checked ones, and trees with no overlap go to their own group.
+    const zero = { ...c('z', 0, 2024), coverageState: 'ready' as const };
+    const all = [...list, zero];
+    expect(sortCandidates(all, 'coverage', false).map((x) => x.id)).toEqual(['synthetic', 'b', 'a', 'c', 'z']);
+    expect(initialOrder(all)).toEqual(['synthetic', 'b', 'c', 'z', 'a']);
+    expect(arrangeRows(all, 'coverage')).toEqual({ order: ['synthetic', 'b', 'a', 'c'], noOverlap: ['z'] });
+
+    // A pinned row keeps its visible position through a re-sort.
+    const pinned = arrangeRows(all, 'coverage', { id: 'a', previous: ['synthetic', 'b', 'c', 'z', 'a'], visible: () => true });
+    expect(pinned.order).toEqual(['synthetic', 'b', 'c', 'a']);
+    const first = arrangeRows(all, 'coverage', { id: 'c', previous: ['synthetic', 'c', 'b'], visible: () => true });
+    expect(first.order).toEqual(['synthetic', 'c', 'b', 'a']);
+  });
+
+  it('picks the best dated tree above 60 % coverage', () => {
+    const c = (id: string, matched: number, year: number, time = true): TreeCandidate => ({
+      ...syntheticCandidate(null),
+      id,
+      kind: 'study',
+      year,
+      branchLengths: time ? 'time' : 'other',
+      coverage: { matched, total: 48 },
+      coverageState: 'ready',
+    });
+    const synth = { ...syntheticCandidate(null), coverage: { matched: 44, total: 48 }, coverageState: 'ready' as const };
+    expect(bestDatedCandidate([synth, c('a', 31, 2019), c('b', 31, 2012), c('u', 40, 2020, false)], 48)?.id).toBe('a');
+    expect(bestDatedCandidate([synth, c('a', 28, 2019)], 48)).toBeNull();
   });
 
   it('writes the citation text', () => {

@@ -7,6 +7,9 @@ import { useStore } from '../../store';
 import Stat from '../Stat';
 import { fmtCompact, fmtInt } from '../Explorer/format';
 
+/** Keeps year ranges such as 1970–2025 on one line (word joiners around the dash). */
+const keepRangesTogether = (s: string) => s.replace(/(\d)–(\d)/g, '$1\u2060–\u2060$2');
+
 /** Live status of an explorer load, shown while the explorer is minimized or closed. */
 const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
   const { explorerStore } = useStore();
@@ -14,32 +17,38 @@ const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
   if (!job || (job.state !== 'planning' && job.state !== 'streaming')) return null;
   const fetched = job.perSource.reduce((s, p) => s + p.fetched, 0);
   const expected = job.perSource.reduce((s, p) => s + p.expected, 0);
-  const sources = job.perSource.map((p) => p.source.toUpperCase()).join('+') || 'Explorer';
+  const sources = job.perSource.map((p) => p.source.toUpperCase()).join(' + ') || 'Explorer';
   const value = expected > 0 ? Math.min(100, (fetched / expected) * 100) : null;
-  const text =
-    job.state === 'planning'
-      ? 'Planning…'
-      : `${sources} ${fmtCompact(fetched)}${expected > 0 ? ` / ${fmtCompact(expected)}` : ''}`;
+  const count = `${fmtCompact(fetched)}${expected > 0 ? ` / ${fmtCompact(expected)}` : ''}`;
+  const text = job.state === 'planning' ? 'Planning…' : `${sources} ${count}`;
+  const label = keepRangesTogether(job.label);
   return (
     <Stack gap={1.5} p={2.5} borderWidth="1px" borderRadius="md" bg="bg.subtle">
-      <Text fontSize="xs" color="fg.muted" truncate title={job.label}>
-        Loading {job.label}
+      <Text fontSize="xs" color="fg.muted" truncate title={label}>
+        Loading {label}
       </Text>
       <Progress.Root size="xs" value={value} aria-label="Explorer load progress" aria-valuetext={text}>
         <Progress.Track>
           <Progress.Range />
         </Progress.Track>
       </Progress.Root>
-      <HStack gap={2}>
-        <Text fontSize="xs" fontVariantNumeric="tabular-nums" flex="1" truncate>
-          {text}
+      <HStack gap={2} fontSize="xs" aria-hidden>
+        <Text flex="1" minW={0} truncate color="fg.muted">
+          {job.state === 'planning' ? 'Planning…' : sources}
         </Text>
-        <Button size="xs" variant="outline" onClick={() => explorerStore.open('occurrences')}>
-          Open
+        {job.state !== 'planning' && (
+          <Text fontVariantNumeric="tabular-nums" flexShrink={0}>
+            {count}
+          </Text>
+        )}
+      </HStack>
+      <HStack gap={2}>
+        <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('occurrences')}>
+          Open explorer
         </Button>
         <Menu.Root>
           <Menu.Trigger asChild>
-            <Button size="xs" variant="outline" colorPalette="red">
+            <Button size="xs" variant="outline" colorPalette="red" flex="1">
               Cancel <LuChevronDown />
             </Button>
           </Menu.Trigger>
@@ -67,7 +76,7 @@ const ExplorerLoadedSummary = observer(function ExplorerLoadedSummary() {
   const last = explorerStore.lastLoad;
   const job = explorerStore.job;
   if (!last || (job && (job.state === 'planning' || job.state === 'streaming'))) return null;
-  const title = queryTitle(last.query);
+  const title = keepRangesTogether(queryTitle(last.query));
   return (
     <Stack gap={1.5} p={2.5} borderWidth="1px" borderRadius="md">
       <Text fontSize="sm" fontWeight="medium" lineClamp={2} title={title}>
@@ -123,19 +132,19 @@ export default observer(function Data() {
 
       {speciesStore.numRecords > 0 && <Stat label="Time">{speciesStore.seconds.toLocaleString()} s</Stat>}
 
-        {speciesStore.numRecords > 0 && (
-          <Stat label="Speed">{Math.round(speciesStore.speed).toLocaleString()} records/s</Stat>
-        )}
+      {speciesStore.numRecords > 0 && (
+        <Stat label="Speed">{Math.round(speciesStore.speed).toLocaleString()} records/s</Stat>
+      )}
 
-        {speciesStore.numPointsDebounced > 0 && (
-          <Stat label="Point occurrences">{speciesStore.numPointsDebounced.toLocaleString()}</Stat>
-        )}
+      {speciesStore.numPointsDebounced > 0 && (
+        <Stat label="Point occurrences">{speciesStore.numPointsDebounced.toLocaleString()}</Stat>
+      )}
 
-        {speciesStore.numPolygonsDebounced > 0 && (
-          <Stat label="Polygons">{speciesStore.numPolygonsDebounced.toLocaleString()}</Stat>
-        )}
+      {speciesStore.numPolygonsDebounced > 0 && (
+        <Stat label="Polygons">{speciesStore.numPolygonsDebounced.toLocaleString()}</Stat>
+      )}
 
-        {treeStore.isLoaded && <Stat label="Species in tree">{treeStore.numLeafNodes.toLocaleString()}</Stat>}
+      {treeStore.isLoaded && <Stat label="Species in tree">{treeStore.numLeafNodes.toLocaleString()}</Stat>}
     </VStack>
   );
 });

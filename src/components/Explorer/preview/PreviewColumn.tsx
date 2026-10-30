@@ -1,7 +1,8 @@
-import { Box, Button, Heading, HStack, Icon, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, Heading, HStack, Icon, Stack, Text, useMediaQuery } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { useEffect, useState } from 'react';
-import { LuCircleAlert, LuClock, LuRotateCw, LuSearchX } from 'react-icons/lu';
+import { useEffect, useRef, useState } from 'react';
+import { LuCircleAlert, LuClock, LuPanelRight, LuRotateCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
+import { Tooltip } from '@/components/ui/tooltip';
 import { isQueryRunnable } from '@/sources';
 import type { SourceId } from '@/sources/types';
 import { useStore } from '../../../store';
@@ -26,6 +27,31 @@ function useNow(active: boolean): number {
     return () => clearInterval(t);
   }, [active]);
   return now;
+}
+
+/** Nearest scrollable ancestor of `el`, or null. */
+function scrollParent(el: HTMLElement | null): HTMLElement | null {
+  for (let p = el?.parentElement ?? null; p; p = p.parentElement) {
+    const { overflowY } = getComputedStyle(p);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return null;
+}
+
+/**
+ * Scrolls the preview column to its top when a load completes (not when the explorer
+ * opens on an earlier load), so the success panel is in view.
+ */
+function useScrollTopOnLoad(ref: React.RefObject<HTMLElement | null>, loadedAt: string | null) {
+  const seen = useRef(loadedAt);
+  useEffect(() => {
+    if (loadedAt == null || loadedAt === seen.current) return;
+    seen.current = loadedAt;
+    const parent = scrollParent(ref.current);
+    if (!parent || parent.scrollTop === 0) return;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    parent.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }, [ref, loadedAt]);
 }
 
 /** One-line source problems above the KPIs: failures with Retry, rate limits with a countdown. */
@@ -174,10 +200,29 @@ const EmptyPreview = observer(function EmptyPreview() {
 const InsightsButton = observer(function InsightsButton() {
   const { explorerStore } = useStore();
   const flags = explorerStore.biasFlags.filter((f) => f.triggered).length;
+  const [compact] = useMediaQuery(['(max-width: 1179.98px)'], { ssr: false });
+  const label = `Insights, ${flags} bias ${flags === 1 ? 'flag' : 'flags'}`;
   return (
-    <Button size="sm" variant="outline" onClick={() => explorerUi.setInsightsOpen(true)} data-testid="insights-toggle">
-      Insights{flags > 0 ? ` · ⚠ ${flags}` : ''}
+    <Tooltip content={label} disabled={!compact} openDelay={200}>
+    <Button
+      size="sm"
+      variant="outline"
+      bg="bg"
+      px={compact ? 2 : undefined}
+      onClick={() => explorerUi.setInsightsOpen(true)}
+      data-testid="insights-toggle"
+      aria-label={label}
+    >
+      <LuPanelRight />
+      {!compact && 'Insights'}
+      {flags > 0 && (
+        <Badge size="sm" colorPalette="orange" variant="solid" fontVariantNumeric="tabular-nums">
+          <Icon as={LuTriangleAlert} boxSize="3" />
+          {flags}
+        </Badge>
+      )}
     </Button>
+    </Tooltip>
   );
 });
 
@@ -189,10 +234,12 @@ export default observer(function PreviewColumn() {
   const loading = job != null && (job.state === 'planning' || job.state === 'streaming');
   const unchangedSinceLoad = lastLoad != null && explorerStore.dirty.size === 0;
   const mode = loading ? 'live' : unchangedSinceLoad ? 'frozen' : 'preview';
+  const rootRef = useRef<HTMLDivElement>(null);
+  useScrollTopOnLoad(rootRef, loading ? null : (lastLoad?.retrievedAt ?? null));
 
   if (previewState === 'empty' && !loading && !unchangedSinceLoad && !isQueryRunnable(explorerStore.query).ok) {
     return (
-      <Box as="section" aria-label="Preview">
+      <Box>
         <EmptyPreview />
       </Box>
     );
@@ -202,15 +249,10 @@ export default observer(function PreviewColumn() {
   const zero = previewState === 'ready' && kpis != null && kpis.records === 0 && !loading;
   const allFailed = previewState === 'error';
   return (
-    <Stack as="section" aria-label="Preview" gap={3}>
+    <Stack gap={3} ref={rootRef}>
       <Box>
         <SourceStatusLines />
-        {mode === 'frozen' ? <LoadedPanel /> : <KpiStrip />}
-        {mode === 'frozen' && drawer && (
-          <HStack justify="flex-end" mt={2}>
-            <InsightsButton />
-          </HStack>
-        )}
+        {mode === 'frozen' ? <LoadedPanel extra={drawer ? <InsightsButton /> : null} /> : <KpiStrip />}
       </Box>
       {zero && <ZeroResults />}
       {allFailed && (

@@ -138,6 +138,7 @@ export function buildPreviewRequest(query: OccurrenceQuery): {
   filters: FilterId[];
 } {
   const filters = activeGbifFilters(query);
+  const allFilters: FilterId[] = [...PREVIEW_FILTERS, 'datasets'];
   const variables: Record<string, GraphqlPredicate> = { p: gbifPredicate(query) };
   const params = ['$p: Predicate'];
   const aliases: string[] = [];
@@ -145,6 +146,13 @@ export function buildPreviewRequest(query: OccurrenceQuery): {
     variables[`p_${id}`] = gbifPredicate(query, { omit: [id] });
     params.push(`$p_${id}: Predicate`);
     aliases.push(`  f_${id}: occurrenceSearch(predicate: $p_${id}) { documents(size: 0) { total } }`);
+  }
+  // The ledger base: taxa + area only. Equal to `main` when no filter is active.
+  const base = gbifPredicate(query, { omit: allFilters });
+  if (JSON.stringify(base) !== JSON.stringify(variables.p)) {
+    variables.p_base = base;
+    params.push('$p_base: Predicate');
+    aliases.push('  base: occurrenceSearch(predicate: $p_base) { documents(size: 0) { total } }');
   }
   const document = [
     `query Preview(${params.join(', ')}) {`,
@@ -167,6 +175,8 @@ export async function previewGbif(
   const data = await gbifGraphql<PreviewResponse>(document, variables, { signal });
   const main = data.main;
   const total = main.documents.total;
+  const baseCount = data.base?.documents.total;
+  const baseTotal = typeof baseCount === 'number' ? Math.max(baseCount, total) : total;
 
   const filterImpact: PreviewSummary['filterImpact'] = {};
   for (const id of filters) {
@@ -199,6 +209,7 @@ export async function previewGbif(
   return {
     source: 'gbif',
     total,
+    baseTotal,
     species: main.cardinality?.speciesKey ?? null,
     datasets: main.cardinality?.datasetKey ?? null,
     yearRange,

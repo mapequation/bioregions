@@ -1,4 +1,18 @@
-import { Badge, Box, Button, Flex, HStack, Icon, IconButton, Skeleton, Spinner, Stack, Text, VisuallyHidden } from '@chakra-ui/react';
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  HStack,
+  Icon,
+  IconButton,
+  Skeleton,
+  Spinner,
+  Stack,
+  Text,
+  useMediaQuery,
+  VisuallyHidden,
+} from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { LuPanelRight, LuPin, LuPinOff, LuTriangleAlert, LuX } from 'react-icons/lu';
@@ -13,6 +27,9 @@ const SOURCE_NAME: Record<SourceId, string> = { gbif: 'GBIF', obis: 'OBIS' };
 const OVERLAP_NOTE = 'OBIS partly republishes into GBIF; overlap is removed while loading.';
 
 const yearsText = (r: [number, number] | null) => (r ? `${r[0]}–${r[1]}` : '–');
+
+/** Below this viewport width the strip's buttons collapse to icons so the KPIs keep one row. */
+const COMPACT_QUERY = '(max-width: 1179.98px)';
 
 /** "−7.5 %" style change; one decimal below 10 %. */
 function pctChange(from: number, to: number): string {
@@ -32,9 +49,11 @@ interface KpiProps {
   loading: boolean;
   first: boolean;
   minW: string;
+  /** One muted line under the value; the line is reserved when `caption` is not undefined. */
+  caption?: ReactNode;
 }
 
-function Kpi({ label, value, testId, tip, loading, first, minW }: KpiProps) {
+function Kpi({ label, value, testId, tip, loading, first, minW, caption }: KpiProps) {
   return (
     <Tooltip content={tip} showArrow openDelay={250} contentProps={{ maxW: '280px' }}>
       <Stack
@@ -62,6 +81,20 @@ function Kpi({ label, value, testId, tip, loading, first, minW }: KpiProps) {
             transition="opacity 0.15s"
           >
             {value}
+          </Text>
+        )}
+        {caption !== undefined && (
+          <Text
+            fontSize="xs"
+            color="fg.muted"
+            lineHeight="16px"
+            minH="16px"
+            whiteSpace="nowrap"
+            fontVariantNumeric="tabular-nums"
+            opacity={loading ? 0.5 : 1}
+            data-testid={`${testId}-caption`}
+          >
+            {caption}
           </Text>
         )}
       </Stack>
@@ -110,7 +143,11 @@ export default observer(function KpiStrip() {
   const loading = previewState === 'stale';
   const first = previewState === 'first' || (!kpis && previewState !== 'error');
   const drawer = useInsightsDrawer();
+  const [compact] = useMediaQuery([COMPACT_QUERY], { ssr: false });
   const flags = explorerStore.biasFlags.filter((f) => f.triggered).length;
+  const flagText = `${flags} bias ${flags === 1 ? 'flag' : 'flags'}`;
+  // Records identified to species: what a load requests (known once the load is planned).
+  const speciesLevel = explorerStore.countStory.speciesLevel;
 
   // Sources that errored while another one still contributes: label the KPIs.
   const enabledIds = (Object.keys(sources) as SourceId[]).filter((id) => explorerStore.query.sources[id]);
@@ -137,13 +174,14 @@ export default observer(function KpiStrip() {
   const k: Kpis | null = kpis;
   return (
     <Box data-testid="kpi-strip" aria-busy={loading || first || undefined}>
-      <Flex align="center" columnGap={6} minH="52px" wrap="wrap" rowGap={2}>
+      <Flex align="flex-start" columnGap={compact ? 5 : 6} minH="52px" wrap="wrap" rowGap={2}>
         <Kpi
           label="Records"
           testId="kpi-records"
           minW="104px"
           loading={loading}
           first={first}
+          caption={first ? '' : speciesLevel != null ? `${fmtInt(speciesLevel)} identified to species` : ''}
           value={
             k ? (
               <>
@@ -161,8 +199,16 @@ export default observer(function KpiStrip() {
           tip={
             <SplitTip
               title="Records matching every filter"
-              rows={bySource((p) => fmtInt(p.total))}
-              note={multi ? `Sum over sources, so an upper bound. ${OVERLAP_NOTE}` : undefined}
+              rows={[
+                ...bySource((p) => fmtInt(p.total)),
+                ...(speciesLevel != null ? ([['Identified to species', fmtInt(speciesLevel)]] as [string, string][]) : []),
+              ]}
+              note={[
+                multi ? `Sum over sources, so an upper bound. ${OVERLAP_NOTE}` : null,
+                'A load takes the records identified to species and removes duplicates; the decision ledger shows each step.',
+              ]
+                .filter(Boolean)
+                .join(' ')}
             />
           }
         />
@@ -206,43 +252,60 @@ export default observer(function KpiStrip() {
           tip={<SplitTip title="Years with records" rows={bySource((p) => yearsText(p.yearRange))} />}
         />
 
-        <HStack gap={2} ml="auto">
+        <HStack gap={2} ml="auto" flexShrink={0} alignSelf="center">
           {baseline ? (
-            <Button size="sm" variant="outline" onClick={() => explorerStore.clearBaseline()} data-testid="pin-baseline">
-              <LuPinOff />
-              Unpin baseline
-            </Button>
-          ) : (
-            <Tooltip content="Keep these numbers to compare what-if edits against" openDelay={400}>
+            <Tooltip content="Unpin baseline" disabled={!compact} openDelay={300}>
               <Button
                 size="sm"
                 variant="outline"
+                px={compact ? 2 : undefined}
+                onClick={() => explorerStore.clearBaseline()}
+                aria-label={compact ? 'Unpin baseline' : undefined}
+                data-testid="pin-baseline"
+              >
+                <LuPinOff />
+                {!compact && 'Unpin baseline'}
+              </Button>
+            </Tooltip>
+          ) : (
+            <Tooltip
+              content={compact ? 'Pin baseline: keep these numbers to compare edits against' : 'Keep these numbers to compare what-if edits against'}
+              openDelay={compact ? 200 : 400}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                px={compact ? 2 : undefined}
                 disabled={!kpis || first}
                 onClick={() => explorerStore.pinBaseline()}
+                aria-label={compact ? 'Pin baseline' : undefined}
                 data-testid="pin-baseline"
               >
                 <LuPin />
-                Pin baseline
+                {!compact && 'Pin baseline'}
               </Button>
             </Tooltip>
           )}
           {drawer && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => explorerUi.setInsightsOpen(true)}
-              data-testid="insights-toggle"
-              aria-label={`Insights, ${flags} bias ${flags === 1 ? 'flag' : 'flags'}`}
-            >
-              <LuPanelRight />
-              Insights
-              {flags > 0 && (
-                <Badge size="sm" colorPalette="orange" variant="solid" fontVariantNumeric="tabular-nums">
-                  <Icon as={LuTriangleAlert} boxSize="3" />
-                  {flags}
-                </Badge>
-              )}
-            </Button>
+            <Tooltip content={`Insights · ${flagText}`} disabled={!compact} openDelay={200}>
+              <Button
+                size="sm"
+                variant="outline"
+                px={compact ? 2 : undefined}
+                onClick={() => explorerUi.setInsightsOpen(true)}
+                data-testid="insights-toggle"
+                aria-label={`Insights, ${flagText}`}
+              >
+                <LuPanelRight />
+                {!compact && 'Insights'}
+                {flags > 0 && (
+                  <Badge size="sm" colorPalette="orange" variant="solid" fontVariantNumeric="tabular-nums">
+                    <Icon as={LuTriangleAlert} boxSize="3" />
+                    {flags}
+                  </Badge>
+                )}
+              </Button>
+            </Tooltip>
           )}
         </HStack>
       </Flex>

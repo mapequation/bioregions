@@ -50,6 +50,17 @@ const withParam = (params: URLSearchParams, key: string, value: string) => {
   return next;
 };
 
+const ALL_FILTERS: FilterId[] = [
+  'basisOfRecord',
+  'uncertainty',
+  'geospatialIssues',
+  'introduced',
+  'presentOnly',
+  'years',
+  'depth',
+  'datasets',
+];
+
 /** Filters that are active and that OBIS applies on the server. */
 function serverFilters(query: OccurrenceQuery): FilterId[] {
   const active: FilterId[] = [];
@@ -88,6 +99,7 @@ export function emptyObisPreview(): PreviewSummary {
   return {
     source: 'obis',
     total: 0,
+    baseTotal: 0,
     species: 0,
     datasets: 0,
     yearRange: null,
@@ -117,8 +129,13 @@ export async function previewObis(
   }
   const params = obisParams(query, { taxonIds: taxa.ids });
   const filters = serverFilters(query);
+  // Ledger base (taxa + area only); needs its own call only when a server filter is active.
+  const baseRequest =
+    filters.length > 0
+      ? obisStatistics(obisParams(query, { taxonIds: taxa.ids, omit: ALL_FILTERS }), signal)
+      : Promise.resolve(null);
 
-  const [stats, years, checklist, datasets, facet, ...impacts] = await Promise.all([
+  const [stats, years, checklist, datasets, facet, baseStats, ...impacts] = await Promise.all([
     obisStatistics(params, signal),
     fetchJson<{ year: number | null; records: number }[]>(obisUrl('statistics/years', params), {
       signal,
@@ -136,6 +153,7 @@ export async function previewObis(
       obisUrl('facet', withParam(withParam(params, 'facets', 'basisOfRecord'), 'size', '100')),
       { signal },
     ),
+    baseRequest,
     ...filters.map((id) =>
       obisStatistics(obisParams(query, { taxonIds: taxa.ids, omit: [id] }), signal),
     ),
@@ -147,6 +165,7 @@ export async function previewObis(
     filterImpact[id] = Math.max(0, impacts[i].records - stats.records);
   });
 
+  const baseTotal = Math.max(stats.records, baseStats?.records ?? stats.records);
   let total = stats.records;
   const keep = activeBasisFilter(query);
   if (keep) {
@@ -161,6 +180,7 @@ export async function previewObis(
   return {
     source: 'obis',
     total,
+    baseTotal,
     species: stats.species,
     datasets: stats.datasets,
     yearRange: minYear != null && maxYear != null ? [minYear, maxYear] : null,

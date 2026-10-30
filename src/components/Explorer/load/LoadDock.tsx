@@ -1,7 +1,7 @@
 import { Box, Button, chakra, Flex, HStack, Icon, SegmentGroup, Skeleton, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useState } from 'react';
-import { LuCircleX, LuInfo, LuRefreshCw, LuTriangleAlert } from 'react-icons/lu';
+import { LuCircleCheck, LuCircleX, LuInfo, LuMap, LuQuote, LuRefreshCw, LuTriangleAlert } from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
@@ -15,6 +15,7 @@ const MODE_ITEMS = [
 ];
 
 const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
+const DUPLICATES_HINT = 'duplicates are removed while loading';
 const MIN_CAP = 1000;
 const SHORTCUT = modEnterLabel(typeof navigator === 'undefined' ? '' : navigator.platform);
 
@@ -24,7 +25,7 @@ const Sep = () => (
   </Box>
 );
 
-/** Estimate line: "≈412 k records · 61 MB · ~2 min · 96 requests". */
+/** Estimate line: "≈16,158 records · 61 MB · ~2 min · 96 requests", over the duplicates hint. */
 const EstimateLine = observer(function EstimateLine() {
   const { explorerStore: ex } = useStore();
   const { estimate, kpis, previewState, canLoad } = ex;
@@ -48,8 +49,8 @@ const EstimateLine = observer(function EstimateLine() {
   }
 
   const records = estimate?.records ?? kpis?.records ?? 0;
-  const approx = !estimate?.exact;
   return (
+    <Box minW={0}>
     <Text
       fontSize="sm"
       color="fg.muted"
@@ -61,7 +62,7 @@ const EstimateLine = observer(function EstimateLine() {
       data-testid="load-estimate"
     >
       <Box as="span" color="fg" fontWeight="semibold">
-        {approx ? `≈${fmtCompact(records)}` : fmtInt(records)} records
+        ≈{fmtInt(records)} records
       </Box>
       {estimate ? (
         <>
@@ -79,6 +80,43 @@ const EstimateLine = observer(function EstimateLine() {
         </>
       )}
     </Text>
+    <Text fontSize="xs" color="fg.muted" truncate data-testid="load-duplicates-hint">
+      {estimate?.exact ? `Identified to species; ${DUPLICATES_HINT}.` : `Estimate; ${DUPLICATES_HINT}.`}
+    </Text>
+    </Box>
+  );
+});
+
+/** Done state after a load of the current query: what was loaded and where to go next. */
+const DoneRow = observer(function DoneRow() {
+  const { explorerStore: ex } = useStore();
+  const last = ex.lastLoad;
+  if (!last) return null;
+  const accepted = last.funnel.accepted;
+  return (
+    <Flex align="center" gap={3} rowGap={2} wrap="wrap" minH={10} data-testid="load-done">
+      <HStack gap={2} flex="1 1 16rem" minW={0} role="status">
+        <Icon as={LuCircleCheck} boxSize={5} color="green.fg" flexShrink={0} aria-hidden />
+        <Box minW={0}>
+          <Text fontSize="sm" fontWeight="semibold" color="fg" truncate fontVariantNumeric="tabular-nums">
+            {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
+          </Text>
+          <Text fontSize="xs" color="fg.muted" truncate>
+            Edit the query to load again with changes.
+          </Text>
+        </Box>
+      </HStack>
+      <HStack gap={2} flexShrink={0} ms="auto">
+        <Button size="sm" variant="outline" onClick={() => ex.setTab('cite')}>
+          <LuQuote />
+          Cite this data
+        </Button>
+        <Button size="sm" variant="solid" onClick={() => ex.close()} data-testid="dock-view-bioregions">
+          <LuMap />
+          View bioregions
+        </Button>
+      </HStack>
+    </Flex>
   );
 });
 
@@ -185,15 +223,23 @@ export default observer(function LoadDock() {
       </Box>
     );
 
+  if (ex.loadedMatchesQuery && job?.state !== 'error') {
+    return (
+      <Box px={3} py={2} data-testid="load-dock">
+        <DoneRow />
+      </Box>
+    );
+  }
+
   const records = estimate?.records ?? kpis?.records ?? null;
   const dirty = !!lastLoad && ex.dirty.size > 0;
-  const verb = loadMode === 'add' ? 'Add' : dirty ? 'Reload' : 'Load';
+  const n = records == null ? null : `~${fmtInt(records)}`;
   const label =
-    records == null
-      ? `${verb} records`
-      : loadMode === 'add'
-        ? `Add ${fmtInt(records)} records to current data`
-        : `${verb} ${fmtInt(records)} records`;
+    loadMode === 'add'
+      ? `Add ${n ?? ''} records to current data`.replace('  ', ' ')
+      : dirty
+        ? 'Reload with changes'
+        : `Load ${n ? `${n} ` : ''}records`;
   const reason = canLoad.ok ? null : canLoad.reason;
   // Reasons already said elsewhere in the dock are not repeated next to the button.
   const inlineReason = reason && reason !== EMPTY_REASON && !(estimate?.overCap && reason === 'Over the cap') ? reason : null;
@@ -242,12 +288,6 @@ export default observer(function LoadDock() {
           </SegmentGroup.Root>
         </HStack>
         <HStack gap={3} flexShrink={0} ms="auto">
-          {dirty && !inlineReason && (
-            <HStack gap={1.5} color="fg.muted" fontSize="sm">
-              <Icon as={LuRefreshCw} boxSize={3.5} />
-              <Text>Query changed since load</Text>
-            </HStack>
-          )}
           {inlineReason && (
             <Text fontSize="sm" color="fg.muted" data-testid="load-disabled-reason">
               {inlineReason}
@@ -264,6 +304,7 @@ export default observer(function LoadDock() {
                 fontVariantNumeric="tabular-nums"
                 data-testid="load-button"
               >
+                {dirty && loadMode !== 'add' && <LuRefreshCw />}
                 {label}
                 <Box as="span" aria-hidden fontSize="xs" opacity={0.7} ms={1} fontWeight="normal">
                   {SHORTCUT}

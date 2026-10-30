@@ -259,6 +259,11 @@ export default class InfomapStore {
   infomap: Infomap = new Infomap();
   infomapId: number | null = null;
   infomapOutput: string = '';
+  // Worker output lines arrive one message at a time (tens per second during a
+  // run). Buffer them and commit in one action per flush so observers re-render
+  // a few times per second instead of once per line.
+  private pendingOutput: string[] = [];
+  private outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
   bioregions: Bioregion[] = [];
 
   error?: string;
@@ -613,6 +618,7 @@ export default class InfomapStore {
   }
 
   onInfomapFinished = action((result: Result, id: number) => {
+    this.flushInfomapOutput();
     const {
       json: tree,
       json_states: statesTree,
@@ -642,15 +648,34 @@ export default class InfomapStore {
   });
 
   onInfomapError = (error: string, id: number) => {
+    this.flushInfomapOutput();
     this.infomapId = null;
     console.error(error, id);
     console.timeEnd('infomap');
     this.setIsRunning(false);
   };
 
-  onInfomapOutput = action((output: string) => {
-    this.infomapOutput += `${output}\n`;
-    this.parseOutput(output);
+  onInfomapOutput = (output: string) => {
+    this.pendingOutput.push(output);
+    if (this.outputFlushTimer === null) {
+      this.outputFlushTimer = setTimeout(this.flushInfomapOutput, 150);
+    }
+  };
+
+  flushInfomapOutput = action(() => {
+    if (this.outputFlushTimer !== null) {
+      clearTimeout(this.outputFlushTimer);
+      this.outputFlushTimer = null;
+    }
+    if (this.pendingOutput.length === 0) {
+      return;
+    }
+    const lines = this.pendingOutput;
+    this.pendingOutput = [];
+    this.infomapOutput += lines.map((line) => `${line}\n`).join('');
+    for (const line of lines) {
+      this.parseOutput(line);
+    }
   });
 
   async run() {
@@ -753,6 +778,7 @@ export default class InfomapStore {
     } catch (e: unknown) {
       console.error('Worker error', e);
     }
+    this.flushInfomapOutput();
     this.infomapId = null;
     this.setIsRunning(false);
     this.setTree(null);

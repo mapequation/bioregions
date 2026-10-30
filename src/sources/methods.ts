@@ -154,7 +154,7 @@ function qualitySentence(q: QualityFilters): string | null {
 }
 
 const DEDUPE_TEXT = {
-  none: '',
+  none: ' Duplicate records were kept.',
   exact:
     ' Duplicate records of the same species at the same coordinates (rounded to four decimal places, about 11 m) were removed across sources.',
   cell: ' Records were thinned across sources to one per species and 0.01° grid cell (about 1 km).',
@@ -176,7 +176,7 @@ function cleaningSentence(
   query?: OccurrenceQuery,
 ): string {
   const base =
-    'Names were reduced to species binomials (infraspecific names merged into their species; genus-only, open-nomenclature and hybrid-formula names discarded), and records with missing, invalid or (0, 0) coordinates were removed.';
+    'Only records identified to species were used: names were reduced to species binomials (infraspecific names merged into their species; records identified only to genus or a higher rank, and open-nomenclature and hybrid-formula names, were excluded), and records with missing, invalid or (0, 0) coordinates were removed.';
   const dedupe = query ? DEDUPE_TEXT[query.quality.dedupe] : '';
   const received = funnel?.received ?? entries.reduce((s, e) => s + e.fetched, 0);
   const accepted = funnel?.accepted ?? entries.reduce((s, e) => s + e.accepted, 0);

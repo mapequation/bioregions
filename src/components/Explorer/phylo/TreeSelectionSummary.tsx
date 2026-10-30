@@ -1,18 +1,44 @@
-import { Alert, Box, Button, Collapsible, Flex, HStack, Icon, Skeleton, Stack, Text } from '@chakra-ui/react';
+import { Alert, Badge, Box, Button, Collapsible, Flex, HStack, Icon, Skeleton, Stack, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { LuChevronRight, LuCircleCheck, LuInfo, LuMap, LuRotateCw } from 'react-icons/lu';
+import { LuArrowLeftRight, LuChevronRight, LuCircleCheck, LuInfo, LuMap, LuRotateCw } from 'react-icons/lu';
 import { useStore } from '../../../store';
-import type { TreeCandidate } from '../../../store/explorer/types';
+import { GRAFEN_NOTE, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import { fmtInt } from '../format';
 
-const GRAFEN_NOTE =
-  "Topology only. Branch lengths use Grafen's method (ρ = 1): ages are relative (root = 1), not millions of years.";
-const UNDATED_NOTE = 'Branch lengths are in substitutions per site and are used as relative time.';
-
-function lengthsNote(c: TreeCandidate): string {
+function lengthsNote(c: PhyloCandidate): string {
   if (c.branchLengths === 'none') return GRAFEN_NOTE;
-  if (c.branchLengths === 'other') return UNDATED_NOTE;
-  return `Dated tree: branch lengths are in ${c.timeUnit ?? 'time units'} and are used as given.`;
+  const units = lengthUnits(c);
+  if (c.branchLengths === 'other') {
+    return units.short === 'unknown'
+      ? 'Branch lengths are not time (Open Tree records no unit) and are used as relative time.'
+      : `Branch lengths are in ${units.long} and are used as relative time.`;
+  }
+  return `Dated tree: branch lengths are in ${units.long} and are used as given.`;
+}
+
+/** '31 tips with branch lengths in Myr' / '44 tips, relative ages (Grafen)'. */
+function tipsWithLengths(tips: number, c: PhyloCandidate): string {
+  const units = lengthUnits(c);
+  const n = `${fmtInt(tips)} ${tips === 1 ? 'tip' : 'tips'}`;
+  return c.branchLengths === 'none' ? `${n}, ${units.long}` : `${n} with branch lengths in ${units.long}`;
+}
+
+function NameList({ title, names }: { title: string; names: string[] }) {
+  if (names.length === 0) return null;
+  return (
+    <Box>
+      <Text textStyle="xs" fontWeight="medium" color="fg.muted" px={2.5} pt={1.5} pb={0.5}>
+        {title}
+      </Text>
+      <Box as="ul" listStyleType="none" columns={{ base: 1, xl: 2 }}>
+        {names.map((name) => (
+          <Box as="li" key={name} px={2.5} py={0.5} textStyle="xs" fontStyle="italic">
+            {name}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 function Stat({ value, label, tone }: { value: number; label: string; tone?: 'muted' }) {
@@ -35,13 +61,25 @@ const Dot = () => (
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
   const { explorerStore, phyloStore } = useStore();
-  const { selectedId, selection, loadState, loadedTree } = phyloStore;
+  const { selectedId, selection, loadState, loadedTree, selectionReason } = phyloStore;
   const candidate = phyloStore.candidates.find((c) => c.id === selectedId) ?? null;
   if (phyloStore.candidates.length === 0) return null;
 
   const loading = loadState === 'loading';
   const done = loadState === 'done' && loadedTree != null && loadedTree.candidateId === selectedId;
   const tooFew = selection != null && selection.kept < 2;
+  const breakdown = phyloStore.absentBreakdown;
+
+  // Trade-off between a dated tree and the synthesis (more tips, relative ages only).
+  const synthetic = phyloStore.syntheticTree;
+  const syntheticTips = synthetic?.coverageState === 'ready' ? (synthetic.coverage?.matched ?? null) : null;
+  const best = phyloStore.bestDated;
+  const alternative: { target: PhyloCandidate; tips: number } | null =
+    candidate?.kind === 'study' && synthetic && syntheticTips != null && syntheticTips >= 2
+      ? { target: synthetic, tips: syntheticTips }
+      : candidate?.kind === 'synthetic' && best?.coverage
+        ? { target: best, tips: best.coverage.matched }
+        : null;
 
   return (
     <Box
@@ -72,14 +110,23 @@ export default observer(function TreeSelectionSummary() {
             >
               Selected
             </Text>
-            <Text textStyle="sm" fontWeight="semibold" truncate title={candidate.citation}>
+            <Text textStyle="sm" fontWeight="semibold" truncate title={candidate.citation} flexShrink={1} minW={0}>
               {candidate.title}
               {candidate.kind === 'synthetic' && candidate.synthVersion
-                ? ` v${candidate.synthVersion.replace(/^v/i, '')}`
-                : candidate.year != null
-                  ? ` (${candidate.year})`
-                  : ''}
+                ? ` ${candidate.synthVersion}`
+                : ''}
+              {candidate.kind === 'study' && candidate.subtitle && (
+                <Text as="span" fontWeight="normal" color="fg.muted" textStyle="xs">
+                  {' '}
+                  · {candidate.subtitle}
+                </Text>
+              )}
             </Text>
+            {selectionReason === 'dated' && (
+              <Badge size="sm" variant="subtle" colorPalette="green" flexShrink={0} alignSelf="center">
+                Best dated match
+              </Badge>
+            )}
           </Flex>
 
           {selection ? (
@@ -107,23 +154,34 @@ export default observer(function TreeSelectionSummary() {
               </HStack>
               <Collapsible.Content>
                 <Box
-                  as="ul"
-                  listStyleType="none"
                   mt={2}
-                  maxH="112px"
+                  maxH="132px"
                   overflowY="auto"
                   borderWidth="1px"
                   borderColor="border.muted"
                   borderRadius="md"
                   bg="bg"
-                  py={1}
-                  columns={{ base: 1, xl: 2 }}
+                  pb={1}
                 >
-                  {selection.absentFromTree.map((name) => (
-                    <Box as="li" key={name} px={2.5} py={0.5} textStyle="xs" fontStyle="italic">
-                      {name}
-                    </Box>
-                  ))}
+                  {breakdown && (
+                    <Text
+                      textStyle="xs"
+                      color="fg"
+                      px={2.5}
+                      pt={1.5}
+                      fontVariantNumeric="tabular-nums"
+                      data-testid="absent-breakdown"
+                    >
+                      {fmtInt(selection.absentFromTree.length)} absent: {fmtInt(breakdown.unmatched.length)}{' '}
+                      {breakdown.unmatched.length === 1 ? 'unmatched name' : 'unmatched names'},{' '}
+                      {fmtInt(breakdown.notInTree.length)} not in this tree
+                    </Text>
+                  )}
+                  <NameList
+                    title="Unmatched names (not found in Open Tree)"
+                    names={breakdown?.unmatched ?? selection.absentFromTree}
+                  />
+                  <NameList title="Matched, but not in this tree" names={breakdown?.notInTree ?? []} />
                 </Box>
               </Collapsible.Content>
             </Collapsible.Root>
@@ -135,8 +193,50 @@ export default observer(function TreeSelectionSummary() {
 
           <HStack gap={2} align="flex-start" textStyle="xs" color="fg.muted">
             <Icon as={LuInfo} mt="2px" flexShrink={0} />
-            <Text>{lengthsNote(candidate)}</Text>
+            <Text>
+              {selectionReason === 'dated' &&
+                'Pre-selected as the dated tree with the best coverage (at least 60 % of your species). '}
+              {lengthsNote(candidate)}
+            </Text>
           </HStack>
+
+          {alternative && selection && (
+            <Flex
+              align="center"
+              gap={3}
+              wrap="wrap"
+              rowGap={1.5}
+              px={3}
+              py={2}
+              borderWidth="1px"
+              borderColor="border.muted"
+              borderRadius="md"
+              bg="bg"
+              data-testid="tree-tradeoff"
+            >
+              <Icon as={LuArrowLeftRight} color="fg.muted" flexShrink={0} />
+              <Text textStyle="xs" flex="1" minW="240px" fontVariantNumeric="tabular-nums">
+                <Text as="span" fontWeight="semibold">
+                  This tree:
+                </Text>{' '}
+                {tipsWithLengths(selection.kept, candidate)}.{' '}
+                <Text as="span" fontWeight="semibold">
+                  {alternative.target.kind === 'synthetic' ? 'Open Tree synthesis' : alternative.target.title}:
+                </Text>{' '}
+                {tipsWithLengths(alternative.tips, alternative.target)}.
+              </Text>
+              <Button
+                size="xs"
+                variant="outline"
+                flexShrink={0}
+                onClick={() => phyloStore.select(alternative.target.id)}
+                data-testid="tree-alternative"
+              >
+                Use {alternative.target.kind === 'synthetic' ? 'Open Tree synthesis' : alternative.target.title} instead (
+                {fmtInt(alternative.tips)} tips)
+              </Button>
+            </Flex>
+          )}
 
           {done ? (
             <Alert.Root status="success" size="sm" borderRadius="md" alignItems="center">
@@ -149,7 +249,7 @@ export default observer(function TreeSelectionSummary() {
                 </Alert.Title>
                 <Alert.Description>The tree citation is now part of the methods text.</Alert.Description>
               </Alert.Content>
-              <Button size="sm" variant="solid" colorPalette="brand" onClick={() => explorerStore.setMinimized(true)}>
+              <Button size="sm" variant="solid" colorPalette="gray" flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
                 <LuMap /> View bioregions
               </Button>
             </Alert.Root>

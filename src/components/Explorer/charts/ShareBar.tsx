@@ -3,8 +3,11 @@ import { Box } from '@chakra-ui/react';
 export interface ShareBarProps {
   value: number;
   max: number;
-  /** solid: filled bar; hollow: outlined bar; ghost: only a dashed tick at `ghostValue` (or `value`). */
-  variant?: 'solid' | 'hollow' | 'ghost';
+  /**
+   * solid: strong fill (totals); muted: soft fill of the palette (non-additive amounts such as
+   * "each filter alone"); ghost: only a dashed tick at `ghostValue` (or `value`).
+   */
+  variant?: 'solid' | 'muted' | 'ghost';
   colorPalette?: string;
   /** Bar height in px (default 8). */
   height?: number;
@@ -16,6 +19,8 @@ export interface ShareBarProps {
   start?: number;
   /** Draws a faint full-width track behind the bar. */
   track?: boolean;
+  /** Hides the bar (not the tick) when `value / max` is below this share. Default 0. */
+  hideBelow?: number;
 }
 
 const fraction = (v: number, max: number) => (max > 0 ? Math.min(1, Math.max(0, v / max)) : 0);
@@ -31,9 +36,11 @@ export default function ShareBar({
   label,
   start = 0,
   track = false,
+  hideBelow = 0,
 }: ShareBarProps) {
   const left = fraction(start, max);
   const w = Math.min(1 - left, fraction(value, max));
+  const visible = variant !== 'ghost' && value > 0 && w >= hideBelow;
   const tick = variant === 'ghost' ? (ghostValue ?? value) : ghostValue;
   return (
     <Box
@@ -48,18 +55,16 @@ export default function ShareBar({
       bg={track ? 'bg.muted' : undefined}
       borderRadius="1px"
     >
-      {variant !== 'ghost' && value > 0 && (
+      {visible && (
         <Box
           position="absolute"
           top={0}
           bottom={0}
           left={`${left * 100}%`}
           w={`${w * 100}%`}
-          minW={variant === 'hollow' ? '3px' : '2px'}
+          minW="2px"
           borderRadius="1px"
-          bg={variant === 'solid' ? 'colorPalette.solid' : 'transparent'}
-          borderWidth={variant === 'hollow' ? '1.5px' : 0}
-          borderColor="fg.muted"
+          bg={variant === 'solid' ? 'colorPalette.solid' : 'colorPalette.emphasized'}
           transitionProperty="width, left"
           transitionDuration="moderate"
           _motionReduce={{ transition: 'none' }}

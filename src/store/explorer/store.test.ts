@@ -155,6 +155,23 @@ describe('ExplorerStore.load', () => {
     expect(store.recent[0].kpis?.records).toBe(3);
     expect(store.methodsText).toContain('The final dataset has 3 records of 2 species');
     expect(store.datasetCsv).toBe('datasetKey,count\nd1,1\nd2,1');
+    // One derivation chain: plans -> duplicates removed while loading -> loaded.
+    expect(store.loadedMatchesQuery).toBe(true);
+    expect(store.countStory).toMatchObject({ speciesLevel: store.estimate?.records, duplicates: 2, loaded: 3 });
+    expect(store.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(2);
+    expect(last?.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(2);
+    store.setYears([1980, 2025]);
+    expect(store.loadedMatchesQuery).toBe(false);
+    expect(store.countStory).toMatchObject({ duplicates: null, loaded: null });
+  });
+
+  it('names only sources that contributed records', async () => {
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', []));
+    const { store } = setup();
+    await store.load();
+    expect(store.methodsText).toContain('(GBIF)');
+    expect(store.methodsText).not.toContain('OBIS');
   });
 
   it('drops OBIS records of low-count species and GBIF species at plan time', async () => {
@@ -202,6 +219,9 @@ describe('ExplorerStore.load', () => {
     expect(store.job?.state).toBe('cancelled');
     expect(store.lastLoad).toBeNull();
     expect(rootStore.clearData).toHaveBeenCalled();
+    // SpeciesStore reads the reason to skip binning and Infomap.
+    const opts = vi.mocked(rootStore.speciesStore.loadRecords).mock.calls[0][1];
+    expect(opts.controller?.signal.reason).toBe('discard');
   });
 
   it('reports a failing source and keeps the other', async () => {

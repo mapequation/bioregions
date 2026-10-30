@@ -33,11 +33,17 @@ export interface DecisionLedgerProps {
 
 const FOOTNOTE = "Each bar is what that filter alone removes. Filters overlap, so the bars don't add up.";
 
+/** Bars under this share of the scale are hidden; the share text still says "<1 %". */
+const MIN_BAR_SHARE = 0.005;
+
+/** Fixed rules (not identified to species, duplicates) are steps on the path, not filters. */
+const isPathRow = (r: LedgerRow) => r.toggleable === false;
+
 /** Columns: label · bar · signed count · share · (Δ vs last load). */
 const columns = (delta: boolean) =>
   delta
-    ? 'minmax(0, 1.1fr) minmax(64px, 1.5fr) 9ch 5ch 11ch'
-    : 'minmax(0, 1.1fr) minmax(64px, 1.5fr) 9ch 5ch';
+    ? 'minmax(0, 1.5fr) minmax(64px, 1.2fr) 9ch 5ch 11ch'
+    : 'minmax(0, 1.5fr) minmax(64px, 1.2fr) 9ch 5ch';
 
 const num = { fontVariantNumeric: 'tabular-nums', textAlign: 'right', whiteSpace: 'nowrap' } as const;
 
@@ -103,8 +109,6 @@ function DeltaCell({ now, before }: { now: number | null; before: number | null 
 
 interface FilterRowsProps {
   rows: LedgerRow[];
-  total: number;
-  totalUpper: boolean;
   scale: number;
   interactive: 'toggle' | 'readonly' | 'static';
   compare: { total: number } | null;
@@ -113,7 +117,7 @@ interface FilterRowsProps {
   onToggle: (row: LedgerRow) => void;
 }
 
-function FilterRows({ rows, total, totalUpper, scale, interactive, compare, blocked, onToggle }: FilterRowsProps) {
+function FilterRows({ rows, scale, interactive, compare, blocked, onToggle }: FilterRowsProps) {
   const cols = columns(compare != null);
   return (
     <Box role="list" aria-label="Filter impact, each filter alone">
@@ -177,9 +181,11 @@ function FilterRows({ rows, total, totalUpper, scale, interactive, compare, bloc
               )}
             </Box>
             <ShareBar
-              variant="hollow"
+              variant="muted"
+              colorPalette={chartPalettes.removal}
               value={row.active ? (row.impact ?? 0) : 0}
               max={scale}
+              hideBelow={MIN_BAR_SHARE}
               ghostValue={compare && row.loadedImpact != null ? row.loadedImpact : undefined}
             />
             <Num muted={!row.active || row.impact == null}>
@@ -190,29 +196,132 @@ function FilterRows({ rows, total, totalUpper, scale, interactive, compare, bloc
           </Grid>
         );
       })}
-      <Grid
-        templateColumns={cols}
-        alignItems="center"
-        columnGap={3}
-        minH={8}
-        mt={1}
-        pt={1}
-        borderTopWidth="1px"
-        borderColor="border.muted"
-        data-testid="ledger-total"
-      >
-        <Text textStyle="sm" fontWeight="semibold">
-          = Matches all filters
-        </Text>
-        <ShareBar variant="solid" colorPalette={chartPalettes.accepted} value={total} max={scale} />
-        <Text as="span" textStyle="sm" fontWeight="semibold" {...num}>
-          {totalUpper ? '≤ ' : ''}
-          {fmtInt(total)}
-        </Text>
-        <span />
-        {compare && <DeltaCell now={-total} before={-compare.total} />}
-      </Grid>
     </Box>
+  );
+}
+
+// --- Path to the dataset ----------------------------------------------------------------
+
+export interface PathStep {
+  id: string;
+  kind: 'total' | 'drop' | 'end';
+  label: string;
+  /** Records, or null when only known after the load (then `pending` is shown instead). */
+  value: number | null;
+  pending?: string;
+  /** "≤" before the number (sum over overlapping sources). */
+  upper?: boolean;
+  /** "≈" before the number (an estimate). */
+  approx?: boolean;
+  tip?: string;
+  testId?: string;
+}
+
+function PathRows({
+  steps,
+  scale,
+  compare,
+}: {
+  steps: PathStep[];
+  scale: number;
+  /** Leaves room for the Δ column of the filter rows. */
+  compare: boolean;
+}) {
+  const cols = columns(compare);
+  return (
+    <Box role="list" aria-label="Path to your dataset, in order">
+      {steps.map((s, i) => {
+        const strong = s.kind !== 'drop';
+        const sign = s.kind === 'drop' ? (s.value != null && s.value < 0 ? '+ ' : '− ') : '= ';
+        const v = s.value == null ? null : Math.abs(s.value);
+        const prefix = s.upper ? '≤ ' : s.approx ? '≈' : '';
+        const labelText = (
+          <Text as="span" textStyle="sm" fontWeight={strong ? 'semibold' : 'normal'} truncate title={s.label}>
+            {sign}
+            {s.label}
+          </Text>
+        );
+        return (
+          <Grid
+            key={s.id}
+            role="listitem"
+            data-testid={s.testId ?? 'ledger-path-row'}
+            data-step={s.id}
+            templateColumns={cols}
+            alignItems="center"
+            columnGap={3}
+            minH={7}
+            mt={s.kind === 'end' && i > 0 ? 1 : 0}
+            borderTopWidth={s.kind === 'end' && i > 0 ? '1px' : 0}
+            borderColor="border.muted"
+          >
+            <HStack gap={1} minW={0} gridColumn={v == null ? '1 / 3' : undefined}>
+              {labelText}
+              {s.tip && (
+                <InfoTip>
+                  <Box maxW="260px">{s.tip}</Box>
+                </InfoTip>
+              )}
+            </HStack>
+            {v != null && (
+              <ShareBar
+                variant={s.kind === 'drop' ? 'muted' : 'solid'}
+                colorPalette={s.kind === 'drop' ? chartPalettes.removal : chartPalettes.accepted}
+                value={v}
+                max={scale}
+                hideBelow={MIN_BAR_SHARE}
+              />
+            )}
+            {v == null ? (
+              <Text
+                as="span"
+                textStyle="xs"
+                color="fg.muted"
+                fontStyle="italic"
+                textAlign="right"
+                gridColumn="3 / -1"
+                whiteSpace="nowrap"
+              >
+                {s.pending}
+              </Text>
+            ) : (
+              <>
+                <Text
+                  as="span"
+                  textStyle={strong ? 'sm' : 'xs'}
+                  fontWeight={strong ? 'semibold' : 'normal'}
+                  color={strong || v > 0 ? 'fg' : 'fg.muted'}
+                  {...num}
+                >
+                  {s.kind === 'drop' ? (s.value != null && s.value < 0 ? fmtSigned(v) : fmtSigned(-v)) : `${prefix}${fmtInt(v)}`}
+                </Text>
+                <Num muted>{s.kind === 'drop' && v > 0 ? fmtPct(v / scale) : ''}</Num>
+                {compare && <span />}
+              </>
+            )}
+          </Grid>
+        );
+      })}
+    </Box>
+  );
+}
+
+/** Column header of the share column, naming its denominator. */
+function ShareHeader({ base, compare }: { base: number | null; compare: boolean }) {
+  return (
+    <Grid templateColumns={columns(compare)} columnGap={3} minH={5} aria-hidden>
+      <span />
+      <Text
+        gridColumn="2 / -1"
+        textStyle="xs"
+        color="fg.muted"
+        textAlign="right"
+        truncate
+        fontVariantNumeric="tabular-nums"
+      >
+        {base != null ? `records · % of ${fmtInt(base)} matching taxa and area` : 'records · % of all considered'}
+      </Text>
+    </Grid>
   );
 }
 
@@ -220,13 +329,14 @@ function FilterRows({ rows, total, totalUpper, scale, interactive, compare, bloc
 
 function CleaningRows({
   steps,
-  received,
+  scale,
   waiting,
   truncated,
   partial,
 }: {
   steps: CleaningStep[];
-  received: number;
+  /** Bar scale shared with the other ledger sections. */
+  scale: number;
   waiting: boolean;
   truncated: { name: string; kept: number; total: number }[];
   partial: boolean;
@@ -237,6 +347,8 @@ function CleaningRows({
     <Box role="list" aria-label="Cleaning steps, in order">
       {steps.map((s) => {
         const sign = s.kind === 'drop' ? '− ' : s.kind === 'end' ? '= ' : '';
+        // The per-source split only helps with several sources.
+        const note = s.id === 'received' && !s.note?.includes('·') ? undefined : s.note;
         const bold = s.kind !== 'drop';
         return (
           <Grid
@@ -256,9 +368,9 @@ function CleaningRows({
                 {sign}
                 {s.label}
               </Text>
-              {s.note && (
+              {note && (
                 <Text textStyle="xs" color="fg.muted" truncate {...{ fontVariantNumeric: 'tabular-nums' }}>
-                  {s.note}
+                  {note}
                 </Text>
               )}
               {s.kind === 'end' && partial && (
@@ -271,17 +383,18 @@ function CleaningRows({
               <Skeleton h="8px" />
             ) : (
               <ShareBar
-                variant="solid"
+                variant={s.kind === 'drop' ? 'muted' : 'solid'}
                 colorPalette={s.kind === 'drop' ? chartPalettes.removal : chartPalettes.accepted}
                 value={s.value}
                 start={s.start}
-                max={received}
+                max={scale}
+                hideBelow={MIN_BAR_SHARE}
               />
             )}
             <Num muted={waiting || (s.kind === 'drop' && s.value === 0)}>
               {s.kind === 'drop' ? fmtSigned(-s.value) : fmtInt(s.value)}
             </Num>
-            <Num muted>{s.kind === 'drop' && s.value > 0 ? fmtPct(s.value / received) : ''}</Num>
+            <Num muted>{s.kind === 'drop' && s.value > 0 ? fmtPct(s.value / scale) : ''}</Num>
           </Grid>
         );
       })}
@@ -323,18 +436,25 @@ function CleaningRows({
 
 function LedgerTable({
   rows,
-  total,
-  totalUpper,
+  path,
   steps,
+  scale,
+  base,
   caption,
 }: {
   rows: LedgerRow[];
-  total: number;
-  totalUpper: boolean;
+  path: PathStep[];
   steps: CleaningStep[] | null;
+  scale: number;
+  base: number | null;
   caption: string;
 }) {
-  const received = steps?.[0]?.value ?? 0;
+  const pathValue = (s: PathStep) => {
+    if (s.value == null) return s.pending ?? '';
+    const v = Math.abs(s.value);
+    if (s.kind === 'drop') return fmtSigned(s.value < 0 ? v : -v);
+    return `${s.upper ? '≤ ' : s.approx ? '≈' : ''}${fmtInt(v)}`;
+  };
   return (
     <Table.Root size="sm" variant="line" css={{ '& td, & th': { fontSize: 'xs' } }}>
       <Table.Caption srOnly>{caption}</Table.Caption>
@@ -343,7 +463,9 @@ function LedgerTable({
           <Table.ColumnHeader>Step</Table.ColumnHeader>
           <Table.ColumnHeader>Status</Table.ColumnHeader>
           <Table.ColumnHeader textAlign="end">Records</Table.ColumnHeader>
-          <Table.ColumnHeader textAlign="end">Share</Table.ColumnHeader>
+          <Table.ColumnHeader textAlign="end">
+            {base != null ? `% of ${fmtInt(base)} matching taxa and area` : 'Share'}
+          </Table.ColumnHeader>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -361,14 +483,22 @@ function LedgerTable({
           </Table.Row>
         ))}
         <Table.Row>
-          <Table.Cell fontWeight="semibold">Matches all filters</Table.Cell>
-          <Table.Cell />
-          <Table.Cell {...num} fontWeight="semibold">
-            {totalUpper ? '≤ ' : ''}
-            {fmtInt(total)}
+          <Table.Cell colSpan={4} fontWeight="semibold" bg="bg.subtle">
+            Path to your dataset
           </Table.Cell>
-          <Table.Cell />
         </Table.Row>
+        {path.map((s) => (
+          <Table.Row key={s.id}>
+            <Table.Cell fontWeight={s.kind === 'drop' ? undefined : 'semibold'}>{s.label}</Table.Cell>
+            <Table.Cell />
+            <Table.Cell {...num} fontWeight={s.kind === 'drop' ? undefined : 'semibold'}>
+              {pathValue(s)}
+            </Table.Cell>
+            <Table.Cell {...num}>
+              {s.kind === 'drop' && s.value ? fmtPct(Math.abs(s.value) / scale) : ''}
+            </Table.Cell>
+          </Table.Row>
+        ))}
         {steps && (
           <>
             <Table.Row>
@@ -385,7 +515,7 @@ function LedgerTable({
                 <Table.Cell />
                 <Table.Cell {...num}>{s.kind === 'drop' ? fmtSigned(-s.value) : fmtInt(s.value)}</Table.Cell>
                 <Table.Cell {...num}>
-                  {s.kind === 'drop' && received > 0 ? fmtPct(s.value / received) : ''}
+                  {s.kind === 'drop' && s.value > 0 ? fmtPct(s.value / scale) : ''}
                 </Table.Cell>
               </Table.Row>
             ))}
@@ -431,32 +561,133 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const query = frozen ? snapshot.query : ex.query;
   if ((query.quality.excludeDatasets?.length ?? 0) > 0) everExcluded.current = true;
 
-  const allRows = frozen ? snapshot.ledger : ex.ledger;
+  const currentRows = ex.ledger;
+  const allRows = frozen ? snapshot.ledger : currentRows;
   // Depth only applies to OBIS: hide the row unless it is on or OBIS contributes.
   const obisOn = frozen
     ? (snapshot.funnel.bySource.obis?.received ?? 0) > 0
     : ex.previews.some((p) => p.source === 'obis' && p.total > 0);
-  const rows = allRows.filter((r) => r.id !== 'depth' || r.active || obisOn);
-  // After a load, the records that matched all filters are the records received (the
-  // snapshot's KPIs count accepted records, after cleaning).
-  const total = frozen ? snapshot.funnel.received || snapshot.kpis.records : ex.ledgerTotal;
-  const totalUpper = frozen ? false : (ex.kpis?.recordsUpperBound ?? false);
+  const rows = allRows.filter((r) => !isPathRow(r) && (r.id !== 'depth' || r.active || obisOn));
+  // Path rows come from the live store (its query equals the loaded one when frozen).
+  const pathRow = (id: string) =>
+    currentRows.find((r) => r.id === id) ?? allRows.find((r) => r.id === id) ?? null;
+
+  // Records matching all filters: the preview count (the query is unchanged when frozen).
+  const total = ex.ledgerTotal > 0 || !frozen ? ex.ledgerTotal : snapshot.funnel.received || snapshot.kpis.records;
+  const totalUpper = ex.kpis?.recordsUpperBound ?? false;
   const state = frozen ? 'ready' : ex.previewState;
   const compare =
-    mode === 'preview' && snapshot != null && ex.dirty.size > 0 ? { total: snapshot.funnel.received || snapshot.kpis.records } : null;
+    mode === 'preview' && snapshot != null && ex.dirty.size > 0
+      ? { total: snapshot.funnel.received || snapshot.kpis.records }
+      : null;
 
-  const maxImpact = rows.reduce((m, r) => Math.max(m, r.active ? (r.impact ?? 0) : 0, compare ? (r.loadedImpact ?? 0) : 0), 0);
-  const scale = Math.max(1, total + maxImpact);
+  // One scale for every section: the records matching the taxa and area (ledgerBase).
+  const base = ex.ledgerBase != null && ex.ledgerBase > 0 ? ex.ledgerBase : null;
+  const maxImpact = rows.reduce(
+    (m, r) => Math.max(m, r.active ? (r.impact ?? 0) : 0, compare ? (r.loadedImpact ?? 0) : 0),
+    0,
+  );
+  const scale = Math.max(1, total, base ?? total + maxImpact);
 
   const funnel: Funnel | null =
     mode === 'live' ? (ex.job?.funnel ?? null) : mode === 'frozen' ? (snapshot?.funnel ?? null) : null;
   const minRecordsOn = (query.quality.minRecordsPerSpecies ?? 1) > 1;
   const steps = funnel ? cleaningSteps(funnel, minRecordsOn) : null;
+
+  // --- Path to your dataset: matching → species level → duplicates → loaded.
+  const speciesRow = pathRow('speciesLevel');
+  const dupRow = pathRow('duplicates');
+  const notSpecies = speciesRow?.impact ?? null;
+  const speciesLevel = notSpecies != null ? Math.max(0, total - notSpecies) : null;
+  // The load estimate also applies the minimum records per species.
+  const planned = ex.countStory.speciesLevel;
+  const lowCount = speciesLevel != null && planned != null && planned < speciesLevel ? speciesLevel - planned : 0;
+  const toLoad = planned ?? speciesLevel;
+  const path: PathStep[] = [
+    {
+      id: 'matching',
+      kind: 'total',
+      label: 'Matches all filters',
+      value: total,
+      upper: totalUpper,
+      testId: 'ledger-total',
+    },
+    {
+      id: 'speciesLevel',
+      kind: 'drop',
+      label: speciesRow?.label ?? 'Not identified to species',
+      value: notSpecies,
+      pending: 'known once the load is planned',
+      tip: 'Records identified only to genus or a higher rank cannot be placed in a species, so they are not loaded.',
+    },
+  ];
+  if (lowCount > 0) {
+    path.push({
+      id: 'lowCount',
+      kind: 'drop',
+      label: 'Species under the minimum records',
+      value: lowCount,
+      tip: 'Records of species with fewer records than the minimum per species, set under Quality.',
+    });
+  }
+  if (frozen) {
+    const f = snapshot.funnel;
+    const dup = (f.dropped as Partial<Record<string, number>>).duplicate ?? dupRow?.impact ?? 0;
+    const cleaned = Math.max(0, f.received - f.accepted - dup);
+    const notReceived = toLoad != null ? toLoad - f.received : 0;
+    if (notReceived !== 0) {
+      path.push({
+        id: 'notReceived',
+        kind: 'drop',
+        label: notReceived > 0 ? 'Not received (cap or source changes)' : 'Received beyond the preview count',
+        value: notReceived,
+        tip: 'Difference between the preview count and the records the sources returned while loading.',
+      });
+    }
+    path.push({
+      id: 'duplicates',
+      kind: 'drop',
+      label: dupRow?.label ?? 'Duplicates (same species at one site)',
+      value: dup,
+    });
+    if (cleaned > 0) {
+      path.push({
+        id: 'cleaning',
+        kind: 'drop',
+        label: 'Invalid, outside the area or low-count',
+        value: cleaned,
+        tip: 'Records dropped by the other cleaning steps; the cleaning detail below breaks them down.',
+      });
+    }
+    path.push({ id: 'loaded', kind: 'end', label: snapshot.mode === 'add' ? 'Added' : 'Loaded', value: f.accepted });
+  } else {
+    path.push({
+      id: 'duplicates',
+      kind: 'drop',
+      label: dupRow?.label ?? 'Duplicates (same species at one site)',
+      value: dupRow?.impact ?? null,
+      pending: mode === 'live' ? 'removing while loading…' : 'removed while loading',
+    });
+    path.push({
+      id: 'toLoad',
+      kind: 'end',
+      label: 'To load, before duplicates',
+      value: toLoad,
+      approx: true,
+      pending: 'known once the load is planned',
+    });
+  }
   const waiting = mode === 'live' && (funnel?.received ?? 0) === 0;
   const truncated = mode !== 'preview' ? (ex.job?.truncated ?? []) : [];
 
   const interactive = frozen ? 'static' : mode === 'live' ? 'readonly' : 'toggle';
   const showRows = state === 'ready' || state === 'stale' || frozen;
+  // After a load the path already shows duplicates and the result; the cleaning detail
+  // appears only when it explains more (other drops, records not received, truncation).
+  const showCleaning =
+    steps != null &&
+    funnel != null &&
+    (mode === 'live' || truncated.length > 0 || path.some((p) => p.id === 'cleaning' || p.id === 'notReceived'));
   const stale = state === 'stale';
 
   const csv = () => {
@@ -505,9 +736,10 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const table = (
     <LedgerTable
       rows={rows}
-      total={total}
-      totalUpper={totalUpper}
+      path={path}
       steps={steps}
+      scale={scale}
+      base={base}
       caption={frozen ? 'Decision ledger at load time' : 'Decision ledger'}
     />
   );
@@ -550,10 +782,9 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
         >
           Filter impact · each alone (overlapping)
         </SectionTitle>
+        <ShareHeader base={base} compare={compare != null} />
         <FilterRows
           rows={rows}
-          total={total}
-          totalUpper={totalUpper}
           scale={scale}
           interactive={interactive}
           compare={compare}
@@ -576,7 +807,9 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
             </Box>
           </InfoTip>
         </HStack>
-        {steps && funnel && (
+        <SectionTitle>Path to your dataset</SectionTitle>
+        <PathRows steps={path} scale={scale} compare={compare != null} />
+        {showCleaning && steps && funnel && (
           <>
             <SectionTitle
               aside={
@@ -587,11 +820,11 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
                 ) : undefined
               }
             >
-              Cleaning · in order
+              {frozen ? 'Cleaning detail · in order' : 'Cleaning · in order'}
             </SectionTitle>
             <CleaningRows
               steps={steps}
-              received={Math.max(1, funnel.received)}
+              scale={scale}
               waiting={waiting}
               truncated={truncated}
               partial={frozen && snapshot.partial != null}
@@ -624,9 +857,10 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
           <VisuallyHidden>
             <LedgerTable
               rows={rows}
-              total={total}
-              totalUpper={totalUpper}
+              path={path}
               steps={steps}
+              scale={scale}
+              base={base}
               caption="Decision ledger (table)"
             />
           </VisuallyHidden>

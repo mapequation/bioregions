@@ -41,7 +41,8 @@ export function provenanceEntries(load: LoadProvenance, gbifDoi?: string): Prove
   const out: ProvenanceEntry[] = [];
   for (const id of ['gbif', 'obis'] as SourceId[]) {
     const counts = load.funnel.bySource[id];
-    if (!load.query.sources[id] || !counts) continue;
+    // Only sources that contributed records are named and cited.
+    if (!load.query.sources[id] || !counts || counts.accepted <= 0) continue;
     out.push({
       id,
       source: id,
@@ -60,9 +61,9 @@ export function provenanceEntries(load: LoadProvenance, gbifDoi?: string): Prove
 }
 
 /** Draft entries for a query that has not been loaded yet. */
-function draftEntries(query: OccurrenceQuery, now: string, gbifDoi?: string): ProvenanceEntry[] {
+function draftEntries(query: OccurrenceQuery, now: string, gbifDoi?: string, sources?: SourceId[]): ProvenanceEntry[] {
   return (['gbif', 'obis'] as SourceId[])
-    .filter((id) => query.sources[id])
+    .filter((id) => query.sources[id] && (!sources || sources.includes(id)))
     .map((id) => ({
       id,
       source: id,
@@ -86,6 +87,8 @@ export interface MethodsTextInput {
   load: LoadProvenance | null;
   /** The query being edited, used for a draft before the first load. */
   query: OccurrenceQuery;
+  /** Sources a draft names (enabled, supported, with matching records); default: all enabled. */
+  sources?: SourceId[];
   /** Download DOI (bare) that cites the GBIF part. */
   downloadDoi?: string;
   /** Tree citation from PhyloStore (empty when no tree was loaded). */
@@ -100,13 +103,15 @@ export function buildMethodsText(input: MethodsTextInput): string {
   const { load, query } = input;
   if (!load) {
     const text = methodsParagraph({
-      entries: draftEntries(query, input.now ?? new Date().toISOString(), input.downloadDoi),
+      entries: draftEntries(query, input.now ?? new Date().toISOString(), input.downloadDoi, input.sources),
       funnel: null,
       speciesCount: 0,
       query,
     });
     // A draft has no counts yet: drop the "final dataset" sentence.
-    return text.replace(/ The final dataset has 0 records of 0 species\./, '');
+    const draft = text.replace(/ The final dataset has 0 records of 0 species\./, '');
+    const min = query.quality.minRecordsPerSpecies ?? 1;
+    return min > 1 ? insertBeforeCitations(draft, `Species with fewer than ${min} records were left out.`) : draft;
   }
   const derivedDoi = input.downloadDoi ? undefined : load.derivedDoi;
   const entries = provenanceEntries(load, input.downloadDoi ?? derivedDoi);
@@ -180,6 +185,8 @@ export function buildLedgerCsv(ledger: LedgerRow[], funnel: Funnel | null): stri
     ['section', 'step', 'active', 'records', 'share'],
   ];
   for (const r of ledger) {
+    // Duplicates are removed while loading; the cleaning rows below report them.
+    if (r.id === 'duplicates') continue;
     rows.push([
       'filter impact',
       r.label,

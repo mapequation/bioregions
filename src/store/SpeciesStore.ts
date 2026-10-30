@@ -440,6 +440,8 @@ export default class SpeciesStore {
    * batch as it arrives, then bin and run Infomap like `load`. Cancelling (through
    * `controller` or `cancelLoad`) stops reading and keeps the records received so far.
    * A failing stream also keeps them, and the error is rethrown after `postLoad`.
+   * Aborting `controller` with the reason `'discard'` drops the records instead and
+   * skips binning and Infomap.
    */
   async loadRecords(
     batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
@@ -484,6 +486,14 @@ export default class SpeciesStore {
     }
 
     this.loadEnd();
+    if (controller.signal.reason === 'discard') {
+      // Cancelled with "discard": drop what arrived and skip binning and Infomap.
+      runInAction(() => {
+        this.loadController = null;
+      });
+      this.clearData();
+      return;
+    }
     await this.postLoad();
     if (failure) {
       throw failure;

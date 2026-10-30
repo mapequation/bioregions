@@ -139,6 +139,12 @@ export interface PreviewSummary {
   source: SourceId;
   /** Records matching the full query. */
   total: number;
+  /**
+   * Records matching the taxa and area with every ledger filter omitted (years, depth,
+   * basis of record, uncertainty, geospatial issues, introduced, presence, datasets).
+   * The common denominator of the filter ledger; missing when unknown.
+   */
+  baseTotal?: number;
   /** Distinct species (null when the source cannot tell). */
   species: number | null;
   datasets: number | null;

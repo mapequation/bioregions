@@ -28,6 +28,8 @@ const PLAN_SECONDS = 1;
 export interface ObisExplorerDetail extends ObisPlanDetail {
   /** Canonical names of species below the minimum records per species (dropped while cleaning). */
   lowCountNames?: string[];
+  /** Records of those species (downloaded, then dropped while cleaning). */
+  lowCountRecords?: number;
 }
 
 /** Per-species counts from a GBIF plan, largest first. */
@@ -74,6 +76,7 @@ export function applyMinRecords(plan: StreamPlan, min: number | undefined): Stre
   const detail: ObisExplorerDetail = {
     ...(plan.detail as ObisPlanDetail),
     lowCountNames: low.map((b) => toSpeciesName(b.label) ?? b.label),
+    lowCountRecords: low.reduce((sum, b) => sum + b.count, 0),
   };
   return {
     ...plan,
@@ -161,6 +164,17 @@ export interface EstimateInput {
   previews: PreviewSummary[];
 }
 
+/**
+ * Records a plan will deliver after cleaning by species: its expected records less
+ * low-count OBIS species, and never more than the source's preview total (OBIS
+ * plans count records the streamed basis-of-record filter drops).
+ */
+export function plannedRecords(plan: StreamPlan, preview?: PreviewSummary): number {
+  const low = plan.source === 'obis' ? ((plan.detail as ObisExplorerDetail | undefined)?.lowCountRecords ?? 0) : 0;
+  const n = preview ? Math.min(plan.expectedRecords, preview.total) : plan.expectedRecords;
+  return Math.max(0, n - low);
+}
+
 /** Load size: exact from plans, else approximate from previews; null without either. */
 export function computeEstimate({ cap, plans, previews }: EstimateInput): Estimate | null {
   if (plans && plans.length > 0) {
@@ -171,7 +185,7 @@ export function computeEstimate({ cap, plans, previews }: EstimateInput): Estima
     for (const p of plans) {
       const n = Math.min(p.expectedRecords, cap);
       const share = p.expectedRecords > 0 ? n / p.expectedRecords : 0;
-      records += p.expectedRecords;
+      records += plannedRecords(p, previews.find((v) => v.source === p.source));
       bytes += Math.round(p.estimatedBytes * share);
       const req = Math.ceil(p.requests * share);
       requests += req;

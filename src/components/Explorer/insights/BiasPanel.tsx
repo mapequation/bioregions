@@ -5,6 +5,7 @@ import { LuCheck, LuCircleDashed, LuInfo, LuTriangleAlert } from 'react-icons/lu
 import { useStore } from '../../../store';
 import type { BiasFlag, BiasId } from '../../../store/explorer/types';
 import { ToggleTip } from '../../ui/toggle-tip';
+import { Tooltip } from '../../ui/tooltip';
 import { chartPalettes } from '../charts/colors';
 import ShareBar from '../charts/ShareBar';
 import { fmtPct } from '../format';
@@ -25,6 +26,32 @@ const MEASURE: Record<BiasId, string> = {
   countryConcentration: 'of records from the top country',
   lowCountSpecies: 'of species have fewer than 5 records',
 };
+
+/** The threshold as worded by the store (`thresholdLabel`), else the plain percentage. */
+function thresholdText(flag: BiasFlag): string {
+  return flag.thresholdLabel || fmtPct(flag.threshold);
+}
+
+const BAR_HEIGHT = 6;
+
+/** The dotted threshold tick as drawn by ShareBar, for the legend. */
+function ThresholdGlyph() {
+  return (
+    <Box
+      as="span"
+      display="inline-block"
+      verticalAlign="middle"
+      h={`${BAR_HEIGHT + 6}px`}
+      borderLeftWidth="2px"
+      borderLeftStyle="dotted"
+      borderColor="fg"
+      opacity={0.7}
+      ml={0.5}
+      mr={1.5}
+      aria-hidden
+    />
+  );
+}
 
 function why(flag: BiasFlag): string {
   const t = fmtPct(flag.threshold);
@@ -62,20 +89,20 @@ function WhyTip({ flag }: { flag: BiasFlag }) {
 
 function TriggeredFlag({ flag }: { flag: BiasFlag }) {
   const title = BIAS_TITLES[flag.id];
+  const threshold = thresholdText(flag);
+  const tick = Math.min(1, Math.max(0, flag.threshold));
   return (
     <Box
       data-testid="bias-flag"
       data-bias={flag.id}
       role="group"
       aria-label={`${title}: warning`}
+      bg="bg"
       borderWidth="1px"
       borderColor="border"
-      borderLeftWidth="3px"
-      borderLeftColor="orange.solid"
-      rounded="md"
-      bg="bg.subtle"
+      rounded="lg"
       px={3}
-      py={2}
+      py={2.5}
     >
       <HStack gap={1.5} align="center">
         <Icon as={LuTriangleAlert} boxSize={4} color="orange.fg" aria-hidden />
@@ -86,25 +113,47 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
           {fmtPct(flag.value)}
         </Text>
       </HStack>
-      <Box mt={1.5} mb={1.5}>
+      <Box position="relative" mt={2} mb={2}>
         <ShareBar
           variant="solid"
           colorPalette={chartPalettes.removal}
           value={flag.value}
           max={1}
           ghostValue={flag.threshold}
-          height={6}
+          height={BAR_HEIGHT}
           track
-          label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; flagged above ${fmtPct(flag.threshold)}`}
+          label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; warning threshold ${threshold}`}
         />
+        {/* Hover target over ShareBar's dotted tick: names the threshold. */}
+        <Tooltip content={`Warning threshold: ${threshold}`} openDelay={150} showArrow>
+          <Box
+            as="span"
+            aria-hidden
+            position="absolute"
+            top="-5px"
+            bottom="-5px"
+            left={`calc(${tick * 100}% - 6px)`}
+            w="12px"
+            cursor="help"
+          />
+        </Tooltip>
       </Box>
       <Text textStyle="xs" color="fg.muted" lineHeight="short">
         {flag.text}
       </Text>
-      <HStack mt={1.5} gap={1} justify="space-between">
+      <HStack mt={2} gap={2} justify="space-between">
         {flag.action ? (
-          <Button size="xs" variant="outline" onClick={() => flag.action?.run()}>
-            {flag.action.label}
+          <Button
+            size="xs"
+            variant="outline"
+            minW={0}
+            flexShrink={1}
+            title={flag.action.label}
+            onClick={() => flag.action?.run()}
+          >
+            <Text as="span" truncate>
+              {flag.action.label}
+            </Text>
           </Button>
         ) : (
           <Text textStyle="xs" color="fg.muted">
@@ -213,6 +262,12 @@ export default observer(function BiasPanel() {
         </Text>
         <Box aria-hidden>{summary}</Box>
       </HStack>
+      {triggered.length > 0 && state !== 'first' && (
+        <Text textStyle="xs" color="fg.muted" mt={-1} mb={2} aria-hidden>
+          <ThresholdGlyph />
+          marks the warning threshold
+        </Text>
+      )}
       <Box aria-busy={stale || undefined} opacity={stale ? 0.5 : 1} transition="opacity 0.15s">
         {body}
       </Box>

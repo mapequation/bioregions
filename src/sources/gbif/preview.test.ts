@@ -134,6 +134,16 @@ describe('buildPreviewRequest', () => {
     expect(JSON.stringify(variables.p_years)).not.toContain('"key":"year"');
     expect(JSON.stringify(variables.p_years)).toContain('"key":"basisOfRecord"');
   });
+
+  it('adds one ledger-base alias with every filter omitted, only when a filter is active', () => {
+    const { document, variables } = buildPreviewRequest(filtered);
+    expect(document).toContain('base: occurrenceSearch(predicate: $p_base)');
+    const base = JSON.stringify(variables.p_base);
+    for (const key of ['year', 'basisOfRecord', 'coordinateUncertaintyInMeters']) {
+      expect(base).not.toContain(`"key":"${key}"`);
+    }
+    expect(buildPreviewRequest(query()).document).not.toContain('base:');
+  });
 });
 
 describe('previewGbif', () => {
@@ -144,6 +154,7 @@ describe('previewGbif', () => {
       f_uncertainty: { documents: { total: 1500 } },
       f_geospatialIssues: { documents: { total: 1010 } },
       f_years: { documents: { total: 4000 } },
+      base: { documents: { total: 6000 } },
     });
     const summary = await previewGbif(filtered);
 
@@ -155,6 +166,7 @@ describe('previewGbif', () => {
     expect(summary).toMatchObject({
       source: 'gbif',
       total: 1000,
+      baseTotal: 6000,
       species: 54,
       datasets: 12,
       yearRange: [1990, 2020],
@@ -192,6 +204,7 @@ describe('previewGbif', () => {
     });
     const summary = await previewGbif(query());
     expect(summary.total).toBe(0);
+    expect(summary.baseTotal).toBe(0);
     expect(summary.yearRange).toBeNull();
     expect(summary.uncertainty).toBeNull();
     expect(summary.years).toEqual([]);
