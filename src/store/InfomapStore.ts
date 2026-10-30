@@ -67,6 +67,9 @@ const defaultArgs: RequiredArgs = {
   output: ['json', 'tree'],
 };
 
+/** Records of the network's species, per species and in all. */
+export type RecordPool = { count: Map<string, number>; total: number };
+
 /** A taxon -> cell link: cell index, the taxon's bioregion id and the link weight. */
 type CellLink = [cellIndex: number, bioregionId: number, weight: number];
 
@@ -125,7 +128,8 @@ export class Bioregion {
     return this.cellMap.size;
   }
 
-  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore) {
+  /** `pool` holds the records of the network's species, per species and in all. */
+  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore, pool: RecordPool) {
     type Species = string;
     const speciesCount = new Map<Species, number>();
 
@@ -158,9 +162,7 @@ export class Bioregion {
     for (const [name, count] of speciesCount.entries()) {
       // Most indicative
       const tf = count / this.numRecords;
-      const idf =
-        (speciesStore.speciesMap.get(name)?.count ?? 0) /
-        speciesStore.numRecords;
+      const idf = (pool.count.get(name) ?? 0) / pool.total;
       const score = tf / idf;
       this.mostIndicative.push({ name, score, count });
       this.mostCommon.push({ name, score, count });
@@ -1885,13 +1887,30 @@ export default class InfomapStore {
     })
     console.timeEnd("Connected bioregions");
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
-    }
-    console.timeEnd("Calc bioregion stats")
+    this.calcBioregionStats(bioregions);
 
     this.setBioregions(bioregions);
+  }
+
+  calcBioregionStats(bioregions: Bioregion[]) {
+    const { speciesStore, treeStore } = this.rootStore;
+    // Indicator scores compare against the records of the network's species
+    // (those with a bioregion) over all grid cells
+    const pool: RecordPool = { count: new Map(), total: 0 };
+    for (const cell of this.cells) {
+      for (const { name, count } of cell.speciesTopList) {
+        if (!speciesStore.speciesMap.get(name)?.bioregionId) {
+          continue;
+        }
+        pool.count.set(name, (pool.count.get(name) ?? 0) + count);
+        pool.total += count;
+      }
+    }
+    console.time('Calc bioregion stats');
+    for (const bioregion of bioregions) {
+      bioregion.calcStats(speciesStore, treeStore, pool);
+    }
+    console.timeEnd('Calc bioregion stats');
   }
 
   /**
@@ -2001,11 +2020,7 @@ export default class InfomapStore {
     }
     this.setConnectedBioregions(cellLinks);
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
-    }
-    console.timeEnd("Calc bioregion stats")
+    this.calcBioregionStats(bioregions);
 
     this.setStateBioregions(bioregions);
   }
@@ -2089,11 +2104,7 @@ export default class InfomapStore {
     }
     this.setConnectedBioregions(cellLinks);
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
-    }
-    console.timeEnd("Calc bioregion stats")
+    this.calcBioregionStats(bioregions);
 
     this.setStateBioregions(bioregions);
   }

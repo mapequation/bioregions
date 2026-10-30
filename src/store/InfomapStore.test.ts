@@ -372,4 +372,29 @@ describe('bioregion statistics', () => {
     expect(root.infomapStore.bioregions[0].numRecords).toBe(20);
     expect(patched.bioregionMetrics.endemicity).toBe(1);
   });
+
+  it('score indicative species against the records of the network species', () => {
+    const root = setup();
+    // E is not in the network
+    root.infomapStore.network = bipartiteNetwork(root, ['A', 'B', 'C', 'D']);
+    root.infomapStore.createBioregions(
+      bipartiteTree(root, [
+        [0, [1], 0.1],
+        [1, [1], 0.1],
+        [taxonId('A'), [1], 0.1],
+        [taxonId('C'), [1], 0.1],
+        [2, [2], 0.1],
+        [3, [2], 0.1],
+        [4, [2], 0.1],
+        [taxonId('B'), [2], 0.1],
+        [taxonId('D'), [2], 0.1],
+      ]),
+    );
+    const scores = Object.fromEntries(
+      root.infomapStore.bioregions[0].mostIndicative.map(({ name, score }) => [name, score]),
+    );
+    // A: 5 of the 8 records in bioregion 1, and 5 of the 18 network-species records
+    expect(scores.A).toBeCloseTo(5 / 8 / (5 / 18), 12);
+    expect(scores.C).toBeCloseTo(2 / 8 / (3 / 18), 12);
+  });
 });
