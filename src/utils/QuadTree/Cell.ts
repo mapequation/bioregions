@@ -23,6 +23,9 @@ export default class Cell
   y1: number; // south
   x2: number; // east
   y2: number; // north
+  // Unclipped bounds. Nodes split at their unclipped midpoints, so the grid
+  // stays dyadic where a visible cell is clipped to the globe (design.md B8).
+  readonly bounds: BBox;
   visible: boolean;
   isLeaf: boolean = true;
   features: GeoFeature[] = [];
@@ -47,6 +50,7 @@ export default class Cell
   type = 'Feature';
 
   constructor(extent: BBox, maxCellSizeLog2: number) {
+    this.bounds = [extent[0], extent[1], extent[2], extent[3]];
     this.x1 = extent[0];
     this.y1 = extent[1];
     this.x2 = extent[2];
@@ -127,8 +131,15 @@ export default class Cell
     return [(this.x1 + this.x2) / 2, (this.y1 + this.y2) / 2];
   }
 
+  /** Unclipped width in degrees, a power of two (design.md B8). */
   get size() {
-    return this.x2 - this.x1;
+    return this.bounds[2] - this.bounds[0];
+  }
+
+  /** Unclipped midpoint, where the node splits. */
+  get splitPoint(): [number, number] {
+    const [x1, y1, x2, y2] = this.bounds;
+    return [(x1 + x2) * 0.5, (y1 + y2) * 0.5];
   }
 
   get sizeLog2() {
@@ -260,9 +271,8 @@ export default class Cell
     nodeCapacity: number,
   ) {
     // Compute the split point, and the quadrant in which to insert the point.
-    let { x1, x2, y1, y2 } = this;
-    const xMid = (x1 + x2) * 0.5;
-    const yMid = (y1 + y2) * 0.5;
+    let [x1, y1, x2, y2] = this.bounds;
+    const [xMid, yMid] = this.splitPoint;
 
     // Recursively insert into the child node.
     this.isLeaf = false;
@@ -315,9 +325,8 @@ export default class Cell
       feature.bbox = turf.bbox(feature.geometry);
     }
 
-    const { x1, y1, x2, y2 } = this;
-    const xm = (x1 + x2) * 0.5;
-    const ym = (y1 + y2) * 0.5;
+    const [x1, y1, x2, y2] = this.bounds;
+    const [xm, ym] = this.splitPoint;
 
     const topLeft = turf.polygon([
       [
@@ -380,6 +389,11 @@ export default class Cell
 
     for (let i = 0; i < 4; ++i) {
       const child = getChild(i);
+      // A quadrant off the globe (above a pole row, or east of lon 180) is
+      // clipped to zero area and never gets a record.
+      if (child.visible && (child.x2 <= child.x1 || child.y2 <= child.y1)) {
+        continue;
+      }
 
       if (booleanIntersects(child.geometry, feature.geometry)) {
         if (!this.children[i]) {
@@ -540,10 +554,11 @@ export default class Cell
     if (this.isLeaf) {
       return this;
     }
-    const [xMid, yMid] = this.center;
+    const [xMid, yMid] = this.splitPoint;
 
-    const isRight = x >= xMid;
-    const isBelow = y >= yMid;
+    // Same midline rule as addChildPoint (B2).
+    const isRight = x > xMid || (x === xMid && xMid < 180);
+    const isBelow = y > yMid || (y === yMid && yMid < 90);
     const i = (Number(isBelow) << 1) | Number(isRight);
     return this.children[i]?.find(x, y, radius) ?? (this.visible ? this : undefined);
   }
