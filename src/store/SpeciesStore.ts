@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, computed, runInAction } from 'mobx';
 // import { spawn, Thread, Worker } from 'threads';
 import type { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
@@ -17,6 +17,7 @@ import { getName } from '../utils/filename';
 import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
 import { normalizeSpeciesName } from '../utils/names';
+import { isAbortError } from '../sources/http';
 
 // export type FeatureProperties = GeoJsonProperties & {
 //   name: string;
@@ -91,7 +92,8 @@ export default class SpeciesStore {
   timer = new Timer();
   speed: number = 0;
   seconds: number = 0;
-  dataWorker: Worker | null = null;
+  /** Aborts the running load (file worker or record stream); see `cancelLoad`. */
+  loadController: AbortController | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -119,6 +121,12 @@ export default class SpeciesStore {
   clearData = action(() => {
     this.loaded = false;
     this.isLoading = false;
+    this.numPoints = 0;
+    this.numPolygons = 0;
+    this.setNumPointsDebounced.cancel();
+    this.setNumPolygonsDebounced.cancel();
+    this.numPointsDebounced = 0;
+    this.numPolygonsDebounced = 0;
     this.multiPointCollection = createMultiPointGeometryCollection();
     this.updateCollection(createFeatureCollection());
     this.binner.setTreeNeedUpdate();
@@ -243,87 +251,56 @@ export default class SpeciesStore {
     // }
   });
 
-  private async loadData(
+  /**
+   * Run the data worker with `message`, passing each data chunk to `onData`.
+   * Resolves when the worker completes or the current load is cancelled.
+   */
+  private runWorker<T>(message: object, onData: (data: T) => void) {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const dataWorker = new Worker(
+          new URL('../workers/DataWorker.ts', import.meta.url),
+          { type: 'module' },
+        );
+        const signal = this.loadController?.signal;
+        const stop = () => {
+          dataWorker.terminate();
+          resolve();
+        };
+        signal?.addEventListener('abort', stop, { once: true });
+
+        dataWorker.addEventListener('message', (event: MessageEvent) => {
+          if (event.data.type === 'status') {
+            if (event.data.status === 'complete') {
+              signal?.removeEventListener('abort', stop);
+              stop();
+            }
+          } else if (event.data.type === 'data') {
+            onData(event.data.data);
+          }
+        });
+
+        dataWorker.postMessage(message);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  private loadData(
     file: string | File,
     getItems: (items: { [key: string]: string | number }[]) => void,
     args: ParseConfig = {},
   ) {
-
-    // dataWorker.stream().subscribe(getItems);
-
-    // yield dataWorker.load(file, args);
-
-    return new Promise<void>((resolve, reject) => {
-
-      try {
-        const dataWorker = new Worker(
-          new URL('../workers/DataWorker.ts', import.meta.url),
-          { type: 'module' }
-        );
-
-        dataWorker.addEventListener("message", (event: MessageEvent) => {
-          if (event.data.type === "status") {
-            if (event.data.status === "complete") {
-              dataWorker.terminate();
-              resolve();
-            }
-          }
-          else if (event.data.type === "data") {
-            getItems(event.data.data);
-          }
-        })
-
-        dataWorker.postMessage({ type: "LOAD", file, args })
-      }
-      catch (err) {
-        reject(err);
-      }
-    })
-
-
-    // const res = await Thread.terminate(dataWorker);
-    // this.dataWorker = null;
-    // return res;
+    return this.runWorker({ type: 'LOAD', file, args }, getItems);
   }
 
-  private async loadShapefileInWorker(
+  private loadShapefileInWorker(
     file: string | File | File[],
     onFeatures: (features: GeometryFeature[]) => void,
     nameKey?: string,
   ) {
-
-    // dataWorker.stream().subscribe(onFeatures);
-
-    // yield dataWorker.loadShapefile(file, nameKey);
-
-    // return await Thread.terminate(dataWorker);
-
-    return new Promise<void>((resolve, reject) => {
-
-      try {
-        const dataWorker = new Worker(
-          new URL('../workers/DataWorker.ts', import.meta.url),
-          { type: 'module' }
-        );
-
-        dataWorker.addEventListener("message", (event: MessageEvent) => {
-          if (event.data.type === "status") {
-            if (event.data.status === "complete") {
-              dataWorker.terminate();
-              resolve();
-            }
-          }
-          else if (event.data.type === "data") {
-            onFeatures(event.data.data);
-          }
-        })
-
-        dataWorker.postMessage({ type: "LOAD_SHAPEFILE", file, nameKey })
-      }
-      catch (err) {
-        reject(err);
-      }
-    });
+    return this.runWorker({ type: 'LOAD_SHAPEFILE', file, nameKey }, onFeatures);
   }
 
   loadStart = action(() => {
@@ -458,20 +435,74 @@ export default class SpeciesStore {
     await this.postLoad();
   }
 
-  cancelLoad = action(async () => {
-    if (this.dataWorker) {
-      this.dataWorker.terminate();
-      this.dataWorker = null;
+  /**
+   * Stream parsed point records (e.g. from GBIF or OBIS) into the store, drawing each
+   * batch as it arrives, then bin and run Infomap like `load`. Cancelling (through
+   * `controller` or `cancelLoad`) stops reading and keeps the records received so far.
+   * A failing stream also keeps them, and the error is rethrown after `postLoad`.
+   */
+  async loadRecords(
+    batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
+    {
+      name,
+      clear = true,
+      controller = new AbortController(),
+    }: { name: string; clear?: boolean; controller?: AbortController },
+  ) {
+    if (clear) {
+      this.clearData();
     }
+    runInAction(() => {
+      this.name = name;
+    });
+    this.preLoad(controller);
+
+    const { mapStore } = this.rootStore;
+    mapStore.setRenderType('records');
+
+    let failure: unknown = null;
+    try {
+      for await (const batch of batches) {
+        if (controller.signal.aborted) {
+          break;
+        }
+        const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
+        for (const record of batch) {
+          const pointFeature = createPointFeature([record.lon, record.lat], {
+            name: record.name,
+          });
+          this.addFeature(pointFeature);
+          multiPoint.coordinates.push(pointFeature.geometry.coordinates);
+        }
+        this.multiPointCollection.geometries.push(multiPoint);
+        mapStore.renderMultiPoint(multiPoint);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        failure = error;
+      }
+    }
+
+    this.loadEnd();
     await this.postLoad();
+    if (failure) {
+      throw failure;
+    }
+  }
+
+  /** Stop the running load; it finishes with the records received so far. */
+  cancelLoad = action(() => {
+    this.loadController?.abort();
   });
 
-  preLoad = action(() => {
+  preLoad = action((controller: AbortController = new AbortController()) => {
+    this.loadController = controller;
     this.setIsLoading();
     this.loadStart();
   });
 
   postLoad = action(async () => {
+    this.loadController = null;
     this.loadEnd();
     this.updateCollection();
     this.setIsLoaded();

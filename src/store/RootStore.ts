@@ -7,6 +7,8 @@ import ColorStore from './ColorStore';
 import SettingsStore from './SettingsStore';
 import ExampleStore from './ExampleStore';
 import DocumentationStore from './DocumentationStore';
+import ExplorerStore from './ExplorerStore';
+import PhyloStore from './PhyloStore';
 
 export interface StoreOptions {
   noLand?: boolean;
@@ -21,6 +23,8 @@ export default class RootStore {
   settingsStore: SettingsStore;
   exampleStore: ExampleStore;
   documentationStore?: DocumentationStore;
+  explorerStore: ExplorerStore;
+  phyloStore: PhyloStore;
 
   constructor(demo = false) {
     this.mapStore = new MapStore(this);
@@ -34,6 +38,8 @@ export default class RootStore {
     if (!demo) {
       this.documentationStore = new DocumentationStore(this);
     }
+    this.explorerStore = new ExplorerStore(this);
+    this.phyloStore = new PhyloStore(this);
   }
 
   clearData() {

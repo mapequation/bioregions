@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { useStore } from '../store/';
-import { Box, Text } from '@chakra-ui/react';
+import { Box, Button, HStack, Stack, Text } from '@chakra-ui/react';
+import { LuSearch } from 'react-icons/lu';
+import { LoadData } from './ControlPanel/Load';
 import { formatThousands } from '../utils/formats';
 import MapStatusBar from './StatusBar/MapStatusBar';
 import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
@@ -70,6 +72,45 @@ const MapTooltip = observer(function _MapTooltip() {
   );
 });
 
+// Centre card on the empty map: the two ways to get data in.
+const EmptyMapCta = observer(function EmptyMapCta() {
+  const { speciesStore, explorerStore } = useStore();
+  const busy = speciesStore.isLoading || (explorerStore.job != null && explorerStore.job.state !== 'done');
+  if (busy || speciesStore.numRecords > 0 || speciesStore.loaded) {
+    return null;
+  }
+  return (
+    <Box position="absolute" inset={0} display="flex" alignItems="center" justifyContent="center" pointerEvents="none" zIndex={5}>
+      <Stack
+        pointerEvents="auto"
+        gap={3}
+        p={5}
+        w="340px"
+        maxW="calc(100% - 32px)"
+        bg="bg"
+        borderWidth="1px"
+        borderRadius="lg"
+        boxShadow="md"
+      >
+        <Box>
+          <Text fontWeight="semibold">No data yet</Text>
+          <Text fontSize="sm" color="fg.muted">
+            Search GBIF and OBIS occurrence records, or load your own file.
+          </Text>
+        </Box>
+        <HStack gap={2} align="stretch">
+          <Button size="sm" flex="1" onClick={() => explorerStore.open()}>
+            <LuSearch /> Explore GBIF &amp; OBIS
+          </Button>
+          <Box flex="1">
+            <LoadData />
+          </Box>
+        </HStack>
+      </Stack>
+    </Box>
+  );
+});
+
 export default observer(function WorldMap() {
   const hostRef = useRef<HTMLDivElement>(null);
   const { mapStore } = useStore();
@@ -93,6 +134,7 @@ export default observer(function WorldMap() {
       <Box position="relative" width="100%" aspectRatio={ASPECT_RATIO}>
         <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
         <MapTooltip />
+        <EmptyMapCta />
       </Box>
     </Box>
   );
