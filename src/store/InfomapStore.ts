@@ -1963,7 +1963,6 @@ export default class InfomapStore {
         throw new Error(`InfomapStore: state name '${stateName}' has no memory part`);
       }
 
-      cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(
         bioregionId,
         node.flow,
@@ -1972,6 +1971,8 @@ export default class InfomapStore {
       bioregion.addCell(cell);
     });
     for (const cell of cells) {
+      // A cell's states can sit in several modules: use the one with most flow
+      cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
       cell.overlappingBioregions.calcTopBioregions();
     }
 
@@ -2034,7 +2035,6 @@ export default class InfomapStore {
       const cell = cells[node.id];
       const memTaxonName = `layer-${node.layerId}`;
 
-      cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(
         bioregionId,
         node.flow,
@@ -2043,6 +2043,8 @@ export default class InfomapStore {
       bioregion.addCell(cell);
     });
     for (const cell of cells) {
+      // A cell's states can sit in several modules: use the one with most flow
+      cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
       cell.overlappingBioregions.calcTopBioregions();
     }
 

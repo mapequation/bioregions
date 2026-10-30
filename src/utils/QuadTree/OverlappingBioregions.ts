@@ -17,6 +17,19 @@ export default class OverlappingBioregions {
     this.memoryIdToBioregion.set(memoryId, bioregionId);
   }
 
+  /** The bioregion holding most of the cell's flow, the lower id on ties; 0 if none. */
+  get dominantBioregionId() {
+    let dominantId = 0;
+    let maxFlow = -Infinity;
+    for (const [bioregionId, flow] of this.bioregionIds) {
+      if (flow > maxFlow || (flow === maxFlow && bioregionId < dominantId)) {
+        dominantId = bioregionId;
+        maxFlow = flow;
+      }
+    }
+    return dominantId;
+  }
+
   calcTopBioregions() {
     // Calculate top
     let topFlow = 0;

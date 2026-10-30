@@ -3,7 +3,7 @@
  * Infomap itself is not run: each test hands `createBioregions` a small tree.
  */
 
-import type { Tree } from '@mapequation/infomap';
+import type { StateTree, Tree } from '@mapequation/infomap';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHeadlessRoot, type HeadlessRoot, setOccurrences } from '../../harness/stubRoot';
 import type {
@@ -103,6 +103,69 @@ function bipartiteTree(root: HeadlessRoot, nodes: [number, number[], number][]):
   } as unknown as Tree;
 }
 
+/**
+ * State network as the app builds it: a state per taxon, then a state per cell
+ * and taxon in it (memory = taxon), with a taxon -> cell link per cell state.
+ */
+function stateNetwork(root: HeadlessRoot) {
+  const states = TAXA.map((name, stateId) => ({ stateId, id: taxonId(name), name }));
+  const links: { source: number; target: number; weight: number }[] = [];
+  cells(root).forEach((cell, id) => {
+    for (const { name, count } of cell.speciesTopList) {
+      const stateId = states.length;
+      states.push({ stateId, id, name: `${cell.id}_${name}` });
+      links.push({ source: TAXA.indexOf(name), target: stateId, weight: count });
+    }
+  });
+  const nodes = bipartiteNetwork(root).nodes;
+  return { nodes, states, links } as unknown as BioregionsStateNetwork;
+}
+
+/** State id of the state network's state `name` (a taxon, or `<cellId>_<taxon>`). */
+function stateIdOf(network: BioregionsStateNetwork, name: string) {
+  const state = network.states.find((s) => s.name === name);
+  if (state == null) throw new Error(`no state ${name}`);
+  return state.stateId;
+}
+
+/** State tree from `[state name, modules, flow]` per state node, in output order. */
+function stateTree(network: BioregionsStateNetwork, nodes: [string, number[], number][]): StateTree {
+  return {
+    args: '',
+    numTopModules: Math.max(...nodes.map(([, modules]) => modules[0])),
+    numLevels: nodes[0][1].length + 1,
+    nodes: nodes.map(([name, modules, flow]) => {
+      const { stateId, id } = network.states[stateIdOf(network, name)];
+      return { stateId, id, name, flow, modules, path: [...modules, 1] };
+    }),
+  } as unknown as StateTree;
+}
+
+/** Multilayer tree from `[node id, layer id, modules, flow]` per state node. */
+function multilayerTree(nodes: [number, number, number[], number][]): StateTree {
+  return {
+    args: '--multilayer-relax-limit 1',
+    numTopModules: Math.max(...nodes.map(([, , modules]) => modules[0])),
+    numLevels: nodes[0][2].length + 1,
+    nodes: nodes.map(([id, layerId, modules, flow], stateId) => ({
+      stateId,
+      id,
+      layerId,
+      name: `${id}`,
+      flow,
+      modules,
+      path: [...modules, 1],
+    })),
+  } as unknown as StateTree;
+}
+
+/** Every state of the state network in module 1, except those named in `modules`. */
+function stateNodes(network: BioregionsStateNetwork, modules: Record<string, number> = {}) {
+  return network.states.map(
+    ({ name = '' }): [string, number[], number] => [name, [modules[name] ?? 1], 0.01],
+  );
+}
+
 beforeEach(() => {
   for (const method of ['log', 'time', 'timeEnd', 'warn'] as const) {
     vi.spyOn(console, method).mockImplementation(() => {});
@@ -172,5 +235,41 @@ describe('vertices without links', () => {
     );
     expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 1, 0, 0, 0]);
     expect(infomapStore.bioregions).toHaveLength(1);
+  });
+});
+
+describe('state and multilayer cells', () => {
+  it('belong to the bioregion holding most of their flow', () => {
+    const root = setup();
+    const network = stateNetwork(root);
+    root.infomapStore.network = network;
+    const rest = stateNodes(network, { B: 2, C: 2, '3013201_B': 2, '3013201_C': 2 }).filter(
+      ([name]) => !['0320132_A', '0320132_B', '1231023_A', '1231023_C'].includes(name),
+    );
+    root.infomapStore.createBioregions(
+      stateTree(network, [
+        ['0320132_A', [1], 0.3],
+        ['1231023_A', [1], 0.1],
+        ...rest,
+        // the last state of each cell sits in module 2: the larger flow wins,
+        // and a tie goes to the lower module id
+        ['0320132_B', [2], 0.1],
+        ['1231023_C', [2], 0.1],
+      ]),
+    );
+    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 1, 1, 1, 2]);
+  });
+
+  it('belong to the multilayer bioregion holding most of their flow', () => {
+    const root = setup();
+    root.infomapStore.createBioregions(
+      multilayerTree([
+        [0, 1, [1], 0.3],
+        [taxonId('A'), 1, [1], 0.3],
+        [taxonId('B'), 2, [2], 0.3],
+        [0, 2, [2], 0.1],
+      ]),
+    );
+    expect(cells(root)[0].bioregionId).toBe(1);
   });
 });
