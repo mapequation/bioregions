@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
 import type { PhyloNode } from '.';
 
@@ -83,5 +83,16 @@ describe('tree utils', () => {
     const tree = prepareTree(parseTree(`((1:1,'Homo sapiens':1)90:1,3:2);`));
 
     expect(postOrder(tree)).toEqual(['1', 'Homo sapiens', 't1', '3', 't0']);
+  });
+
+  it('sets negative branch lengths to zero with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tree = prepareTree(parseTree('((a:1,b:-0.5):1,c:-2);'));
+
+    expect(postOrder(tree, (node) => node.branchLength)).toEqual([1, 0, 1, 0, 0]);
+    expect(postOrder(tree, (node) => node.time)).toEqual([1, 0.5, 0.5, 0, 0]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/2 negative branch lengths/);
+    warn.mockRestore();
   });
 });
