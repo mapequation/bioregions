@@ -65,7 +65,7 @@ describe('tree utils', () => {
 });
 
 describe('getIntersectingBranches', () => {
-  it('gives a zero-length branch cut at its own time all the weight (B5)', () => {
+  it('gives a zero-length branch cut at its own time all the weight', () => {
     const tree = prepareTree(parseTree('((A:0,B:0.5)P:0.5,C:1)R;'));
     const parent = tree.children.find((child: PhyloNode) => child.name === 'P');
     if (!parent) {

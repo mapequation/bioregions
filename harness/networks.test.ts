@@ -133,7 +133,7 @@ describe('species without a tip in the tree (#85)', () => {
   });
 });
 
-describe('state network species links (S3)', () => {
+describe('state network species links', () => {
   it('use the information weight, as bipartite species links do', () => {
     const params = {
       treeWeightBalance: 0,
@@ -149,7 +149,7 @@ describe('state network species links (S3)', () => {
   });
 });
 
-describe('time slice cut at a parent node (B4)', () => {
+describe('time slice cut at a parent node', () => {
   it("files the parent's links under the parent, not under its children", () => {
     const root = createRoot({ treeWeightBalance: 1, useWholeTree: false, segregationTime: 0 });
     const tree = root.treeStore.tree;
@@ -168,7 +168,7 @@ describe('time slice cut at a parent node (B4)', () => {
   });
 });
 
-describe('NaN weights (B5)', () => {
+describe('NaN weights', () => {
   it('gives the information weight 1 with a single grid cell', () => {
     const root = createHeadlessRoot('test');
     root.infomapStore.useWeightedSpeciesLinks = true;
@@ -189,7 +189,7 @@ describe('NaN weights (B5)', () => {
   });
 });
 
-describe('time slice species sets (B9)', () => {
+describe('time slice species sets', () => {
   // (A, B) ends before the cut at 0.5, so only C reaches it below X.
   const NON_ULTRAMETRIC = '(((A: 0.1, B: 0.1)Z: 0.1, C: 0.8)X: 0.2, D: 1)R;';
 
@@ -210,7 +210,7 @@ describe('time slice species sets (B9)', () => {
   });
 });
 
-describe('state network nodes (B10)', () => {
+describe('state network nodes', () => {
   it('creates taxa and states only for links above the threshold', () => {
     const params = { treeWeightBalance: 0.5, useWholeTree: true };
     const weights = buildStateNetwork(params)
@@ -231,7 +231,7 @@ describe('state network nodes (B10)', () => {
   });
 });
 
-describe('uniform tree links in state networks (B11)', () => {
+describe('uniform tree links in state networks', () => {
   it('do not depend on the order of children in the tree', () => {
     // A and B share cells but have different memory weights under P at the cut.
     const params = { treeWeightBalance: 1, useWholeTree: true, uniformTreeLinks: true };
