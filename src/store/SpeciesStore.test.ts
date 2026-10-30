@@ -48,7 +48,7 @@ describe('SpeciesStore.loadString', () => {
   it('creates no inverted cells', async () => {
     const store = createStore();
     Object.assign(store.binner, { minCellCapacity: 1, maxCellCapacity: 1 });
-    // Without the point on lon 180, which lands in a zero-width edge cell.
+    // Without the point on lon 180, which lands in a zero-width edge cell (#91).
     await store.loadString(CSV.slice(0, CSV.lastIndexOf('\n')));
 
     const { cells } = store.binner;
