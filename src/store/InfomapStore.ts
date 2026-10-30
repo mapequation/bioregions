@@ -70,7 +70,7 @@ const defaultArgs: RequiredArgs = {
 /** Records of the network's species, per species and in all. */
 export type RecordPool = { count: Map<string, number>; total: number };
 
-/** A taxon -> cell link: cell index, the taxon's bioregion id and the link weight. */
+/** A taxon -> cell link: cell index, taxon bioregion id and link weight. */
 type CellLink = [cellIndex: number, bioregionId: number, weight: number];
 
 /**
@@ -89,10 +89,30 @@ export function withoutUnlinkedNodes<
   }
   if ('states' in network) {
     const states = network.states.filter(({ stateId }) => linked.has(stateId));
-    return states.length === network.states.length ? network : { ...network, states };
+    return states.length === network.states.length
+      ? network
+      : { ...network, states };
   }
   const nodes = network.nodes.filter(({ id }) => linked.has(id));
-  return nodes.length === network.nodes.length ? network : { ...network, nodes };
+  return nodes.length === network.nodes.length
+    ? network
+    : { ...network, nodes };
+}
+
+/** Scores are ranked at this many decimals, so scores equal on paper tie. */
+const SCORE_DECIMALS = 9;
+
+/** Most indicative species first: by score, then record count, then name. */
+export function compareIndicative(
+  a: { name: string; count: number; score: number },
+  b: { name: string; count: number; score: number },
+) {
+  const scale = 10 ** SCORE_DECIMALS;
+  return (
+    Math.round(b.score * scale) - Math.round(a.score * scale) ||
+    b.count - a.count ||
+    (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  );
 }
 
 export class Bioregion {
@@ -128,8 +148,12 @@ export class Bioregion {
     return this.cellMap.size;
   }
 
-  /** `pool` holds the records of the network's species, per species and in all. */
-  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore, pool: RecordPool) {
+  /** `pool`: records of the network's species, per species and in all. */
+  calcStats(
+    speciesStore: SpeciesStore,
+    treeStore: TreeStore,
+    pool: RecordPool,
+  ) {
     type Species = string;
     const speciesCount = new Map<Species, number>();
 
@@ -178,9 +202,7 @@ export class Bioregion {
     }
 
     this.mostCommon.sort((a, b) => b.count - a.count);
-    this.mostIndicative.sort((a, b) =>
-      isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
-    );
+    this.mostIndicative.sort(compareIndicative);
 
 
     // Bioregion metrics
@@ -1914,8 +1936,8 @@ export default class InfomapStore {
   }
 
   /**
-   * Fill each cell's `connectedBioregions` from its links to taxa, for state and
-   * multilayer networks (`createNonStateBioregions` does this for bipartite ones).
+   * Fill each cell's `connectedBioregions` from its links to taxa, for state
+   * and multilayer networks (`createNonStateBioregions` does it for bipartite).
    */
   setConnectedBioregions(links: CellLink[]) {
     const { cells } = this;
@@ -2016,7 +2038,11 @@ export default class InfomapStore {
       if (cellIndex >= cells.length || states[source].id < cells.length) {
         continue;
       }
-      cellLinks.push([cellIndex, stateBioregionIds.get(source) ?? 0, weight ?? 1]);
+      cellLinks.push([
+        cellIndex,
+        stateBioregionIds.get(source) ?? 0,
+        weight ?? 1,
+      ]);
     }
     this.setConnectedBioregions(cellLinks);
 
@@ -2043,7 +2069,8 @@ export default class InfomapStore {
       this.addError(`Infomap output error, please report.`);
       return;
     }
-    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
+    const numModules =
+      max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
 
     const bioregions: Bioregion[] = Array.from(
       { length: numModules },
@@ -2093,14 +2120,22 @@ export default class InfomapStore {
     // Taxon -> cell links, with the bioregion of the taxon in the link's layer
     const layerBioregionIds = new Map<string, number>();
     for (const node of tree.nodes) {
-      layerBioregionIds.set(`${node.layerId} ${node.id}`, node.modules[moduleLevel]);
+      layerBioregionIds.set(
+        `${node.layerId} ${node.id}`,
+        node.modules[moduleLevel],
+      );
     }
     const cellLinks: CellLink[] = [];
-    for (const { layerId, source, target, weight } of this.multilayerNetwork?.intra ?? []) {
+    const intra = this.multilayerNetwork?.intra ?? [];
+    for (const { layerId, source, target, weight } of intra) {
       if (target >= cells.length || source < cells.length) {
         continue;
       }
-      cellLinks.push([target, layerBioregionIds.get(`${layerId} ${source}`) ?? 0, weight ?? 1]);
+      cellLinks.push([
+        target,
+        layerBioregionIds.get(`${layerId} ${source}`) ?? 0,
+        weight ?? 1,
+      ]);
     }
     this.setConnectedBioregions(cellLinks);
 

@@ -17,7 +17,7 @@ export default class OverlappingBioregions {
     this.memoryIdToBioregion.set(memoryId, bioregionId);
   }
 
-  /** The bioregion holding most of the cell's flow, the lower id on ties; 0 if none. */
+  /** The bioregion with most of the cell's flow (lower id on ties), or 0. */
   get dominantBioregionId() {
     let dominantId = 0;
     let maxFlow = -Infinity;

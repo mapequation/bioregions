@@ -5,13 +5,22 @@
 
 import type { StateTree, Tree } from '@mapequation/infomap';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHeadlessRoot, type HeadlessRoot, setOccurrences } from '../../harness/stubRoot';
-import type {
-  BioregionsMultilayerNetwork,
-  BioregionsNetwork,
-  BioregionsStateNetwork,
+import {
+  createHeadlessRoot,
+  type HeadlessRoot,
+  setOccurrences,
+} from '../../harness/stubRoot';
+import {
+  type BioregionsMultilayerNetwork,
+  type BioregionsNetwork,
+  type BioregionsStateNetwork,
+  compareIndicative,
 } from './InfomapStore';
-import { createPointFeature, type GeoFeature, type Species } from './SpeciesStore';
+import {
+  createPointFeature,
+  type GeoFeature,
+  type Species,
+} from './SpeciesStore';
 
 /** Point clusters `[name, lon, lat, records]`, giving five cells (see `CELLS`). */
 const CLUSTERS: [string, number, number, number][] = [
@@ -39,7 +48,10 @@ const TAXA = ['A', 'B', 'C', 'D', 'E'];
 
 function setup(): HeadlessRoot {
   const root = createHeadlessRoot('test');
-  Object.assign(root.speciesStore.binner, { minCellCapacity: 2, maxCellCapacity: 4 });
+  Object.assign(root.speciesStore.binner, {
+    minCellCapacity: 2,
+    maxCellCapacity: 4,
+  });
   const features: GeoFeature[] = [];
   for (const [name, x, y, n] of CLUSTERS) {
     for (let i = 0; i < n; ++i) {
@@ -58,9 +70,14 @@ function setup(): HeadlessRoot {
     speciesMap.set(properties.name, species);
   }
   Object.assign(root.speciesStore, { speciesMap, numRecords: features.length });
-  expect(cells(root).map((cell) => [cell.id, Object.fromEntries(
-    cell.speciesTopList.map(({ name, count }) => [name, count]),
-  )])).toEqual(CELLS);
+  expect(
+    cells(root).map((cell) => [
+      cell.id,
+      Object.fromEntries(
+        cell.speciesTopList.map(({ name, count }) => [name, count]),
+      ),
+    ]),
+  ).toEqual(CELLS);
   return root;
 }
 
@@ -82,13 +99,24 @@ function bipartiteNetwork(root: HeadlessRoot, taxa = TAXA): BioregionsNetwork {
   const links = cells(root).flatMap((cell, target) =>
     cell.speciesTopList
       .filter(({ name }) => taxa.includes(name))
-      .map(({ name, count }) => ({ source: taxonId(name), target, weight: count })),
+      .map(({ name, count }) => ({
+        source: taxonId(name),
+        target,
+        weight: count,
+      })),
   );
-  return { nodes, links, bipartiteStartId: cells(root).length } as unknown as BioregionsNetwork;
+  return {
+    nodes,
+    links,
+    bipartiteStartId: cells(root).length,
+  } as unknown as BioregionsNetwork;
 }
 
 /** Leaf nodes of an Infomap tree, from `[id, modules, flow]` per node. */
-function bipartiteTree(root: HeadlessRoot, nodes: [number, number[], number][]): Tree {
+function bipartiteTree(
+  root: HeadlessRoot,
+  nodes: [number, number[], number][],
+): Tree {
   const names = bipartiteNetwork(root).nodes.map((node) => node.name);
   return {
     bipartiteStartId: cells(root).length,
@@ -109,13 +137,21 @@ function bipartiteTree(root: HeadlessRoot, nodes: [number, number[], number][]):
  * and taxon in it (memory = taxon), with a taxon -> cell link per cell state.
  */
 function stateNetwork(root: HeadlessRoot) {
-  const states = TAXA.map((name, stateId) => ({ stateId, id: taxonId(name), name }));
+  const states = TAXA.map((name, stateId) => ({
+    stateId,
+    id: taxonId(name),
+    name,
+  }));
   const links: { source: number; target: number; weight: number }[] = [];
   cells(root).forEach((cell, id) => {
     for (const { name, count } of cell.speciesTopList) {
       const stateId = states.length;
       states.push({ stateId, id, name: `${cell.id}_${name}` });
-      links.push({ source: TAXA.indexOf(name), target: stateId, weight: count });
+      links.push({
+        source: TAXA.indexOf(name),
+        target: stateId,
+        weight: count,
+      });
     }
   });
   const nodes = bipartiteNetwork(root).nodes;
@@ -130,7 +166,10 @@ function stateIdOf(network: BioregionsStateNetwork, name: string) {
 }
 
 /** State tree from `[state name, modules, flow]` per state node, in output order. */
-function stateTree(network: BioregionsStateNetwork, nodes: [string, number[], number][]): StateTree {
+function stateTree(
+  network: BioregionsStateNetwork,
+  nodes: [string, number[], number][],
+): StateTree {
   return {
     args: '',
     numTopModules: Math.max(...nodes.map(([, modules]) => modules[0])),
@@ -143,7 +182,9 @@ function stateTree(network: BioregionsStateNetwork, nodes: [string, number[], nu
 }
 
 /** Multilayer tree from `[node id, layer id, modules, flow]` per state node. */
-function multilayerTree(nodes: [number, number, number[], number][]): StateTree {
+function multilayerTree(
+  nodes: [number, number, number[], number][],
+): StateTree {
   return {
     args: '--multilayer-relax-limit 1',
     numTopModules: Math.max(...nodes.map(([, , modules]) => modules[0])),
@@ -161,10 +202,15 @@ function multilayerTree(nodes: [number, number, number[], number][]): StateTree 
 }
 
 /** Every state of the state network in module 1, except those named in `modules`. */
-function stateNodes(network: BioregionsStateNetwork, modules: Record<string, number> = {}) {
-  return network.states.map(
-    ({ name = '' }): [string, number[], number] => [name, [modules[name] ?? 1], 0.01],
-  );
+function stateNodes(
+  network: BioregionsStateNetwork,
+  modules: Record<string, number> = {},
+) {
+  return network.states.map(({ name = '' }): [string, number[], number] => [
+    name,
+    [modules[name] ?? 1],
+    0.01,
+  ]);
 }
 
 beforeEach(() => {
@@ -193,7 +239,9 @@ describe('vertices without links', () => {
     const root = setup();
     const network = bipartiteNetwork(root, ['A', 'B', 'C']);
     const [input] = captureInfomapInput(root, network) as BioregionsNetwork[];
-    const linked = new Set(network.links.flatMap(({ source, target }) => [source, target]));
+    const linked = new Set(
+      network.links.flatMap(({ source, target }) => [source, target]),
+    );
     expect(input.nodes.map((node) => node.id)).toEqual(
       network.nodes.map((node) => node.id).filter((id) => linked.has(id)),
     );
@@ -217,7 +265,10 @@ describe('vertices without links', () => {
       ],
       links: [{ source: 0, target: 1, weight: 1 }],
     } as unknown as BioregionsStateNetwork;
-    const [input] = captureInfomapInput(root, network) as BioregionsStateNetwork[];
+    const [input] = captureInfomapInput(
+      root,
+      network,
+    ) as BioregionsStateNetwork[];
     expect(input.states.map((state) => state.stateId)).toEqual([0, 1]);
     expect(network.states).toHaveLength(3);
   });
@@ -234,7 +285,9 @@ describe('vertices without links', () => {
         [taxonId('C'), [1], 0.25],
       ]),
     );
-    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 1, 0, 0, 0]);
+    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([
+      1, 1, 0, 0, 0,
+    ]);
     expect(infomapStore.bioregions).toHaveLength(1);
   });
 });
@@ -247,8 +300,14 @@ function splitStateCells() {
   const root = setup();
   const network = stateNetwork(root);
   root.infomapStore.network = network;
-  const rest = stateNodes(network, { B: 2, C: 2, '3013201_B': 2, '3013201_C': 2 }).filter(
-    ([name]) => !['0320132_A', '0320132_B', '1231023_A', '1231023_C'].includes(name),
+  const rest = stateNodes(network, {
+    B: 2,
+    C: 2,
+    '3013201_B': 2,
+    '3013201_C': 2,
+  }).filter(
+    ([name]) =>
+      !['0320132_A', '0320132_B', '1231023_A', '1231023_C'].includes(name),
   );
   root.infomapStore.createBioregions(
     stateTree(network, [
@@ -267,7 +326,9 @@ function splitStateCells() {
 describe('state and multilayer cells', () => {
   it('belong to the bioregion holding most of their flow', () => {
     const root = splitStateCells();
-    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 1, 1, 1, 2]);
+    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([
+      1, 1, 1, 1, 2,
+    ]);
   });
 
   it('belong to the multilayer bioregion holding most of their flow', () => {
@@ -288,7 +349,9 @@ describe('state and multilayer cells', () => {
     const [, second] = root.infomapStore.bioregions;
     expect([...second.cellMap.keys()]).toEqual(['3013201']);
     expect(second.numRecords).toBe(4);
-    const numCells = root.infomapStore.bioregions.map((bioregion) => bioregion.numGridCells);
+    const numCells = root.infomapStore.bioregions.map(
+      (bioregion) => bioregion.numGridCells,
+    );
     expect(numCells).toEqual([4, 1]);
   });
 
@@ -319,7 +382,9 @@ describe('multilayer bioregions', () => {
       ]),
     );
     expect(root.infomapStore.bioregions).toHaveLength(2);
-    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 2, 0, 0, 0]);
+    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([
+      1, 2, 0, 0, 0,
+    ]);
   });
 });
 
@@ -356,11 +421,9 @@ describe('bioregion statistics', () => {
   function oneBioregion() {
     const root = setup();
     root.infomapStore.network = bipartiteNetwork(root);
-    const nodes = bipartiteNetwork(root).nodes.map(({ id }): [number, number[], number] => [
-      id,
-      [1],
-      0.1,
-    ]);
+    const nodes = bipartiteNetwork(root).nodes.map(
+      ({ id }): [number, number[], number] => [id, [1], 0.1],
+    );
     root.infomapStore.createBioregions(bipartiteTree(root, nodes));
     return root;
   }
@@ -391,10 +454,47 @@ describe('bioregion statistics', () => {
       ]),
     );
     const scores = Object.fromEntries(
-      root.infomapStore.bioregions[0].mostIndicative.map(({ name, score }) => [name, score]),
+      root.infomapStore.bioregions[0].mostIndicative.map(({ name, score }) => [
+        name,
+        score,
+      ]),
     );
     // A: 5 of the 8 records in bioregion 1, and 5 of the 18 network-species records
     expect(scores.A).toBeCloseTo(5 / 8 / (5 / 18), 12);
     expect(scores.C).toBeCloseTo(2 / 8 / (3 / 18), 12);
+  });
+});
+
+describe('most indicative species', () => {
+  it('are ordered the same whatever the input order', () => {
+    // within 1e-6, the old comparator ranked a < b and b < c by count, but c < a by score
+    const a = { name: 'a', count: 3, score: 1 };
+    const b = { name: 'b', count: 2, score: 1 + 0.6e-6 };
+    const c = { name: 'c', count: 1, score: 1 + 1.2e-6 };
+    for (const order of [
+      [a, b, c],
+      [a, c, b],
+      [b, a, c],
+      [b, c, a],
+      [c, a, b],
+      [c, b, a],
+    ]) {
+      expect(order.sort(compareIndicative)).toEqual([c, b, a]);
+    }
+  });
+
+  it('break ties by count, then name', () => {
+    const items = [
+      { name: 'z', count: 2, score: 2 },
+      { name: 'y', count: 2, score: 2 },
+      { name: 'x', count: 3, score: 2 },
+      { name: 'w', count: 1, score: 3 },
+    ];
+    expect(items.sort(compareIndicative).map(({ name }) => name)).toEqual([
+      'w',
+      'x',
+      'y',
+      'z',
+    ]);
   });
 });
