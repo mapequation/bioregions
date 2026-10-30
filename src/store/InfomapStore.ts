@@ -1990,7 +1990,7 @@ export default class InfomapStore {
 
   createMultilayerBioregions(tree: StateTree) {
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells } = this;
+    const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
     console.log(
       'Create multilayer bioregions... network:',
@@ -2000,22 +2000,21 @@ export default class InfomapStore {
     tree.layers = this.multilayerNetwork?.layers;
     console.log(tree);
 
-    const bioregions: Bioregion[] = Array.from(
-      { length: tree.numTopModules },
-      () => new Bioregion(),
-    );
-
     if (!tree.nodes) {
       console.error('No nodes!');
       console.log(tree);
       this.addError(`Infomap output error, please report.`);
       return;
     }
+    const numModules = max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: numModules },
+      () => new Bioregion(),
+    );
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
-      // const bioregionId = node.modules[0];
-      const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
       const bioregion = bioregions[bioregionId - 1];
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;

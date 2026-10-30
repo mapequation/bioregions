@@ -304,3 +304,20 @@ describe('state and multilayer cells', () => {
     expect(root.infomapStore.bioregions[1].numGridCells).toBe(0);
   });
 });
+
+describe('multilayer bioregions', () => {
+  it('follow the module level', () => {
+    const root = setup();
+    root.infomapStore.setModuleLevel(1);
+    root.infomapStore.createBioregions(
+      multilayerTree([
+        [0, 1, [1, 1], 0.3],
+        [taxonId('A'), 1, [1, 1], 0.3],
+        [1, 1, [1, 2], 0.2],
+        [taxonId('C'), 2, [1, 2], 0.2],
+      ]),
+    );
+    expect(root.infomapStore.bioregions).toHaveLength(2);
+    expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 2, 0, 0, 0]);
+  });
+});
