@@ -106,23 +106,25 @@ async function loadShapefiles(files: File[], nameKey?: string) {
     };
   })();
 
+  let batch: GeometryFeature[] = [];
+  const flush = () => {
+    if (batch.length > 0) {
+      postMessage({ type: 'data', data: batch });
+      batch = [];
+    }
+  };
+  const addFeature = (feature: GeometryFeature) => {
+    batch.push(feature);
+    if (batch.length > 100) {
+      flush();
+    }
+  };
+
   try {
     const source = await shapefile.open(shpStream, dbfStream);
     console.log(`Loading shapefile with bbox '${source.bbox}'...`);
 
     let result = await source.read();
-
-    const addFeature = (() => {
-      let batch: GeometryFeature[] = [];
-      return (feature: GeometryFeature) => {
-        batch.push(feature);
-        if (batch.length > 100) {
-          // dataStream.next(batch);
-          postMessage({ type: "data", data: batch });
-          batch = [];
-        }
-      };
-    })();
 
     while (!result.done) {
       const shp = result.value;
@@ -164,6 +166,8 @@ async function loadShapefiles(files: File[], nameKey?: string) {
     }
   } catch (error: unknown) {
     console.error('!! shp error:', error);
+  } finally {
+    flush();
   }
 
   // dataStream.complete();
