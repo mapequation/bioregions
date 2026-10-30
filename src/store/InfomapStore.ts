@@ -1182,25 +1182,12 @@ export default class InfomapStore {
 
     let sumTreeLinkWeight = 0;
 
-    // Include internal tree nodes into network
+    // Include internal tree nodes into network. A node's species set is all of
+    // its descendant species, also below children that end before the cut.
     visitTreeDepthFirstPostOrder(tree, (node) => {
-      if (node.isLeaf) {
-        node.speciesSet = new Set([node.name]);
-      } else {
-        node.speciesSet = new Set();
-        if (
-          useWholeTree ||
-          node.children.some((child) => child.time > integrationTime)
-        ) {
-          node.children.forEach((child) => {
-            if (child.speciesSet) {
-              for (const each of child.speciesSet) {
-                node.speciesSet?.add(each);
-              }
-            }
-          });
-        }
-      }
+      node.speciesSet = node.isLeaf
+        ? new Set([node.name])
+        : new Set(node.children.flatMap((child) => [...(child.speciesSet ?? [])]));
     });
 
     const getLinksFromTreeNode = (node: PhyloNode) => {
@@ -1748,25 +1735,12 @@ export default class InfomapStore {
 
     let sumTreeLinkWeight = 0;
 
-    // Include internal tree nodes into network
+    // Include internal tree nodes into network. A node's species set is all of
+    // its descendant species, also below children that end before the cut.
     visitTreeDepthFirstPostOrder(tree, (node) => {
-      if (node.isLeaf) {
-        node.speciesSet = new Set([node.name]);
-      } else {
-        node.speciesSet = new Set();
-        if (
-          this.useWholeTree ||
-          node.children.some((child) => child.time > integrationTime)
-        ) {
-          node.children.forEach((child) => {
-            if (child.speciesSet) {
-              for (const each of child.speciesSet) {
-                node.speciesSet?.add(each);
-              }
-            }
-          });
-        }
-      }
+      node.speciesSet = node.isLeaf
+        ? new Set([node.name])
+        : new Set(node.children.flatMap((child) => [...(child.speciesSet ?? [])]));
     });
 
     const getMemLinksFromTreeNode = (node: PhyloNode) => {

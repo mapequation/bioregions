@@ -188,3 +188,24 @@ describe('NaN weights (B5)', () => {
     }
   });
 });
+
+describe('time slice species sets (B9)', () => {
+  // (A, B) ends before the cut at 0.5, so only C reaches it below X.
+  const NON_ULTRAMETRIC = '(((A: 0.1, B: 0.1)Z: 0.1, C: 0.8)X: 0.2, D: 1)R;';
+
+  it.each([
+    { segregationTime: 0 },
+    { segregationTime: 0.1 },
+  ])('link a node to the cells of all its descendant species, with %o', (params) => {
+    const root = createRoot(
+      { ...params, treeWeightBalance: 1, useWholeTree: false, integrationTime: 0.5 },
+      NON_ULTRAMETRIC,
+    );
+    const { nameToCellIds } = root.speciesStore.binner;
+    const expected = new Set(['A', 'B', 'C'].flatMap((name) => [...nameToCellIds[name]]));
+    const cells = namedLinks(root.infomapStore.createNetwork())
+      .filter(({ taxon }) => taxon === 'X')
+      .map(({ cell }) => cell);
+    expect(new Set(cells)).toEqual(expected);
+  });
+});
