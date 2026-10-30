@@ -190,12 +190,21 @@ export default class Cell
       return this.features.push(feature);
     }
 
-    // In-between size bounds, create children if overflowing density threshold
+    // In-between size bounds, create children if overflowing density threshold.
+    // Redistribute the held features and then the arriving one, so that no
+    // record is lost on a split.
     if (this.features.length === nodeCapacity) {
-      this.features.forEach((feature) => {
-        this.addChild(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
-      });
+      const held = this.features;
       this.features = [];
+      held.forEach((heldFeature) => {
+        this.addChild(
+          heldFeature,
+          maxCellSizeLog2,
+          minCellSizeLog2,
+          nodeCapacity,
+        );
+      });
+      this.addChild(feature, maxCellSizeLog2, minCellSizeLog2, nodeCapacity);
     } else {
       this.features.push(feature);
     }
