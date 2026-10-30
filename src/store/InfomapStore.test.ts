@@ -351,3 +351,25 @@ describe('connected bioregions', () => {
     expect(cells(root)[0].connectedBioregions.ownProportion).toBe(0.75);
   });
 });
+
+describe('bioregion statistics', () => {
+  function oneBioregion() {
+    const root = setup();
+    root.infomapStore.network = bipartiteNetwork(root);
+    const nodes = bipartiteNetwork(root).nodes.map(({ id }): [number, number[], number] => [
+      id,
+      [1],
+      0.1,
+    ]);
+    root.infomapStore.createBioregions(bipartiteTree(root, nodes));
+    return root;
+  }
+
+  it('include patched cells', () => {
+    const root = oneBioregion();
+    const patched = cells(root)[2];
+    expect(patched.isLeaf).toBe(false);
+    expect(root.infomapStore.bioregions[0].numRecords).toBe(20);
+    expect(patched.bioregionMetrics.endemicity).toBe(1);
+  });
+});

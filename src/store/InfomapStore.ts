@@ -131,10 +131,6 @@ export class Bioregion {
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
       for (const { count, name } of cell.speciesTopList) {
         const species = speciesStore.speciesMap.get(name);
         if (species == null) {
@@ -190,10 +186,6 @@ export class Bioregion {
     const I_s = [];
     const { nameToCellIds } = speciesStore.binner;
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
       const { connectedBioregions } = cell;
       const numSpeciesWithin = connectedBioregions.bioregionIds.get(this.bioregionId)?.count ?? 0;
       I_c.push(numSpeciesWithin);
@@ -239,10 +231,6 @@ export class Bioregion {
     }
 
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
       cell.calcBioregionStats({
         meanNumSpeciesWithin: this.meanNumSpeciesWithin,
         stddevNumSpeciesWithin: this.stddevNumSpeciesWithin,
