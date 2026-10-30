@@ -175,6 +175,18 @@ describe('NaN weights', () => {
     expect(root.infomapStore.getTaxonLinkWeight(1, 1)).toBe(1);
   });
 
+  it.each([0, 1, 2])(
+    'keeps the information weight at most 1 for a strength below 1, with q = %d',
+    (q) => {
+      const root = createHeadlessRoot('test');
+      Object.assign(root.infomapStore, {
+        useWeightedSpeciesLinks: true,
+        spatialNormalizationOrder: q,
+      });
+      expect(root.infomapStore.getTaxonLinkWeight(0.25, 10)).toBe(1);
+    },
+  );
+
   it.each([
     { segregationTime: 0 },
     { segregationTime: 0.5 },
