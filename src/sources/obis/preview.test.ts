@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OccurrenceQuery } from '../types';
-import { previewObis } from './preview';
+import { previewObis, previewObisParts } from './preview';
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -93,6 +93,21 @@ describe('previewObis', () => {
     });
     expect(preview.basisOfRecord[0]).toEqual({ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 920 });
     expect(preview.filterImpact.uncertainty).toBeUndefined();
+  });
+
+  it('sends the summary calls first and the ledger counts only after them', async () => {
+    const fetch = vi.fn(async (url: string) => respond(url));
+    vi.stubGlobal('fetch', fetch);
+    const parts = previewObisParts(query);
+    const summary = await parts.summary;
+    const paths = () => fetch.mock.calls.map(([url]) => new URL(url).pathname.replace('/v3/', ''));
+    expect(paths().slice(0, 5).sort()).toEqual(['checklist', 'dataset', 'facet', 'statistics', 'statistics/years']);
+    expect(summary.total).toBe(920);
+    expect(summary.baseTotal).toBeUndefined();
+    expect(summary.filterImpact).toEqual({ basisOfRecord: 80 });
+    const impact = await parts.impact;
+    expect(paths().slice(5)).toEqual(['statistics', 'statistics', 'statistics', 'statistics']);
+    expect(impact).toEqual({ baseTotal: 1280, filterImpact: { years: 200, presentOnly: 50, geospatialIssues: 30 } });
   });
 
   it('returns an empty preview when no taxon resolves', async () => {

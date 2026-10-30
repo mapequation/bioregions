@@ -11,7 +11,7 @@ import {
   treeStats,
   writeNewick,
 } from '@/phylo/newickTools';
-import { studyTipOttId } from '@/phylo/otol';
+import { type StudyTreeTips, studyTipOttId } from '@/phylo/otol';
 import { normalizeSpeciesName } from '@/utils/names';
 import type { TreeSelection } from '../explorer/types';
 
@@ -73,6 +73,17 @@ export interface DatasetTree extends TreeSelection {
   hasBranchLengths: boolean;
   /** Tips in the source tree (after placing broken taxa). */
   sourceTips: number;
+  /** Labels of source tips not kept (not in the dataset, or repeats); see tipDisplayName. */
+  notInData: string[];
+}
+
+/** A readable name for a source-tree tip label ('770315' -> 'ott770315'). */
+export function tipDisplayName(label: string): string {
+  const original = ORIGINAL_LABEL.exec(label)?.[1];
+  if (original) return original.replace(/_/g, ' ');
+  const id = studyTipOttId(label);
+  if (id !== null) return `ott${id}`;
+  return cleanOttLabel(label).replace(/_/g, ' ').trim() || label;
 }
 
 /**
@@ -87,7 +98,17 @@ export function buildDatasetTree(
   broken: Record<string, string> = {},
 ): DatasetTree {
   const source = placeBrokenTaxa(parseNewick(newick), broken);
-  const sourceTips = preOrder(source).filter((n) => n.children.length === 0).length;
+  const sourceLabels = preOrder(source)
+    .filter((n) => n.children.length === 0)
+    .map((n) => n.name);
+  const sourceTips = sourceLabels.length;
+  const seen = new Set<string>();
+  const notInData: string[] = [];
+  for (const label of sourceLabels) {
+    const name = tipToDataset(label, join);
+    if (name && !seen.has(name)) seen.add(name);
+    else notInData.push(label);
+  }
   const { tree, kept } = relabelTips(source, (label) => tipToDataset(label, join));
   const keptNames = new Set<string>();
   for (const n of preOrder(tree)) {
@@ -108,6 +129,7 @@ export function buildDatasetTree(
     broken: brokenNames,
     hasBranchLengths: kept > 1 && treeStats(tree).hasBranchLengths,
     sourceTips,
+    notInData,
   };
 }
 
@@ -122,6 +144,25 @@ export function coverageOf(newick: string, join: TipJoin): { matched: number; ha
     }
   }
   return { matched: seen.size, hasBranchLengths: treeStats(tree).hasBranchLengths };
+}
+
+/**
+ * Coverage of a study tree from its tips alone (see fetchStudyTips): the dataset
+ * species it contains, and the names of tree tips that are not in the dataset
+ * (repeats included, as buildDatasetTree drops them).
+ */
+export function coverageOfTips(
+  tips: StudyTreeTips,
+  join: TipJoin,
+): { kept: Set<string>; hasBranchLengths: boolean; notInData: string[] } {
+  const kept = new Set<string>();
+  const notInData: string[] = [];
+  tips.labels.forEach((label, i) => {
+    const name = tipToDataset(label, join);
+    if (name && !kept.has(name)) kept.add(name);
+    else notInData.push(tips.names[i] ?? tipDisplayName(label));
+  });
+  return { kept, hasBranchLengths: tips.hasBranchLengths, notInData };
 }
 
 /**

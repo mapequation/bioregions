@@ -6,15 +6,18 @@ import {
   bestDatedCandidate,
   branchLengthKind,
   cleanTreeLabel,
+  humanizeTreeLabel,
   initialOrder,
   lengthUnits,
   mapLimit,
   shortAuthors,
   sortCandidates,
+  studyCandidate,
   studyCandidates,
   synthVersionLabel,
   syntheticCandidate,
   treeCitationText,
+  truncateWords,
 } from './candidates';
 
 const study = (studyId: string, treeId: string, extra: Partial<StudyTree> = {}): StudyTree => ({
@@ -136,5 +139,31 @@ describe('candidates', () => {
       active--;
     });
     expect(peak).toBe(3);
+  });
+});
+
+describe('tree labels', () => {
+  it('humanises file-like ids and cuts at word boundaries', () => {
+    expect(humanizeTreeLabel('MamPhy_fullPosterior_BDvr_DNAonly_4098sp_topoFree_NDexp_MCC_v2_target')).toBe(
+      'MCC tree · DNA-only · 4,098 spp.',
+    );
+    expect(humanizeTreeLabel('some_file_name')).toBe('some file name');
+    expect(humanizeTreeLabel('Garli ML tree')).toBe('Garli ML tree');
+    expect(truncateWords('Time-calibrated, autocorrelated rates, soft-bounded constraints')).toBe(
+      'Time-calibrated, autocorrelated rates…',
+    );
+  });
+
+  it('drops file prefixes and a word cut by the label cap', () => {
+    const c = studyCandidate({
+      studyId: 'ot_3043',
+      treeId: 'tree2',
+      label: 'File S3. Fully assembled phylogeny in Newick forma',
+      reference: 'Del Risco, A. A. (2024). Bats.',
+      year: 2024,
+      isDated: true,
+    });
+    expect(c.subtitle).toBe('Fully assembled phylogeny in Newick…');
+    expect(c.subtitleDetail).toContain('File S3. Fully assembled phylogeny in Newick forma');
   });
 });

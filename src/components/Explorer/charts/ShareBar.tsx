@@ -1,3 +1,10 @@
+// Colour contract of the explorer bars (shared by the decision ledger and the bias cards):
+// - warnings (triggered bias flags): colorPalette `chartPalettes.removal` ('orange'), variant
+//   'solid' -> orange.solid;
+// - removals (ledger filter impacts and cleaning drops): the same palette, variant 'muted' ->
+//   orange.emphasized, so a removal reads as the same hue as a warning but quieter;
+// - totals (matching / loaded records): `chartPalettes.accepted` ('brand'), variant 'solid'.
+// Tracks are a neutral `bg.muted` strip. All are semantic tokens, so both colour modes work.
 import { Box } from '@chakra-ui/react';
 
 export interface ShareBarProps {
@@ -19,6 +26,8 @@ export interface ShareBarProps {
   start?: number;
   /** Draws a faint full-width track behind the bar. */
   track?: boolean;
+  /** Track height in px, vertically centred on the bar (default: the bar height). */
+  trackHeight?: number;
   /** Hides the bar (not the tick) when `value / max` is below this share. Default 0. */
   hideBelow?: number;
 }
@@ -36,8 +45,10 @@ export default function ShareBar({
   label,
   start = 0,
   track = false,
+  trackHeight,
   hideBelow = 0,
 }: ShareBarProps) {
+  const thinTrack = track && trackHeight != null && trackHeight < height;
   const left = fraction(start, max);
   const w = Math.min(1 - left, fraction(value, max));
   const visible = variant !== 'ghost' && value > 0 && w >= hideBelow;
@@ -52,9 +63,21 @@ export default function ShareBar({
       h={`${height}px`}
       flexShrink={0}
       colorPalette={colorPalette}
-      bg={track ? 'bg.muted' : undefined}
+      bg={track && !thinTrack ? 'bg.muted' : undefined}
       borderRadius="1px"
     >
+      {thinTrack && (
+        <Box
+          position="absolute"
+          left={0}
+          right={0}
+          top="50%"
+          h={`${trackHeight}px`}
+          transform="translateY(-50%)"
+          bg="bg.muted"
+          borderRadius="full"
+        />
+      )}
       {visible && (
         <Box
           position="absolute"

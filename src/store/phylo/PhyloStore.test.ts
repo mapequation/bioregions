@@ -14,6 +14,7 @@ vi.mock('@/phylo/otol', async (importOriginal) => {
     inducedSubtree: vi.fn(),
     findStudyTrees: vi.fn(),
     fetchStudyTree: vi.fn(),
+    fetchStudyTips: vi.fn(),
     synthesisInfo: vi.fn(),
   };
 });
@@ -59,6 +60,8 @@ function mockOtol() {
       : [],
   );
   vi.mocked(otol.fetchStudyTree).mockResolvedValue('((1:2,4:2):1,(77:1,3:1):2);');
+  // No phylesystem file: coverage falls back to the API Newick.
+  vi.mocked(otol.fetchStudyTips).mockRejectedValue(new Error('no study file'));
 }
 
 function fakeRoot() {
@@ -197,6 +200,70 @@ describe('PhyloStore', () => {
     expect(store.selectedId).toBe('ot_1@tree1');
     expect(store.selectionReason).toBe('user');
     expect(store.bestDated?.id).toBe('ot_2@tree2');
+    store.dispose();
+  });
+
+  it('counts coverage from study tips, waits for checks before preferring a load, and retries failures', async () => {
+    mockOtol();
+    vi.mocked(otol.fetchStudyTips).mockClear();
+    const studies = [
+      { studyId: 'ot_1', treeId: 'tree1', reference: 'Perelman, P., et al. (2011). Primates.', year: 2011, isDated: true, branchLengthMode: 'ot:time' },
+      { studyId: 'ot_1', treeId: 'tree2', reference: 'Perelman, P., et al. (2011). Primates.', year: 2011, isDated: false },
+      { studyId: 'ot_2', treeId: 'tree9', reference: 'Upham, N., et al. (2019). Mammals.', year: 2019, isDated: true, branchLengthMode: 'ot:time' },
+    ];
+    vi.mocked(otol.findStudyTrees).mockImplementation(async ({ taxonName }) => (taxonName === 'Callitrichidae' ? studies : []));
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(otol.fetchStudyTips).mockImplementation(async (studyId) => {
+      if (studyId === 'ot_2') throw new Error('offline');
+      await gate;
+      return {
+        tree1: { labels: ['1', '4', '77', '3'], names: ['Callithrix jacchus', 'Saguinus oedipus', 'Homo sapiens', 'Callithrix argentata'], hasBranchLengths: true },
+        tree2: { labels: ['1', '2'], names: ['Callithrix jacchus', 'Callithrix penicillata'], hasBranchLengths: false },
+      };
+    });
+    vi.mocked(otol.fetchStudyTree).mockImplementation(async (_study, treeId) => {
+      if (treeId === 'tree9') throw new Error('HTTP 500');
+      return '((1:2,4:2):1,(77:1,3:1):2);';
+    });
+    const root = fakeRoot();
+    root.explorerStore.isOpen = true;
+    root.explorerStore.tab = 'phylogeny';
+    const store = new PhyloStore(root as unknown as RootStore);
+    await when(() => store.candidatesState === 'ready' && store.selection !== null);
+
+    // One download per study; the synthesis is pre-selected but may still be replaced.
+    expect(vi.mocked(otol.fetchStudyTips)).toHaveBeenCalledTimes(2);
+    expect(store.selectedId).toBe('synthetic');
+    expect(store.awaitingBestTree).toBe(true);
+
+    release();
+    await when(() => !store.checkingCoverage);
+    expect(store.candidates.find((c) => c.id === 'ot_1@tree1')?.coverage?.matched).toBe(3);
+    expect(store.candidates.find((c) => c.id === 'ot_1@tree2')?.branchLengths).toBe('none');
+    const failed = store.candidates.find((c) => c.id === 'ot_2@tree9');
+    expect(failed).toMatchObject({ coverageState: 'error', coverageError: 'failed' });
+    expect(store.awaitingBestTree).toBe(false);
+    // The study tree with 3 of 5 species is dated and pre-selected after the checks.
+    await when(() => store.selectedId === 'ot_1@tree1' && store.selectionNotInData !== null);
+    expect(store.selectionReason).toBe('dated');
+    expect(store.selectionNotInData).toEqual(['Homo sapiens']);
+
+    // A retry runs the check again for that row only.
+    vi.mocked(otol.fetchStudyTips).mockResolvedValue({
+      tree9: { labels: ['1', '2', '3', '4'], names: ['a', 'b', 'c', 'd'], hasBranchLengths: true },
+    });
+    await store.retryCoverage('ot_2@tree9');
+    expect(store.candidates.find((c) => c.id === 'ot_2@tree9')).toMatchObject({ coverageState: 'ready', coverage: { matched: 4 } });
+    // Still automatic, so the better dated tree replaces the pick.
+    expect(store.selectedId).toBe('ot_2@tree9');
+
+    // Loading counts as the user's choice.
+    store.select('synthetic', 'default');
+    root.speciesStore.loaded = false;
+    vi.mocked(otol.fetchStudyTree).mockResolvedValue('((1:2,4:2):1,(77:1,3:1):2);');
+    await store.loadSelected();
+    expect(store.selectionReason).toBe('user');
     store.dispose();
   });
 });

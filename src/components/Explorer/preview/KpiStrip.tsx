@@ -140,8 +140,16 @@ export default observer(function KpiStrip() {
   const { previewState, baseline, sources } = explorerStore;
   const kpis = explorerStore.kpis;
   const previews = explorerStore.previews;
-  const loading = previewState === 'stale';
-  const first = previewState === 'first' || (!kpis && previewState !== 'error');
+  // The KPIs depend only on each source's headline numbers, not on the ledger impacts: they
+  // dim only while a source still owes new headline numbers (a progressive preview that has
+  // delivered them clears `stale` while its filter impacts load).
+  const enabledSources = (Object.keys(sources) as SourceId[])
+    .filter((id) => explorerStore.query.sources[id])
+    .map((id) => sources[id]);
+  const loading =
+    previewState === 'stale' &&
+    enabledSources.some((s) => (s.state === 'loading' || s.state === 'rateLimited') && (s.stale || !s.preview));
+  const first = !kpis && (previewState === 'first' || previewState === 'stale');
   const drawer = useInsightsDrawer();
   const [compact] = useMediaQuery([COMPACT_QUERY], { ssr: false });
   const flags = explorerStore.biasFlags.filter((f) => f.triggered).length;

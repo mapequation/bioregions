@@ -14,14 +14,28 @@ import ExplorerStore, {
 } from './ExplorerStore';
 import type RootStore from './RootStore';
 
-vi.mock('../sources/gbif/preview', async (orig) => ({
-  ...(await orig<typeof import('../sources/gbif/preview')>()),
-  previewGbif: vi.fn(),
-}));
-vi.mock('../sources/obis/preview', async (orig) => ({
-  ...(await orig<typeof import('../sources/obis/preview')>()),
-  previewObis: vi.fn(),
-}));
+// The store asks each source for a fast summary plus ledger counts; the tests stub one
+// full preview per source and serve it as the summary (its baseTotal/filterImpact win).
+vi.mock('../sources/gbif/preview', async (orig) => {
+  const previewGbif = vi.fn();
+  return {
+    ...(await orig<typeof import('../sources/gbif/preview')>()),
+    previewGbif,
+    previewGbifSummary: (q: unknown, s: unknown) => previewGbif(q, s),
+    previewGbifImpact: async () => ({ filterImpact: {} }),
+  };
+});
+vi.mock('../sources/obis/preview', async (orig) => {
+  const previewObis = vi.fn();
+  return {
+    ...(await orig<typeof import('../sources/obis/preview')>()),
+    previewObis,
+    previewObisParts: (q: unknown, s: unknown) => {
+      const summary = Promise.resolve(previewObis(q, s));
+      return { summary, impact: summary.then(() => ({ filterImpact: {} })) };
+    },
+  };
+});
 vi.mock('../sources/gbif/taxa', async (orig) => ({
   ...(await orig<typeof import('../sources/gbif/taxa')>()),
   suggestGbifTaxa: vi.fn(),
@@ -270,11 +284,65 @@ describe('computeBiasFlags', () => {
     byId.temporalSkew.action?.run();
     expect(a.narrowYears).toHaveBeenCalledWith(2011);
     // Concrete action labels and legend text.
-    expect(byId.datasetDominance.action?.label).toBe('Exclude eBird');
+    expect(byId.datasetDominance.action?.label).toBe('Exclude this dataset');
+    expect(byId.datasetDominance.action?.title).toBe('Exclude eBird');
     expect(byId.temporalSkew.action?.label).toBe('Restrict to 2011');
-    expect(byId.humanObservation.action?.label).toBe('Compare: specimens only');
-    expect(byId.lowCountSpecies.action?.label).toBe('Set minimum 5 records per species');
-    expect(byId.countryConcentration.thresholdLabel).toBe('warns above 50 % of records');
+    expect(byId.humanObservation.action?.label).toBe('Specimens only');
+    expect(byId.lowCountSpecies.action?.label).toBe('5+ records per species');
+    expect(byId.countryConcentration.thresholdLabel).toBe('flagged above 50 % of records');
+  });
+
+  it('grades triggered flags as notes or warnings and prices each remedy', () => {
+    const flags = computeBiasFlags(
+      {
+        query: explorerDefaultQuery(),
+        previews: [
+          preview('gbif', {
+            total: 1000,
+            topDatasets: [{ key: 'inat', label: 'iNaturalist Research-grade Observations', count: 450 }],
+            basisOfRecord: [
+              { key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 700 },
+              { key: 'PRESERVED_SPECIMEN', label: 'Preserved specimen', count: 250 },
+              { key: 'MATERIAL_SAMPLE', label: 'Material sample', count: 50 },
+            ],
+            // 50 records undated.
+            years: [
+              { year: 2000, count: 100 },
+              { year: 2020, count: 850 },
+            ],
+            countries: [{ key: 'BR', label: 'Brazil', count: 740 }],
+          }),
+        ],
+        speciesCounts: [
+          { key: 'a', label: 'A', count: 1 },
+          { key: 'b', label: 'B', count: 3 },
+          { key: 'c', label: 'C', count: 100 },
+        ],
+        currentYear: 2025,
+      },
+      actions(),
+    );
+    const byId = Object.fromEntries(flags.map((f) => [f.id, f]));
+    // 45 % >= 1.5 x 30 %: a warning; 74 % < 1.5 x 50 %: a note; 70 % < 90 %: a note.
+    expect(byId.datasetDominance.level).toBe('warning');
+    expect(byId.countryConcentration.level).toBe('note');
+    expect(byId.humanObservation.level).toBe('note');
+    expect(byId.temporalSkew.level).toBe('note'); // 850 / 950 = 89 %
+    expect(byId.lowCountSpecies.level).toBe('warning'); // 67 %
+    expect(byId.datasetDominance.action).toMatchObject({
+      label: 'Exclude this dataset',
+      title: 'Exclude iNaturalist Research-grade Observations',
+      cost: 450,
+    });
+    expect(byId.humanObservation.action?.cost).toBe(700);
+    expect(byId.temporalSkew.action?.cost).toBe(150); // 100 older + 50 undated
+    expect(byId.countryConcentration.action?.cost).toBeUndefined();
+    expect(byId.lowCountSpecies.action?.cost).toBe(4);
+    const passed = computeBiasFlags(
+      { query: explorerDefaultQuery(), previews: [preview('gbif', { total: 10 })], speciesCounts: null, currentYear: 2025 },
+      actions(),
+    );
+    expect(passed.find((f) => f.id === 'lowCountSpecies')?.level).toBeUndefined();
   });
 
   it('names the year range it sets and drops actions that are already applied', () => {

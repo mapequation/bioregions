@@ -24,6 +24,7 @@ import { fmtInt } from '../format';
 import {
   alphaExtent,
   decadeSteps,
+  chooseZoom,
   dragBbox,
   fitView,
   legendLabel,
@@ -32,7 +33,9 @@ import {
   pxToLonLat,
   tilesForView,
   unionBbox,
+  unwrapBbox,
   wktBbox,
+  wrapBbox,
 } from './mapView';
 
 /** Approximate colour ramps of the GBIF point styles (sampled from rendered tiles). */
@@ -40,11 +43,20 @@ const GBIF_RAMP = {
   light: ['#5e0063', '#a42e61', '#d16a63', '#edab79', '#f6ca8e'],
   dark: ['#64360d', '#a05f19', '#d98724', '#e9a330', '#f6b739'],
 };
+/** Ramps of the hexagon styles used in area views (sampled from tiles, few to many records). */
+const GBIF_HEX_RAMP = {
+  light: ['#5e0063', '#a42e61', '#d26b63', '#eeab79', '#ffebaa'],
+  dark: ['#ffff00', '#ffcc00', '#ff9900', '#ff6600', '#d60a00'],
+};
 const OBIS_FILL = 'var(--chakra-colors-teal-solid)';
 const OBIS_MIN_OPACITY = 0.18;
 const OBIS_MAX_OPACITY = 0.8;
 const NO_CELLS: ObisCell[] = [];
 const MAX_HEIGHT = 'calc((100dvh - 132px) * 0.42)';
+/** Hexagon size on screen (CSS px) for the density layer of an area view. */
+const HEX_PX = 5;
+/** Hexagons across a tile drawn `size` CSS px wide, so each is about HEX_PX on screen. */
+const hexPerTile = (size: number) => Math.round(Math.min(256, Math.max(16, size / HEX_PX)));
 
 // --- Area extent ---------------------------------------------------------------------
 
@@ -137,13 +149,16 @@ function wktRings(wkt: string): [number, number][][] {
 function areaPath(area: AreaFilter): string | null {
   const ring = (pts: [number, number][]) => `M${pts.map(([x, y]) => `${x},${-y}`).join('L')}Z`;
   if (area.kind === 'bbox') {
-    const [w, s, e, n] = area.bbox;
-    return ring([
-      [w, s],
-      [e, s],
-      [e, n],
-      [w, n],
-    ]);
+    // Unwrapped across the antimeridian, plus a copy one world west for the world view.
+    const [w, s, e, n] = unwrapBbox(area.bbox);
+    const rect = (dx: number) =>
+      ring([
+        [w + dx, s],
+        [e + dx, s],
+        [e + dx, n],
+        [w + dx, n],
+      ]);
+    return e > 180 ? rect(0) + rect(-360) : rect(0);
   }
   if (area.kind === 'wkt') {
     const rings = wktRings(area.wkt);
@@ -260,6 +275,10 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   );
   const ready = size.width > 0 && size.height > 0;
   const tiles = ready ? tilesForView(view) : [];
+  // Fitted to an area, density tiles come one zoom finer and only where the area is,
+  // so records read as fine pixels rather than a sparse dot grid, at no extra requests.
+  const zoomedToArea = fit === 'area' && hasArea && bbox != null;
+  const densityTiles = !ready ? [] : zoomedToArea ? tilesForView(view, chooseZoom(view.scale), bbox) : tiles;
   const tileScale: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1.25 ? 2 : 1;
 
   // GBIF density layer: only when GBIF is on, supports the query and knows a taxon.
@@ -267,7 +286,16 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   const showGbif = query.sources.gbif && supportsGbif(query).ok && gbifKnowsTaxa;
   const coverage = gbifTileFilterCoverage(query);
   const densityUrls = showGbif
-    ? tiles.map((t) => gbifDensityTileUrl(query, { z: t.z, x: t.x, y: t.y, scale: tileScale, dark }))
+    ? densityTiles.map((t) =>
+        gbifDensityTileUrl(query, {
+          z: t.z,
+          x: t.x,
+          y: t.y,
+          scale: tileScale,
+          dark,
+          ...(zoomedToArea && { bin: 'hex' as const, hexPerTile: hexPerTile(t.size) }),
+        }),
+      )
     : [];
 
   // Track which density tiles have settled, and which failed (204 = empty).
@@ -327,7 +355,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     const box = dragBbox(drag.a, localPx(e));
     setDrag(null);
     if (box) {
-      explorerStore.setArea({ kind: 'bbox', bbox: box });
+      explorerStore.setArea({ kind: 'bbox', bbox: wrapBbox(box) });
       explorerUi.setDrawing(false);
     }
   };
@@ -370,7 +398,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     : showObis
       ? 'Map shows the OBIS record grid for this query; GBIF density is off.'
       : 'No occurrence layer for this query.';
-  const ramp = dark ? GBIF_RAMP.dark : GBIF_RAMP.light;
+  const ramps = zoomedToArea ? GBIF_HEX_RAMP : GBIF_RAMP;
+  const ramp = dark ? ramps.dark : ramps.light;
   const obisSteps = decadeSteps(obis.max).slice(0, 5);
 
   return (
@@ -401,7 +430,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         >
           {tiles.map((t) => (
             <img
-              key={`b-${t.z}-${t.x}-${t.y}`}
+              key={`b-${t.z}-${t.col}-${t.y}`}
               src={gbifBasemapUrl({ z: t.z, x: t.x, y: t.y, scale: tileScale, dark })}
               alt=""
               draggable={false}
@@ -416,12 +445,12 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
               }}
             />
           ))}
-          {tiles.map((t, i) => {
+          {densityTiles.map((t, i) => {
             const src = densityUrls[i];
             if (!src) return null;
             return (
               <img
-                key={`d-${t.z}-${t.x}-${t.y}`}
+                key={`d-${t.z}-${t.col}-${t.y}`}
                 src={src}
                 alt=""
                 draggable={false}
@@ -453,6 +482,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                 style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: drawing ? 'none' : 'auto' }}
               >
                 {obisLayer}
+                {/* Across the antimeridian the view passes 180°: repeat the grid one world east. */}
+                {view.east > 180 && obisLayer.length > 0 && <g transform="translate(360 0)">{obisLayer}</g>}
                 {outline && fit === 'area' && (
                   <>
                     <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.4} fillRule="evenodd" />
@@ -583,7 +614,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             {showGbif && (
               <Box>
                 <Text lineHeight="short" mb={1}>
-                  GBIF records per pixel
+                  GBIF records per {zoomedToArea ? 'hexagon' : 'pixel'}
                 </Text>
                 <Box
                   h="8px"

@@ -1,5 +1,7 @@
-// GBIF preview: one graphql.gbif.org request returns totals, species/dataset counts,
-// year histogram, uncertainty stats, top facets, and the per-filter impact counts.
+// GBIF preview in two graphql.gbif.org requests sent together: a fast summary (totals,
+// species/dataset counts, year histogram, uncertainty stats, top facets) that drives the
+// KPIs, map and insights, and a slower one with the per-filter impact counts and the
+// ledger base, which only the decision ledger waits for.
 
 import type { FacetBucket, FilterId, OccurrenceQuery, PreviewSummary } from '../types';
 import { gbifGraphql } from './graphql';
@@ -113,7 +115,10 @@ interface MainResult {
   } | null;
 }
 
-type PreviewResponse = { main: MainResult } & Record<string, { documents: { total: number } }>;
+type ImpactResponse = Record<string, { documents: { total: number } }>;
+
+/** What the second, slower preview request adds: the ledger base and per-filter impact. */
+export type PreviewImpact = Pick<PreviewSummary, 'baseTotal' | 'filterImpact'>;
 
 const MAIN_FIELDS = `
     documents(size: 0) { total }
@@ -131,60 +136,87 @@ const MAIN_FIELDS = `
       datasetKey(size: 12) { key count label }
     }`;
 
-/** The GraphQL document and variables for a preview; exported for tests and debugging. */
-export function buildPreviewRequest(query: OccurrenceQuery): {
+/** The fast request: totals, cardinality, stats, histogram and facets. */
+export function buildSummaryRequest(query: OccurrenceQuery): {
+  document: string;
+  variables: { p: GraphqlPredicate };
+} {
+  return {
+    document: `query PreviewSummary($p: Predicate) {\n  main: occurrenceSearch(predicate: $p) {${MAIN_FIELDS}\n  }\n}`,
+    variables: { p: gbifPredicate(query) },
+  };
+}
+
+/**
+ * The ledger request: one count per active filter (the query without that filter), the
+ * ledger base (taxa + area only) and the query's own count, so impacts are self-consistent.
+ * Null when no filter is active (the base then equals the total and nothing is removed).
+ */
+export function buildImpactRequest(query: OccurrenceQuery): {
   document: string;
   variables: Record<string, GraphqlPredicate>;
   filters: FilterId[];
-} {
+} | null {
   const filters = activeGbifFilters(query);
   const allFilters: FilterId[] = [...PREVIEW_FILTERS, 'datasets'];
-  const variables: Record<string, GraphqlPredicate> = { p: gbifPredicate(query) };
+  const p = gbifPredicate(query);
+  const base = gbifPredicate(query, { omit: allFilters });
+  const hasBase = JSON.stringify(base) !== JSON.stringify(p);
+  if (filters.length === 0 && !hasBase) return null;
+  const variables: Record<string, GraphqlPredicate> = { p };
   const params = ['$p: Predicate'];
-  const aliases: string[] = [];
+  const aliases = ['  main: occurrenceSearch(predicate: $p) { documents(size: 0) { total } }'];
   for (const id of filters) {
     variables[`p_${id}`] = gbifPredicate(query, { omit: [id] });
     params.push(`$p_${id}: Predicate`);
     aliases.push(`  f_${id}: occurrenceSearch(predicate: $p_${id}) { documents(size: 0) { total } }`);
   }
-  // The ledger base: taxa + area only. Equal to `main` when no filter is active.
-  const base = gbifPredicate(query, { omit: allFilters });
-  if (JSON.stringify(base) !== JSON.stringify(variables.p)) {
+  if (hasBase) {
     variables.p_base = base;
     params.push('$p_base: Predicate');
     aliases.push('  base: occurrenceSearch(predicate: $p_base) { documents(size: 0) { total } }');
   }
-  const document = [
-    `query Preview(${params.join(', ')}) {`,
-    `  main: occurrenceSearch(predicate: $p) {${MAIN_FIELDS}\n  }`,
-    ...aliases,
-    '}',
-  ].join('\n');
+  const document = [`query PreviewImpact(${params.join(', ')}) {`, ...aliases, '}'].join('\n');
   return { document, variables, filters };
 }
 
 const buckets = (raw: RawBucket[] | null | undefined, label: (b: RawBucket) => string) =>
   (raw ?? []).map((b): FacetBucket => ({ key: String(b.key), label: label(b), count: b.count }));
 
-/** Summarize what a query returns from GBIF, in a single GraphQL request. */
-export async function previewGbif(
+/** Ledger base and per-filter impact (the second preview request; none without filters). */
+export async function previewGbifImpact(
+  query: OccurrenceQuery,
+  signal?: AbortSignal,
+): Promise<PreviewImpact> {
+  const request = buildImpactRequest(query);
+  if (!request) return { filterImpact: {} };
+  const data = await gbifGraphql<ImpactResponse>(request.document, request.variables, { signal });
+  const total = data.main?.documents.total ?? 0;
+  const baseCount = data.base?.documents.total;
+  const filterImpact: PreviewSummary['filterImpact'] = {};
+  for (const id of request.filters) {
+    const count = data[`f_${id}`]?.documents.total;
+    if (typeof count === 'number') filterImpact[id] = Math.max(0, count - total);
+  }
+  return {
+    ...(typeof baseCount === 'number' && { baseTotal: Math.max(baseCount, total) }),
+    filterImpact,
+  };
+}
+
+/**
+ * Summary of what a query returns from GBIF (the fast request). `baseTotal` is set only
+ * when no filter is active (it then equals `total`); otherwise `previewGbifImpact` adds it.
+ */
+export async function previewGbifSummary(
   query: OccurrenceQuery,
   signal?: AbortSignal,
 ): Promise<PreviewSummary> {
-  const { document, variables, filters } = buildPreviewRequest(query);
-  const data = await gbifGraphql<PreviewResponse>(document, variables, { signal });
+  const { document, variables } = buildSummaryRequest(query);
+  const data = await gbifGraphql<{ main: MainResult }>(document, variables, { signal });
   const main = data.main;
   const total = main.documents.total;
-  const baseCount = data.base?.documents.total;
-  const baseTotal = typeof baseCount === 'number' ? Math.max(baseCount, total) : total;
-
-  const filterImpact: PreviewSummary['filterImpact'] = {};
-  for (const id of filters) {
-    const count = data[`f_${id}`]?.documents.total;
-    if (typeof count === 'number') {
-      filterImpact[id] = Math.max(0, count - total);
-    }
-  }
+  const filtered = buildImpactRequest(query) != null;
 
   const years = (main.histogram?.year?.buckets ?? [])
     .map((b) => ({ year: Math.round(Number(b.key)), count: b.count }))
@@ -209,7 +241,7 @@ export async function previewGbif(
   return {
     source: 'gbif',
     total,
-    baseTotal,
+    ...(!filtered && { baseTotal: total }),
     species: main.cardinality?.speciesKey ?? null,
     datasets: main.cardinality?.datasetKey ?? null,
     yearRange,
@@ -220,6 +252,22 @@ export async function previewGbif(
     countries: buckets(facet?.countryCode, (b) => countryLabel(b.key)),
     issues: buckets(facet?.issue, (b) => issueLabel(b.key)),
     uncertainty,
-    filterImpact,
+    filterImpact: {},
+  };
+}
+
+/** Summary and impact together (two parallel requests), e.g. for scripts and tests. */
+export async function previewGbif(
+  query: OccurrenceQuery,
+  signal?: AbortSignal,
+): Promise<PreviewSummary> {
+  const [summary, impact] = await Promise.all([
+    previewGbifSummary(query, signal),
+    previewGbifImpact(query, signal),
+  ]);
+  return {
+    ...summary,
+    baseTotal: Math.max(impact.baseTotal ?? summary.baseTotal ?? summary.total, summary.total),
+    filterImpact: impact.filterImpact,
   };
 }

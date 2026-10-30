@@ -31,7 +31,21 @@ function doiUrl(doi: string): string {
   return /^https?:\/\//.test(doi) ? doi : `https://doi.org/${doi.replace(/^doi:\s*/i, '')}`;
 }
 
-function CoverageCell({ c }: { c: TreeCandidate }) {
+/** Branch lengths come from study metadata until the tree itself has been read. */
+function unverified(c: TreeCandidate): boolean {
+  return c.kind === 'study' && c.coverageState !== 'ready';
+}
+
+const UNVERIFIED_TIP = 'From the study record; confirmed once the tree is read.';
+
+/** A muted '?' after a value that is not confirmed yet. */
+const Unsure = () => (
+  <Text as="span" color="fg.subtle" ms={0.5} aria-hidden>
+    ?
+  </Text>
+);
+
+function CoverageCell({ c, onRetry }: { c: PhyloCandidate; onRetry: (id: string) => void }) {
   if (c.coverageState === 'pending') {
     return (
       <HStack gap={1.5} color="fg.muted" textStyle="xs">
@@ -41,12 +55,42 @@ function CoverageCell({ c }: { c: TreeCandidate }) {
     );
   }
   if (c.coverageState === 'error' || !c.coverage) {
+    const timedOut = c.coverageError === 'timeout';
     return (
-      <Tooltip content="Couldn't download this tree to count its tips." showArrow>
-        <Text as="span" color="fg.muted" textStyle="xs" tabIndex={0}>
-          unknown
+      <HStack gap={1} textStyle="xs" color="fg.muted" minW={0}>
+        <Tooltip
+          content={
+            timedOut
+              ? 'Open Tree took longer than 20 s to send this tree.'
+              : "Couldn't download this tree to count its tips."
+          }
+          showArrow
+        >
+          <Text as="span" tabIndex={0} whiteSpace="nowrap">
+            {timedOut ? 'timed out' : 'failed'}
+          </Text>
+        </Tooltip>
+        <Text as="span" aria-hidden>
+          ·
         </Text>
-      </Tooltip>
+        <Button
+          size="2xs"
+          variant="plain"
+          px={0}
+          h="auto"
+          minW={0}
+          color="fg"
+          textDecoration="underline"
+          textUnderlineOffset="2px"
+          aria-label={`Retry coverage check for ${c.title}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry(c.id);
+          }}
+        >
+          retry
+        </Button>
+      </HStack>
     );
   }
   const { matched, total } = c.coverage;
@@ -74,7 +118,8 @@ function CoverageCell({ c }: { c: TreeCandidate }) {
 
 function LengthsCell({ c }: { c: PhyloCandidate }) {
   const units = lengthUnits(c);
-  const tip =
+  const unsure = unverified(c);
+  const known =
     c.branchLengths === 'none'
       ? 'No branch lengths: Grafen lengths (relative ages, root = 1) are added on load.'
       : c.branchLengths === 'time'
@@ -84,10 +129,18 @@ function LengthsCell({ c }: { c: PhyloCandidate }) {
         : units.short === 'unknown'
           ? 'Branch lengths are not time and Open Tree records no unit; they are used as relative time.'
           : `Branch lengths in ${units.long}, used as relative time.`;
+  const tip = unsure ? `${known} ${UNVERIFIED_TIP}` : known;
   return (
     <Tooltip content={tip} showArrow openDelay={300} contentProps={{ maxW: '280px' }}>
-      <Text as="span" display="block" truncate tabIndex={0} color={c.branchLengths === 'time' ? 'fg' : 'fg.muted'}>
+      <Text
+        as="span"
+        display="block"
+        truncate
+        tabIndex={0}
+        color={unsure ? 'fg.muted' : c.branchLengths === 'time' ? 'fg' : 'fg.muted'}
+      >
         {units.short}
+        {unsure && <Unsure />}
       </Text>
     </Tooltip>
   );
@@ -122,7 +175,18 @@ function SourceCell({ c, selected }: { c: PhyloCandidate; selected: boolean }) {
 }
 
 function DatedCell({ c }: { c: TreeCandidate }) {
-  return c.branchLengths === 'time' ? (
+  const dated = c.branchLengths === 'time';
+  if (unverified(c)) {
+    return (
+      <Tooltip content={`${dated ? 'Dated' : 'Not dated'} per the study record; confirmed once the tree is read.`} showArrow openDelay={300}>
+        <Text as="span" display="inline-flex" alignItems="center" color="fg.muted" tabIndex={0} aria-label={dated ? 'dated (unconfirmed)' : 'not dated (unconfirmed)'}>
+          {dated ? <Icon as={LuCheck} /> : '–'}
+          <Unsure />
+        </Text>
+      </Tooltip>
+    );
+  }
+  return dated ? (
     <Icon as={LuCheck} color="fg" aria-label="dated" role="img" />
   ) : (
     <Text as="span" color="fg.muted" aria-label="not dated">
@@ -166,6 +230,7 @@ export default observer(function TreeSourceTable() {
   const checking = phyloStore.checkingCoverage;
   const progress = phyloStore.coverageProgress;
   const waiting = matchProgress != null || (candidatesState === 'loading' && candidates.length === 0);
+  const retry = (id: string) => void phyloStore.retryCoverage(id);
   const select = (id: string) => {
     if (id !== phyloStore.selectedId) phyloStore.select(id);
   };
@@ -295,7 +360,7 @@ export default observer(function TreeSourceTable() {
                           <SourceCell c={c} selected={selected} />
                         </Table.Cell>
                         <Table.Cell>
-                          <CoverageCell c={c} />
+                          <CoverageCell c={c} onRetry={retry} />
                         </Table.Cell>
                         <Table.Cell textAlign="center">
                           <DatedCell c={c} />
@@ -362,7 +427,7 @@ export default observer(function TreeSourceTable() {
                       <SourceCell c={c} selected={false} />
                     </Table.Cell>
                     <Table.Cell>
-                      <CoverageCell c={c} />
+                      <CoverageCell c={c} onRetry={retry} />
                     </Table.Cell>
                     <Table.Cell textAlign="center">
                       <DatedCell c={c} />

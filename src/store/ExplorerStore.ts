@@ -34,11 +34,11 @@ import {
   citingDownload,
 } from './explorer/provenance';
 import type { SourceProgress } from './explorer/types';
-import { previewGbif } from '../sources/gbif/preview';
+import { previewGbifImpact, previewGbifSummary } from '../sources/gbif/preview';
 import { gbifTaxonCount, suggestGbifTaxa } from '../sources/gbif/taxa';
 import { HttpError, isAbortError } from '../sources/http';
 import { supportsObis } from '../sources/obis/params';
-import { previewObis } from '../sources/obis/preview';
+import { previewObisParts } from '../sources/obis/preview';
 import { resolveQueryTaxa, suggestObisTaxa } from '../sources/obis/taxa';
 import {
   ALL_BASIS,
@@ -89,7 +89,8 @@ import type {
 import type RootStore from './RootStore';
 
 export const SOURCE_IDS: SourceId[] = ['gbif', 'obis'];
-export const PREVIEW_DEBOUNCE_MS = 400;
+/** Pause after the last query edit before previewing (number fields and brush drags settle first). */
+export const PREVIEW_DEBOUNCE_MS = 250;
 /** Attempts (including the first) before a rate-limited preview counts as an error. */
 export const MAX_RATE_LIMIT_ATTEMPTS = 5;
 export const DEFAULT_CAP = 500_000;
@@ -118,12 +119,14 @@ export const BIAS_THRESHOLDS: Record<BiasId, number> = {
 };
 /** Legend text for each bias threshold. */
 export const BIAS_THRESHOLD_LABELS: Record<BiasId, string> = {
-  datasetDominance: 'warns above 30 % of records',
-  humanObservation: 'warns above 60 % of records',
-  temporalSkew: 'warns above 60 % of dated records',
-  countryConcentration: 'warns above 50 % of records',
-  lowCountSpecies: 'warns above 20 % of species',
+  datasetDominance: 'flagged above 30 % of records',
+  humanObservation: 'flagged above 60 % of records',
+  temporalSkew: 'flagged above 60 % of dated records',
+  countryConcentration: 'flagged above 50 % of records',
+  lowCountSpecies: 'flagged above 20 % of species',
 };
+/** A triggered bias flag is a warning at this multiple of its threshold, else a note. */
+export const BIAS_WARNING_FACTOR = 1.5;
 /** "Recent" for the temporal-skew check: the last 15 years, inclusive. */
 export const RECENT_YEARS = 15;
 /** Species with fewer records than this count as low-count. */
@@ -131,14 +134,26 @@ export const LOW_COUNT = 5;
 /** Basis of record kept by "Compare: specimens only". */
 export const SPECIMEN_BASIS: BasisOfRecord[] = ['PRESERVED_SPECIMEN', 'MATERIAL_SAMPLE'];
 
+type PreviewImpact = Pick<PreviewSummary, 'baseTotal' | 'filterImpact'>;
+
 interface PreviewAdapter {
   supports(query: OccurrenceQuery): Supports;
-  preview(query: OccurrenceQuery, signal?: AbortSignal): Promise<PreviewSummary>;
+  /**
+   * Start a preview: `summary` drives the KPIs, map and insights as soon as it lands;
+   * `impact` (ledger base and per-filter counts) fills the decision ledger after.
+   */
+  preview(
+    query: OccurrenceQuery,
+    signal?: AbortSignal,
+  ): { summary: Promise<PreviewSummary>; impact: Promise<PreviewImpact> };
 }
 
 const ADAPTERS: Record<SourceId, PreviewAdapter> = {
-  gbif: { supports: (q) => supportsGbif(q), preview: (q, s) => previewGbif(q, s) },
-  obis: { supports: (q) => supportsObis(q), preview: (q, s) => previewObis(q, s) },
+  gbif: {
+    supports: (q) => supportsGbif(q),
+    preview: (q, s) => ({ summary: previewGbifSummary(q, s), impact: previewGbifImpact(q, s) }),
+  },
+  obis: { supports: (q) => supportsObis(q), preview: (q, s) => previewObisParts(q, s) },
 };
 
 /** Values a filter returns to when toggled back on. */
@@ -168,6 +183,8 @@ export function emptySourceState(enabled: boolean): SourceState {
     preview: null,
     state: 'idle',
     stale: false,
+    impact: null,
+    impactState: 'idle',
   };
 }
 
@@ -184,12 +201,26 @@ export function previewKey(query: OccurrenceQuery): string {
   });
 }
 
-/** Previews of enabled sources that have a (possibly stale) result. */
+/**
+ * Previews of enabled sources that have a (possibly stale) result, with the ledger counts
+ * of the impact request merged in when they have arrived (the summary's own `baseTotal`,
+ * set when no filter is active, wins over an older impact's).
+ */
 export function contributingPreviews(sources: Record<SourceId, SourceState>): PreviewSummary[] {
   const out: PreviewSummary[] = [];
   for (const id of SOURCE_IDS) {
-    const p = sources[id].preview;
-    if (sources[id].enabled && p) out.push(p);
+    const { preview: p, impact, enabled } = sources[id];
+    if (!enabled || !p) continue;
+    if (!impact) {
+      out.push(p);
+      continue;
+    }
+    const baseTotal = p.baseTotal ?? impact.baseTotal;
+    out.push({
+      ...p,
+      ...(baseTotal != null && { baseTotal: Math.max(baseTotal, p.total) }),
+      filterImpact: { ...impact.filterImpact, ...p.filterImpact },
+    });
   }
   return out;
 }
@@ -423,15 +454,20 @@ export function computeBiasFlags(
 ): BiasFlag[] {
   const total = previews.reduce((sum, p) => sum + p.total, 0);
   if (total <= 0) return [];
-  const flag = (id: BiasId, value: number, text: string, action?: BiasFlag['action']): BiasFlag => ({
-    id,
-    triggered: value > BIAS_THRESHOLDS[id],
-    value,
-    threshold: BIAS_THRESHOLDS[id],
-    thresholdLabel: BIAS_THRESHOLD_LABELS[id],
-    text,
-    ...(action && { action }),
-  });
+  const flag = (id: BiasId, value: number, text: string, action?: BiasFlag['action']): BiasFlag => {
+    const threshold = BIAS_THRESHOLDS[id];
+    const triggered = value > threshold;
+    return {
+      id,
+      triggered,
+      ...(triggered && { level: value >= threshold * BIAS_WARNING_FACTOR ? 'warning' : 'note' }),
+      value,
+      threshold,
+      thresholdLabel: BIAS_THRESHOLD_LABELS[id],
+      text,
+      ...(action && { action }),
+    };
+  };
 
   // Dataset dominance: the single largest dataset across sources.
   let top: (FacetBucket & { source: SourceId }) | null = null;
@@ -446,7 +482,14 @@ export function computeBiasFlags(
     top
       ? `${pctLabel(topShare)} of records come from one dataset (${top.label}). Its sampling design can shape your regions.`
       : 'No single dataset dominates.',
-    top?.source === 'gbif' ? { label: `Exclude ${top.label}`, run: () => actions.excludeDataset(topKey) } : undefined,
+    top?.source === 'gbif'
+      ? {
+          label: 'Exclude this dataset',
+          title: `Exclude ${top.label}`,
+          cost: top.count,
+          run: () => actions.excludeDataset(topKey),
+        }
+      : undefined,
   );
 
   // Human observations.
@@ -459,7 +502,12 @@ export function computeBiasFlags(
     `${pctLabel(humanShare)} are human observations, often citizen science: dense near people and roads.`,
     sameBasis(query.quality.basisOfRecord, SPECIMEN_BASIS)
       ? undefined
-      : { label: 'Compare: specimens only', run: () => actions.specimensOnly() },
+      : {
+          label: 'Specimens only',
+          title: 'Compare: preserved specimens and material samples only, after pinning a baseline',
+          cost: Math.max(0, total - basis.reduce((sum, b) => sum + (SPECIMEN_BASIS.includes(b.key as BasisOfRecord) ? b.count : 0), 0)),
+          run: () => actions.specimensOnly(),
+        },
   );
 
   // Temporal skew: share of dated records from the last 15 years.
@@ -476,7 +524,14 @@ export function computeBiasFlags(
     'temporalSkew',
     recentShare,
     `${pctLabel(recentShare)} of records are from ${cutoff} or later; historical ranges may be missing.`,
-    canNarrow ? { label: narrowLabel, run: () => actions.narrowYears(cutoff) } : undefined,
+    canNarrow
+      ? {
+          label: narrowLabel,
+          // Undated records go too, so the cost is everything outside the recent years.
+          cost: Math.max(0, total - recent),
+          run: () => actions.narrowYears(cutoff),
+        }
+      : undefined,
   );
 
   // Country concentration (not meaningful when the area is one country).
@@ -504,7 +559,12 @@ export function computeBiasFlags(
       `${low.toLocaleString('en-US')} species (${pctLabel(lowShare)}) have fewer than ${LOW_COUNT} records and can form spurious regions.`,
       (query.quality.minRecordsPerSpecies ?? 1) >= LOW_COUNT
         ? undefined
-        : { label: `Set minimum ${LOW_COUNT} records per species`, run: () => actions.setMinRecords(LOW_COUNT) },
+        : {
+            label: `${LOW_COUNT}+ records per species`,
+            title: `Set a minimum of ${LOW_COUNT} records per species`,
+            cost: speciesCounts.reduce((sum, b) => sum + (b.count < LOW_COUNT ? b.count : 0), 0),
+            run: () => actions.setMinRecords(LOW_COUNT),
+          },
     );
   } else {
     lowFlag = flag('lowCountSpecies', 0, 'Records per species are known once the load is planned.');
@@ -535,6 +595,17 @@ export function dirtySections(a: OccurrenceQuery, b: OccurrenceQuery): Set<Query
     if (SECTION_KEYS[s](a) !== SECTION_KEYS[s](b)) out.add(s);
   }
   return out;
+}
+
+/** Log preview request timings in development (`localStorage.explorerTimings = '1'` in production). */
+function logTiming(source: SourceId, part: 'summary' | 'impact', started: number) {
+  let on = (import.meta as { env?: { DEV?: boolean } }).env?.DEV ?? false;
+  try {
+    on ||= globalThis.localStorage?.getItem('explorerTimings') === '1';
+  } catch {
+    // Storage blocked: keep the default.
+  }
+  if (on) console.debug(`[explorer] ${source} ${part} ${Math.round(performance.now() - started)} ms`);
 }
 
 /** Backoff before retrying a rate-limited preview: 2, 4, 8, 16 s (capped at 30 s). */
@@ -930,6 +1001,8 @@ export default class ExplorerStore {
       for (const id of SOURCE_IDS) {
         Object.assign(this.sources[id], {
           preview: null,
+          impact: null,
+          impactState: 'idle',
           state: 'idle',
           stale: false,
           error: undefined,
@@ -944,7 +1017,15 @@ export default class ExplorerStore {
     for (const id of SOURCE_IDS) {
       const s = this.sources[id];
       if (!s.enabled || !s.supports.ok) {
-        Object.assign(s, { preview: null, state: 'idle', stale: false, error: undefined, retryAt: undefined });
+        Object.assign(s, {
+          preview: null,
+          impact: null,
+          impactState: 'idle',
+          state: 'idle',
+          stale: false,
+          error: undefined,
+          retryAt: undefined,
+        });
         continue;
       }
       s.state = 'loading';
@@ -987,8 +1068,31 @@ export default class ExplorerStore {
           s.gbifOnlyTaxa = [];
         });
       }
-      const preview = await ADAPTERS[id].preview(query, signal);
+      const started = performance.now();
+      const { summary, impact } = ADAPTERS[id].preview(query, signal);
+      runInAction(() => {
+        s.impactState = 'loading';
+      });
+      void impact.then(
+        (value) => {
+          if (signal.aborted) return;
+          logTiming(id, 'impact', started);
+          runInAction(() => {
+            s.impact = value;
+            s.impactState = 'ready';
+          });
+        },
+        (error) => {
+          if (signal.aborted || isAbortError(error)) return;
+          runInAction(() => {
+            s.impact = { filterImpact: {} };
+            s.impactState = 'error';
+          });
+        },
+      );
+      const preview = await summary;
       if (signal.aborted) return;
+      logTiming(id, 'summary', started);
       runInAction(() => {
         s.preview = preview;
         s.state = 'ready';
@@ -1015,6 +1119,8 @@ export default class ExplorerStore {
       runInAction(() => {
         s.state = 'error';
         s.preview = null;
+        s.impact = null;
+        s.impactState = 'idle';
         s.stale = false;
         s.retryAt = undefined;
         s.attempt = undefined;
@@ -1123,6 +1229,17 @@ export default class ExplorerStore {
     if (kpis) return 'ready';
     if (enabled.some((s) => s.state === 'error')) return 'error';
     return 'empty';
+  }
+
+  /**
+   * True while a source's ledger counts (base and per-filter impact) are still being
+   * fetched after its summary arrived; the ledger shows the previous counts dimmed.
+   */
+  get impactPending(): boolean {
+    return SOURCE_IDS.some((id) => {
+      const s = this.sources[id];
+      return this.query.sources[id] && s.supports.ok && s.impactState === 'loading';
+    });
   }
 
   /**

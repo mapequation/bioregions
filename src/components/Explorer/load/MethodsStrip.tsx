@@ -4,13 +4,15 @@ import { useId } from 'react';
 import { LuCheck, LuChevronUp, LuCopy } from 'react-icons/lu';
 import { useStore } from '@/store';
 
-const EMPTY_TEXT = 'Add a taxon or choose an area, and the methods paragraph drafts itself here.';
+const EMPTY_TEXT = 'The methods paragraph is drafted once you add a taxon or choose an area';
 
 /** Sticky methods draft: one line collapsed (32 px), a 180 px reading panel expanded. */
 export default observer(function MethodsStrip() {
   const { explorerStore: ex } = useStore();
   const panelId = useId();
-  const text = ex.methodsText.trim();
+  // Until the query is runnable (and nothing is loaded) there is nothing to describe yet.
+  const draftable = ex.lastLoad != null || ex.previewState !== 'empty';
+  const text = draftable ? ex.methodsText.trim() : '';
   const expanded = ex.methodsExpanded;
   // Same text as the store (and the Cite tab); "draft" until it describes the loaded data.
   const loaded = ex.loadedMatchesQuery;
@@ -70,6 +72,7 @@ export default observer(function MethodsStrip() {
             {expanded ? 'Collapse' : 'Expand'}
           </Box>
         </chakra.button>
+        {text && (
         <Clipboard.Root value={text} timeout={2000}>
           <Clipboard.Context>
             {(c) => (
@@ -78,7 +81,6 @@ export default observer(function MethodsStrip() {
                   size="xs"
                   variant={c.copied ? 'subtle' : 'ghost'}
                   colorPalette={c.copied ? 'green' : undefined}
-                  disabled={!text}
                   data-testid="copy-methods"
                   data-copied={c.copied || undefined}
                   flexShrink={0}
@@ -99,6 +101,7 @@ export default observer(function MethodsStrip() {
             )}
           </Clipboard.Context>
         </Clipboard.Root>
+        )}
       </Flex>
       {expanded && (
         <Box id={panelId} flex="1" minH={0} overflowY="auto" px={3} pb={3} ps={9} tabIndex={0} role="region" aria-label={title} focusVisibleRing="inside">
@@ -111,11 +114,13 @@ export default observer(function MethodsStrip() {
               {EMPTY_TEXT}
             </Text>
           )}
+          {text && (
           <Text fontSize="xs" color="fg.muted" mt={2}>
             {loaded
               ? 'Describes the loaded dataset. The full citation set is on Cite & reproduce.'
               : 'Rewrites after every edit. The final text and citations are on Cite & reproduce after loading.'}
           </Text>
+          )}
         </Box>
       )}
     </Flex>

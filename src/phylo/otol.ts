@@ -357,15 +357,163 @@ export type StudyTipLabel = 'ot:ottId' | 'ot:ottTaxonName' | 'ot:originalLabel';
  * Tips are labelled by OTT id by default ('770315', unquoted), which maps back to
  * matched dataset names exactly; taxon names can repeat and are quoted. Tips not
  * mapped to OTT read "*tip #1 not mapped to OTT. Original label - ..." in every mode.
+ * Kept in the browser's Cache Storage for STUDY_CACHE_MAX_AGE.
+ *
+ * The API converts the stored NexSON on every call and answers one request at a time
+ * (about 1.2 s each, measured Oct 2026), so prefer fetchStudyTips for coverage.
  */
 export function fetchStudyTree(
   studyId: string,
   treeId: string,
   signal?: AbortSignal,
   tipLabel: StudyTipLabel = 'ot:ottId',
+  options: { timeoutMs?: number; retries?: number } = {},
 ): Promise<string> {
   const url = `${OTOL_API}/study/${encodeURIComponent(studyId)}/tree/${encodeURIComponent(treeId)}.tre?tip_label=${tipLabel}`;
-  return fetchText(url, { signal, timeoutMs: 120_000 });
+  return cachedText(url, STUDY_CACHE_MAX_AGE, () =>
+    fetchText(url, { signal, timeoutMs: options.timeoutMs ?? 120_000, retries: options.retries }),
+  );
+}
+
+// --- Browser cache -------------------------------------------------------------
+
+/** Cache Storage bucket for Open Tree responses (bump the version to drop old entries). */
+export const OTOL_CACHE = 'otol-v1';
+/** Study trees change rarely; cached copies are reused for two weeks. */
+export const STUDY_CACHE_MAX_AGE = 14 * 24 * 3600 * 1000;
+const CACHED_AT = 'x-otol-cached-at';
+
+async function openCache(): Promise<Cache | null> {
+  try {
+    return typeof caches === 'undefined' ? null : await caches.open(OTOL_CACHE);
+  } catch {
+    // Cache Storage is unavailable (insecure context, private mode, quota).
+    return null;
+  }
+}
+
+/**
+ * Text for `key` (a URL) from Cache Storage when younger than `maxAgeMs`, otherwise
+ * from `load`, which is then stored. Works without Cache Storage (no caching).
+ */
+export async function cachedText(key: string, maxAgeMs: number, load: () => Promise<string>): Promise<string> {
+  const cache = await openCache();
+  if (cache) {
+    try {
+      const hit = await cache.match(key);
+      const at = Number(hit?.headers.get(CACHED_AT));
+      if (hit && Number.isFinite(at) && Date.now() - at < maxAgeMs) return await hit.text();
+    } catch {
+      // Fall through to the network.
+    }
+  }
+  const text = await load();
+  if (cache) {
+    const headers = { 'content-type': 'text/plain; charset=utf-8', [CACHED_AT]: String(Date.now()) };
+    cache.put(key, new Response(text, { headers })).catch(() => undefined);
+  }
+  return text;
+}
+
+// --- Study tree tips (coverage) -------------------------------------------------
+
+/** Tips of one study tree, enough to count coverage without the topology. */
+export interface StudyTreeTips {
+  /** Tip labels as fetchStudyTree writes them with tip_label=ot:ottId. */
+  labels: string[];
+  /** Readable tip names (OTT taxon name or the author's label), parallel to `labels`. */
+  names: string[];
+  /** Every branch has a length. */
+  hasBranchLengths: boolean;
+}
+
+/**
+ * Raw NexSON of a study in the phylesystem git repository that backs the API
+ * (study/ot_3043 -> study/ot_43/ot_3043/ot_3043.json). Served by GitHub's CDN in
+ * parallel and in well under a second, where the API takes 1-10 s per tree, one
+ * request at a time. Updated by every curation commit (verified live, Oct 2026).
+ */
+export function phylesystemUrl(studyId: string): string | null {
+  const match = /^([a-z]+)_(\d+)$/.exec(studyId);
+  if (!match) return null;
+  const shard = `${match[1]}_${match[2].slice(-2).padStart(2, '0')}`;
+  return `https://raw.githubusercontent.com/OpenTreeOfLife/phylesystem-1/master/study/${shard}/${studyId}/${studyId}.json`;
+}
+
+interface NexsonOtu {
+  '^ot:ottId'?: number;
+  '^ot:ottTaxonName'?: string;
+  '^ot:originalLabel'?: string;
+}
+
+interface Nexson {
+  nexml?: {
+    otusById?: Record<string, { otuById?: Record<string, NexsonOtu> }>;
+    treesById?: Record<
+      string,
+      {
+        '@otus'?: string;
+        treeById?: Record<
+          string,
+          {
+            nodeById?: Record<string, { '@otu'?: string }>;
+            edgeBySourceId?: Record<string, Record<string, { '@length'?: number }>>;
+          }
+        >;
+      }
+    >;
+  };
+}
+
+/** Tips of every tree in a NexSON 1.2 study, labelled as the API's ot:ottId Newick labels them. */
+export function nexsonTreeTips(doc: Nexson): Record<string, StudyTreeTips> {
+  const out: Record<string, StudyTreeTips> = {};
+  const otusById = doc.nexml?.otusById ?? {};
+  for (const group of Object.values(doc.nexml?.treesById ?? {})) {
+    const otus = otusById[group['@otus'] ?? '']?.otuById ?? {};
+    for (const [treeId, tree] of Object.entries(group.treeById ?? {})) {
+      const edges = tree.edgeBySourceId ?? {};
+      const labels: string[] = [];
+      const names: string[] = [];
+      let tipNo = 0;
+      for (const [nodeId, node] of Object.entries(tree.nodeById ?? {})) {
+        if (edges[nodeId]) continue;
+        tipNo++;
+        const otu = node['@otu'] ? otus[node['@otu']] : undefined;
+        const original = otu?.['^ot:originalLabel'] ?? '';
+        const ottId = otu?.['^ot:ottId'];
+        labels.push(
+          ottId != null ? String(ottId) : `*tip #${tipNo} not mapped to OTT. Original label - ${original}`,
+        );
+        names.push(otu?.['^ot:ottTaxonName'] || original || (ottId != null ? `ott${ottId}` : nodeId));
+      }
+      const hasBranchLengths = Object.values(edges).every((bySource) =>
+        Object.values(bySource).every((edge) => typeof edge['@length'] === 'number'),
+      );
+      out[treeId] = { labels, names, hasBranchLengths };
+    }
+  }
+  return out;
+}
+
+/**
+ * Tips of every tree in a study, from the phylesystem NexSON (one parallel CDN request
+ * per study instead of one serialized API request per tree). Only the compact tips are
+ * cached. Rejects when the study file is unavailable; callers fall back to fetchStudyTree.
+ */
+export async function fetchStudyTips(
+  studyId: string,
+  signal?: AbortSignal,
+  timeoutMs = 20_000,
+): Promise<Record<string, StudyTreeTips>> {
+  const url = phylesystemUrl(studyId);
+  if (!url) throw new Error(`No phylesystem file for study ${studyId}`);
+  const key = `${OTOL_API}/study/${encodeURIComponent(studyId)}/tips.json?v=1`;
+  const text = await cachedText(key, STUDY_CACHE_MAX_AGE, async () => {
+    const nexson = await fetchText(url, { signal, timeoutMs, retries: 1 });
+    return JSON.stringify(nexsonTreeTips(JSON.parse(nexson) as Nexson));
+  });
+  return JSON.parse(text) as Record<string, StudyTreeTips>;
 }
 
 /** OTT id of a study-tree tip fetched with tip_label=ot:ottId, or null for unmapped tips. */

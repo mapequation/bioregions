@@ -14,6 +14,8 @@ export interface PhyloCandidate extends TreeCandidate {
   subtitleDetail?: string;
   /** Open Tree branch-length mode, e.g. 'ot:time' or 'ot:substitutionCount'. */
   lengthMode?: string;
+  /** Why the coverage check failed (coverageState 'error'): it took too long, or the download failed. */
+  coverageError?: 'timeout' | 'failed';
 }
 
 export const SYNTHETIC_ID = 'synthetic';
@@ -118,6 +120,58 @@ export function cleanTreeLabel(label: string | undefined, treeId: string, surnam
   return text.length > 1 ? text : null;
 }
 
+/** Longest subtitle before it is cut at a word boundary (curator labels are capped at 50 characters). */
+export const SUBTITLE_MAX = 44;
+
+/** Open Tree stores at most this many characters of a curator's tree label. */
+const LABEL_CAP = 50;
+
+/** Cut `text` at the last word boundary within `max` characters and add an ellipsis. */
+export function truncateWords(text: string, max = SUBTITLE_MAX): string {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max + 1);
+  const space = cut.lastIndexOf(' ');
+  const head = (space > max * 0.5 ? cut.slice(0, space) : text.slice(0, max)).replace(/[\s,;:.\-–(]+$/, '');
+  return `${head}…`;
+}
+
+const FILE_TOKENS: [RegExp, string][] = [
+  [/^mcc$/i, 'MCC tree'],
+  [/^(?:mcc)?(?:target|summary)$/i, ''],
+  [/^(?:maj(?:ority)?rule|consensus|con)$/i, 'consensus tree'],
+  [/^(?:ml|raxml|iqtree|garli)$/i, 'ML tree'],
+  [/^(?:dnaonly|dna)$/i, 'DNA-only'],
+  [/^(?:completed|complete|full)$/i, 'completed'],
+];
+
+/**
+ * A readable label for a file-like id ('MamPhy_fullPosterior_BDvr_DNAonly_4098sp_..._MCC_v2_target'
+ * -> 'MCC tree · DNA-only · 4,098 spp.'): known tokens are kept in a fixed
+ * order, and an id with none of them just gets spaces for underscores. Text with spaces
+ * is returned unchanged.
+ */
+export function humanizeTreeLabel(label: string): string {
+  if (/\s/.test(label.trim()) || !/[_]/.test(label)) return label.trim();
+  const tokens = label.split(/[_]+/).filter(Boolean);
+  const parts: string[] = [];
+  let species: string | null = null;
+  for (const token of tokens) {
+    const count = /^(\d+)(?:sp|spp|species|taxa|tips)$/i.exec(token);
+    if (count) {
+      species = `${Number(count[1]).toLocaleString('en-US')} spp.`;
+      continue;
+    }
+    const known = FILE_TOKENS.find(([re]) => re.test(token));
+    if (known?.[1] && !parts.includes(known[1])) parts.push(known[1]);
+  }
+  if (species) parts.push(species);
+  if (parts.length === 0) return tokens.join(' ');
+  // 'MCC tree' / 'consensus tree' / 'ML tree' lead; the rest keep their order.
+  const kind = parts.findIndex((p) => p.endsWith(' tree'));
+  if (kind > 0) parts.unshift(...parts.splice(kind, 1));
+  return parts.join(' · ');
+}
+
 /** Open Tree branch-length mode and time unit -> short unit label and a sentence-ready long form. */
 export function lengthUnits(
   c: Pick<PhyloCandidate, 'branchLengths' | 'lengthMode' | 'timeUnit'>,
@@ -156,7 +210,15 @@ export function studyCandidate(tree: StudyTree, position: [number, number] = [1,
     .split(' & ')[0]
     .split(/\s+/)
     .pop();
-  const label = cleanTreeLabel(tree.label, tree.treeId, surname);
+  const cleaned = cleanTreeLabel(tree.label, tree.treeId, surname)
+    // 'File S3. Fully assembled …' -> 'Fully assembled …'
+    ?.replace(/^(?:file|fig(?:ure)?\.?|table|appendix)\s*S?\d+[a-z]?[.:]\s+(?=\S)/i, '');
+  let label = cleaned ? humanizeTreeLabel(cleaned) : null;
+  // A label at Open Tree's cap was cut mid-word: drop the partial word.
+  if (label && (tree.label?.trim().length ?? 0) >= LABEL_CAP && /\w$/.test(label) && label.includes(' ')) {
+    label = `${label.slice(0, label.lastIndexOf(' ')).replace(/[\s,;:.\-–(]+$/, '')}…`;
+  }
+  label = label ? truncateWords(label) : null;
   const fallback = count > 1 ? `tree ${index} of ${count}` : undefined;
   const full = tree.label?.trim();
   return {

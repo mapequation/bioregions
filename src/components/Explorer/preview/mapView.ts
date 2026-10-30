@@ -15,29 +15,64 @@ export interface MapView {
 
 export interface PlacedTile {
   z: number;
+  /** Tile column for the URL, wrapped into the world. */
   x: number;
   y: number;
+  /** Unwrapped column (x + k * columns), unique per placed tile; differs from `x` across the antimeridian. */
+  col: number;
   /** CSS px relative to the map's top-left corner. */
   left: number;
   top: number;
   size: number;
 }
 
-/** Highest tile zoom the preview uses (spec: zoom 0-3, no free pan or zoom). */
-export const MAX_TILE_ZOOM = 3;
+/**
+ * Highest tile zoom. The preview has no free pan or zoom; it only fits the area, so
+ * this keeps small areas (down to MIN_VIEW_DEGREES) sharp.
+ */
+export const MAX_TILE_ZOOM = 5;
 /** Narrowest view in degrees, so small areas are not blown up into a blur. */
 export const MIN_VIEW_DEGREES = 12;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
+ * A box with east < west crosses the antimeridian (e.g. Oceania [110, -50, -120, 30]);
+ * return it with east + 360 so it is a plain interval (east may exceed 180).
+ */
+export function unwrapBbox(bbox: BBox): BBox {
+  const [w, s, e, n] = bbox;
+  return e < w ? [w, s, e + 360, n] : bbox;
+}
+
+/**
+ * Inverse of `unwrapBbox` for a box in unwrapped longitudes (e.g. drawn across 180°):
+ * shifted into [-180, 180], with east < west when it crosses the antimeridian.
+ */
+export function wrapBbox(bbox: BBox): BBox {
+  let [w, s, e, n] = bbox;
+  if (e - w >= 360) return [-180, s, 180, n];
+  while (w >= 180) {
+    w -= 360;
+    e -= 360;
+  }
+  while (w < -180) {
+    w += 360;
+    e += 360;
+  }
+  if (e > 180) e -= 360;
+  return [w, s, e, n];
+}
+
+/**
  * Fit `bbox` (null = world) into a `width` x `height` px frame with some padding.
- * The view never gets wider than the world, and stays inside it when it is smaller.
+ * The view never gets wider than the world, and stays inside it when it is smaller;
+ * a box across the antimeridian is fitted unwrapped (the view then reaches past 180°).
  */
 export function fitView(bbox: BBox | null, width: number, height: number): MapView {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
-  const [bw, bs, be, bn] = bbox ?? [-180, -90, 180, 90];
+  const [bw, bs, be, bn] = bbox ? unwrapBbox(bbox) : [-180, -90, 180, 90];
   const world = !bbox || (be - bw >= 359 && bn - bs >= 170);
   const pad = world ? 0 : Math.max(2, 0.08 * Math.max(be - bw, bn - bs));
   const tw = Math.max(MIN_VIEW_DEGREES, be - bw + 2 * pad);
@@ -45,8 +80,9 @@ export function fitView(bbox: BBox | null, width: number, height: number): MapVi
   const scale = Math.max(Math.min(w / tw, h / th), w / 360);
   const vw = w / scale;
   const vh = h / scale;
-  const cx = vw >= 360 ? 0 : clamp((bw + be) / 2, -180 + vw / 2, 180 - vw / 2);
-  // Polar latitudes rarely hold records: with the world in a wide frame, centre a bit north.
+  // A box across the antimeridian is centred as is (tiles wrap); others stay inside the world.
+  const crosses = be > 180;
+  const cx = crosses ? (bw + be) / 2 : vw >= 360 ? 0 : clamp((bw + be) / 2, -180 + vw / 2, 180 - vw / 2);
   const cy = vh >= 180 ? 0 : world ? clamp(8, -90 + vh / 2, 90 - vh / 2) : clamp((bs + bn) / 2, -90 + vh / 2, 90 - vh / 2);
   return { west: cx - vw / 2, east: cx + vw / 2, south: cy - vh / 2, north: cy + vh / 2, scale };
 }
@@ -59,23 +95,39 @@ export function chooseZoom(scale: number): number {
   return MAX_TILE_ZOOM;
 }
 
-/** Tiles of zoom `z` that cover the view, positioned in CSS px. */
-export function tilesForView(view: MapView, z = chooseZoom(view.scale)): PlacedTile[] {
+/**
+ * Tiles of zoom `z` that cover the view, positioned in CSS px. Columns wrap around the
+ * antimeridian; `within` (unwrapped lon/lat box) limits them to tiles touching it.
+ */
+export function tilesForView(view: MapView, z = chooseZoom(view.scale), within?: BBox | null): PlacedTile[] {
   const { cols, rows, degrees } = gbifTileGrid(z);
-  const x0 = clamp(Math.floor((view.west + 180) / degrees), 0, cols - 1);
-  const x1 = clamp(Math.ceil((view.east + 180) / degrees) - 1, 0, cols - 1);
-  const y0 = clamp(Math.floor((90 - view.north) / degrees), 0, rows - 1);
-  const y1 = clamp(Math.ceil((90 - view.south) / degrees) - 1, 0, rows - 1);
+  let { west, east, south, north } = view;
+  if (within) {
+    const [bw, bs, be, bn] = unwrapBbox(within);
+    west = Math.max(west, bw);
+    east = Math.min(east, be);
+    south = Math.max(south, bs);
+    north = Math.min(north, bn);
+    if (west >= east || south >= north) return [];
+  }
+  const eps = 1e-9;
+  const x0 = Math.floor((west + 180) / degrees + eps);
+  const x1 = Math.min(x0 + cols - 1, Math.ceil((east + 180) / degrees - eps) - 1);
+  const y0 = clamp(Math.floor((90 - north) / degrees + eps), 0, rows - 1);
+  const y1 = clamp(Math.ceil((90 - south) / degrees - eps) - 1, 0, rows - 1);
   const out: PlacedTile[] = [];
   for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const [west, , , north] = gbifTileBounds({ z, x, y });
+    for (let col = x0; col <= x1; col++) {
+      const x = ((col % cols) + cols) % cols;
+      const [, , , tileNorth] = gbifTileBounds({ z, x, y });
+      const tileWest = -180 + col * degrees;
       out.push({
         z,
         x,
         y,
-        left: (west - view.west) * view.scale,
-        top: (view.north - north) * view.scale,
+        col,
+        left: (tileWest - view.west) * view.scale,
+        top: (view.north - tileNorth) * view.scale,
         size: degrees * view.scale,
       });
     }
@@ -83,9 +135,13 @@ export function tilesForView(view: MapView, z = chooseZoom(view.scale)): PlacedT
   return out;
 }
 
-/** CSS px offset in the map -> lon/lat (clamped to the world). */
+/**
+ * CSS px offset in the map -> lon/lat, clamped to the view's world (longitude stays
+ * unwrapped, so it can pass 180° in a view across the antimeridian; see `wrapBbox`).
+ */
 export function pxToLonLat(view: MapView, px: number, py: number): [number, number] {
-  return [clamp(view.west + px / view.scale, -180, 180), clamp(view.north - py / view.scale, -90, 90)];
+  const east = Math.max(180, view.east);
+  return [clamp(view.west + px / view.scale, east - 360, east), clamp(view.north - py / view.scale, -90, 90)];
 }
 
 /** Bounding box of every coordinate pair in a WKT string (null when none). */

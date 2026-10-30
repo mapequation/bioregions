@@ -3,10 +3,13 @@ import type { OccurrenceQuery } from '../types';
 import {
   activeGbifFilters,
   basisOfRecordLabel,
-  buildPreviewRequest,
+  buildImpactRequest,
+  buildSummaryRequest,
   countryLabel,
   issueLabel,
   previewGbif,
+  previewGbifImpact,
+  previewGbifSummary,
 } from './preview';
 
 function query(overrides: Partial<OccurrenceQuery> = {}): OccurrenceQuery {
@@ -125,24 +128,44 @@ describe('activeGbifFilters', () => {
   });
 });
 
-describe('buildPreviewRequest', () => {
-  it('adds one count alias per active filter, each without that filter', () => {
-    const { document, variables } = buildPreviewRequest(filtered);
+describe('buildSummaryRequest', () => {
+  it('asks only for the main search, with no count aliases', () => {
+    const { document, variables } = buildSummaryRequest(filtered);
     expect(document).toContain('main: occurrenceSearch(predicate: $p)');
+    expect(document).toContain('histogram');
+    expect(document).not.toContain('f_');
+    expect(document).not.toContain('base:');
+    expect(Object.keys(variables)).toEqual(['p']);
+  });
+});
+
+describe('buildImpactRequest', () => {
+  it('adds one count alias per active filter, each without that filter', () => {
+    const request = buildImpactRequest(filtered);
+    if (!request) throw new Error('expected an impact request');
+    const { document, variables } = request;
+    expect(document).toContain('main: occurrenceSearch(predicate: $p) { documents(size: 0) { total } }');
+    expect(document).not.toContain('histogram');
     expect(document).toContain('f_years: occurrenceSearch(predicate: $p_years)');
     expect(JSON.stringify(variables.p)).toContain('"key":"year"');
     expect(JSON.stringify(variables.p_years)).not.toContain('"key":"year"');
     expect(JSON.stringify(variables.p_years)).toContain('"key":"basisOfRecord"');
   });
 
-  it('adds one ledger-base alias with every filter omitted, only when a filter is active', () => {
-    const { document, variables } = buildPreviewRequest(filtered);
-    expect(document).toContain('base: occurrenceSearch(predicate: $p_base)');
-    const base = JSON.stringify(variables.p_base);
+  it('adds one ledger-base alias with every filter omitted', () => {
+    const request = buildImpactRequest(filtered);
+    expect(request?.document).toContain('base: occurrenceSearch(predicate: $p_base)');
+    const base = JSON.stringify(request?.variables.p_base);
     for (const key of ['year', 'basisOfRecord', 'coordinateUncertaintyInMeters']) {
       expect(base).not.toContain(`"key":"${key}"`);
     }
-    expect(buildPreviewRequest(query()).document).not.toContain('base:');
+  });
+
+  it('is not needed when no filter is active', async () => {
+    expect(buildImpactRequest(query())).toBeNull();
+    const fetchMock = stubGraphql({});
+    expect(await previewGbifImpact(query())).toEqual({ filterImpact: {} });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -158,10 +181,14 @@ describe('previewGbif', () => {
     });
     const summary = await previewGbif(filtered);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://graphql.gbif.org/graphql');
-    expect(JSON.parse(String(init?.body)).variables.p_uncertainty).toBeDefined();
+    // The fast summary and the ledger counts go out together as two requests.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const bodies = fetchMock.mock.calls.map(([url, init]) => {
+      expect(url).toBe('https://graphql.gbif.org/graphql');
+      return JSON.parse(String(init?.body));
+    });
+    expect(bodies.some((b) => b.variables.p_uncertainty != null)).toBe(true);
+    expect(bodies.some((b) => Object.keys(b.variables).length === 1)).toBe(true);
 
     expect(summary).toMatchObject({
       source: 'gbif',
@@ -189,6 +216,14 @@ describe('previewGbif', () => {
     expect(summary.topDatasets[0].label).toBe('Jaguar Movement Database');
   });
 
+  it('leaves the ledger base to the impact request when a filter is active', async () => {
+    stubGraphql({ main: mainResult });
+    const summary = await previewGbifSummary(filtered);
+    expect(summary.total).toBe(1000);
+    expect(summary.baseTotal).toBeUndefined();
+    expect(summary.filterImpact).toEqual({});
+  });
+
   it('handles an empty result', async () => {
     stubGraphql({
       main: {
@@ -203,6 +238,7 @@ describe('previewGbif', () => {
       },
     });
     const summary = await previewGbif(query());
+    expect((await previewGbifSummary(query())).baseTotal).toBe(0);
     expect(summary.total).toBe(0);
     expect(summary.baseTotal).toBe(0);
     expect(summary.yearRange).toBeNull();

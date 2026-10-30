@@ -1,7 +1,7 @@
 import { Box, Button, chakra, Flex, HStack, Icon, SegmentGroup, Skeleton, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useState } from 'react';
-import { LuCircleCheck, LuCircleX, LuInfo, LuMap, LuQuote, LuRefreshCw, LuTriangleAlert } from 'react-icons/lu';
+import { LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuTriangleAlert } from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
@@ -15,7 +15,7 @@ const MODE_ITEMS = [
 ];
 
 const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
-const DUPLICATES_HINT = 'duplicates are removed while loading';
+const DUPLICATES_HINT = 'duplicates removed while loading';
 const MIN_CAP = 1000;
 const SHORTCUT = modEnterLabel(typeof navigator === 'undefined' ? '' : navigator.platform);
 
@@ -25,7 +25,10 @@ const Sep = () => (
   </Box>
 );
 
-/** Estimate line: "≈16,158 records · 61 MB · ~2 min · 96 requests", over the duplicates hint. */
+/**
+ * Estimate line: "16,158 species-level records · duplicates removed while loading · 2.4 MB ·
+ * <1 min · 3 requests". The count is what the load requests, so it never over-promises.
+ */
 const EstimateLine = observer(function EstimateLine() {
   const { explorerStore: ex } = useStore();
   const { estimate, kpis, previewState, canLoad } = ex;
@@ -49,29 +52,53 @@ const EstimateLine = observer(function EstimateLine() {
   }
 
   const records = estimate?.records ?? kpis?.records ?? 0;
+  const exact = estimate?.exact ?? false;
+  const what = exact ? 'species-level records' : 'matching records';
+  const full = [
+    `${exact ? '' : '≈'}${fmtInt(records)} ${what}`,
+    DUPLICATES_HINT,
+    ...(estimate
+      ? [
+          fmtBytes(estimate.bytes),
+          fmtApproxMinutes(estimate.seconds),
+          `${fmtInt(estimate.requests)} ${estimate.requests === 1 ? 'request' : 'requests'}`,
+        ]
+      : ['size and time follow once the load is planned']),
+  ].join(' · ');
   return (
-    <Box minW={0}>
     <Text
       fontSize="sm"
       color="fg.muted"
-      truncate
+      lineClamp={2}
       fontVariantNumeric="tabular-nums"
       opacity={busy ? 0.55 : 1}
       transition="opacity 0.2s"
       aria-busy={busy}
+      title={full}
       data-testid="load-estimate"
     >
-      <Box as="span" color="fg" fontWeight="semibold">
-        ≈{fmtInt(records)} records
+      <Box as="span" color="fg" fontWeight="semibold" whiteSpace="nowrap">
+        {exact ? '' : '≈'}
+        {fmtInt(records)} {what}
+      </Box>
+      <Sep />
+      <Box as="span" whiteSpace="nowrap" data-testid="load-duplicates-hint">
+        {DUPLICATES_HINT}
       </Box>
       {estimate ? (
         <>
           <Sep />
-          {fmtBytes(estimate.bytes)}
+          <Box as="span" whiteSpace="nowrap">
+            {fmtBytes(estimate.bytes)}
+          </Box>
           <Sep />
-          {fmtApproxMinutes(estimate.seconds)}
+          <Box as="span" whiteSpace="nowrap">
+            {fmtApproxMinutes(estimate.seconds)}
+          </Box>
           <Sep />
-          {fmtInt(estimate.requests)} {estimate.requests === 1 ? 'request' : 'requests'}
+          <Box as="span" whiteSpace="nowrap">
+            {fmtInt(estimate.requests)} {estimate.requests === 1 ? 'request' : 'requests'}
+          </Box>
         </>
       ) : (
         <>
@@ -80,43 +107,26 @@ const EstimateLine = observer(function EstimateLine() {
         </>
       )}
     </Text>
-    <Text fontSize="xs" color="fg.muted" truncate data-testid="load-duplicates-hint">
-      {estimate?.exact ? `Identified to species; ${DUPLICATES_HINT}.` : `Estimate; ${DUPLICATES_HINT}.`}
-    </Text>
-    </Box>
   );
 });
 
-/** Done state after a load of the current query: what was loaded and where to go next. */
+/** Done state after a load of the current query: status text only (the actions live in LoadedPanel). */
 const DoneRow = observer(function DoneRow() {
   const { explorerStore: ex } = useStore();
   const last = ex.lastLoad;
   if (!last) return null;
   const accepted = last.funnel.accepted;
   return (
-    <Flex align="center" gap={3} rowGap={2} wrap="wrap" minH={10} data-testid="load-done">
-      <HStack gap={2} flex="1 1 16rem" minW={0} role="status">
-        <Icon as={LuCircleCheck} boxSize={5} color="green.fg" flexShrink={0} aria-hidden />
-        <Box minW={0}>
-          <Text fontSize="sm" fontWeight="semibold" color="fg" truncate fontVariantNumeric="tabular-nums">
-            {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
-          </Text>
-          <Text fontSize="xs" color="fg.muted" truncate>
-            Edit the query to load again with changes.
-          </Text>
+    <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done">
+      <Icon as={LuCircleCheck} boxSize={4} color="green.fg" flexShrink={0} aria-hidden />
+      <Text fontSize="sm" color="fg.muted" truncate fontVariantNumeric="tabular-nums">
+        <Box as="span" color="fg" fontWeight="semibold">
+          {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
         </Box>
-      </HStack>
-      <HStack gap={2} flexShrink={0} ms="auto">
-        <Button size="sm" variant="outline" onClick={() => ex.setTab('cite')}>
-          <LuQuote />
-          Cite this data
-        </Button>
-        <Button size="sm" variant="solid" onClick={() => ex.close()} data-testid="dock-view-bioregions">
-          <LuMap />
-          View bioregions
-        </Button>
-      </HStack>
-    </Flex>
+        <Sep />
+        Edit the query to load again
+      </Text>
+    </HStack>
   );
 });
 
@@ -215,7 +225,7 @@ const OverCapRow = observer(function OverCapRow() {
 /** Bottom dock: estimate, cap, Replace/Add and the Load button; grows into LoadProgress while loading. */
 export default observer(function LoadDock() {
   const { explorerStore: ex } = useStore();
-  const { job, canLoad, estimate, kpis, lastLoad, loadMode } = ex;
+  const { job, canLoad, estimate, lastLoad, loadMode } = ex;
 
   if (job && (job.state === 'planning' || job.state === 'streaming')) return (
       <Box px={3} py={2} data-testid="load-dock">
@@ -231,15 +241,9 @@ export default observer(function LoadDock() {
     );
   }
 
-  const records = estimate?.records ?? kpis?.records ?? null;
   const dirty = !!lastLoad && ex.dirty.size > 0;
-  const n = records == null ? null : `~${fmtInt(records)}`;
-  const label =
-    loadMode === 'add'
-      ? `Add ${n ?? ''} records to current data`.replace('  ', ' ')
-      : dirty
-        ? 'Reload with changes'
-        : `Load ${n ? `${n} ` : ''}records`;
+  // The count lives in the estimate line; the button never promises a number.
+  const label = loadMode === 'add' ? 'Add records' : dirty ? 'Reload with changes' : 'Load records';
   const reason = canLoad.ok ? null : canLoad.reason;
   // Reasons already said elsewhere in the dock are not repeated next to the button.
   const inlineReason = reason && reason !== EMPTY_REASON && !(estimate?.overCap && reason === 'Over the cap') ? reason : null;
@@ -293,7 +297,11 @@ export default observer(function LoadDock() {
               {inlineReason}
             </Text>
           )}
-          <Tooltip content={reason ?? `Load (${SHORTCUT})`} disabled={!reason} openDelay={300}>
+          <Tooltip
+            content={reason ?? `${loadMode === 'add' ? 'Add to the current data' : 'Load'} (${SHORTCUT})`}
+            disabled={!reason}
+            openDelay={300}
+          >
             <Box as="span" display="inline-flex">
               <Button
                 size="sm"

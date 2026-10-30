@@ -26,6 +26,9 @@ function useNow(active: boolean): number {
   return now;
 }
 
+/** Whether a source has anything to fetch; 0 / 0 sources count as done. */
+const hasWork = (p: SourceProgress) => p.requestsTotal > 0 || p.expected > 0 || p.fetched > 0;
+
 function statsText(p: SourceProgress): string {
   const parts = [`${fmtInt(p.fetched)} / ${fmtInt(p.expected)}`];
   if (p.speciesTotal) parts.push(`species ${fmtInt(p.speciesDone ?? 0)}/${fmtInt(p.speciesTotal)}`);
@@ -174,12 +177,20 @@ export default observer(function LoadProgress() {
 
   if (!job) return null;
 
+  // A source with nothing to fetch (0 records, 0 requests) is done before it starts: it gets
+  // no progress row, only a static note.
+  const hasPreview = (id: SourceId) => ex.previews.some((p) => p.source === id);
+  const previewEmpty = (id: SourceId) => ex.previews.some((p) => p.source === id && p.total === 0);
   const rows: (SourceProgress | { source: SourceId; planning: true })[] =
     job.perSource.length > 0
-      ? job.perSource
+      ? job.perSource.filter(hasWork)
       : (['gbif', 'obis'] as SourceId[])
-          .filter((id) => ex.query.sources[id])
+          .filter((id) => ex.query.sources[id] && !previewEmpty(id))
           .map((source) => ({ source, planning: true as const }));
+  const idle: SourceId[] =
+    job.perSource.length > 0
+      ? job.perSource.filter((p) => !hasWork(p)).map((p) => p.source)
+      : (['gbif', 'obis'] as SourceId[]).filter((id) => ex.query.sources[id] && hasPreview(id) && previewEmpty(id));
 
   return (
     <Flex direction="column" gap={2} minH="7.25rem" data-testid="load-progress" aria-busy={active}>
@@ -212,6 +223,11 @@ export default observer(function LoadProgress() {
           <SourceRow key={p.source} p={p} now={now} />
         ))}
       </Grid>
+      {idle.length > 0 && (
+        <Text fontSize="xs" color="fg.muted" data-testid="load-progress-idle">
+          {idle.map((id) => SOURCE_LABEL[id]).join(', ')}: not queried (no matching records)
+        </Text>
+      )}
       <VisuallyHidden aria-live="polite">{announcement}</VisuallyHidden>
     </Flex>
   );

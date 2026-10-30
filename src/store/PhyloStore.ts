@@ -4,12 +4,14 @@
 // src/store/phylo/ (matching, candidates, treeBuild).
 import { makeAutoObservable, reaction, runInAction } from 'mobx';
 import {
+  fetchStudyTips,
   fetchStudyTree,
   findStudyTrees,
   inducedSubtree,
   matchNames as matchOtolNames,
   mrca,
   type StudyTree,
+  type StudyTreeTips,
   synthesisInfo,
 } from '@/phylo/otol';
 import { isAbortError, queryKey } from '@/sources';
@@ -39,8 +41,41 @@ import {
   uniqueNames,
 } from './phylo/matching';
 import { dropUnknownIds } from './phylo/dropUnknown';
-import { buildDatasetTree, coverageOf, type DatasetTree, datasetNewick, type TipJoin } from './phylo/treeBuild';
+import {
+  buildDatasetTree,
+  coverageOf,
+  coverageOfTips,
+  type DatasetTree,
+  datasetNewick,
+  type TipJoin,
+  tipDisplayName,
+} from './phylo/treeBuild';
 import type RootStore from './RootStore';
+
+/** A single coverage check (one study download) gives up after this long. */
+export const COVERAGE_TIMEOUT_MS = 20_000;
+
+class TimeoutError extends Error {
+  override name = 'TimeoutError';
+}
+
+/** Run `task` with its own signal, aborted with `signal` or after `ms` (then rejects with TimeoutError). */
+function withDeadline<T>(ms: number, signal: AbortSignal, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const inner = new AbortController();
+  const onAbort = () => inner.abort();
+  signal.addEventListener('abort', onAbort, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new TimeoutError(`Timed out after ${Math.round(ms / 1000)} s`));
+      inner.abort();
+    }, ms);
+  });
+  return Promise.race([task(inner.signal), deadline]).finally(() => {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', onAbort);
+  });
+}
 
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -96,21 +131,29 @@ export default class PhyloStore {
   rowOrder: string[] = [];
   /** Checked study trees with no dataset species, shown in a collapsed group. */
   noOverlapIds: string[] = [];
-  /** Why the current tree is selected: the default, the best dated tree, or the user's pick. */
+  /**
+   * Why the current tree is selected: automatically ('default': the synthesis or first
+   * tree; 'dated': the best dated tree once coverage is known) or by the user (a row
+   * click or a load). Automatic picks are re-run when coverage checks finish.
+   */
   selectionReason: 'default' | 'dated' | 'user' | null = null;
+  /** Tips of the selected tree that are not in the dataset (readable names), or null while unknown. */
+  selectionNotInData: string[] | null = null;
 
   private controller: AbortController | null = null;
   private lastKey: unknown = null;
   private inducedBroken: Record<string, string> = {};
   private newicks = new Map<string, Promise<string>>();
   private built = new Map<string, DatasetTree>();
+  /** Tips of study trees read by the coverage check, by candidate id. */
+  private tips = new Map<string, StudyTreeTips>();
   private disposers: (() => void)[] = [];
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
     makeAutoObservable<
       this,
-      'controller' | 'lastKey' | 'inducedBroken' | 'newicks' | 'built' | 'disposers'
+      'controller' | 'lastKey' | 'inducedBroken' | 'newicks' | 'built' | 'tips' | 'disposers'
     >(
       this,
       {
@@ -120,6 +163,7 @@ export default class PhyloStore {
         inducedBroken: false,
         newicks: false,
         built: false,
+        tips: false,
         disposers: false,
       },
       { autoBind: true },
@@ -203,6 +247,14 @@ export default class PhyloStore {
   get checkingCoverage(): boolean {
     const { done, total } = this.coverageProgress;
     return done < total;
+  }
+
+  /**
+   * The current pick is automatic and coverage checks are still running, so a dated
+   * tree may still replace it: loading now is offered as a secondary action.
+   */
+  get awaitingBestTree(): boolean {
+    return this.checkingCoverage && this.selectionReason !== 'user';
   }
 
   /** The dated tree with the best coverage, when it covers at least 60 % of the dataset species. */
@@ -309,6 +361,7 @@ export default class PhyloStore {
     this.selectedId = null;
     this.selectionReason = null;
     this.selection = null;
+    this.selectionNotInData = null;
     this.error = null;
     this.rowOrder = [];
     this.noOverlapIds = [];
@@ -318,6 +371,7 @@ export default class PhyloStore {
     this.inducedBroken = {};
     this.newicks = new Map();
     this.built = new Map();
+    this.tips = new Map();
   }
 
   /** MRCA, synthetic induced subtree and study trees, then exact coverage per row. */
@@ -399,23 +453,69 @@ export default class PhyloStore {
   }
 
   /**
-   * Fetch study trees (COVERAGE_CONCURRENCY at a time) and count dataset species among
-   * their tips. When all are checked, sort the table once and pre-select the best dated tree.
+   * Count dataset species among the tips of each study tree, one download per study
+   * (COVERAGE_CONCURRENCY studies at a time, in table order: dated and newest first).
+   * When all are checked, sort the table once and pre-select the best dated tree.
    */
   private async checkCoverage(studies: PhyloCandidate[], signal: AbortSignal) {
+    const byStudy = new Map<string, PhyloCandidate[]>();
+    for (const c of studies) {
+      if (!c.studyId) continue;
+      byStudy.set(c.studyId, [...(byStudy.get(c.studyId) ?? []), c]);
+    }
+    await mapLimit([...byStudy.entries()], COVERAGE_CONCURRENCY, ([studyId, trees]) =>
+      this.checkStudy(studyId, trees, signal),
+    );
+    if (signal.aborted) return;
+    this.finishCoverage();
+  }
+
+  /**
+   * Coverage of one study's trees: from the study's tips (fast, parallel, cached), else
+   * from each tree's Newick via the API. Each download times out after COVERAGE_TIMEOUT_MS.
+   */
+  private async checkStudy(studyId: string, trees: PhyloCandidate[], signal: AbortSignal) {
     const join = this.tipJoin;
-    await mapLimit(studies, COVERAGE_CONCURRENCY, async (candidate) => {
+    let tips: Record<string, StudyTreeTips> | null = null;
+    try {
+      tips = await withDeadline(COVERAGE_TIMEOUT_MS, signal, (s) => fetchStudyTips(studyId, s, COVERAGE_TIMEOUT_MS));
+    } catch (error) {
+      if (isAbortError(error) || signal.aborted) return;
+      if (error instanceof TimeoutError) {
+        for (const c of trees) this.updateCandidate(c.id, 'timeout');
+        return;
+      }
+    }
+    for (const candidate of trees) {
       if (signal.aborted) return;
+      const treeTips = candidate.treeId ? tips?.[candidate.treeId] : undefined;
+      if (treeTips) {
+        const { kept, hasBranchLengths } = coverageOfTips(treeTips, join);
+        const matched = kept.size;
+        this.tips.set(candidate.id, treeTips);
+        this.updateCandidate(candidate.id, { matched, hasBranchLengths });
+        continue;
+      }
       try {
-        const newick = await this.newick(candidate, signal);
+        const newick = await withDeadline(COVERAGE_TIMEOUT_MS, signal, (s) => this.newick(candidate, s));
         const { matched, hasBranchLengths } = coverageOf(newick, join);
         this.updateCandidate(candidate.id, { matched, hasBranchLengths });
       } catch (error) {
         if (isAbortError(error) || signal.aborted) return;
-        this.updateCandidate(candidate.id, null);
+        this.updateCandidate(candidate.id, error instanceof TimeoutError ? 'timeout' : 'failed');
       }
-    });
-    if (signal.aborted) return;
+    }
+  }
+
+  /** Check a study tree's coverage again after it failed or timed out. */
+  async retryCoverage(id: string): Promise<void> {
+    const candidate = this.candidates.find((c) => c.id === id);
+    const signal = this.controller?.signal;
+    if (!candidate?.studyId || candidate.coverageState === 'pending' || !signal || signal.aborted) return;
+    candidate.coverageState = 'pending';
+    candidate.coverageError = undefined;
+    await this.checkStudy(candidate.studyId, [candidate], signal);
+    if (signal.aborted || this.checkingCoverage) return;
     this.finishCoverage();
   }
 
@@ -445,15 +545,20 @@ export default class PhyloStore {
     this.noOverlapIds = layout.noOverlap;
   }
 
-  /** Record exact coverage (null: failed) and the actual branch lengths of a study tree. */
-  private updateCandidate(id: string, result: { matched: number; hasBranchLengths: boolean } | null) {
+  /** Record exact coverage (or why it failed) and the actual branch lengths of a study tree. */
+  private updateCandidate(
+    id: string,
+    result: { matched: number; hasBranchLengths: boolean } | 'timeout' | 'failed',
+  ) {
     // Row order is not touched here: rows keep their place until all checks finish.
     const candidate = this.candidates.find((c) => c.id === id);
     if (!candidate) return;
-    if (!result) {
+    if (typeof result === 'string') {
       candidate.coverageState = 'error';
+      candidate.coverageError = result;
       return;
     }
+    candidate.coverageError = undefined;
     candidate.coverage = { matched: result.matched, total: this.datasetNames.length };
     candidate.coverageState = 'ready';
     if (!result.hasBranchLengths) candidate.branchLengths = 'none';
@@ -467,7 +572,10 @@ export default class PhyloStore {
     if (candidate.kind !== 'study' || !candidate.studyId || !candidate.treeId) {
       return Promise.reject(new Error('The synthetic tree is not available'));
     }
-    const promise = fetchStudyTree(candidate.studyId, candidate.treeId, signal);
+    const promise = fetchStudyTree(candidate.studyId, candidate.treeId, signal, 'ot:ottId', {
+      timeoutMs: COVERAGE_TIMEOUT_MS,
+      retries: 1,
+    });
     this.newicks.set(candidate.id, promise);
     promise.catch(() => {
       if (this.newicks.get(candidate.id) === promise) this.newicks.delete(candidate.id);
@@ -504,10 +612,29 @@ export default class PhyloStore {
     if (id === this.selectedId && this.selection) return;
     this.selectedId = id;
     this.selection = null;
+    this.selectionNotInData = null;
+
+    // A study tree read by the coverage check is summarised from its tips right away;
+    // its Newick (needed to load it) is fetched in the background.
+    const tips = this.tips.get(id);
+    if (tips) {
+      const { kept, notInData } = coverageOfTips(tips, this.tipJoin);
+      this.selection = {
+        kept: kept.size,
+        absentFromTree: this.datasetNames.filter((name) => !kept.has(name)),
+        pruned: notInData.length,
+        broken: [],
+      };
+      this.selectionNotInData = notInData;
+      this.datasetTree(candidate).catch(() => undefined);
+      return;
+    }
+
     this.datasetTree(candidate).then(
       (built) =>
         runInAction(() => {
           if (this.selectedId !== id) return;
+          this.selectionNotInData = built.notInData.map(tipDisplayName);
           this.selection = {
             kept: built.kept,
             absentFromTree: built.absentFromTree,
@@ -547,6 +674,8 @@ export default class PhyloStore {
   async loadSelected(): Promise<void> {
     const candidate = this.selectedCandidate;
     if (!candidate) return;
+    // Loading is the user's choice: finishing coverage checks no longer changes the pick.
+    this.selectionReason = 'user';
     this.loadState = 'loading';
     this.error = null;
     try {

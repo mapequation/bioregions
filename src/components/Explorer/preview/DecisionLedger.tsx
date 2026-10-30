@@ -39,11 +39,15 @@ const MIN_BAR_SHARE = 0.005;
 /** Fixed rules (not identified to species, duplicates) are steps on the path, not filters. */
 const isPathRow = (r: LedgerRow) => r.toggleable === false;
 
+/** Width of the bar column: a fixed scale directly left of the numbers. */
+const BAR_W = '160px';
+/** Bar and track heights (px): the bar sits on a thinner, faint full-width track. */
+const BAR_H = 8;
+const TRACK_H = 4;
+
 /** Columns: label · bar · signed count · share · (Δ vs last load). */
 const columns = (delta: boolean) =>
-  delta
-    ? 'minmax(0, 1.5fr) minmax(64px, 1.2fr) 9ch 5ch 11ch'
-    : 'minmax(0, 1.5fr) minmax(64px, 1.2fr) 9ch 5ch';
+  delta ? `minmax(0, 1fr) ${BAR_W} 9ch 6ch 11ch` : `minmax(0, 1fr) ${BAR_W} 9ch 6ch`;
 
 const num = { fontVariantNumeric: 'tabular-nums', textAlign: 'right', whiteSpace: 'nowrap' } as const;
 
@@ -185,6 +189,9 @@ function FilterRows({ rows, scale, interactive, compare, blocked, onToggle }: Fi
               colorPalette={chartPalettes.removal}
               value={row.active ? (row.impact ?? 0) : 0}
               max={scale}
+              height={BAR_H}
+              track
+              trackHeight={TRACK_H}
               hideBelow={MIN_BAR_SHARE}
               ghostValue={compare && row.loadedImpact != null ? row.loadedImpact : undefined}
             />
@@ -223,6 +230,7 @@ function PathRows({
   compare,
 }: {
   steps: PathStep[];
+  /** Bar scale and the denominator of every share: the first row's records. */
   scale: number;
   /** Leaves room for the Δ column of the filter rows. */
   compare: boolean;
@@ -232,7 +240,8 @@ function PathRows({
     <Box role="list" aria-label="Path to your dataset, in order">
       {steps.map((s, i) => {
         const strong = s.kind !== 'drop';
-        const sign = s.kind === 'drop' ? (s.value != null && s.value < 0 ? '+ ' : '− ') : '= ';
+        const sign =
+          s.kind === 'drop' ? (s.value != null && s.value < 0 ? '+ ' : '− ') : i === 0 ? '' : '= ';
         const v = s.value == null ? null : Math.abs(s.value);
         const prefix = s.upper ? '≤ ' : s.approx ? '≈' : '';
         const labelText = (
@@ -269,6 +278,9 @@ function PathRows({
                 colorPalette={s.kind === 'drop' ? chartPalettes.removal : chartPalettes.accepted}
                 value={v}
                 max={scale}
+                height={BAR_H}
+                track
+                trackHeight={TRACK_H}
                 hideBelow={MIN_BAR_SHARE}
               />
             )}
@@ -295,7 +307,7 @@ function PathRows({
                 >
                   {s.kind === 'drop' ? (s.value != null && s.value < 0 ? fmtSigned(v) : fmtSigned(-v)) : `${prefix}${fmtInt(v)}`}
                 </Text>
-                <Num muted>{s.kind === 'drop' && v > 0 ? fmtPct(v / scale) : ''}</Num>
+                <Num muted>{fmtPct(v / scale)}</Num>
                 {compare && <span />}
               </>
             )}
@@ -380,7 +392,7 @@ function CleaningRows({
               )}
             </HStack>
             {waiting ? (
-              <Skeleton h="8px" />
+              <Skeleton h={`${BAR_H}px`} />
             ) : (
               <ShareBar
                 variant={s.kind === 'drop' ? 'muted' : 'solid'}
@@ -388,6 +400,9 @@ function CleaningRows({
                 value={s.value}
                 start={s.start}
                 max={scale}
+                height={BAR_H}
+                track
+                trackHeight={TRACK_H}
                 hideBelow={MIN_BAR_SHARE}
               />
             )}
@@ -440,6 +455,7 @@ function LedgerTable({
   steps,
   scale,
   base,
+  pathBase,
   caption,
 }: {
   rows: LedgerRow[];
@@ -447,6 +463,8 @@ function LedgerTable({
   steps: CleaningStep[] | null;
   scale: number;
   base: number | null;
+  /** Denominator of the path shares (its first row). */
+  pathBase: number;
   caption: string;
 }) {
   const pathValue = (s: PathStep) => {
@@ -484,7 +502,7 @@ function LedgerTable({
         ))}
         <Table.Row>
           <Table.Cell colSpan={4} fontWeight="semibold" bg="bg.subtle">
-            Path to your dataset
+            Path to your dataset (% of the first step)
           </Table.Cell>
         </Table.Row>
         {path.map((s) => (
@@ -494,9 +512,7 @@ function LedgerTable({
             <Table.Cell {...num} fontWeight={s.kind === 'drop' ? undefined : 'semibold'}>
               {pathValue(s)}
             </Table.Cell>
-            <Table.Cell {...num}>
-              {s.kind === 'drop' && s.value ? fmtPct(Math.abs(s.value) / scale) : ''}
-            </Table.Cell>
+            <Table.Cell {...num}>{s.value != null ? fmtPct(Math.abs(s.value) / pathBase) : ''}</Table.Cell>
           </Table.Row>
         ))}
         {steps && (
@@ -594,7 +610,10 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const minRecordsOn = (query.quality.minRecordsPerSpecies ?? 1) > 1;
   const steps = funnel ? cleaningSteps(funnel, minRecordsOn) : null;
 
-  // --- Path to your dataset: matching → species level → duplicates → loaded.
+  // --- Path to your dataset, one self-contained chain whose shares are all of its first row:
+  // matching taxa and area → filters → matches all filters → species level → duplicates → loaded.
+  // No row is shown before the total it is subtracted from.
+  const pathBase = base ?? Math.max(1, total);
   const speciesRow = pathRow('speciesLevel');
   const dupRow = pathRow('duplicates');
   const notSpecies = speciesRow?.impact ?? null;
@@ -603,10 +622,30 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const planned = ex.countStory.speciesLevel;
   const lowCount = speciesLevel != null && planned != null && planned < speciesLevel ? speciesLevel - planned : 0;
   const toLoad = planned ?? speciesLevel;
-  const path: PathStep[] = [
+  const path: PathStep[] = [];
+  if (base != null) {
+    path.push(
+      {
+        id: 'base',
+        kind: 'total',
+        label: 'Matching taxa and area',
+        value: base,
+        upper: totalUpper,
+        tip: 'Records of the chosen taxa in the chosen area, before any quality or scope filter.',
+      },
+      {
+        id: 'filters',
+        kind: 'drop',
+        label: 'Removed by quality and scope filters',
+        value: Math.max(0, base - total),
+        tip: 'Records failing at least one of the filters above, each record counted once.',
+      },
+    );
+  }
+  path.push(
     {
       id: 'matching',
-      kind: 'total',
+      kind: base != null ? 'end' : 'total',
       label: 'Matches all filters',
       value: total,
       upper: totalUpper,
@@ -620,7 +659,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       pending: 'known once the load is planned',
       tip: 'Records identified only to genus or a higher rank cannot be placed in a species, so they are not loaded.',
     },
-  ];
+  );
   if (lowCount > 0) {
     path.push({
       id: 'lowCount',
@@ -630,6 +669,16 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       tip: 'Records of species with fewer records than the minimum per species, set under Quality.',
     });
   }
+  path.push({
+    id: 'toLoad',
+    kind: 'end',
+    label: 'Species-level records',
+    value: toLoad,
+    approx: planned == null,
+    pending: 'known once the load is planned',
+    tip: 'The records a load requests. Duplicates are removed while they arrive.',
+  });
+  const dupLabel = 'Duplicates (same species, same site)';
   if (frozen) {
     const f = snapshot.funnel;
     const dup = (f.dropped as Partial<Record<string, number>>).duplicate ?? dupRow?.impact ?? 0;
@@ -644,12 +693,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
         tip: 'Difference between the preview count and the records the sources returned while loading.',
       });
     }
-    path.push({
-      id: 'duplicates',
-      kind: 'drop',
-      label: dupRow?.label ?? 'Duplicates (same species at one site)',
-      value: dup,
-    });
+    path.push({ id: 'duplicates', kind: 'drop', label: dupLabel, value: dup });
     if (cleaned > 0) {
       path.push({
         id: 'cleaning',
@@ -661,21 +705,22 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     }
     path.push({ id: 'loaded', kind: 'end', label: snapshot.mode === 'add' ? 'Added' : 'Loaded', value: f.accepted });
   } else {
-    path.push({
-      id: 'duplicates',
-      kind: 'drop',
-      label: dupRow?.label ?? 'Duplicates (same species at one site)',
-      value: dupRow?.impact ?? null,
-      pending: mode === 'live' ? 'removing while loading…' : 'removed while loading',
-    });
-    path.push({
-      id: 'toLoad',
-      kind: 'end',
-      label: 'To load, before duplicates',
-      value: toLoad,
-      approx: true,
-      pending: 'known once the load is planned',
-    });
+    path.push(
+      {
+        id: 'duplicates',
+        kind: 'drop',
+        label: dupLabel,
+        value: dupRow?.impact ?? null,
+        pending: mode === 'live' ? 'counting while loading…' : 'counted while loading',
+      },
+      {
+        id: 'loaded',
+        kind: 'end',
+        label: 'Loaded',
+        value: null,
+        pending: mode === 'live' ? 'loading…' : 'known after loading',
+      },
+    );
   }
   const waiting = mode === 'live' && (funnel?.received ?? 0) === 0;
   const truncated = mode !== 'preview' ? (ex.job?.truncated ?? []) : [];
@@ -740,6 +785,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       steps={steps}
       scale={scale}
       base={base}
+      pathBase={pathBase}
       caption={frozen ? 'Decision ledger at load time' : 'Decision ledger'}
     />
   );
@@ -808,7 +854,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
           </InfoTip>
         </HStack>
         <SectionTitle>Path to your dataset</SectionTitle>
-        <PathRows steps={path} scale={scale} compare={compare != null} />
+        <PathRows steps={path} scale={pathBase} compare={compare != null} />
         {showCleaning && steps && funnel && (
           <>
             <SectionTitle
@@ -861,6 +907,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
               steps={steps}
               scale={scale}
               base={base}
+              pathBase={pathBase}
               caption="Decision ledger (table)"
             />
           </VisuallyHidden>

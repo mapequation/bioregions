@@ -3,13 +3,16 @@ import {
   alphaExtent,
   chooseZoom,
   decadeSteps,
+  MAX_TILE_ZOOM,
   dragBbox,
   fitView,
   mapNote,
   pxToLonLat,
   tilesForView,
   unionBbox,
+  unwrapBbox,
   wktBbox,
+  wrapBbox,
 } from './mapView';
 
 describe('fitView', () => {
@@ -50,7 +53,8 @@ describe('tiles', () => {
   it('picks the coarsest zoom that is sharp enough', () => {
     expect(chooseZoom(2)).toBe(0);
     expect(chooseZoom(3)).toBe(1);
-    expect(chooseZoom(100)).toBe(3);
+    expect(chooseZoom(30)).toBe(4);
+    expect(chooseZoom(1000)).toBe(MAX_TILE_ZOOM);
   });
 
   it('covers the world with the two zoom-0 tiles', () => {
@@ -66,6 +70,34 @@ describe('tiles', () => {
     const tiles = tilesForView(view, 2);
     expect(tiles.every((t) => t.size === 450)).toBe(true);
     expect(tiles[0]).toMatchObject({ x: 1, y: 1, left: -350, top: -350 });
+  });
+
+  it('fits a box across the antimeridian unwrapped and wraps its tiles', () => {
+    const view = fitView([110, -50, -120, 30], 800, 400);
+    // Centred on the box (110..240), not stretched over the whole world.
+    expect((view.west + view.east) / 2).toBeCloseTo(175);
+    expect(view.east - view.west).toBeLessThan(210);
+    const tiles = tilesForView(view, 1);
+    const cols = tiles.filter((t) => t.y === 0).map((t) => [t.col, t.x]);
+    // Column 4 (lon 180..270) is fetched as column 0 of the world.
+    expect(cols).toContainEqual([4, 0]);
+    expect(new Set(tiles.map((t) => `${t.col},${t.y}`)).size).toBe(tiles.length);
+  });
+
+  it('limits tiles to a box', () => {
+    const view = fitView([-82, -56, -34, 13], 800, 320);
+    const all = tilesForView(view, 2);
+    const inside = tilesForView(view, 2, [-82, -56, -34, 13]);
+    expect(inside.length).toBeGreaterThan(0);
+    expect(inside.length).toBeLessThan(all.length);
+    expect(tilesForView(view, 2, [100, 0, 110, 10])).toEqual([]);
+  });
+
+  it('wraps drawn boxes back into the world', () => {
+    expect(wrapBbox([170, -20, 200, 10])).toEqual([170, -20, -160, 10]);
+    expect(wrapBbox([190, -20, 200, 10])).toEqual([-170, -20, -160, 10]);
+    expect(wrapBbox([-10, 0, 10, 5])).toEqual([-10, 0, 10, 5]);
+    expect(unwrapBbox([170, -20, -160, 10])).toEqual([170, -20, 200, 10]);
   });
 
   it('maps pixels back to lon/lat', () => {

@@ -10,6 +10,8 @@ export default observer(function CladeCard() {
   const { phyloStore } = useStore();
   const { clade, selection, matchProgress, candidatesState } = phyloStore;
   const broken = selection?.broken ?? [];
+  const synthetic = phyloStore.syntheticTree;
+  const placed = synthetic?.coverageState === 'ready' ? (synthetic.coverage?.matched ?? null) : null;
   const pending = matchProgress != null || (clade == null && candidatesState === 'loading');
 
   return (
@@ -35,19 +37,40 @@ export default observer(function CladeCard() {
                 {clade.rank}
               </Badge>
             )}
-          </Flex>
-          <Flex align="center" justify="space-between" gap={2} textStyle="xs" color="fg.muted">
-            <Text fontVariantNumeric="tabular-nums">{fmtInt(clade.numTips)} tips in synthesis</Text>
             <Link
               href={`https://tree.opentreeoflife.org/opentree/argus/ottol@${clade.ottId}`}
               target="_blank"
               rel="noreferrer"
+              aria-label={`${clade.name} on Open Tree (opens in a new tab)`}
+              textStyle="xs"
               color="fg.muted"
+              flexShrink={0}
+              ms="auto"
               _hover={{ color: 'fg' }}
             >
               Open Tree <LuExternalLink />
             </Link>
           </Flex>
+          <Stack gap={0} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" data-testid="clade-counts">
+            <Text>
+              <Text as="span" color="fg" fontWeight="medium">
+                {fmtInt(clade.numTips)}
+              </Text>{' '}
+              species in {clade.name} on Open Tree
+            </Text>
+            <Text>
+              {placed != null ? (
+                <>
+                  <Text as="span" color="fg" fontWeight="medium">
+                    {fmtInt(placed)}
+                  </Text>{' '}
+                  of your {fmtInt(phyloStore.datasetNames.length)} species placed in the synthesis
+                </>
+              ) : (
+                'Placing your species…'
+              )}
+            </Text>
+          </Stack>
         </Stack>
       ) : pending ? (
         <Stack gap={2} p={3} borderWidth="1px" borderColor="border.muted" borderRadius="md" aria-busy>

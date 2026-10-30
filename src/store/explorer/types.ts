@@ -24,10 +24,18 @@ export interface SourceState {
   supports: Supports;
   /** Query taxa this source does not know (OBIS: no AphiaID), shown as "GBIF only" chips. */
   gbifOnlyTaxa: string[];
+  /** The fast part of the preview (KPIs, map, insights); `baseTotal`/`filterImpact` come from `impact`. */
   preview: PreviewSummary | null;
   state: ReqState;
   /** True while loading and `preview` still holds the previous result. */
   stale: boolean;
+  /**
+   * Ledger counts from the second preview request (base and per-filter impact). Kept from
+   * the previous query until the new ones arrive, so the ledger does not blank out.
+   */
+  impact: Pick<PreviewSummary, 'baseTotal' | 'filterImpact'> | null;
+  /** State of the ledger request; 'loading' while `impact` belongs to an older query. */
+  impactState: 'idle' | 'loading' | 'ready' | 'error';
   error?: string;
   /** Epoch ms of the next automatic retry while rate-limited. */
   retryAt?: number;
@@ -90,13 +98,27 @@ export type BiasId =
 
 export interface BiasFlag {
   id: BiasId;
+  /** Above the threshold (a note or a warning). */
   triggered: boolean;
+  /**
+   * Severity of a triggered flag: 'warning' at 1.5 x the threshold or more, else 'note'.
+   * Absent when the check passes.
+   */
+  level?: 'note' | 'warning';
   value: number;
   threshold: number;
   /** Legend text for the threshold, e.g. "warns above 50 %". */
   thresholdLabel?: string;
   text: string;
-  action?: { label: string; run(): void };
+  action?: {
+    /** Short button label that fits a 280 px column, e.g. "Exclude this dataset". */
+    label: string;
+    /** Full description for the tooltip and accessible name, e.g. "Exclude eBird". */
+    title?: string;
+    /** Records the remedy would remove from the preview total, when known. */
+    cost?: number;
+    run(): void;
+  };
 }
 
 export interface Estimate {

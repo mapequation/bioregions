@@ -1,6 +1,6 @@
 // Preview of an OBIS query: counts, year histogram, top species and datasets, basis
-// of record, and per-filter impact. About five small requests in parallel (~0.7 s),
-// plus one /statistics call per active filter OBIS can express.
+// of record (five small requests in parallel), then the ledger base and one
+// /statistics call per active filter OBIS can express.
 
 import { fetchJson } from '../http';
 import type { FacetBucket, FilterId, OccurrenceQuery, PreviewSummary } from '../types';
@@ -114,28 +114,57 @@ export function emptyObisPreview(): PreviewSummary {
   };
 }
 
+/** What the second preview step adds: the ledger base and server-side filter impact. */
+export type ObisPreviewImpact = Pick<PreviewSummary, 'baseTotal' | 'filterImpact'>;
+
+/** The two halves of an OBIS preview: the fast summary and the ledger counts that follow it. */
+export interface ObisPreviewParts {
+  summary: Promise<PreviewSummary>;
+  impact: Promise<ObisPreviewImpact>;
+}
+
 /**
- * Preview summary. `total` already subtracts records the streamed basis-of-record
- * filter will drop (exact, from the facet); the other figures describe the
- * server-side query. Uncertainty impact is unknown, so it has no `filterImpact` key.
+ * Preview in two steps. `summary` (five parallel calls) carries everything except the
+ * ledger base and the server-side filter impact; `total` already subtracts records the
+ * streamed basis-of-record filter will drop (exact, from the facet), and that impact is
+ * in the summary. `impact` starts once the summary's statistics are in, so its
+ * /statistics calls never compete with the summary for connections. Uncertainty impact
+ * is unknown, so it has no `filterImpact` key.
  */
-export async function previewObis(
+export function previewObisParts(query: OccurrenceQuery, signal?: AbortSignal): ObisPreviewParts {
+  const raw = summarize(query, signal);
+  const summary = raw.then((r) => r.summary);
+  const impact = raw.then(async ({ summary: s, records, ids }) => {
+    if (!ids) return { baseTotal: s.total, filterImpact: {} };
+    const filters = serverFilters(query);
+    if (filters.length === 0) return { baseTotal: s.baseTotal, filterImpact: {} };
+    const [baseStats, ...impacts] = await Promise.all([
+      obisStatistics(obisParams(query, { taxonIds: ids, omit: ALL_FILTERS }), signal),
+      ...filters.map((id) => obisStatistics(obisParams(query, { taxonIds: ids, omit: [id] }), signal)),
+    ]);
+    const filterImpact: PreviewSummary['filterImpact'] = {};
+    filters.forEach((id, i) => {
+      filterImpact[id] = Math.max(0, impacts[i].records - records);
+    });
+    return { baseTotal: Math.max(records, baseStats.records), filterImpact };
+  });
+  // The caller may only await `summary`; never leave a rejection unhandled.
+  impact.catch(() => {});
+  return { summary, impact };
+}
+
+async function summarize(
   query: OccurrenceQuery,
   signal?: AbortSignal,
-): Promise<PreviewSummary> {
+): Promise<{ summary: PreviewSummary; records: number; ids: number[] | null }> {
   const taxa = await resolveQueryTaxa(query, signal);
   if (taxa.empty) {
-    return emptyObisPreview();
+    return { summary: emptyObisPreview(), records: 0, ids: null };
   }
   const params = obisParams(query, { taxonIds: taxa.ids });
-  const filters = serverFilters(query);
-  // Ledger base (taxa + area only); needs its own call only when a server filter is active.
-  const baseRequest =
-    filters.length > 0
-      ? obisStatistics(obisParams(query, { taxonIds: taxa.ids, omit: ALL_FILTERS }), signal)
-      : Promise.resolve(null);
+  const filtered = serverFilters(query).length > 0;
 
-  const [stats, years, checklist, datasets, facet, baseStats, ...impacts] = await Promise.all([
+  const [stats, years, checklist, datasets, facet] = await Promise.all([
     obisStatistics(params, signal),
     fetchJson<{ year: number | null; records: number }[]>(obisUrl('statistics/years', params), {
       signal,
@@ -153,19 +182,10 @@ export async function previewObis(
       obisUrl('facet', withParam(withParam(params, 'facets', 'basisOfRecord'), 'size', '100')),
       { signal },
     ),
-    baseRequest,
-    ...filters.map((id) =>
-      obisStatistics(obisParams(query, { taxonIds: taxa.ids, omit: [id] }), signal),
-    ),
   ]);
 
   const basisOfRecord = basisBuckets(facet.results.basisOfRecord ?? []);
   const filterImpact: PreviewSummary['filterImpact'] = {};
-  filters.forEach((id, i) => {
-    filterImpact[id] = Math.max(0, impacts[i].records - stats.records);
-  });
-
-  const baseTotal = Math.max(stats.records, baseStats?.records ?? stats.records);
   let total = stats.records;
   const keep = activeBasisFilter(query);
   if (keep) {
@@ -177,10 +197,11 @@ export async function previewObis(
   }
 
   const [minYear, maxYear] = stats.yearrange ?? [null, null];
-  return {
+  const summary: PreviewSummary = {
     source: 'obis',
     total,
-    baseTotal,
+    // Without a server-side filter the base is the server count (basis of record included).
+    ...(!filtered && { baseTotal: stats.records }),
     species: stats.species,
     datasets: stats.datasets,
     yearRange: minYear != null && maxYear != null ? [minYear, maxYear] : null,
@@ -201,5 +222,20 @@ export async function previewObis(
     issues: [],
     uncertainty: null,
     filterImpact,
+  };
+  return { summary, records: stats.records, ids: taxa.ids };
+}
+
+/** Summary and impact together, e.g. for scripts and tests. */
+export async function previewObis(
+  query: OccurrenceQuery,
+  signal?: AbortSignal,
+): Promise<PreviewSummary> {
+  const parts = previewObisParts(query, signal);
+  const [summary, impact] = await Promise.all([parts.summary, parts.impact]);
+  return {
+    ...summary,
+    ...(impact.baseTotal != null && { baseTotal: impact.baseTotal }),
+    filterImpact: { ...summary.filterImpact, ...impact.filterImpact },
   };
 }

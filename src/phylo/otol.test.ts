@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  cachedText,
   fetchStudyTree,
   findStudyTrees,
+  nexsonTreeTips,
+  phylesystemUrl,
   inducedSubtree,
   matchNames,
   mrca,
@@ -243,6 +246,47 @@ describe('study trees', () => {
     expect(normalizeDoi('http://dx.doi.org/10.1016/x')).toBe('https://doi.org/10.1016/x');
     expect(normalizeDoi('doi:10.1234/abc.1')).toBe('https://doi.org/10.1234/abc.1');
     expect(normalizeDoi('')).toBeUndefined();
+  });
+});
+
+describe('study tips', () => {
+  it('maps a study id to its phylesystem file', () => {
+    expect(phylesystemUrl('ot_3043')).toMatch(/\/study\/ot_43\/ot_3043\/ot_3043\.json$/);
+    expect(phylesystemUrl('pg_308')).toMatch(/\/study\/pg_08\/pg_308\/pg_308\.json$/);
+    expect(phylesystemUrl('weird')).toBeNull();
+  });
+
+  it('reads tips and branch lengths from NexSON', () => {
+    const tips = nexsonTreeTips({
+      nexml: {
+        otusById: {
+          otus1: {
+            otuById: {
+              o1: { '^ot:ottId': 11, '^ot:ottTaxonName': 'A a', '^ot:originalLabel': 'A_a' },
+              o2: { '^ot:originalLabel': 'Mystery sp.' },
+            },
+          },
+        },
+        treesById: {
+          trees1: {
+            '@otus': 'otus1',
+            treeById: {
+              tree1: {
+                nodeById: { n1: {}, n2: { '@otu': 'o1' }, n3: { '@otu': 'o2' } },
+                edgeBySourceId: { n1: { e1: { '@length': 1 }, e2: {} } },
+              },
+            },
+          },
+        },
+      },
+    } as never);
+    expect(tips.tree1.labels).toEqual(['11', '*tip #2 not mapped to OTT. Original label - Mystery sp.']);
+    expect(tips.tree1.names).toEqual(['A a', 'Mystery sp.']);
+    expect(tips.tree1.hasBranchLengths).toBe(false);
+  });
+
+  it('loads without Cache Storage', async () => {
+    expect(await cachedText('https://example.org/x', 1000, async () => 'fresh')).toBe('fresh');
   });
 });
 

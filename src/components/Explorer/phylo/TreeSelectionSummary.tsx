@@ -1,6 +1,15 @@
-import { Alert, Badge, Box, Button, Collapsible, Flex, HStack, Icon, Skeleton, Stack, Text } from '@chakra-ui/react';
+import { Alert, Badge, Box, Button, Flex, HStack, Icon, Skeleton, Stack, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { LuArrowLeftRight, LuChevronRight, LuCircleCheck, LuInfo, LuMap, LuRotateCw } from 'react-icons/lu';
+import { useState } from 'react';
+import {
+  LuArrowLeftRight,
+  LuChevronRight,
+  LuCircleCheck,
+  LuInfo,
+  LuLoaderCircle,
+  LuMap,
+  LuRotateCw,
+} from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { GRAFEN_NOTE, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import { fmtInt } from '../format';
@@ -23,21 +32,52 @@ function tipsWithLengths(tips: number, c: PhyloCandidate): string {
   return c.branchLengths === 'none' ? `${n}, ${units.long}` : `${n} with branch lengths in ${units.long}`;
 }
 
+/** Longest name list rendered; the rest is summarised. */
+const LIST_MAX = 300;
+
 function NameList({ title, names }: { title: string; names: string[] }) {
   if (names.length === 0) return null;
+  const shown = names.slice(0, LIST_MAX);
   return (
     <Box>
       <Text textStyle="xs" fontWeight="medium" color="fg.muted" px={2.5} pt={1.5} pb={0.5}>
         {title}
       </Text>
       <Box as="ul" listStyleType="none" columns={{ base: 1, xl: 2 }}>
-        {names.map((name) => (
-          <Box as="li" key={name} px={2.5} py={0.5} textStyle="xs" fontStyle="italic">
+        {shown.map((name, i) => (
+          // Tree tips can repeat a name.
+          // biome-ignore lint/suspicious/noArrayIndexKey: static list
+          <Box as="li" key={`${name}-${i}`} px={2.5} py={0.5} textStyle="xs" fontStyle="italic" truncate title={name}>
             {name}
           </Box>
         ))}
       </Box>
+      {names.length > LIST_MAX && (
+        <Text textStyle="xs" color="fg.muted" px={2.5} py={0.5} fontVariantNumeric="tabular-nums">
+          and {fmtInt(names.length - LIST_MAX)} more
+        </Text>
+      )}
     </Box>
+  );
+}
+
+/** A small 'Show'/'Hide' disclosure button for a name list. */
+function ShowToggle({ open, controls, onToggle, label }: { open: boolean; controls: string; onToggle: () => void; label: string }) {
+  return (
+    <Button
+      size="xs"
+      variant="ghost"
+      px={1.5}
+      h={6}
+      aria-expanded={open}
+      aria-controls={controls}
+      aria-label={`${open ? 'Hide' : 'Show'} ${label}`}
+      onClick={onToggle}
+      _hover={{ bg: 'bg.muted' }}
+    >
+      <Icon as={LuChevronRight} transition="transform 0.15s" transform={open ? 'rotate(90deg)' : undefined} />
+      {open ? 'Hide' : 'Show'}
+    </Button>
   );
 }
 
@@ -61,7 +101,11 @@ const Dot = () => (
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
   const { explorerStore, phyloStore } = useStore();
-  const { selectedId, selection, loadState, loadedTree, selectionReason } = phyloStore;
+  const { selectedId, selection, loadState, loadedTree, selectionReason, selectionNotInData } = phyloStore;
+  // The open name list belongs to one tree: picking another closes it.
+  const [open, setOpen] = useState<{ id: string | null; list: 'absent' | 'extra' } | null>(null);
+  const openList = open && open.id === selectedId ? open.list : null;
+  const toggle = (list: 'absent' | 'extra') => setOpen(openList === list ? null : { id: selectedId, list });
   const candidate = phyloStore.candidates.find((c) => c.id === selectedId) ?? null;
   if (phyloStore.candidates.length === 0) return null;
 
@@ -69,6 +113,8 @@ export default observer(function TreeSelectionSummary() {
   const done = loadState === 'done' && loadedTree != null && loadedTree.candidateId === selectedId;
   const tooFew = selection != null && selection.kept < 2;
   const breakdown = phyloStore.absentBreakdown;
+  const awaiting = phyloStore.awaitingBestTree;
+  const coverage = phyloStore.coverageProgress;
 
   // Trade-off between a dated tree and the synthesis (more tips, relative ages only).
   const synthetic = phyloStore.syntheticTree;
@@ -130,30 +176,61 @@ export default observer(function TreeSelectionSummary() {
           </Flex>
 
           {selection ? (
-            <Collapsible.Root>
-              <HStack gap={2} wrap="wrap" rowGap={1} textStyle="sm">
-                <Stat value={selection.kept} label="tips kept" />
+            <Box>
+              <HStack gap={2} wrap="wrap" rowGap={1} textStyle="sm" data-testid="tree-selection-counts">
+                {candidate.kind === 'synthetic' ? (
+                  <Text as="span">
+                    Induced subtree of your{' '}
+                    <Text as="span" fontWeight="semibold" fontVariantNumeric="tabular-nums">
+                      {fmtInt(selection.kept)}
+                    </Text>{' '}
+                    placed species
+                  </Text>
+                ) : (
+                  <Stat value={selection.kept} label="of your species in this tree" />
+                )}
                 <Dot />
                 <HStack gap={1}>
-                  <Stat value={selection.absentFromTree.length} label="dataset species absent" tone="muted" />
+                  <Stat
+                    value={selection.absentFromTree.length}
+                    label={candidate.kind === 'synthetic' ? 'not placed' : 'absent'}
+                    tone="muted"
+                  />
                   {selection.absentFromTree.length > 0 && (
-                    <Collapsible.Trigger asChild>
-                      <Button size="xs" variant="ghost" px={1.5} h={6} className="group" _expanded={{ bg: 'transparent' }} _hover={{ bg: 'bg.muted' }}>
-                        <Icon
-                          as={LuChevronRight}
-                          transition="transform 0.15s"
-                          _groupExpanded={{ transform: 'rotate(90deg)' }}
-                        />
-                        Show
-                      </Button>
-                    </Collapsible.Trigger>
+                    <ShowToggle
+                      open={openList === 'absent'}
+                      controls="phylo-absent-list"
+                      label="your species missing from this tree"
+                      onToggle={() => toggle('absent')}
+                    />
                   )}
                 </HStack>
                 <Dot />
-                <Stat value={selection.pruned} label="tree tips pruned" tone="muted" />
+                <HStack gap={1}>
+                  <Stat
+                    value={selection.pruned}
+                    label={
+                      candidate.kind === 'synthetic'
+                        ? selection.pruned === 1
+                          ? 'extra tip'
+                          : 'extra tips'
+                        : `tree ${selection.pruned === 1 ? 'tip' : 'tips'} not in your data`
+                    }
+                    tone="muted"
+                  />
+                  {selection.pruned > 0 && selectionNotInData && selectionNotInData.length > 0 && (
+                    <ShowToggle
+                      open={openList === 'extra'}
+                      controls="phylo-extra-list"
+                      label="tree tips not in your data"
+                      onToggle={() => toggle('extra')}
+                    />
+                  )}
+                </HStack>
               </HStack>
-              <Collapsible.Content>
+              {openList === 'absent' && (
                 <Box
+                  id="phylo-absent-list"
                   mt={2}
                   maxH="132px"
                   overflowY="auto"
@@ -183,8 +260,26 @@ export default observer(function TreeSelectionSummary() {
                   />
                   <NameList title="Matched, but not in this tree" names={breakdown?.notInTree ?? []} />
                 </Box>
-              </Collapsible.Content>
-            </Collapsible.Root>
+              )}
+              {openList === 'extra' && selectionNotInData && (
+                <Box
+                  id="phylo-extra-list"
+                  mt={2}
+                  maxH="132px"
+                  overflowY="auto"
+                  borderWidth="1px"
+                  borderColor="border.muted"
+                  borderRadius="md"
+                  bg="bg"
+                  pb={1}
+                >
+                  <NameList
+                    title="Tree tips not in your data (dropped on load)"
+                    names={selectionNotInData}
+                  />
+                </Box>
+              )}
+            </Box>
           ) : (
             <Flex align="center" h="20px" aria-busy>
               <Skeleton h="3" w="60%" />
@@ -264,6 +359,26 @@ export default observer(function TreeSelectionSummary() {
                 <LuRotateCw /> Retry
               </Button>
             </Alert.Root>
+          ) : awaiting ? (
+            <Flex align="center" justify="flex-end" gap={3} wrap="wrap" rowGap={2}>
+              <HStack gap={1.5} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" me="auto" minW={0}>
+                <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" flexShrink={0} />
+                <Text>
+                  Checking coverage {fmtInt(coverage.done)}/{fmtInt(coverage.total)} · a dated tree may fit better
+                </Text>
+              </HStack>
+              <Button
+                data-testid="load-tree"
+                size="sm"
+                variant="outline"
+                loading={loading}
+                loadingText="Loading tree…"
+                disabled={selection == null || tooFew}
+                onClick={() => void phyloStore.loadSelected()}
+              >
+                {candidate.kind === 'synthetic' ? 'Load synthesis now (topology only)' : `Load ${candidate.title} now`}
+              </Button>
+            </Flex>
           ) : (
             <Flex align="center" justify="flex-end" gap={3}>
               {tooFew && (

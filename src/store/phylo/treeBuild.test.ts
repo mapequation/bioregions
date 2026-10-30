@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { parseNewick, tipLabels, treeStats } from '@/phylo/newickTools';
-import { buildDatasetTree, coverageOf, datasetNewick, placeBrokenTaxa, type TipJoin, tipToDataset } from './treeBuild';
+import {
+  buildDatasetTree,
+  coverageOf,
+  coverageOfTips,
+  datasetNewick,
+  placeBrokenTaxa,
+  type TipJoin,
+  tipDisplayName,
+  tipToDataset,
+} from './treeBuild';
 
 const join: TipJoin = {
   ottToDataset: new Map([
@@ -67,4 +76,22 @@ it('placeBrokenTaxa adds tips under the standing-in node', () => {
 
 it('coverageOf counts distinct dataset species', () => {
   expect(coverageOf('((1:1,1:1):1,(3:1,9:1):1);', join)).toEqual({ matched: 2, hasBranchLengths: true });
+});
+
+describe('tips not in the data', () => {
+  it('counts coverage from tips and lists the rest by name', () => {
+    const tips = { labels: ['1', '1', '9', '3'], names: ['Puma concolor', 'Puma concolor', 'Homo sapiens', 'Felis catus'], hasBranchLengths: true };
+    expect(coverageOfTips(tips, join)).toEqual({
+      kept: new Set(['Puma concolor', 'Felis catus']),
+      hasBranchLengths: true,
+      notInData: ['Puma concolor', 'Homo sapiens'],
+    });
+  });
+
+  it('keeps the labels of dropped source tips', () => {
+    const built = buildDatasetTree('((1:1,9:1):1,3:2);', join, ['Puma concolor', 'Felis catus']);
+    expect(built.notInData).toEqual(['9']);
+    expect(tipDisplayName('9')).toBe('ott9');
+    expect(tipDisplayName("*tip #1 not mapped to OTT. Original label - Saguinus_sp.")).toBe('Saguinus sp.');
+  });
 });

@@ -43,7 +43,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const other = matching != null ? matching - (notSpecies ?? 0) - dup - records : 0;
   const story =
     matching != null && matching > 0 && last.mode !== 'add'
-      ? `From ${fmtInt(matching)} matching records: ${[
+      ? `From ${fmtInt(matching)} records matching all filters: ${[
           notSpecies ? `${fmtInt(notSpecies)} not identified to species` : null,
           `${fmtInt(dup)} duplicates`,
           other > 0 ? `${fmtInt(other)} other` : null,

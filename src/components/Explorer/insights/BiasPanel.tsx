@@ -3,12 +3,13 @@ import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
 import { LuCheck, LuCircleDashed, LuInfo, LuTriangleAlert } from 'react-icons/lu';
 import { useStore } from '../../../store';
+import { BIAS_WARNING_FACTOR } from '../../../store/ExplorerStore';
 import type { BiasFlag, BiasId } from '../../../store/explorer/types';
 import { ToggleTip } from '../../ui/toggle-tip';
 import { Tooltip } from '../../ui/tooltip';
 import { chartPalettes } from '../charts/colors';
 import ShareBar from '../charts/ShareBar';
-import { fmtPct } from '../format';
+import { fmtInt, fmtPct } from '../format';
 
 export const BIAS_TITLES: Record<BiasId, string> = {
   datasetDominance: 'Dataset dominance',
@@ -18,7 +19,7 @@ export const BIAS_TITLES: Record<BiasId, string> = {
   lowCountSpecies: 'Low-count species',
 };
 
-/** What the value measures, for the bar's accessible label and the passed line. */
+/** What the value measures, for the bar's accessible label. */
 const MEASURE: Record<BiasId, string> = {
   datasetDominance: 'of records from the largest dataset',
   humanObservation: 'of records are human observations',
@@ -27,10 +28,19 @@ const MEASURE: Record<BiasId, string> = {
   lowCountSpecies: 'of species have fewer than 5 records',
 };
 
-/** The threshold as worded by the store (`thresholdLabel`), else the plain percentage. */
-function thresholdText(flag: BiasFlag): string {
-  return flag.thresholdLabel || fmtPct(flag.threshold);
-}
+/** Short definition of the value, for the passed-check line ("species with < 5 records: 10 %"). */
+const DEFINITION: Record<BiasId, string> = {
+  datasetDominance: 'largest dataset',
+  humanObservation: 'human observations',
+  temporalSkew: 'dated records from the last 15 years',
+  countryConcentration: 'top country',
+  lowCountSpecies: 'species with < 5 records',
+};
+
+/** "flagged above 20 %": where a note starts. */
+const flaggedAbove = (flag: BiasFlag) => `flagged above ${fmtPct(flag.threshold)}`;
+/** Where a note becomes a warning. */
+const warningFrom = (flag: BiasFlag) => fmtPct(flag.threshold * BIAS_WARNING_FACTOR);
 
 const BAR_HEIGHT = 6;
 
@@ -54,6 +64,10 @@ function ThresholdGlyph() {
 }
 
 function why(flag: BiasFlag): string {
+  return `${whyCheck(flag)} From ${warningFrom(flag)} it is a warning, below that a note.`;
+}
+
+function whyCheck(flag: BiasFlag): string {
   const t = fmtPct(flag.threshold);
   switch (flag.id) {
     case 'datasetDominance':
@@ -87,45 +101,97 @@ function WhyTip({ flag }: { flag: BiasFlag }) {
   );
 }
 
+/** The remedy as one full-width button: label left, the records it removes right. */
+function ActionRow({ flag }: { flag: BiasFlag }) {
+  const action = flag.action;
+  if (!action) {
+    return flag.id === 'datasetDominance' ? (
+      <Text mt={2} textStyle="xs" color="fg.muted">
+        OBIS datasets can't be excluded.
+      </Text>
+    ) : null;
+  }
+  const name = action.title ?? action.label;
+  const cost = action.cost != null && action.cost > 0 ? action.cost : null;
+  const described = cost != null ? `${name} (removes ${fmtInt(cost)} records)` : name;
+  return (
+    <Tooltip content={described} openDelay={400}>
+      <Button
+        mt={2}
+        size="xs"
+        variant="outline"
+        w="full"
+        justifyContent="space-between"
+        gap={2}
+        aria-label={described}
+        onClick={() => action.run()}
+      >
+        <Text as="span" truncate>
+          {action.label}
+        </Text>
+        {cost != null && (
+          <Text as="span" color="fg.muted" fontWeight="normal" fontVariantNumeric="tabular-nums" flexShrink={0}>
+            {`\u2212${fmtInt(cost)}`}
+          </Text>
+        )}
+      </Button>
+    </Tooltip>
+  );
+}
+
 function TriggeredFlag({ flag }: { flag: BiasFlag }) {
   const title = BIAS_TITLES[flag.id];
-  const threshold = thresholdText(flag);
+  const warning = flag.level === 'warning';
+  const levelText = warning ? 'warning' : 'note';
   const tick = Math.min(1, Math.max(0, flag.threshold));
+  const thresholds = `${flaggedAbove(flag)}, a warning from ${warningFrom(flag)}`;
   return (
     <Box
       data-testid="bias-flag"
       data-bias={flag.id}
+      data-level={levelText}
       role="group"
-      aria-label={`${title}: warning`}
+      aria-label={`${title}: ${levelText}`}
       bg="bg"
       borderWidth="1px"
-      borderColor="border"
+      borderColor={warning ? 'orange.muted' : 'border'}
       rounded="lg"
       px={3}
       py={2.5}
     >
-      <HStack gap={1.5} align="center">
-        <Icon as={LuTriangleAlert} boxSize={4} color="orange.fg" aria-hidden />
-        <Text textStyle="sm" fontWeight="semibold" flex="1" minW={0} truncate>
+      <HStack gap={1.5} align="center" minH={6}>
+        <Icon
+          as={warning ? LuTriangleAlert : LuInfo}
+          boxSize={4}
+          color={warning ? 'orange.fg' : 'fg.muted'}
+          aria-hidden
+        />
+        <Text textStyle="sm" fontWeight={warning ? 'semibold' : 'medium'} flex="1" minW={0} lineHeight="short">
           {title}
         </Text>
-        <Text textStyle="sm" fontWeight="semibold" fontVariantNumeric="tabular-nums">
+        <Text
+          textStyle="sm"
+          fontWeight={warning ? 'semibold' : 'medium'}
+          color={warning ? 'fg' : 'fg.muted'}
+          fontVariantNumeric="tabular-nums"
+        >
           {fmtPct(flag.value)}
         </Text>
+        <WhyTip flag={flag} />
       </HStack>
-      <Box position="relative" mt={2} mb={2}>
+      <Box position="relative" mt={1.5} mb={2}>
         <ShareBar
-          variant="solid"
-          colorPalette={chartPalettes.removal}
+          variant={warning ? 'solid' : 'muted'}
+          colorPalette={warning ? chartPalettes.removal : 'gray'}
           value={flag.value}
           max={1}
           ghostValue={flag.threshold}
           height={BAR_HEIGHT}
           track
-          label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; warning threshold ${threshold}`}
+          label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; ${thresholds}`}
         />
         {/* Hover target over ShareBar's dotted tick: names the threshold. */}
-        <Tooltip content={`Warning threshold: ${threshold}`} openDelay={150} showArrow>
+        <Tooltip content={`Threshold: ${thresholds}`} openDelay={150} showArrow>
           <Box
             as="span"
             aria-hidden
@@ -141,72 +207,76 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
       <Text textStyle="xs" color="fg.muted" lineHeight="short">
         {flag.text}
       </Text>
-      <HStack mt={2} gap={2} justify="space-between">
-        {flag.action ? (
-          <Button
-            size="xs"
-            variant="outline"
-            minW={0}
-            flexShrink={1}
-            title={flag.action.label}
-            onClick={() => flag.action?.run()}
-          >
-            <Text as="span" truncate>
-              {flag.action.label}
-            </Text>
-          </Button>
-        ) : (
-          <Text textStyle="xs" color="fg.muted">
-            OBIS datasets can't be excluded.
-          </Text>
-        )}
-        <WhyTip flag={flag} />
-      </HStack>
+      <ActionRow flag={flag} />
     </Box>
   );
 }
 
 function QuietFlag({ flag, pending }: { flag: BiasFlag; pending: boolean }) {
   const title = BIAS_TITLES[flag.id];
+  const detail = pending
+    ? `${DEFINITION[flag.id]}: known once the load is planned`
+    : `${DEFINITION[flag.id]}: ${fmtPct(flag.value)} \u00b7 ${flaggedAbove(flag)}`;
   return (
-    <HStack gap={2} minH={7} data-bias={flag.id}>
+    <HStack gap={2} py={1} align="flex-start" data-bias={flag.id}>
       <Icon
         as={pending ? LuCircleDashed : LuCheck}
         boxSize={3.5}
+        mt={0.5}
         color={pending ? 'fg.muted' : 'green.fg'}
         aria-hidden
       />
-      <Text textStyle="sm" color="fg.muted" flex="1" minW={0} truncate>
-        {title}
-        <Box as="span" srOnly>
-          {pending ? ': not checked yet. ' : `: passes, ${fmtPct(flag.value)} ${MEASURE[flag.id]}. `}
-        </Box>
-      </Text>
-      <Text textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" aria-hidden>
-        {pending ? 'pending' : fmtPct(flag.value)}
-      </Text>
+      <Box flex="1" minW={0}>
+        <Text textStyle="sm" color="fg.muted" lineHeight="short">
+          {title}
+          <Box as="span" srOnly>
+            {pending ? ': not checked yet.' : ': passes.'}
+          </Box>
+        </Text>
+        <Text textStyle="xs" color="fg.subtle" lineHeight="short" fontVariantNumeric="tabular-nums">
+          {detail}
+        </Text>
+      </Box>
       <WhyTip flag={flag} />
     </HStack>
   );
 }
 
-/** The five sampling-bias checks: triggered flags as cards, passed checks as one line each. */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The five sampling-bias checks: warnings (orange) and notes (muted) as cards, passed
+ * checks as one line each with their value and threshold.
+ */
 export default observer(function BiasPanel() {
   const { explorerStore: ex } = useStore();
   const state = ex.previewState;
   const flags = ex.biasFlags;
   const pending = (f: BiasFlag) => f.id === 'lowCountSpecies' && ex.speciesCounts == null;
-  const triggered = flags.filter((f) => f.triggered);
+  const warnings = flags.filter((f) => f.triggered && f.level === 'warning');
+  const notes = flags.filter((f) => f.triggered && f.level !== 'warning');
   const quiet = flags.filter((f) => !f.triggered);
   const stale = state === 'stale';
+
+  const counts = [
+    warnings.length > 0 && plural(warnings.length, 'warning'),
+    notes.length > 0 && plural(notes.length, 'note'),
+  ].filter(Boolean);
+  const countText = counts.join(' \u00b7 ');
 
   let summary = null;
   if (flags.length > 0) {
     summary =
-      triggered.length > 0 ? (
-        <Badge size="sm" colorPalette="orange" variant="subtle" fontVariantNumeric="tabular-nums">
-          <LuTriangleAlert aria-hidden />
-          {triggered.length} of {flags.length}
+      warnings.length > 0 || notes.length > 0 ? (
+        <Badge
+          size="sm"
+          colorPalette={warnings.length > 0 ? 'orange' : 'gray'}
+          variant="subtle"
+          fontVariantNumeric="tabular-nums"
+          whiteSpace="nowrap"
+        >
+          {warnings.length > 0 ? <LuTriangleAlert aria-hidden /> : <LuInfo aria-hidden />}
+          {countText}
         </Badge>
       ) : (
         <Badge size="sm" colorPalette="green" variant="subtle">
@@ -233,13 +303,14 @@ export default observer(function BiasPanel() {
       </Text>
     );
   } else {
+    const cards = [...warnings, ...notes];
     body = (
       <Stack gap={2}>
-        {triggered.map((f) => (
+        {cards.map((f) => (
           <TriggeredFlag key={f.id} flag={f} />
         ))}
         {quiet.length > 0 && (
-          <Box mt={triggered.length > 0 ? 1 : 0}>
+          <Box mt={cards.length > 0 ? 1 : 0}>
             {quiet.map((f) => (
               <QuietFlag key={f.id} flag={f} pending={pending(f)} />
             ))}
@@ -251,21 +322,21 @@ export default observer(function BiasPanel() {
 
   return (
     <Box as="section" aria-labelledby="bias-checks-heading">
-      <HStack justify="space-between" mb={2} minH={6}>
-        <Text as="h3" id="bias-checks-heading" {...sectionHeading}>
+      <HStack justify="space-between" mb={2} minH={6} gap={2}>
+        <Text as="h3" id="bias-checks-heading" {...sectionHeading} whiteSpace="nowrap">
           Bias checks
           {flags.length > 0 && (
             <Box as="span" srOnly>
-              , {triggered.length} of {flags.length} flagged
+              , {countText || 'all pass'}
             </Box>
           )}
         </Text>
         <Box aria-hidden>{summary}</Box>
       </HStack>
-      {triggered.length > 0 && state !== 'first' && (
+      {(warnings.length > 0 || notes.length > 0) && state !== 'first' && (
         <Text textStyle="xs" color="fg.muted" mt={-1} mb={2} aria-hidden>
           <ThresholdGlyph />
-          marks the warning threshold
+          marks the threshold
         </Text>
       )}
       <Box aria-busy={stale || undefined} opacity={stale ? 0.5 : 1} transition="opacity 0.15s">

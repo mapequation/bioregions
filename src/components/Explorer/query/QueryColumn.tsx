@@ -65,25 +65,36 @@ export default observer(function QueryColumn() {
 
   return (
     <Stack gap={0} position="relative">
-      {locked && (
-        <HStack
-          role="status"
-          position="sticky"
-          top={0}
-          zIndex={1}
-          gap={2}
-          px={4}
-          py={2}
-          fontSize="xs"
-          fontWeight="medium"
-          bg="bg.muted"
-          color="fg"
-          borderBottomWidth="1px"
-        >
-          <Icon as={LuLock} boxSize={3.5} color="fg.muted" />
-          <Text>Query locked while loading — cancel to edit</Text>
-        </HStack>
-      )}
+      {/*
+        Lock strip: a zero-height sticky anchor with the strip absolutely positioned on it,
+        so it overlays the (dimmed, inert) top of the column instead of pushing it down.
+        The status region is always mounted so the change is announced.
+      */}
+      <Box position="sticky" top={0} h={0} zIndex={2} role="status" aria-live="polite">
+        {locked && (
+          <HStack
+            position="absolute"
+            top={0}
+            insetX={0}
+            h={8}
+            gap={2}
+            px={4}
+            fontSize="xs"
+            fontWeight="medium"
+            bg="bg.muted"
+            color="fg"
+            borderBottomWidth="1px"
+            borderColor="border"
+            boxShadow="xs"
+          >
+            <Icon as={LuLock} boxSize={3.5} color="fg.muted" aria-hidden />
+            <Text truncate>Locked while loading</Text>
+            <Text ml="auto" color="fg.muted" fontWeight="normal" whiteSpace="nowrap">
+              Cancel to edit
+            </Text>
+          </HStack>
+        )}
+      </Box>
       <Box opacity={locked ? 0.5 : 1} inert={locked} aria-disabled={locked || undefined} transition="opacity 0.15s">
         <QuerySectionBox id="taxa" title="Taxa" summary={q.taxa.length ? taxaLabel(q.taxa, 2) : 'All taxa'}>
           <TaxonPicker />
