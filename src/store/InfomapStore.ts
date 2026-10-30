@@ -25,6 +25,10 @@ import type SpeciesStore from './SpeciesStore';
 import type TreeStore from './TreeStore';
 
 export interface BioregionsNetworkData {
+  /** Number of links discarded because their weight fell below `linkWeightThreshold`. */
+  numLinksBelowThreshold?: number;
+  /** Number of occurrence species excluded from the network (no tip in the tree at treeWeightBalance = 1). */
+  numSpeciesExcluded?: number;
   nodeIdMap: { [name: string]: number };
   numLeafTaxonNodes: number;
   numInternalTaxonNodes: number;
@@ -884,6 +888,25 @@ export default class InfomapStore {
     let sumNonTreeLinkWeight = 0;
 
     const { treeWeightBalance } = this;
+    if (includeTree && isEqual(treeWeightBalance, 1)) {
+      // At full tree weight the species loop below is skipped, so occurrence
+      // species with no tip in the phylogeny contribute nothing at all. Count
+      // them so callers can see how much of the data left the network, and so
+      // a no-tree baseline can be restricted to the same species pool.
+      let numSpeciesNotInTree = 0;
+      for (const name of Object.keys(nameToCellIds)) {
+        if (!this.rootStore.treeStore.treeNodeMap.has(name)) {
+          ++numSpeciesNotInTree;
+        }
+      }
+      network.numSpeciesExcluded = numSpeciesNotInTree;
+      if (numSpeciesNotInTree > 0) {
+        console.warn(
+          `treeWeightBalance = 1: ${numSpeciesNotInTree} of ${Object.keys(nameToCellIds).length
+          } species have no tip in the tree and are excluded from the network.`,
+        );
+      }
+    }
     if (!includeTree || treeWeightBalance < 1) {
       for (const [name, cells] of Object.entries(nameToCellIds)) {
         const nodeWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
@@ -1366,6 +1389,7 @@ export default class InfomapStore {
 
     const linkMap = new Map<TaxonName, StateCellOutLinks>();
     const linkWeightThreshold = 10 ** this.linkWeightThresholdExponent;
+    let numLinksBelowThreshold = 0;
 
     const addStateLink = (
       taxonName: string,
@@ -1398,7 +1422,11 @@ export default class InfomapStore {
     const addLinksToNetwork = () => {
       for (const [taxonName, outLinks] of linkMap.entries()) {
         for (const [stateCellName, weight] of outLinks) {
-          if (weight < linkWeightThreshold) { return; }
+          // NOTE: must be `continue`, not `return`. A `return` here aborts the
+          // whole loop and silently truncates the network at the first
+          // sub-threshold link. Cf. the equivalent guard in
+          // `createStandardNetwork`, which sits inside the `addLink` helper.
+          if (weight < linkWeightThreshold) { ++numLinksBelowThreshold; continue; }
 
           const taxonNode = phyloStateNodes.get(taxonName);
           const cellStateNode = cellStateNodes.get(stateCellName);
@@ -1486,6 +1514,12 @@ export default class InfomapStore {
 
     if (treeWeightBalance === 0) {
       addLinksToNetwork();
+      network.numLinksBelowThreshold = numLinksBelowThreshold;
+      if (numLinksBelowThreshold > 0) {
+        console.warn(
+          `State network: dropped ${numLinksBelowThreshold} links with weight < ${linkWeightThreshold}.`,
+        );
+      }
       return network;
     }
 
@@ -1682,6 +1716,12 @@ export default class InfomapStore {
 
     addLinksToNetwork();
 
+    network.numLinksBelowThreshold = numLinksBelowThreshold;
+    if (numLinksBelowThreshold > 0) {
+      console.warn(
+        `State network: dropped ${numLinksBelowThreshold} links with weight < ${linkWeightThreshold}.`,
+      );
+    }
     console.log('Nodes missing in network', Array.from(missing));
     console.log('Network:', network);
 
