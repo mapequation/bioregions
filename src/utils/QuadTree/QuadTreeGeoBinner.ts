@@ -29,6 +29,8 @@ export default class QuadtreeGeoBinner {
   _cells: Cell[] = [];
   private _speciesStore: SpeciesStore;
   patchSparseCells = true;
+  // Records in no emitted cell, from the last generateCells.
+  numDroppedSparse: number = 0;
 
   cellsNeedUpdate: boolean = true; // Revisit tree to regenerate cells if dirty
   treeNeedUpdate: boolean = false; // Revisit data to regenerate tree if dirty
@@ -177,14 +179,7 @@ export default class QuadtreeGeoBinner {
   setPatchSparseCells = action((value: boolean = true) => {
     if (value !== this.patchSparseCells) {
       this.patchSparseCells = value;
-      if (!value) {
-        // Remove previous patches
-        this.visitNonEmpty((node: Cell) => {
-          if (!node.isLeaf) {
-            node.features = [];
-          }
-        });
-      }
+      // generateCells redoes the remainder pass from the leaf records.
       this.setCellsNeedUpdate();
     }
   });
@@ -274,25 +269,36 @@ export default class QuadtreeGeoBinner {
   }
 
   /**
-   * Generate all bins less than maxCellSizeLog2
-   * @param patchSparseNodes {Boolean} Keep parent cell behind sub-cells if
-   * some but not all four sub-cells get the minimum number of records to be
-   * included. Default false.
+   * Generate the grid cells, in pre-order (parents before children).
+   *
+   * Cells partition the records. A leaf with at least minCellCapacity records
+   * is a cell. With `patchSparseNodes`, the records of a node that falls short
+   * pass up to its parent, and an internal node that collects at least
+   * minCellCapacity of them is a remainder cell covering its own area minus
+   * its emitted descendants (see Cell.partition). Records still short at
+   * maxCellSizeLog2, or in sparse leaves without patching, are dropped and
+   * counted in numDroppedSparse.
+   * @param patchSparseNodes {Boolean} Collect the records of sparse cells in
+   * remainder cells. Default true.
    * @return Array of quadtree nodes
    */
   generateCells = action((patchSparseNodes = true): Cell[] => {
     console.time('generateCells');
-    if (patchSparseNodes) {
-      this.root?.patchSparseNodes(this.maxSizeLog2, this.minCellCapacity);
-    }
+    const dropped = { count: 0 };
+    this.root?.partition(
+      this.maxSizeLog2,
+      Math.max(this.minCellCapacity, 1),
+      patchSparseNodes,
+      dropped,
+    );
+    this.numDroppedSparse = dropped.count;
 
     const nodes: Cell[] = [];
-    this.visitNonEmpty((node: Cell) => {
-      // Skip biggest non-empty nodes if its number of features are below the lower threshold
-      if (node.numFeatures < this.minCellCapacity) {
-        return true;
+    this.visit((node: Cell) => {
+      if (node.isCell) {
+        nodes.push(node);
       }
-      nodes.push(node);
+      return undefined;
     });
 
     this._cells = nodes;

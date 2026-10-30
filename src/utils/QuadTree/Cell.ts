@@ -41,7 +41,13 @@ export default class Cell
   connectedBioregions: ConnectedBioregions = new ConnectedBioregions();
   color: string = "#ffcccccc";
   path: number[] = [];
+  // Area of the cell in km². For a remainder cell, the area of its own region:
+  // fullArea minus the areas of its emitted descendants.
   area: number;
+  // Area of the (clipped) extent in km².
+  readonly fullArea: number;
+  // Emitted as a grid cell by the last QuadtreeGeoBinner.generateCells.
+  isCell: boolean = false;
   id: string = ''; // '0','1',..'3', '00', '01', ..,'33', '000', '001', ...etc
   private _recalcStats: boolean = true;
   private _speciesTopList: { count: number; name: string }[] = [];
@@ -66,6 +72,12 @@ export default class Cell
     }
 
     this.area = area(this.extent);
+    this.fullArea = this.area;
+  }
+
+  /** An internal node emitted as a cell for the records its children passed up. */
+  get isRemainder() {
+    return this.isCell && !this.isLeaf;
   }
 
   get _children() {
@@ -449,39 +461,67 @@ export default class Cell
     return aggregatedFeatures;
   }
 
-  patchSparseNodes(maxCellSizeLog2: number, lowerThreshold: number) {
-    if (this.isLeaf) return this.features;
+  /**
+   * Decide which nodes of this subtree are emitted as grid cells, bottom-up,
+   * so that the cells partition the records (each record is in at most one
+   * cell).
+   *
+   * A leaf with at least `threshold` records is emitted. With `patch`, a leaf
+   * that falls short passes its records up to its parent. An adaptive internal
+   * node (at most `maxCellSizeLog2` wide) collects the records its children
+   * pass up and is emitted as a *remainder cell* if it holds at least
+   * `threshold` of them; otherwise it passes them on. A remainder cell's area
+   * is its own area minus the areas of its emitted descendants. Records still
+   * short at the coarsest adaptive level, and without `patch` the records of
+   * sparse leaves, are dropped and counted in `dropped.count`.
+   *
+   * Only quadrants that hold records take part, so a node clipped at a pole or
+   * at lon 180 is not treated as patchy for its off-globe quadrants. A node
+   * whose children are all emitted gets no records and is not emitted.
+   *
+   * Returns the records passed up to the parent and the area claimed by the
+   * nearest emitted nodes in this subtree.
+   */
+  partition(
+    maxCellSizeLog2: number,
+    threshold: number,
+    patch: boolean,
+    dropped: { count: number },
+  ): { records: GeoFeature[]; claimedArea: number } {
+    this._recalcStats = true;
+    this.area = this.fullArea;
+    this.isCell = false;
+    const adaptive = this.sizeLog2 <= maxCellSizeLog2;
 
-    // Already patched if features at non-leaf node.
-    if (this.features.length > 0) {
-      return this.features;
+    let held: GeoFeature[];
+    let claimedArea = 0;
+    if (this.isLeaf) {
+      held = this.features;
+    } else {
+      // Records of polygons can be in more than one child; count them once.
+      const passedUp = new Set<GeoFeature>();
+      for (const child of this.children) {
+        if (!child) continue;
+        const up = child.partition(maxCellSizeLog2, threshold, patch, dropped);
+        claimedArea += up.claimedArea;
+        for (const feature of up.records) passedUp.add(feature);
+      }
+      held = Array.from(passedUp);
+      this.features = [];
     }
 
-    const nonEmptyChildren = this.children.filter(
-      (child) => child !== undefined,
-    );
-    const sparseChildren = nonEmptyChildren.filter(
-      (child) => child?.isLeaf && child.features.length < lowerThreshold,
-    );
-
-    const doPatch =
-      this.sizeLog2 <= maxCellSizeLog2 &&
-      (nonEmptyChildren.length < 4 || sparseChildren.length > 0);
-
-    const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
-    nonEmptyChildren.forEach((child) => {
-      child
-        ?.patchSparseNodes(maxCellSizeLog2, lowerThreshold)
-        ?.forEach((feature) => {
-          aggregatedFeatures.push(feature);
-        });
-    });
-
-    if (doPatch) {
-      this.features = aggregatedFeatures;
+    if (held.length >= threshold && (this.isLeaf || adaptive)) {
+      this.isCell = true;
+      this.features = held;
+      this.area = Math.max(this.fullArea - claimedArea, 0);
+      return { records: [], claimedArea: this.fullArea };
     }
-
-    return aggregatedFeatures;
+    const isTop = !this.parent || this.parent.sizeLog2 > maxCellSizeLog2;
+    if (!patch || isTop) {
+      dropped.count += held.length;
+      return { records: [], claimedArea };
+    }
+    return { records: held, claimedArea };
   }
 
   calcStats() {
