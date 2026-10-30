@@ -67,6 +67,9 @@ const defaultArgs: RequiredArgs = {
   output: ['json', 'tree'],
 };
 
+/** A taxon -> cell link: cell index, the taxon's bioregion id and the link weight. */
+type CellLink = [cellIndex: number, bioregionId: number, weight: number];
+
 /**
  * The network as Infomap should get it: without vertices (bipartite) or state
  * nodes that no link touches. Infomap would keep each of them as a zero-flow
@@ -1903,6 +1906,21 @@ export default class InfomapStore {
     this.setBioregions(bioregions);
   }
 
+  /**
+   * Fill each cell's `connectedBioregions` from its links to taxa, for state and
+   * multilayer networks (`createNonStateBioregions` does this for bipartite ones).
+   */
+  setConnectedBioregions(links: CellLink[]) {
+    const { cells } = this;
+    for (const [cellIndex, bioregionId, weight] of links) {
+      cells[cellIndex].connectedBioregions.addLink(bioregionId, weight);
+    }
+    for (const cell of cells) {
+      cell.connectedBioregions.setOwnBioregion(cell.bioregionId);
+      cell.connectedBioregions.calcTopBioregions();
+    }
+  }
+
   createStateBioregions(tree: StateTree) {
     if (tree.args.includes('multilayer-relax-limit')) {
       this.createMultilayerBioregions(tree);
@@ -1979,6 +1997,22 @@ export default class InfomapStore {
       cell.overlappingBioregions.calcTopBioregions();
     }
 
+    // Taxon -> cell links, with the bioregion of the taxon's state node
+    const { states, links } = this.network as BioregionsStateNetwork;
+    const stateBioregionIds = new Map<number, number>();
+    for (const node of tree.nodes) {
+      stateBioregionIds.set(node.stateId, node.modules[moduleLevel]);
+    }
+    const cellLinks: CellLink[] = [];
+    for (const { source, target, weight } of links) {
+      const cellIndex = states[target].id;
+      if (cellIndex >= cells.length || states[source].id < cells.length) {
+        continue;
+      }
+      cellLinks.push([cellIndex, stateBioregionIds.get(source) ?? 0, weight ?? 1]);
+    }
+    this.setConnectedBioregions(cellLinks);
+
     console.time("Calc bioregion stats")
     for (const bioregion of bioregions) {
       bioregion.calcStats(speciesStore, treeStore);
@@ -2052,6 +2086,20 @@ export default class InfomapStore {
       }
       cell.overlappingBioregions.calcTopBioregions();
     }
+
+    // Taxon -> cell links, with the bioregion of the taxon in the link's layer
+    const layerBioregionIds = new Map<string, number>();
+    for (const node of tree.nodes) {
+      layerBioregionIds.set(`${node.layerId} ${node.id}`, node.modules[moduleLevel]);
+    }
+    const cellLinks: CellLink[] = [];
+    for (const { layerId, source, target, weight } of this.multilayerNetwork?.intra ?? []) {
+      if (target >= cells.length || source < cells.length) {
+        continue;
+      }
+      cellLinks.push([target, layerBioregionIds.get(`${layerId} ${source}`) ?? 0, weight ?? 1]);
+    }
+    this.setConnectedBioregions(cellLinks);
 
     console.time("Calc bioregion stats")
     for (const bioregion of bioregions) {

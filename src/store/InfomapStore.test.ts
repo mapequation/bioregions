@@ -7,6 +7,7 @@ import type { StateTree, Tree } from '@mapequation/infomap';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHeadlessRoot, type HeadlessRoot, setOccurrences } from '../../harness/stubRoot';
 import type {
+  BioregionsMultilayerNetwork,
   BioregionsNetwork,
   BioregionsStateNetwork,
 } from './InfomapStore';
@@ -319,5 +320,34 @@ describe('multilayer bioregions', () => {
     );
     expect(root.infomapStore.bioregions).toHaveLength(2);
     expect(cells(root).map((cell) => cell.bioregionId)).toEqual([1, 2, 0, 0, 0]);
+  });
+});
+
+describe('connected bioregions', () => {
+  it('are filled for state networks', () => {
+    const root = splitStateCells();
+    const [cell] = cells(root);
+    // `0320132` links to A (3 records, bioregion 1) and B (1 record, bioregion 2)
+    expect(cell.bioregionId).toBe(1);
+    expect(cell.connectedBioregions.ownProportion).toBe(0.75);
+    expect(cell.bioregionMetrics.overlap).toBe(0.5);
+  });
+
+  it('are filled for multilayer networks', () => {
+    const root = setup();
+    root.infomapStore.multilayerNetwork = {
+      intra: [
+        { layerId: 1, source: taxonId('A'), target: 0, weight: 3 },
+        { layerId: 1, source: taxonId('B'), target: 0, weight: 1 },
+      ],
+    } as unknown as BioregionsMultilayerNetwork;
+    root.infomapStore.createBioregions(
+      multilayerTree([
+        [0, 1, [1], 0.3],
+        [taxonId('A'), 1, [1], 0.3],
+        [taxonId('B'), 1, [2], 0.1],
+      ]),
+    );
+    expect(cells(root)[0].connectedBioregions.ownProportion).toBe(0.75);
   });
 });
