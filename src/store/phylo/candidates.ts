@@ -182,7 +182,7 @@ export function humanizeTreeLabel(label: string): string {
 export function lengthUnits(
   c: Pick<PhyloCandidate, 'branchLengths' | 'lengthMode' | 'timeUnit'>,
 ): { short: string; long: string } {
-  if (c.branchLengths === 'none') return { short: 'Grafen', long: 'relative ages (Grafen)' };
+  if (c.branchLengths === 'none') return { short: 'Grafen (relative)', long: 'relative ages (Grafen)' };
   if (c.branchLengths === 'time') {
     const unit = c.timeUnit?.trim();
     if (!unit || /^(?:my|myr|mya|ma|million(?:s)? (?:of )?years?.*)$/i.test(unit)) return { short: 'Myr', long: 'Myr' };
@@ -190,9 +190,9 @@ export function lengthUnits(
   }
   switch (c.lengthMode) {
     case 'ot:substitutionCount':
-      return { short: 'subst./site', long: 'substitutions per site' };
+      return { short: 'substitutions/site', long: 'substitutions per site' };
     case 'ot:changesCount':
-      return { short: 'changes', long: 'character changes' };
+      return { short: 'character changes', long: 'character changes (parsimony)' };
     default:
       return { short: 'unknown', long: 'unknown units' };
   }

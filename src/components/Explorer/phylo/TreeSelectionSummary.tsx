@@ -11,6 +11,7 @@ import {
   LuRotateCw,
 } from 'react-icons/lu';
 import { useStore } from '../../../store';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { GRAFEN_NOTE, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import { fmtInt } from '../format';
 
@@ -107,12 +108,6 @@ function Stat({ value, label, tone }: { value: number; label: string; tone?: 'mu
   );
 }
 
-const Dot = () => (
-  <Text as="span" color="fg.muted" aria-hidden>
-    ·
-  </Text>
-);
-
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
   const { explorerStore, phyloStore, infomapStore } = useStore();
@@ -200,7 +195,7 @@ export default observer(function TreeSelectionSummary() {
 
           {selection ? (
             <Box>
-              <HStack gap={2} wrap="wrap" rowGap={1} textStyle="sm" data-testid="tree-selection-counts">
+              <HStack columnGap={5} rowGap={1} wrap="wrap" textStyle="sm" data-testid="tree-selection-counts">
                 {candidate.kind === 'synthetic' ? (
                   <Text as="span">
                     Induced subtree of your{' '}
@@ -212,7 +207,6 @@ export default observer(function TreeSelectionSummary() {
                 ) : (
                   <Stat value={selection.kept} label="of your species in this tree" />
                 )}
-                <Dot />
                 <HStack gap={1}>
                   <Stat
                     value={selection.absentFromTree.length}
@@ -228,7 +222,6 @@ export default observer(function TreeSelectionSummary() {
                     />
                   )}
                 </HStack>
-                <Dot />
                 <HStack gap={1}>
                   <Stat
                     value={selection.pruned}
@@ -349,8 +342,7 @@ export default observer(function TreeSelectionSummary() {
                 {tipsWithLengths(alternative.tips, alternative.target)}.
               </Text>
               <Button
-                size="xs"
-                variant="outline"
+                {...secondaryButtonProps}
                 flexShrink={0}
                 onClick={() => phyloStore.select(alternative.target.id)}
                 data-testid="tree-alternative"
@@ -372,7 +364,7 @@ export default observer(function TreeSelectionSummary() {
                 </Alert.Title>
                 <Alert.Description>The tree citation is now part of the methods text.</Alert.Description>
               </Alert.Content>
-              <Button size="sm" variant="solid" colorPalette="gray" flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
+              <Button {...primaryButtonProps} flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
                 <LuMap /> View bioregions
               </Button>
             </Alert.Root>
@@ -383,7 +375,7 @@ export default observer(function TreeSelectionSummary() {
                 <Alert.Title>Couldn't load the tree</Alert.Title>
                 <Alert.Description>Open Tree did not return the tree. Your current data is unchanged.</Alert.Description>
               </Alert.Content>
-              <Button size="sm" variant="outline" onClick={() => void phyloStore.loadSelected()}>
+              <Button {...secondaryButtonProps} flexShrink={0} onClick={() => void phyloStore.loadSelected()}>
                 <LuRotateCw /> Retry
               </Button>
             </Alert.Root>
@@ -400,8 +392,7 @@ export default observer(function TreeSelectionSummary() {
               </HStack>
               <Button
                 data-testid="load-tree"
-                size="sm"
-                variant="outline"
+                {...secondaryButtonProps}
                 loading={loading}
                 loadingText="Loading tree…"
                 disabled={selection == null || tooFew}
@@ -424,7 +415,7 @@ export default observer(function TreeSelectionSummary() {
               )}
               <Button
                 data-testid="load-tree"
-                size="sm"
+                {...primaryButtonProps}
                 loading={loading}
                 loadingText="Loading tree…"
                 disabled={selection == null || tooFew}

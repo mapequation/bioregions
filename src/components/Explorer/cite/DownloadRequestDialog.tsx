@@ -16,6 +16,7 @@ import {
 } from '../../ui/dialog';
 import { Field } from '../../ui/field';
 import { isValidEmail, requestError } from './citeHelpers';
+import { primaryButtonProps } from '../buttonStyles';
 
 export const LOGIN_NOTE = 'Your GBIF password is sent only to api.gbif.org and is never stored.';
 
@@ -200,7 +201,7 @@ export default observer(function DownloadRequestDialog({ open, onOpenChange, que
             <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button size="sm" type="submit" disabled={!valid} loading={busy} loadingText="Requesting…">
+            <Button {...primaryButtonProps} type="submit" disabled={!valid} loading={busy} loadingText="Requesting…">
               Request download
             </Button>
           </DialogFooter>

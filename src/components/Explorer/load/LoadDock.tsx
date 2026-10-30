@@ -7,6 +7,7 @@ import { InfoTip } from '@/components/ui/toggle-tip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
 import { NO_MATCHES_REASON } from '@/store/ExplorerStore';
+import { primaryButtonProps } from '../buttonStyles';
 import { fmtBytes, fmtCompact, fmtInt } from '../format';
 import { acceptedOf, EMPTY_REASON_SHORT, EMPTY_TITLE, emptyReasonOf } from '../preview/cleaningSteps';
 import LoadProgress from './LoadProgress';
@@ -181,15 +182,22 @@ const DoneRow = observer(function DoneRow() {
     );
   }
   const accepted = acceptedOf(last);
+  const partial = last.partial != null;
   return (
-    <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done">
-      <Icon as={LuCircleCheck} boxSize={4} color="green.fg" flexShrink={0} aria-hidden />
+    <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done" data-state={partial ? 'partial' : 'complete'}>
+      <Icon
+        as={partial ? LuTriangleAlert : LuCircleCheck}
+        boxSize={4}
+        color={partial ? 'orange.fg' : 'green.fg'}
+        flexShrink={0}
+        aria-hidden
+      />
       <Text fontSize="sm" color="fg.muted" truncate fontVariantNumeric="tabular-nums">
         <Box as="span" color="fg" fontWeight="semibold">
           {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
         </Box>
-        {last.partial && (
-          <Box as="span" color="orange.fg" fontWeight="medium">
+        {partial && (
+          <Box as="span" color="orange.fg" fontWeight="semibold">
             {' (partial)'}
           </Box>
         )}
@@ -380,8 +388,7 @@ export default observer(function LoadDock() {
           >
             <Box as="span" display="inline-flex">
               <Button
-                size="sm"
-                variant="solid"
+                {...primaryButtonProps}
                 disabled={!canLoad.ok}
                 onClick={() => ex.load()}
                 aria-keyshortcuts="Control+Enter Meta+Enter"

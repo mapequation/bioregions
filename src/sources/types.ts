@@ -91,6 +91,8 @@ export interface OccurrenceRecord {
   datasetKey?: string;
   basisOfRecord?: string;
   uncertainty?: number;
+  /** ISO 3166-1 alpha-2 country code, when the source gives one (OBIS: often missing). */
+  country?: string;
 }
 
 export interface StreamProgress {

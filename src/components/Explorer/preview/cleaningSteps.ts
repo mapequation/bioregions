@@ -1,6 +1,7 @@
 // Pure helpers for the decision ledger's "Cleaning · in order" section and the load-outcome wording.
 import type { Funnel } from '../../../sources/types';
 import { fmtInt, fmtPct } from '../format';
+import { partialExplanation } from '../load/partialText';
 
 const SOURCE_LABEL: Record<string, string> = { gbif: 'GBIF', obis: 'OBIS', file: 'File' };
 
@@ -57,6 +58,8 @@ export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly';
 
 /** A partial (cancelled or failed) load, as recorded on the load snapshot. */
 export interface PartialLoad {
+  /** Species missing, or all species present but later records truncated. */
+  kind?: 'speciesMissing' | 'recordsTruncated';
   planned: number;
   accepted: number;
   speciesLoaded?: number | null;
@@ -111,9 +114,13 @@ export function notReceivedOf(load: LoadOutcome): number {
   return Math.max(0, p.notReceived ?? p.planned - load.funnel.received);
 }
 
-/** Why a partial dataset is taxonomically biased, not just thinned. */
-export const PARTIAL_BIAS =
-  'Records stream species by species, so missing species are absent, not thinned; bioregions from this partial dataset are not representative.';
+/** Why bioregions from a partial dataset should not be trusted (kind-neutral). */
+export const PARTIAL_BIAS = 'Bioregions from this partial dataset are not representative.';
+
+/** The kind-specific explanation plus PARTIAL_BIAS, for tooltips. */
+export function partialBiasText(p: PartialLoad | null | undefined): string {
+  return p ? `${partialExplanation(p)} ${PARTIAL_BIAS}` : PARTIAL_BIAS;
+}
 
 /** "819 of ~272,546 records (<1 %) from 1 of 210 species." */
 export function partialSummary(p: PartialLoad): string {
@@ -161,6 +168,8 @@ export function loadDrops(p: {
   /** Planned records never received because the load was cancelled. */
   cancelled: number;
   dedupeLabel: string;
+  /** The partial load, for kind-specific wording of the not-received tip. */
+  partial?: PartialLoad | null;
 }): LoadDrop[] {
   const d = p.funnel.dropped as Partial<Record<string, number>>;
   const cross = d.crossSource ?? 0;
@@ -175,7 +184,7 @@ export function loadDrops(p: {
       short: 'not loaded (cancelled)',
       value: p.cancelled,
       missing: true,
-      tip: `Planned records that never arrived because the load was stopped. ${PARTIAL_BIAS}`,
+      tip: `Planned records that never arrived because the load was stopped. ${partialBiasText(p.partial)}`,
     });
   } else if (notReceived !== 0) {
     out.push({

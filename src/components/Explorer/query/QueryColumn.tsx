@@ -105,7 +105,7 @@ export default observer(function QueryColumn() {
         <QuerySectionBox id="years" title="Years" summary={yearsLabel(q.years)}>
           <YearBrush />
         </QuerySectionBox>
-        <QuerySectionBox id="depth" title="Depth · OBIS" summary={depthLabel(q.depth) ?? 'Any depth'}>
+        <QuerySectionBox id="depth" title="Depth · OBIS" summary={q.sources.obis ? (depthLabel(q.depth) ?? 'Any depth') : 'OBIS off'}>
           <DepthField />
         </QuerySectionBox>
         <QuerySectionBox id="quality" title="Quality" summary={presetLabel}>

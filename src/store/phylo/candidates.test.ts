@@ -74,10 +74,10 @@ describe('candidates', () => {
       lengthUnits({ branchLengths, lengthMode, timeUnit }).short;
     expect(units('time')).toBe('Myr');
     expect(units('time', 'ot:time', 'Myr')).toBe('Myr');
-    expect(units('other', 'ot:substitutionCount')).toBe('subst./site');
-    expect(units('other', 'ot:changesCount')).toBe('changes');
+    expect(units('other', 'ot:substitutionCount')).toBe('substitutions/site');
+    expect(units('other', 'ot:changesCount')).toBe('character changes');
     expect(units('other', 'ot:other')).toBe('unknown');
-    expect(units('none')).toBe('Grafen');
+    expect(units('none')).toBe('Grafen (relative)');
   });
 
   it('sorts with the synthetic tree first and filters dated', () => {

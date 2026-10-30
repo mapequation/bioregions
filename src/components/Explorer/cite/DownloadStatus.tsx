@@ -7,6 +7,7 @@ import type { GbifDownload } from '../../../store/explorer/types';
 import { Tooltip } from '../../ui/tooltip';
 import { fmtBytes, fmtInt } from '../format';
 import { isPending, shortTime } from './citeHelpers';
+import { secondaryButtonProps } from '../buttonStyles';
 
 const STATUS: Record<
   GbifDownload['status'],
@@ -102,7 +103,7 @@ const DownloadRow = observer(function DownloadRow({ d, cited }: { d: GbifDownloa
             </>
           )}
           {d.downloadLink && (
-            <Button size="xs" variant="outline" asChild ms="auto">
+            <Button {...secondaryButtonProps} asChild ms="auto">
               <a href={d.downloadLink} target="_blank" rel="noopener noreferrer">
                 Open zip
                 <LuExternalLink />

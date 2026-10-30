@@ -103,6 +103,30 @@ export interface InsightsScope {
   label: string;
 }
 
+/**
+ * What the data is made of, in the insights scope: the query preview while previewing,
+ * the accepted records once the query on screen is loaded (or partly loaded).
+ */
+export interface Composition {
+  basisOfRecord: FacetBucket[];
+  topDatasets: FacetBucket[];
+  topSpecies: FacetBucket[];
+  /** ISO 3166-1 alpha-2 keys; in a loaded scope only records with a country code count. */
+  countries: FacetBucket[];
+  /** GBIF interpretation issues; empty in a loaded scope (not streamed, see `notes.issues`). */
+  issues: FacetBucket[];
+  uncertainty: { min: number; max: number; avg: number } | null;
+  /** Records the scope covers (matching the query, or loaded). */
+  total: number;
+  scopeKind: InsightsScope['kind'];
+  /** Caveats of a loaded scope, one sentence each. */
+  notes?: {
+    /** e.g. "Countries are known for 9,812 of 12,094 loaded records (OBIS often gives none)." */
+    countries?: string;
+    issues?: string;
+  };
+}
+
 /** Share of dated records from `cutoffYear` on (the temporal-skew check and the year brush). */
 export interface RecentShare {
   cutoffYear: number;
@@ -136,7 +160,7 @@ export interface BiasFlag {
     label: string;
     /** Full description for the tooltip and accessible name, e.g. "Exclude eBird". */
     title?: string;
-    /** Records the remedy would remove from the preview total, when known. */
+    /** Records the remedy would remove from the scope's total (never more than it), when known. */
     cost?: number;
     run(): void;
   };
@@ -168,6 +192,16 @@ export interface LoadJob {
   truncated: { name: string; kept: number; total: number }[];
   /** Live species completeness (0..1) from the sources' speciesDone/speciesTotal; null when unknown. */
   speciesCoverage: number | null;
+  /**
+   * Held by `pauseLoad()` (the cancel menu is open): no batch is counted or handed to
+   * SpeciesStore, so `funnel`, `speciesLoaded` and `perSource` stay frozen and
+   * `cancel('keep')` keeps exactly those records.
+   */
+  paused: boolean;
+  /** Species with at least one accepted record so far (what a stop would keep). */
+  speciesLoaded?: number;
+  /** Species the plans promise, null when unknown (the denominator of `speciesLoaded`). */
+  speciesPlanned?: number | null;
   error?: string;
 }
 
@@ -179,6 +213,12 @@ export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly';
 
 /** How much of a load arrived when it stopped early. */
 export interface PartialLoad {
+  /**
+   * 'speciesMissing' when fewer species arrived than planned (whole species absent);
+   * 'recordsTruncated' when every planned species is present (or the species are
+   * unknown) but later records were not received.
+   */
+  kind: 'speciesMissing' | 'recordsTruncated';
   /** Records the plans promised (capped). */
   planned: number;
   /** Records loaded. */
@@ -249,8 +289,15 @@ export interface ZipImport {
   queryMatch: 'match' | 'mismatch' | 'unknown';
   /** The download's own taxa, area and years in words, e.g. "Callitrichidae · Brazil · 2000–2020". */
   downloadQueryText?: string;
-  /** GBIF records of the dataset on screen (the part the download can be compared with). */
+  /** GBIF records loaded on screen (same as `streamGbifLoaded`; kept for older callers). */
   streamGbifRecords: number;
+  /** Raw GBIF records the load on screen received from the API (before cleaning). */
+  streamGbifReceived: number;
+  /**
+   * GBIF records loaded on screen after cleaning and deduplication: the figure the zip's
+   * cleaned records are compared with (the "GBIF" part of the loaded count).
+   */
+  streamGbifLoaded: number;
   /** Replacing the data with the zip makes sense: same query and at least one record accepted. */
   canReplace: boolean;
   /** The download's DOI may cite the data on screen (same query). */

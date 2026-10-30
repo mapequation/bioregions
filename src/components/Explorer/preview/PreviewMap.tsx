@@ -24,14 +24,15 @@ import { fmtInt } from '../format';
 import {
   alphaExtent,
   bboxRings,
-  chooseZoom,
   decadeSteps,
+  densityZoom,
   dragBbox,
   fitPolarView,
   fitView,
   legendLabel,
   type MapView,
   mapNote,
+  MIN_DENSITY_ZOOM,
   mapProjection,
   type PolarSrs,
   polarDragBbox,
@@ -62,6 +63,8 @@ const OBIS_MAX_OPACITY = 0.8;
 const OBIS_STEPS = 12;
 /** Px kept free at the top of an area view for the map controls. */
 const CONTROLS_INSET = 36;
+/** Px between the legend box and the data of a polar view (legend offset 8 + gap 8). */
+const LEGEND_GAP = 16;
 const POLAR_BASEMAP = { 'EPSG:3575': '3575', 'EPSG:3031': '3031' } as const;
 
 /** GBIF basemap tile in a polar projection (same grid as the polar density tiles). */
@@ -220,6 +223,28 @@ function useSize<T extends HTMLElement>(): [React.RefObject<T | null>, { width: 
   return [ref, size];
 }
 
+/** Border-box size of an element that may mount later (callback ref; 0 x 0 while absent). */
+function useElementSize(): [(el: HTMLElement | null) => void, { width: number; height: number }] {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    if (!el) {
+      setSize((s) => (s.width === 0 && s.height === 0 ? s : { width: 0, height: 0 }));
+      return;
+    }
+    const update = () => {
+      const w = Math.round(el.offsetWidth);
+      const h = Math.round(el.offsetHeight);
+      setSize((s) => (s.width === w && s.height === h ? s : { width: w, height: h }));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return [setEl, size];
+}
+
 interface ObisCell {
   w: number;
   s: number;
@@ -338,8 +363,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
   const bbox = useAreaBbox(query.area, query);
   const hasArea = query.area.kind !== 'world';
-  // Fitted to an area, density tiles come one zoom finer and only where the area is,
-  // so records read as fine pixels rather than a sparse dot grid, at no extra requests.
+  // Fitted to an area, density tiles are hexagon bins of about HEX_PX, requested only where
+  // the area is and never at zoom 0, whose ad-hoc tiles bin records too coarsely to touch.
   const zoomedToArea = fit === 'area' && hasArea && bbox != null;
   // Circumpolar areas switch to GBIF's polar tiles; plate carrée would show a thin strip.
   const srs = zoomedToArea ? polarSrsFor(bbox) : null;
@@ -347,17 +372,30 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `areaKeyRings` stands for the rings
   const rings = useMemo(() => areaRings(query.area, srs != null), [areaKeyRings]);
   const inset = zoomedToArea && !faint ? CONTROLS_INSET : 0;
+  // A polar view keeps its data clear of the legend in the bottom-left corner.
+  const [legendRef, legendSize] = useElementSize();
+  const legendW = legendSize.width > 0 ? legendSize.width + LEGEND_GAP : 0;
+  const legendH = legendSize.height > 0 ? legendSize.height + LEGEND_GAP : 0;
   const view: MapView = useMemo(
     () =>
       srs && bbox
-        ? fitPolarView(srs, rings ?? bboxRings(bbox), size.width, size.height, inset)
+        ? fitPolarView(srs, rings ?? bboxRings(bbox), size.width, size.height, inset, {
+            width: legendW,
+            height: legendH,
+          })
         : fitView(fit === 'world' || !hasArea ? null : bbox, size.width, size.height, inset),
-    [srs, rings, fit, hasArea, bbox, size.width, size.height, inset],
+    [srs, rings, fit, hasArea, bbox, size.width, size.height, inset, legendW, legendH],
   );
   const proj = useMemo(() => mapProjection(view, srs), [view, srs]);
   const ready = size.width > 0 && size.height > 0;
   const tiles = !ready ? [] : srs ? polarTilesForView(srs, view) : tilesForView(view);
-  const densityTiles = !ready ? [] : zoomedToArea && !srs ? tilesForView(view, chooseZoom(view.scale), bbox) : tiles;
+  const densityTiles = !ready
+    ? []
+    : !zoomedToArea
+      ? tiles
+      : srs
+        ? polarTilesForView(srs, view, MIN_DENSITY_ZOOM)
+        : tilesForView(view, densityZoom(view.scale), bbox);
   const tileScale: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1.25 ? 2 : 1;
 
   // GBIF density layer: only when GBIF is on, supports the query and knows a taxon.
@@ -712,6 +750,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
         {(showGbif || obisCells.length > 0) && (
           <Box
+            ref={legendRef}
             position="absolute"
             left={2}
             bottom={2}
@@ -725,7 +764,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             fontVariantNumeric="tabular-nums"
             pointerEvents="none"
             display="flex"
-            gap={4}
+            flexDirection={srs ? 'column' : 'row'}
+            gap={srs ? 2 : 4}
           >
             {showGbif && (
               <Box>

@@ -71,3 +71,39 @@ export function fmtSigned(n: number): string {
   if (n === 0) return '0';
   return `${n < 0 ? MINUS : '+'}${fmtInt(Math.abs(n))}`;
 }
+
+// --- Dates and times ---------------------------------------------------------------------
+// One setup for every timestamp in the explorer: the viewer's locale and its default hour
+// cycle ("20:37" or "8:37 PM"), with the date written out as "Oct 30, 2026" / "30 Oct 2026".
+
+const TIME_PARTS: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
+const DATE_PARTS: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormat(kind: 'time' | 'stamp', locale?: string): Intl.DateTimeFormat {
+  const key = `${kind}|${locale ?? ''}`;
+  let f = dateFormats.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, kind === 'time' ? TIME_PARTS : { ...DATE_PARTS, ...TIME_PARTS });
+    dateFormats.set(key, f);
+  }
+  return f;
+}
+
+function toDate(value: string | number | Date | null | undefined): Date | null {
+  if (value == null || value === '') return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** "20:37" / "8:37 PM" in the viewer's locale; "" for a missing or invalid date. */
+export function fmtTime(value: string | number | Date | null | undefined, locale?: string): string {
+  const d = toDate(value);
+  return d ? dateFormat('time', locale).format(d) : '';
+}
+
+/** "Oct 30, 2026, 8:37 PM" / "30 Oct 2026, 20:37"; "" for a missing or invalid date. */
+export function fmtTimestamp(value: string | number | Date | null | undefined, locale?: string): string {
+  const d = toDate(value);
+  return d ? dateFormat('stamp', locale).format(d) : '';
+}

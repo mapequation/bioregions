@@ -16,6 +16,8 @@ export const OBIS_FIELDS = [
   'dataset_id',
   'basisOfRecord',
   'coordinateUncertaintyInMeters',
+  // Publisher-supplied and often missing (marine records outside any country).
+  'countryCode',
 ];
 
 export interface ObisOccurrence {
@@ -28,6 +30,7 @@ export interface ObisOccurrence {
   date_year?: number;
   dataset_id?: string;
   basisOfRecord?: string;
+  countryCode?: string;
   coordinateUncertaintyInMeters?: number | string;
 }
 
@@ -67,6 +70,8 @@ function speciesName(row: ObisOccurrence): string {
 
 export function toOccurrenceRecord(row: ObisOccurrence): OccurrenceRecord {
   const uncertainty = Number(row.coordinateUncertaintyInMeters);
+  const code = row.countryCode?.trim().toUpperCase();
+  const country = code && /^[A-Z]{2}$/.test(code) ? code : undefined;
   return {
     name: speciesName(row),
     lon: Number(row.decimalLongitude),
@@ -77,6 +82,7 @@ export function toOccurrenceRecord(row: ObisOccurrence): OccurrenceRecord {
     basisOfRecord: normalizeObisBasis(row.basisOfRecord),
     ...(row.coordinateUncertaintyInMeters != null &&
       Number.isFinite(uncertainty) && { uncertainty }),
+    ...(country && { country }),
   };
 }
 

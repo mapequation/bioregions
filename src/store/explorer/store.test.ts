@@ -225,6 +225,7 @@ describe('ExplorerStore.load', () => {
     expect(store.job?.state).toBe('cancelled');
     // GBIF fetched 1 of 3, OBIS 0 of 2; the plans name 2 species, 1 arrived.
     expect(store.lastLoad?.partial).toEqual({
+      kind: 'speciesMissing',
       planned: 5,
       accepted: 1,
       speciesLoaded: 1,
@@ -243,6 +244,122 @@ describe('ExplorerStore.load', () => {
       'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; because records stream species by species',
     );
     expect(rootStore.clearData).not.toHaveBeenCalled();
+  });
+
+  it('pauses while the cancel menu is open and keeps exactly the frozen records', async () => {
+    let open!: () => void;
+    const more = new Promise<void>((r) => {
+      open = r;
+    });
+    // GBIF: one batch now, a second once `more` resolves (it arrives while paused).
+    vi.mocked(streamGbif).mockImplementation(async function* (_plan: StreamPlan, opts: StreamOptions) {
+      yield { source: 'gbif', records: [record('Callithrix jacchus', -40, -10, 'gbif', 'd1')], progress: { fetched: 1, expected: 3, requestsDone: 1, requestsTotal: 2 } };
+      await more;
+      if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      yield { source: 'gbif', records: [record('Callithrix jacchus', -41, -11, 'gbif', 'd1'), record('Callithrix jacchus', -42, -12, 'gbif', 'd2')], progress: { fetched: 3, expected: 3, requestsDone: 2, requestsTotal: 2 } };
+      return { fetched: 3, truncated: 0, requests: 2, reachedCap: false };
+    });
+    vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], more));
+    const { store, consumed } = setup();
+    const running = store.load();
+    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
+    store.pauseLoad();
+    expect(store.job?.paused).toBe(true);
+    expect(store.job?.speciesLoaded).toBe(1);
+    expect(store.job?.speciesPlanned).toBe(2);
+    open();
+    await new Promise((r) => setTimeout(r, 30));
+    // Batches arrived but none was counted or handed on.
+    expect(store.job?.funnel.accepted).toBe(1);
+    expect(consumed.flat()).toHaveLength(1);
+    store.cancel('keep');
+    await running;
+    expect(store.job?.paused).toBe(false);
+    expect(store.lastLoad?.accepted).toBe(1);
+    expect(consumed.flat()).toHaveLength(1);
+    expect(store.lastLoad?.partial).toMatchObject({ kind: 'speciesMissing', speciesLoaded: 1, speciesPlanned: 2 });
+  });
+
+  it('resumes a paused load to completion', async () => {
+    let open!: () => void;
+    const more = new Promise<void>((r) => {
+      open = r;
+    });
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], more));
+    const { store, consumed } = setup();
+    const running = store.load();
+    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
+    store.pauseLoad();
+    open();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(store.job?.funnel.accepted).toBe(1);
+    store.resumeLoad();
+    await running;
+    expect(store.job?.state).toBe('done');
+    expect(consumed.flat()).toHaveLength(2);
+    expect(store.lastLoad?.partial).toBeNull();
+  });
+
+  it('describes the loaded records, not the preview, once the query is loaded', async () => {
+    const rec = (name: string, lon: number, basisOfRecord: string, country: string | undefined, year: number, datasetKey: string) => ({
+      name,
+      lon,
+      lat: -10,
+      source: 'gbif' as const,
+      datasetKey,
+      basisOfRecord,
+      year,
+      ...(country && { country }),
+      uncertainty: lon === -40 ? 100 : 300,
+    });
+    vi.mocked(streamGbif).mockImplementation(
+      batches('gbif', [
+        [
+          rec('Callithrix jacchus', -40, 'HUMAN_OBSERVATION', 'BR', 2020, 'd1'),
+          rec('Callithrix jacchus', -41, 'HUMAN_OBSERVATION', 'BR', 2021, 'd1'),
+          rec('Callithrix jacchus', -42, 'PRESERVED_SPECIMEN', 'PE', 1950, 'd2'),
+        ],
+      ]),
+    );
+    vi.mocked(streamObis).mockImplementation(batches('obis', [[rec('Saguinus oedipus', -75, 'HUMAN_OBSERVATION', undefined, 2019, 'o1')]]));
+    const { store } = setup();
+    // A preview far larger than the load must not leak into the loaded scope.
+    store.sources.gbif.preview = {
+      source: 'gbif',
+      total: 16_772,
+      species: 3,
+      datasets: 1,
+      yearRange: [1950, 2021],
+      years: [{ year: 2020, count: 16_772 }],
+      basisOfRecord: [{ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 16_772 }],
+      topSpecies: [],
+      topDatasets: [{ key: 'd1', label: 'eBird', count: 16_000 }],
+      countries: [{ key: 'BR', label: 'Brazil', count: 16_772 }],
+      issues: [{ key: 'X', label: 'X', count: 5 }],
+      uncertainty: null,
+      filterImpact: {},
+    };
+    await store.load();
+    expect(store.insightsScope.kind).toBe('loaded');
+    const c = store.composition;
+    expect(c).toMatchObject({ scopeKind: 'loaded', total: 4, issues: [] });
+    expect(c.basisOfRecord[0]).toEqual({ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 3 });
+    expect(c.topDatasets[0]).toEqual({ key: 'd1', label: 'eBird', count: 2 });
+    expect(c.topSpecies[0]).toEqual({ key: 'Callithrix jacchus', label: 'Callithrix jacchus', count: 3 });
+    expect(c.countries).toEqual([
+      { key: 'BR', label: 'Brazil', count: 2 },
+      { key: 'PE', label: 'Peru', count: 1 },
+    ]);
+    expect(c.uncertainty).toEqual({ min: 100, max: 300, avg: 250 });
+    expect(c.notes?.countries).toBe('Countries are known for 3 of 4 loaded records (OBIS records often carry no country code).');
+    const flags = store.biasFlags;
+    for (const f of flags) if (f.action?.cost != null) expect(f.action.cost).toBeLessThanOrEqual(4);
+    expect(flags.find((f) => f.id === 'humanObservation')).toMatchObject({ value: 0.75, action: { cost: 3 } });
+    expect(flags.find((f) => f.id === 'datasetDominance')).toMatchObject({ value: 0.5, action: { cost: 2 } });
+    expect(flags.find((f) => f.id === 'temporalSkew')?.action?.cost).toBe(1);
+    expect(flags.find((f) => f.id === 'countryConcentration')?.text).toContain('of records with a country are from Brazil');
+    expect(flags.find((f) => f.id === 'lowCountSpecies')?.action?.cost).toBe(4);
   });
 
   it('keeps a load stopped with few species but skips bioregions until asked', async () => {

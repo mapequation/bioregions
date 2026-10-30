@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OccurrenceQuery, RecordBatch } from '../types';
-import { MAX_ALIASES, planGbif, planRequests, streamGbif, type GbifPlanDetail } from './stream';
+import { BYTES_PER_RECORD, MAX_ALIASES, planGbif, planRequests, streamGbif, type GbifPlanDetail } from './stream';
 
 // --- A fake graphql.gbif.org over an in-memory record set ------------------------
 
@@ -112,6 +112,7 @@ function fakeGbif(db: FakeRecord[], names: Map<number, string>): FakeServer {
               datasetKey: 'ds',
               basisOfRecord: 'PRESERVED_SPECIMEN',
               coordinateUncertaintyInMeters: null,
+              countryCode: 'BR',
             })),
           },
         };
@@ -225,7 +226,7 @@ describe('planGbif', () => {
     expect(detail.total).toBe(10_001);
     expect(detail.exceedsCap).toBe(true);
     expect(plan.expectedRecords).toBe(10_001);
-    expect(plan.estimatedBytes).toBe(10_001 * 150);
+    expect(plan.estimatedBytes).toBe(10_001 * BYTES_PER_RECORD);
   });
 });
 
@@ -258,7 +259,8 @@ describe('streamGbif', () => {
     const end = last(batches)?.progress;
     expect(end).toMatchObject({ fetched: db.length, speciesDone: 120, speciesTotal: 120 });
     expect(end?.requestsDone).toBe(end?.requestsTotal);
-    expect(records[0]).toMatchObject({ source: 'gbif', datasetKey: 'ds' });
+    expect(records[0]).toMatchObject({ source: 'gbif', datasetKey: 'ds', country: 'BR' });
+    expect(server.requests[server.requests.length - 1]).toContain('countryCode');
   });
 
   it('splits a large species spatially without duplicating edge points', async () => {

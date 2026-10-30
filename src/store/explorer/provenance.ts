@@ -2,6 +2,7 @@
 // GBIF derived-dataset CSV and the decision ledger as CSV.
 import { type PhylogenyInfo, derivedDatasetCsv, methodsParagraph, obisCitation } from '../../sources/methods';
 import type { DropReason, Funnel, OccurrenceQuery, ProvenanceEntry, SourceId } from '../../sources/types';
+import type { LoadStats } from './job';
 import type { GbifDownload, LedgerRow, PartialLoad, Provenance } from './types';
 
 /** Provenance kept for the last load: the shared shape plus the exact requests sent. */
@@ -17,6 +18,8 @@ export interface LoadProvenance extends Provenance {
    * provenance of that dataset, for citing what is still shown.
    */
   previous?: LoadProvenance;
+  /** Statistics of the accepted records (basis, datasets, years, species, countries). */
+  stats?: LoadStats;
 }
 
 const SOURCE_LABELS: Record<SourceId, string> = {
@@ -100,16 +103,21 @@ export function partialSentence(partial: PartialLoad, bioregionsSkipped = false)
   const { planned, accepted, speciesLoaded, speciesPlanned } = partial;
   const records = `${fmt(accepted)} of ~${fmt(planned)} planned records (${partialPct(accepted, planned)})`;
   const head = 'Loading was stopped early:';
-  if (speciesPlanned != null && speciesPlanned > 0 && speciesLoaded >= speciesPlanned) {
-    return `${head} ${records} from all ${fmt(speciesPlanned)} species were loaded.`;
-  }
-  const known = speciesPlanned != null && speciesPlanned > 0;
-  const species = known ? `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}` : fmt(speciesLoaded);
-  const coverage = known
-    ? ` Species coverage is ${partialPct(speciesLoaded, speciesPlanned)}`
-    : ` Record coverage is ${partialPct(accepted, planned)}`;
   const regions = bioregionsSkipped ? '; bioregions were not computed for this incomplete dataset.' : '.';
-  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned.${coverage}${regions}`;
+  const known = speciesPlanned != null && speciesPlanned > 0;
+  if (!known) {
+    return `${head} ${records} from ${fmt(speciesLoaded)} species were loaded; the planned species are unknown, and later records were not received, so record counts per species are not representative. Record coverage is ${partialPct(accepted, planned)}${regions}`;
+  }
+  if (partial.kind === 'recordsTruncated') {
+    return `${head} ${records} were loaded; all ${fmt(speciesPlanned)} species are present, but later records were not received, so record counts per species are not representative${regions}`;
+  }
+  const species = `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}`;
+  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned. Species coverage is ${partialPct(speciesLoaded, speciesPlanned)}${regions}`;
+}
+
+/** Whole species are missing (fewer arrived than planned), or only later records were cut. */
+export function partialKind(speciesLoaded: number, speciesPlanned: number | null): PartialLoad['kind'] {
+  return speciesPlanned != null && speciesLoaded < speciesPlanned ? 'speciesMissing' : 'recordsTruncated';
 }
 
 /** Share of the planned species that arrived (records when the species are unknown), 0..1. */

@@ -106,6 +106,12 @@ export default class MapStore {
   width: number = MAX_WIDTH;
   height: number = MAX_WIDTH / ASPECT_RATIO;
   private sizeObserver: ResizeObserver | null = null;
+  // True while the view is the automatic fit-to-data framing (set by fitToData, cleared by any
+  // user pan/zoom or view reset), so a later container resize re-frames the data: d3gl's resize
+  // rescales the projection but keeps the pixel pan, which would leave the data off-centre.
+  private framedToData = false;
+  private applyingFit = false;
+  private fitFrame = 0;
 
   renderType: RenderType = 'records';
   clipToLand: boolean = true;
@@ -286,6 +292,9 @@ export default class MapStore {
   disposeEngine = () => {
     this.sizeObserver?.disconnect();
     this.sizeObserver = null;
+    cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = 0;
+    this.framedToData = false;
     this.pointsHandle = null;
     this.engine?.destroy();
     this.engine = null;
@@ -300,9 +309,10 @@ export default class MapStore {
     if (host === null) return;
     const measure = () => {
       const w = Math.round(host.getBoundingClientRect().width);
-      if (w > 0) {
+      if (w > 0 && w !== this.width) {
         this.width = w;
         this.height = Math.round(w / ASPECT_RATIO);
+        if (this.framedToData) this.scheduleFitToData();
       }
     };
     measure();
@@ -336,7 +346,7 @@ export default class MapStore {
     // One call for every projection: d3gl auto-dispatches drag-to-rotate (versor) for the
     // orthographic globe and affine pan/zoom for flat projections. Hover/click picking
     // inverts screen → data internally, so we no longer track the transform ourselves.
-    engine.enableZoom([1, 18]);
+    engine.enableZoom([1, 18], this.onViewChange);
 
     // Clip-aware picking on the cells layer drives the React tooltip (see WorldMap.MapTooltip).
     engine.on('hover', this.onHover);
@@ -451,6 +461,7 @@ export default class MapStore {
 
   setProjection(projection: Projection) {
     this.projectionName = projection;
+    this.framedToData = false;
     // Re-fit the new projection to the (fixed) viewport and swap it in place: d3gl re-projects
     // the existing layers and re-dispatches the right interaction (globe rotation vs pan/zoom).
     this.projection = fitProjection(
@@ -478,7 +489,40 @@ export default class MapStore {
     const engine = this.engine;
     const cells = this.rootStore.speciesStore.binner.cells;
     if (engine === null || cells.length === 0) return;
+    this.applyingFit = true;
+    try {
+      this.frameData(engine, cells, padding, maxZoom);
+      this.framedToData = true;
+    } finally {
+      this.applyingFit = false;
+    }
+  }
 
+  /**
+   * Fit to the data once layout has settled: two animation frames, so the React commit, the
+   * dialog's scroll-lock release and d3gl's own (frame-deferred) resize have all landed and the
+   * fit uses the container's final size. Repeated calls coalesce into one fit.
+   */
+  scheduleFitToData = () => {
+    if (typeof requestAnimationFrame === 'undefined') {
+      this.fitToData();
+      return;
+    }
+    cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = requestAnimationFrame(() => {
+      this.fitFrame = requestAnimationFrame(() => {
+        this.fitFrame = 0;
+        this.fitToData();
+      });
+    });
+  };
+
+  // Any pan/zoom that is not our own fit hands the view to the user (no refit on resize).
+  private onViewChange = () => {
+    if (!this.applyingFit) this.framedToData = false;
+  };
+
+  private frameData(engine: GeoMap, cells: readonly Cell[], padding: number, maxZoom: number) {
     if ((this.projection.clipAngle() ?? 0) > 0) {
       const [lon, lat] = d3.geoCentroid({
         type: 'MultiPoint',
@@ -529,7 +573,7 @@ export default class MapStore {
       y: place((y0 + y1) / 2, H, sy0, sy1),
     });
     // Re-seed d3-zoom from the engine's transform so the next wheel/drag continues from here.
-    engine.enableZoom([1, 18]);
+    engine.enableZoom([1, 18], this.onViewChange);
   }
 
   // --- Hover tooltip + cross-highlight (native d3gl interaction) ---

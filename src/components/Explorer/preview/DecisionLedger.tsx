@@ -31,7 +31,7 @@ import {
   dedupeText,
   loadDrops,
   notReceivedOf,
-  PARTIAL_BIAS,
+  partialBiasText,
   partialSummary,
 } from './cleaningSteps';
 
@@ -786,7 +786,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     const f = snapshot.funnel;
     // A cancelled load: the planned records never received are "not loaded", not removed.
     const cancelled = snapshot.partial != null ? notReceivedOf(snapshot) : 0;
-    for (const drop of loadDrops({ funnel: f, toLoad, cancelled, dedupeLabel })) {
+    for (const drop of loadDrops({ funnel: f, toLoad, cancelled, dedupeLabel, partial: snapshot.partial })) {
       path.push({ id: drop.id, kind: 'drop', label: drop.label, value: drop.value, tip: drop.tip });
     }
     path.push({
@@ -794,7 +794,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       kind: 'end',
       label: `${snapshot.mode === 'add' ? 'Added' : 'Loaded'}${snapshot.partial ? ' (partial)' : ''}`,
       value: f.accepted,
-      tip: snapshot.partial ? `Partial dataset: ${partialSummary(snapshot.partial)} ${PARTIAL_BIAS}` : undefined,
+      tip: snapshot.partial ? `Partial dataset: ${partialSummary(snapshot.partial)} ${partialBiasText(snapshot.partial)}` : undefined,
     });
   } else {
     const pending = mode === 'live' ? 'counting while loading…' : 'counted while loading';

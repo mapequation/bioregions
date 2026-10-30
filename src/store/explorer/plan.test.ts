@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GbifPlanDetail } from '../../sources/gbif/stream';
+import { BYTES_PER_RECORD, type GbifPlanDetail } from '../../sources/gbif/stream';
 import { defaultQuery } from '../../sources/query';
 import type { PreviewSummary, StreamPlan } from '../../sources/types';
 import { type ObisExplorerDetail, applyMinRecords, computeEstimate, fetchObisChecklist, planSpeciesNames } from './plan';
@@ -90,7 +90,7 @@ describe('computeEstimate', () => {
   it('approximates from previews', () => {
     const est = computeEstimate({ cap: 500_000, plans: null, previews: [preview('gbif', 12_000, 40)] });
     expect(est).toMatchObject({ records: 12_000, species: 40, exact: false, overCap: false, requests: 4 });
-    expect(est?.bytes).toBe(12_000 * 150);
+    expect(est?.bytes).toBe(12_000 * BYTES_PER_RECORD);
   });
 
   it('is null without plans or previews', () => {

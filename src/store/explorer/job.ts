@@ -1,6 +1,7 @@
 // Pure pieces of a running load: merging source streams, seeded deduplication for
 // "add" mode, per-source dataset tallies and the ETA.
 import { isAbortError } from '../../sources/http';
+import { BASIS_LABELS } from '../../sources/query';
 import type {
   DedupeMode,
   FacetBucket,
@@ -114,14 +115,83 @@ export class SeededDedupe {
   }
 }
 
-/** Accepted records per source dataset, plus species, years and record counts for the KPIs. */
+/** Labels for bucket keys the tally cannot name itself (from the preview facets). */
+export interface TallyLabels {
+  datasets?: ReadonlyMap<string, string>;
+  basisOfRecord?: ReadonlyMap<string, string>;
+  countries?: ReadonlyMap<string, string>;
+}
+
+const byCount = (a: FacetBucket, b: FacetBucket) => b.count - a.count || (a.key < b.key ? -1 : 1);
+
+function buckets(map: ReadonlyMap<string, number>, label: (key: string) => string): FacetBucket[] {
+  return [...map].map(([key, count]) => ({ key, label: label(key), count })).sort(byCount);
+}
+
+let regionNames: Intl.DisplayNames | null | undefined;
+/** English country name of an ISO 3166-1 alpha-2 code (the code when unknown). */
+export function countryName(code: string): string {
+  if (regionNames === undefined) {
+    try {
+      regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    } catch {
+      regionNames = null;
+    }
+  }
+  try {
+    return regionNames?.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/** "PRESERVED_SPECIMEN" -> its display label ("Preserved specimen" for unknown keys). */
+export function basisKeyLabel(key: string): string {
+  const known = (BASIS_LABELS as Record<string, string | undefined>)[key];
+  if (known) return known;
+  const s = key.toLowerCase().replace(/_/g, ' ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/**
+ * Statistics of the records a load accepted (after cleaning and deduplication): what the
+ * insights and bias checks describe once the query on screen is loaded.
+ */
+export interface LoadStats {
+  /** Accepted records the statistics cover. */
+  total: number;
+  bySource: Partial<Record<SourceId, number>>;
+  basisOfRecord: FacetBucket[];
+  /** Every dataset with its source, largest first. */
+  datasets: (FacetBucket & { source: SourceId })[];
+  /** Ascending, one bin per year (undated records are left out). */
+  years: { year: number; count: number }[];
+  /** Records per species, largest first. */
+  species: FacetBucket[];
+  /** Records per country (ISO 3166-1 alpha-2 keys), largest first; only records with a country. */
+  countries: FacetBucket[];
+  /** Records carrying a country code, per source (the denominator of `countries`). */
+  withCountry: Partial<Record<SourceId, number>>;
+  uncertainty: { min: number; max: number; avg: number } | null;
+}
+
+/** Accepted records per source dataset, plus species, years, basis, countries and uncertainty. */
 export class LoadTally {
   readonly datasets: Partial<Record<SourceId, Map<string, number>>> = {};
-  readonly species = new Set<string>();
+  /** Records per species (`.size` is the species count). */
+  readonly species = new Map<string, number>();
   readonly bySource: Partial<Record<SourceId, number>> = {};
+  readonly basis = new Map<string, number>();
+  readonly years = new Map<number, number>();
+  readonly countries = new Map<string, number>();
+  readonly withCountry: Partial<Record<SourceId, number>> = {};
   records = 0;
   minYear = Number.POSITIVE_INFINITY;
   maxYear = Number.NEGATIVE_INFINITY;
+  private uncertaintyMin = Number.POSITIVE_INFINITY;
+  private uncertaintyMax = Number.NEGATIVE_INFINITY;
+  private uncertaintySum = 0;
+  private uncertaintyN = 0;
 
   add(source: SourceId, records: OccurrenceRecord[]): void {
     let map = this.datasets[source];
@@ -129,27 +199,62 @@ export class LoadTally {
       map = new Map();
       this.datasets[source] = map;
     }
+    let withCountry = 0;
     for (const r of records) {
-      this.species.add(r.name);
+      this.species.set(r.name, (this.species.get(r.name) ?? 0) + 1);
       if (r.datasetKey) map.set(r.datasetKey, (map.get(r.datasetKey) ?? 0) + 1);
+      if (r.basisOfRecord) this.basis.set(r.basisOfRecord, (this.basis.get(r.basisOfRecord) ?? 0) + 1);
+      if (r.country) {
+        this.countries.set(r.country, (this.countries.get(r.country) ?? 0) + 1);
+        withCountry++;
+      }
       if (r.year != null) {
+        this.years.set(r.year, (this.years.get(r.year) ?? 0) + 1);
         if (r.year < this.minYear) this.minYear = r.year;
         if (r.year > this.maxYear) this.maxYear = r.year;
+      }
+      if (r.uncertainty != null && Number.isFinite(r.uncertainty)) {
+        if (r.uncertainty < this.uncertaintyMin) this.uncertaintyMin = r.uncertainty;
+        if (r.uncertainty > this.uncertaintyMax) this.uncertaintyMax = r.uncertainty;
+        this.uncertaintySum += r.uncertainty;
+        this.uncertaintyN++;
       }
     }
     this.records += records.length;
     this.bySource[source] = (this.bySource[source] ?? 0) + records.length;
+    if (withCountry > 0) this.withCountry[source] = (this.withCountry[source] ?? 0) + withCountry;
   }
 
   /** Dataset buckets per source, largest first; labels from `titles` when known. */
-  datasetCounts(titles: Map<string, string> = new Map()): Partial<Record<SourceId, FacetBucket[]>> {
+  datasetCounts(titles: ReadonlyMap<string, string> = new Map()): Partial<Record<SourceId, FacetBucket[]>> {
     const out: Partial<Record<SourceId, FacetBucket[]>> = {};
     for (const [source, map] of Object.entries(this.datasets) as [SourceId, Map<string, number>][]) {
-      out[source] = [...map]
-        .map(([key, count]) => ({ key, label: titles.get(key) ?? key, count }))
-        .sort((a, b) => b.count - a.count || (a.key < b.key ? -1 : 1));
+      out[source] = buckets(map, (key) => titles.get(key) ?? key);
     }
     return out;
+  }
+
+  /** A plain snapshot for the provenance (labels from the preview facets when known). */
+  stats(labels: TallyLabels = {}): LoadStats {
+    const datasets: LoadStats['datasets'] = [];
+    for (const [source, list] of Object.entries(this.datasetCounts(labels.datasets)) as [SourceId, FacetBucket[]][]) {
+      for (const b of list) datasets.push({ ...b, source });
+    }
+    datasets.sort(byCount);
+    return {
+      total: this.records,
+      bySource: { ...this.bySource },
+      basisOfRecord: buckets(this.basis, (k) => labels.basisOfRecord?.get(k) ?? basisKeyLabel(k)),
+      datasets,
+      years: [...this.years].map(([year, count]) => ({ year, count })).sort((a, b) => a.year - b.year),
+      species: buckets(this.species, (k) => k),
+      countries: buckets(this.countries, (k) => labels.countries?.get(k) ?? countryName(k)),
+      withCountry: { ...this.withCountry },
+      uncertainty:
+        this.uncertaintyN > 0
+          ? { min: this.uncertaintyMin, max: this.uncertaintyMax, avg: this.uncertaintySum / this.uncertaintyN }
+          : null,
+    };
   }
 
   get datasetTotal(): number {
@@ -160,6 +265,38 @@ export class LoadTally {
 
   get yearRange(): [number, number] | null {
     return Number.isFinite(this.minYear) ? [this.minYear, this.maxYear] : null;
+  }
+}
+
+/**
+ * Holds a running load between batches: while closed, `wait()` does not resolve, so
+ * no batch is counted or handed on. `open()` (resume or cancel) releases the waiters.
+ */
+export class PauseGate {
+  private waiting: Promise<void> | null = null;
+  private release: (() => void) | null = null;
+
+  get paused(): boolean {
+    return this.waiting != null;
+  }
+
+  close(): void {
+    if (this.waiting) return;
+    this.waiting = new Promise<void>((resolve) => {
+      this.release = resolve;
+    });
+  }
+
+  open(): void {
+    const release = this.release;
+    this.waiting = null;
+    this.release = null;
+    release?.();
+  }
+
+  /** Resolves at once when open, else when the gate opens. */
+  wait(): Promise<void> | null {
+    return this.waiting;
   }
 }
 

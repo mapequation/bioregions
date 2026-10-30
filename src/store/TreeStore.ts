@@ -5,6 +5,7 @@ import {
   computed,
   autorun,
   untracked,
+  runInAction,
   type IReactionDisposer,
 } from 'mobx';
 import type RootStore from './RootStore';
@@ -61,6 +62,10 @@ const PIE_MAX = 11;
 const LABEL_GAP = 6;
 const LABEL_H = 14;
 const LABEL_FONT_SIZE = 11; // px, matches the label overlay (setHost)
+// Rectangular trees up to this many tips size their tip labels to the row pitch (down to
+// LABEL_FONT_MIN) so every tip keeps a label; larger trees keep the default size and thinning.
+const LABEL_ALL_MAX = 150;
+const LABEL_FONT_MIN = 8;
 // Rectangular layout: treeLayout's edge padding (time 0 sits at x = RECT_PAD), and the gap kept
 // between the longest tip label and the plot's right edge.
 const RECT_PAD = 40;
@@ -165,6 +170,9 @@ export default class TreeStore {
   hoverInfo: TreeHoverInfo | null = null;
   hoverPos: [number, number] = [0, 0];
 
+  // Tip labels in view that collision thinning dropped (drives the "zoom in" hint).
+  hiddenLabels = 0;
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -190,6 +198,7 @@ export default class TreeStore {
       coords: observable,
       hoverInfo: observable.ref,
       hoverPos: observable.ref,
+      hiddenLabels: observable,
       setHoverInfo: action,
       setLayout: action,
       setCurve: action,
@@ -467,10 +476,17 @@ export default class TreeStore {
   // the autorun and re-run the full layout + ancestral reconstruction. The zoom callback passes
   // the live transform `t` directly for real-time label placement.
   private updateLabels(view: ViewTransform = untracked(() => this.view)) {
-    this.labels?.update(this.anchors, view, {
-      width: this.width,
-      height: this.height,
-    });
+    const { width, height } = this;
+    this.labels?.update(this.anchors, view, { width, height });
+    // Thinned = anchors on screen minus labels the layer kept (it only keeps nodes it shows).
+    let inView = 0;
+    for (const a of this.anchors) {
+      const x = a.refX * view.k + view.x;
+      const y = a.refY * view.k + view.y;
+      if (x >= 0 && x <= width && y >= 0 && y <= height) inView++;
+    }
+    const hidden = Math.max(0, inView - (this.labelEl?.childElementCount ?? inView));
+    if (hidden !== untracked(() => this.hiddenLabels)) runInAction(() => (this.hiddenLabels = hidden));
   }
 
   /** Dominant region of a node's displayed range (highest-count slice within the set). */
@@ -515,8 +531,30 @@ export default class TreeStore {
     const { layout: mode, curve, coords: sizeMode } = this;
 
     const { root, center } = layoutTree(tree, mode, this.width, this.height);
+    // Small rectangular trees: fit the tip labels to the row pitch so none are thinned out.
+    let fontSize = LABEL_FONT_SIZE;
+    let labelH = LABEL_H;
+    const tips = root.leaves();
+    if (mode === 'rectangular' && tips.length > 1 && tips.length <= LABEL_ALL_MAX) {
+      // Even tip rows (the cluster layout's wider gaps between non-siblings would squeeze the
+      // tightest rows below a readable label); each parent re-centres on its children.
+      const top = tips[0].x;
+      const pitch = (tips[tips.length - 1].x - top) / (tips.length - 1);
+      tips.forEach((n, i) => {
+        n.x = top + i * pitch;
+      });
+      root.eachAfter((n) => {
+        if (n.children) n.x = n.children.reduce((sum, c) => sum + c.x, 0) / n.children.length;
+      });
+      fontSize = Math.max(LABEL_FONT_MIN, Math.min(LABEL_FONT_SIZE, Math.floor(pitch - 0.5)));
+      labelH = Math.min(LABEL_H, Math.max(fontSize, Math.floor(pitch * 10) / 10));
+    }
+    if (this.labelEl) {
+      this.labelEl.style.fontSize = `${fontSize}px`;
+      this.labelEl.style.lineHeight = `${labelH}px`;
+    }
     // Label widths in the overlay's font (measured, so the margin and collision boxes fit).
-    const font = `${LABEL_FONT_SIZE}px ${this.labelEl ? getComputedStyle(this.labelEl).fontFamily : 'sans-serif'}`;
+    const font = `${fontSize}px ${this.labelEl ? getComputedStyle(this.labelEl).fontFamily : 'sans-serif'}`;
     const labelWidths = new Map<string, number>();
     const labelWidth = (name: string) => {
       let w = labelWidths.get(name);
@@ -638,9 +676,9 @@ export default class TreeStore {
         refY: py,
         text: name,
         width: labelWidth(name) + 6,
-        height: LABEL_H,
+        height: labelH,
         priority: dataOf(n)?.speciesCount ?? 1,
-        offset: labelOffset(mode, a, LABEL_GAP, LABEL_H),
+        offset: labelOffset(mode, a, LABEL_GAP, labelH),
         // Radial: declare the reading angle and let d3gl derive BOTH the CSS transform and the
         // oriented collision box from it (with the upright flip), so rotated tips pack by their
         // true on-screen footprint and fill the fan — instead of the old hand-written transform,

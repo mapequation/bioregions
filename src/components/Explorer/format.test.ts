@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtBytes, fmtCompact, fmtDuration, fmtInt, fmtPct, fmtSigned } from './format';
+import { fmtBytes, fmtCompact, fmtDuration, fmtInt, fmtPct, fmtSigned, fmtTime, fmtTimestamp } from './format';
 
 describe('explorer number formats', () => {
   it('formats integers with thousands separators', () => {
@@ -41,5 +41,24 @@ describe('explorer number formats', () => {
     expect(fmtSigned(-88410)).toBe('−88,410');
     expect(fmtSigned(1200)).toBe('+1,200');
     expect(fmtSigned(0)).toBe('0');
+  });
+});
+
+describe('explorer timestamps', () => {
+  const iso = '2026-10-30T20:37:00';
+  it('formats the time in the locale hour cycle', () => {
+    expect(fmtTime(iso, 'en-GB')).toBe('20:37');
+    expect(fmtTime(iso, 'en-US')).toBe('8:37 PM');
+  });
+
+  it('formats date and time with the same time part', () => {
+    expect(fmtTimestamp(iso, 'en-GB')).toBe('30 Oct 2026, 20:37');
+    expect(fmtTimestamp(iso, 'en-US')).toBe('Oct 30, 2026, 8:37 PM');
+    expect(fmtTimestamp(iso, 'en-GB').endsWith(fmtTime(iso, 'en-GB'))).toBe(true);
+  });
+
+  it('returns an empty string for missing or invalid dates', () => {
+    expect(fmtTime(undefined)).toBe('');
+    expect(fmtTimestamp('not a date')).toBe('');
   });
 });

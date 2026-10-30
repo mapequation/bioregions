@@ -30,10 +30,10 @@ export const MAX_ALIASES = 40;
 /** Stop splitting a cell spatially below this width in degrees. */
 export const MIN_CELL_DEGREES = 0.01;
 /** Rough transfer size of one record with the streamed fields. */
-export const BYTES_PER_RECORD = 150;
+export const BYTES_PER_RECORD = 168;
 
 const RECORD_FIELDS =
-  'decimalLatitude decimalLongitude year datasetKey basisOfRecord coordinateUncertaintyInMeters';
+  'decimalLatitude decimalLongitude year datasetKey basisOfRecord coordinateUncertaintyInMeters countryCode';
 
 export interface GbifSpecies {
   key: number;
@@ -83,6 +83,8 @@ interface RawRecord {
   datasetKey: string | null;
   basisOfRecord: string | null;
   coordinateUncertaintyInMeters: number | null;
+  /** ISO 3166-1 alpha-2 (GraphQL `countryCode`); absent in older fixtures. */
+  countryCode?: string | null;
 }
 
 type Aliased<T> = Record<string, T>;
@@ -246,6 +248,7 @@ function toRecord(raw: RawRecord, name: string): OccurrenceRecord {
     ...(raw.coordinateUncertaintyInMeters != null && {
       uncertainty: raw.coordinateUncertaintyInMeters,
     }),
+    ...(raw.countryCode && { country: raw.countryCode }),
   };
 }
 

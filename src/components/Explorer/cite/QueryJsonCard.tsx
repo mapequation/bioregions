@@ -8,6 +8,7 @@ import { describeQuery, queryTitle } from '@/sources';
 import { useStore } from '../../../store';
 import { PopoverArrow, PopoverBody, PopoverContent, PopoverRoot, PopoverTrigger } from '../../ui/popover';
 import { copyText, downloadText } from './citeHelpers';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 
 // --- Small shared controls for the Cite & reproduce tab ---------------------------------
 
@@ -34,7 +35,7 @@ export function CopyButton({ text, label = 'Copy', disabled, variant = 'outline'
     timer.current = setTimeout(() => setState('idle'), 1800);
   };
   return (
-    <Button size="sm" variant={variant} onClick={onClick} disabled={disabled} data-testid={rest['data-testid']}>
+    <Button {...(variant === 'outline' ? secondaryButtonProps : { size: 'sm' as const, variant })} onClick={onClick} disabled={disabled} data-testid={rest['data-testid']}>
       {state === 'copied' ? <LuCheck /> : <LuCopy />}
       {/* Keep the label width stable so neighbours don't jump. */}
       <Box as="span" display="inline-grid">
@@ -82,7 +83,7 @@ export const SaveToLibraryButton = observer(function SaveToLibraryButton({
       positioning={{ placement: 'bottom-start' }}
     >
       <PopoverTrigger asChild>
-        <Button size="sm" variant="outline">
+        <Button {...secondaryButtonProps}>
           {saved ? <LuCheck /> : <LuBookmarkPlus />}
           {saved ? 'Saved' : label}
         </Button>
@@ -108,7 +109,7 @@ export const SaveToLibraryButton = observer(function SaveToLibraryButton({
                 placeholder={placeholder}
                 onChange={(e) => setName(e.target.value)}
               />
-              <Button size="sm" type="submit">
+              <Button {...primaryButtonProps} type="submit">
                 Save
               </Button>
             </HStack>
@@ -156,7 +157,7 @@ export default observer(function QueryJsonCard({ query: queryProp }: { query?: O
         </Box>
         <HStack gap={2} wrap="wrap">
           <CopyButton text={json} label="Copy JSON" />
-          <Button size="sm" variant="outline" onClick={() => downloadText('query.json', json, 'application/json')}>
+          <Button {...secondaryButtonProps} onClick={() => downloadText('query.json', json, 'application/json')}>
             <LuFileDown />
             Download query.json
           </Button>

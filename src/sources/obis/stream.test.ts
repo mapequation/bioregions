@@ -81,6 +81,7 @@ describe('records', () => {
         dataset_id: 'd',
         basisOfRecord: 'HumanObservation',
         coordinateUncertaintyInMeters: '25',
+        countryCode: 'us ',
       }),
     ).toEqual({
       name: 'Tursiops truncatus',
@@ -91,7 +92,12 @@ describe('records', () => {
       datasetKey: 'd',
       basisOfRecord: 'HUMAN_OBSERVATION',
       uncertainty: 25,
+      country: 'US',
     });
+    // Not an ISO alpha-2 code: left out.
+    expect(
+      toOccurrenceRecord({ id: 'x', species: 'Tursiops truncatus', decimalLatitude: 1, decimalLongitude: 2, countryCode: 'USA' }).country,
+    ).toBeUndefined();
   });
 
   it('splits the id space into ranges', () => {

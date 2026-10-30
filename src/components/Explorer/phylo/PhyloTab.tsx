@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { LuArrowLeft, LuGitFork, LuNetwork, LuRotateCw } from 'react-icons/lu';
 import { isQueryRunnable, toSpeciesName } from '@/sources';
 import { useStore } from '../../../store';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt } from '../format';
 import CladeCard from './CladeCard';
 import NameMatchSummary from './NameMatchSummary';
@@ -70,7 +71,7 @@ export default observer(function PhyloTab() {
             <Alert.Description wordBreak="break-word">{matchError}</Alert.Description>
           </Alert.Content>
         </Alert.Root>
-        <Button size="sm" variant="outline" onClick={match}>
+        <Button {...secondaryButtonProps} onClick={match}>
           <LuRotateCw /> Retry
         </Button>
       </StartCard>
@@ -90,7 +91,7 @@ export default observer(function PhyloTab() {
               pick a published tree to weight the bioregions by phylogeny.
             </Text>
           </Stack>
-          <Button size="sm" variant="outline" onClick={() => explorerStore.setTab('occurrences')}>
+          <Button {...secondaryButtonProps} onClick={() => explorerStore.setTab('occurrences')}>
             <LuArrowLeft /> Go to Occurrences
           </Button>
         </StartCard>
@@ -107,7 +108,7 @@ export default observer(function PhyloTab() {
             Tree of Life and finds their clade and published trees.
           </Text>
         </Stack>
-        <Button size="sm" data-testid="phylo-match-query" onClick={match}>
+        <Button {...primaryButtonProps} data-testid="phylo-match-query" onClick={match}>
           <LuGitFork />
           {queryCount != null
             ? `Match the ${fmtInt(queryCount)} species in the current query`

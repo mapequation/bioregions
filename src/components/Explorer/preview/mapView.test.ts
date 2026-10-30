@@ -4,6 +4,8 @@ import {
   bboxRings,
   chooseZoom,
   densifyRing,
+  densityZoom,
+  MIN_DENSITY_ZOOM,
   fitPolarView,
   mapProjection,
   POLAR_EXTENT,
@@ -65,6 +67,9 @@ describe('tiles', () => {
     expect(chooseZoom(3)).toBe(1);
     expect(chooseZoom(30)).toBe(4);
     expect(chooseZoom(1000)).toBe(MAX_TILE_ZOOM);
+    // Zoom-0 ad-hoc tiles bin records too coarsely for hexagons; area density starts at 1.
+    expect(densityZoom(2)).toBe(MIN_DENSITY_ZOOM);
+    expect(densityZoom(30)).toBe(chooseZoom(30));
   });
 
   it('covers the world with the two zoom-0 tiles', () => {
@@ -219,6 +224,35 @@ describe('polar views', () => {
     expect(tiles.length).toBeGreaterThan(0);
     const z = tiles[0].z;
     expect(tiles.every((t) => t.x >= 0 && t.y >= 0 && t.x < 2 ** z && t.y < 2 ** z)).toBe(true);
+  });
+
+  it('requests polar density tiles no coarser than minZoom', () => {
+    const v = fitPolarView('EPSG:3575', bboxRings([-180, 45, 180, 90]), 400, 200);
+    expect(polarTilesForView('EPSG:3575', v)[0].z).toBe(0);
+    const tiles = polarTilesForView('EPSG:3575', v, MIN_DENSITY_ZOOM);
+    expect(tiles.every((t) => t.z === 1)).toBe(true);
+    expect(tiles).toHaveLength(4);
+  });
+
+  it('keeps the data clear of the legend corner', () => {
+    const rings = bboxRings([-180, 66, 180, 90]);
+    const extent = (v: ReturnType<typeof fitPolarView>) => {
+      const proj = mapProjection(v, 'EPSG:3575');
+      const pts = densifyRing(rings[0], 2).map(([lon, lat]) => proj.toPx(lon, lat));
+      return { left: Math.min(...pts.map((p) => p[0])), bottom: Math.max(...pts.map((p) => p[1])) };
+    };
+    const base = fitPolarView('EPSG:3575', rings, 500, 300, 36);
+    // A small legend beside a centred circle: the fit is unchanged.
+    expect(fitPolarView('EPSG:3575', rings, 500, 300, 36, { width: 100, height: 60 })).toEqual(base);
+    // A wide legend: the circle slides right just past it, at the same size.
+    const slid = fitPolarView('EPSG:3575', rings, 500, 300, 36, { width: 180, height: 120 });
+    expect(slid.scale).toBeCloseTo(base.scale, 12);
+    expect(extent(slid).left).toBeGreaterThanOrEqual(180 - 1e-6);
+    // No room to slide: it shrinks beside or above the legend.
+    const tight = fitPolarView('EPSG:3575', rings, 320, 300, 36, { width: 200, height: 120 });
+    expect(tight.scale).toBeLessThan(base.scale);
+    const e = extent(tight);
+    expect(e.left >= 200 - 1e-6 || e.bottom <= 300 - 120 + 1e-6).toBe(true);
   });
 
   it('drags a box the short way across 180 degrees', () => {

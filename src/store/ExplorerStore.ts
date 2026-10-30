@@ -11,7 +11,6 @@ import {
   GbifDownloadError,
   describeDownloadScope,
   downloadScope,
-  gbifTaxonNames,
   getGbifDownload,
   requestGbifDownload,
   scopeDifferences,
@@ -22,7 +21,16 @@ import { type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../sour
 import { streamObis } from '../sources/obis/stream';
 import type { Funnel, RecordBatch, StreamPlan } from '../sources/types';
 import { exampleStudies } from './explorer/examples';
-import { JOB_UPDATE_MS, LoadTally, SeededDedupe, etaSeconds, mergeBatches } from './explorer/job';
+import {
+  JOB_UPDATE_MS,
+  type LoadStats,
+  LoadTally,
+  PauseGate,
+  SeededDedupe,
+  type TallyLabels,
+  etaSeconds,
+  mergeBatches,
+} from './explorer/job';
 import {
   STORAGE_KEYS,
   type StoredDownload,
@@ -43,7 +51,9 @@ import {
   buildObisCitation,
   citingDownload,
   partialCoverage,
+  partialKind,
 } from './explorer/provenance';
+import { resolveTaxonNames, unknownTaxonLabel } from './explorer/taxonNames';
 import type { SourceProgress } from './explorer/types';
 import { previewGbifImpact, previewGbifSummary } from '../sources/gbif/preview';
 import { gbifTaxonCount, suggestGbifTaxa } from '../sources/gbif/taxa';
@@ -78,6 +88,7 @@ import type {
   Baseline,
   BiasFlag,
   BiasId,
+  Composition,
   CountStory,
   DownloadCredentials,
   EmptyReason,
@@ -147,6 +158,9 @@ export const RECENT_YEARS = 15;
 /** Species with fewer records than this count as low-count. */
 export const LOW_COUNT = 5;
 /** Basis of record kept by "Compare: specimens only". */
+/** Buckets in `composition.topDatasets` and `topSpecies` for a loaded scope. */
+export const COMPOSITION_TOP = 10;
+
 export const SPECIMEN_BASIS: BasisOfRecord[] = ['PRESERVED_SPECIMEN', 'MATERIAL_SAMPLE'];
 
 type PreviewImpact = Pick<PreviewSummary, 'baseTotal' | 'filterImpact'>;
@@ -254,6 +268,7 @@ export function partialLoad(p: {
   fetched: number;
 }): PartialLoad {
   const out = {
+    kind: partialKind(p.speciesLoaded, p.speciesPlanned),
     planned: p.planned,
     accepted: p.accepted,
     speciesLoaded: p.speciesLoaded,
@@ -552,15 +567,58 @@ export interface BiasInput {
   previews: PreviewSummary[];
   speciesCounts: FacetBucket[] | null;
   currentYear: number;
+  /**
+   * Statistics of the loaded records: when given, every check, share and remedy cost
+   * describes them instead of the query preview (the 'loaded' and 'partial' scopes).
+   */
+  stats?: LoadStats | null;
 }
 
-/** The five sampling-bias checks on the merged preview (empty without records). */
-export function computeBiasFlags(
-  { query, previews, speciesCounts, currentYear }: BiasInput,
-  actions: BiasActions,
-): BiasFlag[] {
+/** What the bias checks read, from the merged previews or from the loaded records. */
+interface BiasData {
+  total: number;
+  datasets: (FacetBucket & { source: SourceId })[];
+  basis: FacetBucket[];
+  years: { year: number; count: number }[];
+  countries: FacetBucket[];
+  /** Records the country shares are taken of (loaded records with a country code). */
+  countryTotal: number;
+  speciesCounts: FacetBucket[] | null;
+}
+
+function biasData({ previews, speciesCounts, stats }: BiasInput): BiasData {
+  if (stats) {
+    const countryTotal = Object.values(stats.withCountry).reduce((a, b) => a + (b ?? 0), 0);
+    return {
+      total: stats.total,
+      datasets: stats.datasets,
+      basis: stats.basisOfRecord,
+      years: stats.years,
+      countries: stats.countries,
+      countryTotal,
+      speciesCounts: stats.species,
+    };
+  }
   const total = previews.reduce((sum, p) => sum + p.total, 0);
+  return {
+    total,
+    datasets: previews.flatMap((p) => p.topDatasets.map((b) => ({ ...b, source: p.source }))),
+    basis: mergeBuckets(previews.map((p) => p.basisOfRecord)),
+    years: mergeYears(previews.map((p) => p.years)),
+    countries: mergeBuckets(previews.map((p) => p.countries)),
+    countryTotal: total,
+    speciesCounts,
+  };
+}
+
+/** The five sampling-bias checks on the merged preview or the loaded records (empty without records). */
+export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFlag[] {
+  const { query, currentYear } = input;
+  const data = biasData(input);
+  const { total, speciesCounts } = data;
   if (total <= 0) return [];
+  /** A remedy never removes more records than the scope holds. */
+  const capped = (n: number) => Math.min(total, Math.max(0, n));
   const flag = (id: BiasId, value: number, text: string, action?: BiasFlag['action']): BiasFlag => {
     const threshold = BIAS_THRESHOLDS[id];
     const triggered = value > threshold;
@@ -578,9 +636,7 @@ export function computeBiasFlags(
 
   // Dataset dominance: the single largest dataset across sources.
   let top: (FacetBucket & { source: SourceId }) | null = null;
-  for (const p of previews) {
-    for (const b of p.topDatasets) if (!top || b.count > top.count) top = { ...b, source: p.source };
-  }
+  for (const b of data.datasets) if (!top || b.count > top.count) top = b;
   const topShare = top ? top.count / total : 0;
   const topKey = top?.key ?? '';
   const datasetFlag = flag(
@@ -593,14 +649,14 @@ export function computeBiasFlags(
       ? {
           label: 'Exclude this dataset',
           title: `Exclude ${top.label}`,
-          cost: top.count,
+          cost: capped(top.count),
           run: () => actions.excludeDataset(topKey),
         }
       : undefined,
   );
 
   // Human observations.
-  const basis = mergeBuckets(previews.map((p) => p.basisOfRecord));
+  const basis = data.basis;
   const human = basis.find((b) => b.key === 'HUMAN_OBSERVATION')?.count ?? 0;
   const humanShare = human / total;
   const humanFlag = flag(
@@ -612,13 +668,13 @@ export function computeBiasFlags(
       : {
           label: 'Specimens only',
           title: 'Compare: preserved specimens and material samples only, after pinning a baseline',
-          cost: Math.max(0, total - basis.reduce((sum, b) => sum + (SPECIMEN_BASIS.includes(b.key as BasisOfRecord) ? b.count : 0), 0)),
+          cost: capped(total - basis.reduce((sum, b) => sum + (SPECIMEN_BASIS.includes(b.key as BasisOfRecord) ? b.count : 0), 0)),
           run: () => actions.specimensOnly(),
         },
   );
 
   // Temporal skew: share of dated records from the last 15 years (one source with the year brush).
-  const years = mergeYears(previews.map((p) => p.years));
+  const years = data.years;
   const { cutoffYear: cutoff, share } = recentShareOf(years, currentYear);
   const recentShare = share ?? 0;
   const recent = years.reduce((sum, y) => sum + (y.year >= cutoff ? y.count : 0), 0);
@@ -634,22 +690,22 @@ export function computeBiasFlags(
       ? {
           label: narrowLabel,
           // Undated records go too, so the cost is everything outside the recent years.
-          cost: Math.max(0, total - recent),
+          cost: capped(total - recent),
           run: () => actions.narrowYears(cutoff),
         }
       : undefined,
   );
 
   // Country concentration (not meaningful when the area is one country).
-  const countries = mergeBuckets(previews.map((p) => p.countries));
-  const topCountry = countries[0];
+  const topCountry = data.countries[0];
   const oneCountry = query.area.kind === 'countries' && query.area.codes.length === 1;
-  const countryShare = topCountry && !oneCountry ? topCountry.count / total : 0;
+  const countryShare = topCountry && !oneCountry && data.countryTotal > 0 ? topCountry.count / data.countryTotal : 0;
+  const ofRecords = data.countryTotal < total ? 'of records with a country' : 'of records';
   const countryFlag = flag(
     'countryConcentration',
     countryShare,
     topCountry && !oneCountry
-      ? `${pctLabel(countryShare)} of records are from ${topCountry.label}; effort differs between countries.`
+      ? `${pctLabel(countryShare)} ${ofRecords} are from ${topCountry.label}; effort differs between countries.`
       : 'Records are not concentrated in one country.',
     topCountry && !oneCountry ? { label: 'Show countries', run: () => actions.showCountries() } : undefined,
   );
@@ -668,7 +724,7 @@ export function computeBiasFlags(
         : {
             label: `${LOW_COUNT}+ records per species`,
             title: `Set a minimum of ${LOW_COUNT} records per species`,
-            cost: speciesCounts.reduce((sum, b) => sum + (b.count < LOW_COUNT ? b.count : 0), 0),
+            cost: capped(speciesCounts.reduce((sum, b) => sum + (b.count < LOW_COUNT ? b.count : 0), 0)),
             run: () => actions.setMinRecords(LOW_COUNT),
           },
     );
@@ -804,6 +860,7 @@ export async function checkDownload(
   query: OccurrenceQuery,
   signal?: AbortSignal,
   fetchStatus: (key: string, signal?: AbortSignal) => Promise<GbifDownloadStatus> = getGbifDownload,
+  taxonNames: (keys: string[], signal?: AbortSignal) => Promise<Map<string, string>> = resolveTaxonNames,
 ): Promise<DownloadCheck> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return { match: 'unknown', differences: [], failure: 'offline' };
@@ -823,13 +880,15 @@ export async function checkDownload(
   const differences = scopeDifferences(theirs, downloadScope(gbifDownloadPredicate(query)));
   const names = new Map<string, string>();
   for (const t of query.taxa) if (t.gbifKey != null) names.set(String(t.gbifKey), t.name);
-  const unknown = theirs.taxonKeys.filter((k) => !names.has(k)).slice(0, MAX_NAME_LOOKUPS);
+  const unknown = theirs.taxonKeys.filter((k) => !names.has(k));
   if (unknown.length > 0) {
     try {
-      for (const [k, v] of await gbifTaxonNames(unknown, timed)) names.set(k, v);
+      for (const [k, v] of await taxonNames(unknown.slice(0, MAX_NAME_LOOKUPS), timed)) names.set(k, v);
     } catch {
-      // Names are cosmetic: keys stay as "GBIF taxon <key>".
+      // Names are cosmetic: unresolved keys get the fallback below.
     }
+    // Never "GBIF taxon 935Y2": keys no service could name say so.
+    for (const k of unknown) if (!names.has(k)) names.set(k, unknownTaxonLabel(k));
   }
   return {
     match: differences.length === 0 ? 'match' : 'mismatch',
@@ -876,9 +935,9 @@ export function zipVerdict(p: {
   } else if (!p.hasData || p.streamGbifRecords === 0) {
     note = `Made for this query: ${n(p.accepted)} of its ${n(p.received)} records pass cleaning.`;
   } else if (p.accepted === p.streamGbifRecords) {
-    note = `Made for this query: its ${n(p.accepted)} records after cleaning equal the ${n(p.streamGbifRecords)} GBIF records on screen.`;
+    note = `Made for this query: its ${n(p.accepted)} records after cleaning equal the ${n(p.streamGbifRecords)} GBIF records loaded on screen.`;
   } else {
-    note = `Made for this query; GBIF changed between the two snapshots: ${n(p.accepted)} records after cleaning here, ${n(p.streamGbifRecords)} GBIF records on screen.`;
+    note = `Made for this query; GBIF changed between the two snapshots: ${n(p.accepted)} records after cleaning here, ${n(p.streamGbifRecords)} GBIF records loaded on screen.`;
   }
   if (queryMatch === 'match' && p.hasData && !p.doi) note += ' The zip carries no DOI to cite.';
   return { ...out, note };
@@ -957,6 +1016,10 @@ export default class ExplorerStore {
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private zipController: AbortController | null = null;
   private zipFile: Blob | null = null;
+  /** Holds the running load's batches while paused (`pauseLoad`). */
+  private pauseGate: PauseGate | null = null;
+  /** Pushes the running load's exact counts to `job` (set while a load streams). */
+  private pauseFlush: (() => void) | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -1661,7 +1724,72 @@ export default class ExplorerStore {
     return all > 0 ? after / all : 0;
   }
 
-  /** The five sampling-bias checks. */
+  /**
+   * Statistics of the loaded records when the insights describe a load ('loaded' or
+   * 'partial' scope); null while previewing.
+   */
+  get scopeStats(): LoadStats | null {
+    if (this.insightsScope.kind === 'query') return null;
+    return (this.lastLoad as LoadProvenance | null)?.stats ?? null;
+  }
+
+  /** What the data is made of, in the insights scope (`insightsScope.kind`). */
+  get composition(): Composition {
+    const scope = this.insightsScope;
+    const stats = this.scopeStats;
+    if (stats) {
+      const withCountry = Object.values(stats.withCountry).reduce((a, b) => a + (b ?? 0), 0);
+      const loaded = scope.kind === 'partial' ? 'records loaded so far' : 'loaded records';
+      const notes: NonNullable<Composition['notes']> = {
+        issues: 'GBIF interpretation issues are counted for the query preview only, not for loaded records.',
+      };
+      if (withCountry < stats.total) {
+        const obisOnly = (stats.bySource.obis ?? 0) > 0;
+        notes.countries = `Countries are known for ${fmtCount(withCountry)} of ${fmtCount(stats.total)} ${loaded}${
+          obisOnly ? ' (OBIS records often carry no country code)' : ''
+        }.`;
+      }
+      return {
+        basisOfRecord: stats.basisOfRecord,
+        topDatasets: stats.datasets.slice(0, COMPOSITION_TOP).map(({ source: _, ...b }) => b),
+        topSpecies: stats.species.slice(0, COMPOSITION_TOP),
+        countries: stats.countries,
+        issues: [],
+        uncertainty: stats.uncertainty,
+        total: stats.total,
+        scopeKind: scope.kind,
+        notes,
+      };
+    }
+    const previews = this.previews;
+    let uncertainty: Composition['uncertainty'] = null;
+    let weighted = 0;
+    let weight = 0;
+    for (const p of previews) {
+      const u = p.uncertainty;
+      if (!u) continue;
+      uncertainty = uncertainty
+        ? { min: Math.min(uncertainty.min, u.min), max: Math.max(uncertainty.max, u.max), avg: 0 }
+        : { ...u, avg: 0 };
+      const w = Math.max(1, p.total);
+      weighted += u.avg * w;
+      weight += w;
+    }
+    if (uncertainty) uncertainty.avg = weighted / weight;
+    return {
+      basisOfRecord: mergeBuckets(previews.map((p) => p.basisOfRecord)),
+      topDatasets: mergeBuckets(previews.map((p) => p.topDatasets)),
+      topSpecies: mergeBuckets(previews.map((p) => p.topSpecies)),
+      countries: mergeBuckets(previews.map((p) => p.countries)),
+      issues: mergeBuckets(previews.map((p) => p.issues)),
+      uncertainty,
+      total: this.ledgerTotal,
+      // A load whose statistics are missing (older provenance) is described by the preview.
+      scopeKind: 'query',
+    };
+  }
+
+  /** The five sampling-bias checks, on the same scope as `composition`. */
   get biasFlags(): BiasFlag[] {
     return computeBiasFlags(
       {
@@ -1669,6 +1797,7 @@ export default class ExplorerStore {
         previews: this.previews,
         speciesCounts: this.keptSpeciesCounts,
         currentYear: new Date().getFullYear(),
+        stats: this.scopeStats,
       },
       {
         excludeDataset: (key) => this.excludeDataset(key),
@@ -1899,6 +2028,19 @@ export default class ExplorerStore {
     this.loadMode = m;
   }
 
+  /** Names of dataset, basis and country keys from the preview facets, for load statistics. */
+  private get facetLabels(): TallyLabels {
+    const datasets = new Map<string, string>();
+    const basisOfRecord = new Map<string, string>();
+    const countries = new Map<string, string>();
+    for (const p of this.previews) {
+      for (const d of p.topDatasets) datasets.set(d.key, d.label);
+      for (const b of p.basisOfRecord) basisOfRecord.set(b.key, b.label);
+      for (const c of p.countries) countries.set(c.key, c.label);
+    }
+    return { datasets, basisOfRecord, countries };
+  }
+
   /** Whether a load is planning or streaming. */
   get isLoading(): boolean {
     return this.job?.state === 'planning' || this.job?.state === 'streaming';
@@ -1917,8 +2059,9 @@ export default class ExplorerStore {
     const ledger = this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row }));
     const ledgerBase = this.ledgerBase;
     const hadData = hasLoadedData(this.rootStore);
-    const titles = new Map<string, string>();
-    for (const p of this.previews) for (const d of p.topDatasets) titles.set(d.key, d.label);
+    const labels = this.facetLabels;
+    const gate = new PauseGate();
+    this.pauseGate = gate;
     this.job = {
       state: 'planning',
       label: queryTitle(query),
@@ -1928,6 +2071,9 @@ export default class ExplorerStore {
       funnel: emptyFunnel(),
       truncated: [],
       speciesCoverage: null,
+      paused: false,
+      speciesLoaded: 0,
+      speciesPlanned: null,
     };
     const job = this.job;
 
@@ -1942,8 +2088,14 @@ export default class ExplorerStore {
       const ids = SOURCE_IDS.filter((id) => query.sources[id]);
       plans = ids.map((id) => this.plans.plans[id]).filter((p): p is StreamPlan => p != null);
       if (plans.length === 0) throw new Error('No source can run this query');
-    } catch (error) {
+      const speciesPlanned = plannedSpecies(plans);
       runInAction(() => {
+        job.speciesPlanned = speciesPlanned;
+      });
+    } catch (error) {
+      this.releasePause(gate);
+      runInAction(() => {
+        job.paused = false;
         const aborted = controller.signal.aborted || isAbortError(error);
         job.state = aborted ? 'cancelled' : 'error';
         if (!aborted) job.error = shortError(error);
@@ -1996,10 +2148,13 @@ export default class ExplorerStore {
         job.funnel = seeded.adjust(cleaner.funnel);
         job.truncated = perSource.flatMap((p) => p.truncated ?? []);
         job.speciesCoverage = speciesCoverage(perSource);
+        job.speciesLoaded = tally.species.size;
         const fetched = perSource.reduce((s, p) => s + p.fetched, 0);
-        job.etaSeconds = etaSeconds(fetched, planned, now - startedAt);
+        job.etaSeconds = gate.paused ? null : etaSeconds(fetched, planned, now - startedAt);
       });
     };
+    // Opening the cancel menu pauses: show exactly what is counted, then count nothing more.
+    this.pauseFlush = () => flush(true);
     const onError = (source: SourceId, error: unknown) => {
       const p = progress.get(source);
       if (p) p.state = 'error';
@@ -2016,6 +2171,7 @@ export default class ExplorerStore {
     const finish = () => {
       if (finished) return;
       finished = true;
+      this.releasePause(gate);
       flush(true);
       skipBioregions = this.finishLoad({
         job,
@@ -2025,7 +2181,7 @@ export default class ExplorerStore {
         cleaner,
         seeded,
         tally,
-        titles,
+        labels,
         ledger,
         ledgerBase,
         planned,
@@ -2039,6 +2195,8 @@ export default class ExplorerStore {
     async function* accepted(): AsyncGenerator<RecordBatch['records']> {
       try {
         for await (const batch of mergeBatches(streams, onError, onDone)) {
+          // Paused: hold this batch uncounted until resumed; a cancel drops it.
+          await gate.wait();
           if (controller.signal.aborted) break;
           const p = progress.get(batch.source);
           if (p) {
@@ -2098,7 +2256,7 @@ export default class ExplorerStore {
     cleaner: RecordCleaner;
     seeded: SeededDedupe;
     tally: LoadTally;
-    titles: Map<string, string>;
+    labels: TallyLabels;
     ledger: LedgerRow[];
     ledgerBase: number | null;
     planned: number;
@@ -2113,6 +2271,8 @@ export default class ExplorerStore {
     const funnel = ctx.seeded.adjust(ctx.cleaner.funnel);
     const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
     job.funnel = funnel;
+    job.speciesLoaded = tally.species.size;
+    job.paused = false;
     job.etaSeconds = cancelled ? null : 0;
     if (errors.length > 0) job.error = errors.join('; ');
     const failed = !cancelled && errors.length >= plans.length && funnel.accepted === 0;
@@ -2166,7 +2326,8 @@ export default class ExplorerStore {
       ...(empty && { emptyReason: empty, previousKept: ctx.hadData }),
       partial,
       ...(skip && { bioregionsSkipped: true }),
-      datasetCounts: tally.datasetCounts(ctx.titles),
+      datasetCounts: tally.datasetCounts(ctx.labels.datasets),
+      stats: tally.stats(ctx.labels),
       requests,
       ...(empty && ctx.hadData && { previous: keptLoad(this.lastLoad as LoadProvenance | null) }),
     };
@@ -2191,6 +2352,37 @@ export default class ExplorerStore {
   }
 
   /**
+   * Hold a running load, e.g. while the cancel menu is open: no further batch is counted
+   * or reaches SpeciesStore, so `job.funnel` and `job.speciesLoaded` are exactly what
+   * `cancel('keep')` keeps. `resumeLoad()` continues.
+   */
+  pauseLoad() {
+    const gate = this.pauseGate;
+    if (!gate || !this.isLoading || !this.job || gate.paused) return;
+    gate.close();
+    this.pauseFlush?.();
+    this.job.paused = true;
+    this.job.etaSeconds = null;
+  }
+
+  /** Continue a load held by `pauseLoad()`. */
+  resumeLoad() {
+    const gate = this.pauseGate;
+    if (!gate?.paused) return;
+    if (this.job) this.job.paused = false;
+    gate.open();
+  }
+
+  /** Open and forget a load's pause gate (the load ended or was cancelled). */
+  private releasePause(gate: PauseGate) {
+    gate.open();
+    if (this.pauseGate === gate) {
+      this.pauseGate = null;
+      this.pauseFlush = null;
+    }
+  }
+
+  /**
    * Stop a running load: keep what arrived or discard it. Kept records run Infomap only
    * when at least half the planned species arrived (else `lastLoad.bioregionsSkipped`).
    */
@@ -2200,6 +2392,9 @@ export default class ExplorerStore {
     this.cancelMode = mode;
     // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
     controller.abort(mode);
+    // Release a paused load after the abort, so the held batch is dropped, not counted.
+    if (this.job) this.job.paused = false;
+    this.pauseGate?.open();
     if (this.job?.state === 'planning') this.job.state = 'cancelled';
     if (mode === 'discard') this.rootStore.clearData();
   }
@@ -2306,12 +2501,15 @@ export default class ExplorerStore {
     const shown = this.shownLoad;
     const query = toJS(shown?.query ?? this.query);
     const nameKey = downloadKeyFromName(file.name);
+    const gbifLoaded = shown?.funnel.bySource.gbif?.accepted ?? 0;
     const base = {
       fileName: file.name,
       ...(nameKey && { downloadKey: nameKey }),
       queryMatch: 'unknown' as const,
       // Only the GBIF part of the data on screen can be compared with a GBIF download.
-      streamGbifRecords: shown?.funnel.bySource.gbif?.accepted ?? 0,
+      streamGbifRecords: gbifLoaded,
+      streamGbifReceived: shown?.funnel.bySource.gbif?.received ?? 0,
+      streamGbifLoaded: gbifLoaded,
       canReplace: false,
       canCiteDoi: false,
     };
@@ -2374,6 +2572,15 @@ export default class ExplorerStore {
     }
   }
 
+  /** Close the zip dialog: stop parsing and forget the dropped file. */
+  clearZip() {
+    this.zipController?.abort();
+    this.zipController = null;
+    this.zipImport = null;
+    this.zipFile = null;
+    this.zipSummary = null;
+  }
+
   /**
    * Load the parsed zip in place of the data, or keep the streamed data and cite the
    * zip's DOI; each only when the download matches the query (`canReplace`, `canCiteDoi`).
@@ -2405,6 +2612,9 @@ export default class ExplorerStore {
     this.loadController = controller;
     this.cancelMode = null;
     const label = summary.downloadKey ? `GBIF download ${summary.downloadKey}` : 'GBIF download';
+    const labels = this.facetLabels;
+    const gate = new PauseGate();
+    this.pauseGate = gate;
     const job: LoadJob = {
       state: 'streaming',
       label,
@@ -2414,6 +2624,9 @@ export default class ExplorerStore {
       funnel: emptyFunnel(),
       truncated: [],
       speciesCoverage: null,
+      paused: false,
+      speciesLoaded: 0,
+      speciesPlanned: null,
     };
     this.job = job;
     const hadData = hasLoadedData(this.rootStore);
@@ -2436,15 +2649,19 @@ export default class ExplorerStore {
       runInAction(() => {
         job.perSource = [{ ...progress }];
         job.funnel = cleaner.funnel;
-        job.etaSeconds = etaSeconds(progress.fetched, expected, now - job.startedAt);
+        job.speciesLoaded = tally.species.size;
+        job.etaSeconds = gate.paused ? null : etaSeconds(progress.fetched, expected, now - job.startedAt);
       });
     };
+    this.pauseFlush = () => flush(true);
     let finished = false;
     const finish = () => {
       if (finished) return;
       finished = true;
+      this.releasePause(gate);
       flush(true);
       runInAction(() => {
+        job.paused = false;
         const funnel = cleaner.funnel;
         const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
         const failed = !cancelled && job.state === 'error';
@@ -2479,7 +2696,8 @@ export default class ExplorerStore {
               })
             : null,
           ...(empty && hadData && { previous: keptLoad(previous) }),
-          datasetCounts: tally.datasetCounts(),
+          datasetCounts: tally.datasetCounts(labels.datasets),
+          stats: tally.stats(labels),
           requests: { gbif: gbifDownloadPredicate(query) },
           gbifDownloadKey: summary.downloadKey,
           gbifDownloadDoi: summary.doi,
@@ -2494,6 +2712,7 @@ export default class ExplorerStore {
           signal: controller.signal,
           excludeIntroduced: query.quality.excludeIntroduced,
         })) {
+          await gate.wait();
           if (controller.signal.aborted) break;
           progress.fetched += batch.records.length;
           const accepted = cleaner.accept(batch.records);

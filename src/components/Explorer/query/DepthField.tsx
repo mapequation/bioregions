@@ -1,9 +1,10 @@
 import { HStack, Stack, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import { depthLabel } from '@/sources';
 import { useStore } from '../../../store';
 import NumberField from './NumberField';
 
-/** Depth range in meters; meaningful for marine (OBIS) records. */
+/** Depth range in meters; only OBIS filters by depth, so the inputs show only with OBIS on. */
 export default observer(function DepthField() {
   const { explorerStore } = useStore();
   const q = explorerStore.query;
@@ -11,10 +12,12 @@ export default observer(function DepthField() {
   const obisOn = q.sources.obis;
   const set = min != null || max != null;
 
-  if (!obisOn && !set) {
+  // One look per OBIS state: the toggle alone decides. The loading lock only dims the column.
+  if (!obisOn) {
     return (
-      <Text fontSize="xs" color="fg.muted">
+      <Text fontSize="xs" color="fg.muted" lineHeight="short">
         Turn on OBIS to filter marine records by depth.
+        {set && <> Your range ({depthLabel(q.depth)}) applies again when OBIS is on.</>}
       </Text>
     );
   }

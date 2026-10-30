@@ -10,7 +10,7 @@ import { Tooltip } from '../../ui/tooltip';
 import { chartPalettes } from '../charts/colors';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
-import { insightsScope, ScopeLine } from './ScopeLine';
+import { INSIGHTS_POSITIONING, INSIGHTS_TIP_PROPS, insightsScope, ScopeLine } from './ScopeLine';
 
 export const BIAS_TITLES: Record<BiasId, string> = {
   datasetDominance: 'Dataset dominance',
@@ -45,27 +45,8 @@ const warningFrom = (flag: BiasFlag) => fmtPct(flag.threshold * BIAS_WARNING_FAC
 
 const BAR_HEIGHT = 6;
 
-/** The dotted threshold tick as drawn by ShareBar, for the legend. */
-function ThresholdGlyph() {
-  return (
-    <Box
-      as="span"
-      display="inline-block"
-      verticalAlign="middle"
-      h={`${BAR_HEIGHT + 6}px`}
-      borderLeftWidth="2px"
-      borderLeftStyle="dotted"
-      borderColor="fg"
-      opacity={0.7}
-      ml={0.5}
-      mr={1.5}
-      aria-hidden
-    />
-  );
-}
-
 function why(flag: BiasFlag): string {
-  return `${whyCheck(flag)} From ${warningFrom(flag)} it is a warning, below that a note.`;
+  return `${whyCheck(flag)} From ${warningFrom(flag)} it is a warning, below that a note. On the bar, the dotted line marks the ${fmtPct(flag.threshold)} threshold.`;
 }
 
 function whyCheck(flag: BiasFlag): string {
@@ -94,7 +75,14 @@ export const sectionHeading = {
 
 function WhyTip({ flag }: { flag: BiasFlag }) {
   return (
-    <ToggleTip content={<Box maxW="240px">{why(flag)}</Box>} positioning={{ placement: 'left-start' }}>
+    <ToggleTip
+      content={
+        <Box maxW="240px" whiteSpace="normal" lineHeight="short">
+          {why(flag)}
+        </Box>
+      }
+      positioning={{ ...INSIGHTS_POSITIONING, placement: 'left-start' }}
+    >
       <IconButton size="2xs" variant="ghost" color="fg.muted" aria-label={`About the ${BIAS_TITLES[flag.id]} check`}>
         <LuInfo />
       </IconButton>
@@ -131,7 +119,7 @@ function ActionRow({ flag }: { flag: BiasFlag }) {
   const described = cost != null ? `${name} (removes ${fmtInt(cost)} records)` : name;
   const detail = hiddenDetail(action.label, action.title);
   return (
-    <Tooltip content={described} openDelay={400}>
+    <Tooltip content={described} openDelay={400} positioning={INSIGHTS_POSITIONING} contentProps={INSIGHTS_TIP_PROPS}>
       <Button
         mt={2}
         size="xs"
@@ -161,7 +149,6 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
   const title = BIAS_TITLES[flag.id];
   const warning = flag.level === 'warning';
   const levelText = warning ? 'warning' : 'note';
-  const tick = Math.min(1, Math.max(0, flag.threshold));
   const thresholds = `${flaggedAbove(flag)}, a warning from ${warningFrom(flag)}`;
   return (
     <Box
@@ -195,35 +182,29 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
         >
           {title}
         </Text>
-<WhyTip flag={flag} />
+        <WhyTip flag={flag} />
       </HStack>
       {/* Value in a fixed right column beside its bar, so the title keeps one line. */}
       <HStack gap={2} mt={1} mb={2} align="center">
-        <Box position="relative" flex="1" minW={0}>
-          <ShareBar
-            variant={warning ? 'solid' : 'muted'}
-            colorPalette={warning ? chartPalettes.removal : 'gray'}
-            value={flag.value}
-            max={1}
-            ghostValue={flag.threshold}
-            height={BAR_HEIGHT}
-            track
-            label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; ${thresholds}`}
-          />
-          {/* Hover target over ShareBar's dotted tick: names the threshold. */}
-          <Tooltip content={`Threshold: ${thresholds}`} openDelay={150} showArrow>
-            <Box
-              as="span"
-              aria-hidden
-              position="absolute"
-              top="-5px"
-              bottom="-5px"
-              left={`calc(${tick * 100}% - 6px)`}
-              w="12px"
-              cursor="help"
+        <Tooltip
+          content={`${fmtPct(flag.value)} ${MEASURE[flag.id]}. The dotted line marks the threshold: ${thresholds}.`}
+          openDelay={150}
+          positioning={INSIGHTS_POSITIONING}
+          contentProps={INSIGHTS_TIP_PROPS}
+        >
+          <Box position="relative" flex="1" minW={0} py="5px" my="-5px" cursor="help">
+            <ShareBar
+              variant={warning ? 'solid' : 'muted'}
+              colorPalette={warning ? chartPalettes.removal : 'gray'}
+              value={flag.value}
+              max={1}
+              ghostValue={flag.threshold}
+              height={BAR_HEIGHT}
+              track
+              label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; ${thresholds}`}
             />
-          </Tooltip>
-        </Box>
+          </Box>
+        </Tooltip>
         <Text
           textStyle="sm"
           fontWeight={warning ? 'semibold' : 'medium'}
@@ -291,9 +272,9 @@ export default observer(function BiasPanel() {
   const notes = flags.filter((f) => f.triggered && f.level !== 'warning');
   const quiet = flags.filter((f) => !f.triggered);
   const stale = state === 'stale';
+  // Flags and composition share one scope (the query preview, or the loaded or partial dataset).
+  const comp = ex.composition;
   const scope = insightsScope(ex);
-  // A partial load keeps the checks of the full query: shown in grey (full contrast), with the scope line saying so.
-  const partial = scope?.kind === 'partial';
 
   const counts = [
     warnings.length > 0 && plural(warnings.length, 'warning'),
@@ -368,22 +349,13 @@ export default observer(function BiasPanel() {
             </Box>
           )}
         </Text>
-        <Box aria-hidden filter={partial ? 'grayscale(1)' : undefined}>
-          {summary}
-        </Box>
+        <Box aria-hidden>{summary}</Box>
       </HStack>
-      <ScopeLine scope={scope} id="bias-checks-scope" />
-      {(warnings.length > 0 || notes.length > 0) && state !== 'first' && (
-        <Text textStyle="xs" color="fg.muted" mt={-1} mb={2} aria-hidden>
-          <ThresholdGlyph />
-          marks the threshold
-        </Text>
-      )}
+      <ScopeLine kind={comp.scopeKind} records={comp.total} id="bias-checks-scope" detail={scope?.label} />
       <Box
         aria-busy={stale || undefined}
-        aria-describedby={scope ? 'bias-checks-scope' : undefined}
+        aria-describedby="bias-checks-scope"
         opacity={stale ? 0.5 : 1}
-        filter={partial ? 'grayscale(1)' : undefined}
         transition="opacity 0.15s"
       >
         {body}

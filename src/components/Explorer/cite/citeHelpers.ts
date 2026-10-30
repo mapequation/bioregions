@@ -1,6 +1,7 @@
 // Pure helpers for the Cite & reproduce tab and the Library (no React, no store).
 import { citationDate, gbifDownloadCitation } from '@/sources';
 import type { GbifDownload, Provenance } from '../../../store/explorer/types';
+import { fmtTime, fmtTimestamp } from '../format';
 
 /** Accepts "10.15468/dd-abc", "doi:10.…" or "https://doi.org/10.…"; returns the bare DOI or null. */
 export function normalizeDoi(input: string): string | null {
@@ -37,30 +38,17 @@ export function isPending(d: Pick<GbifDownload, 'status'>): boolean {
   return d.status === 'PREPARING' || d.status === 'RUNNING';
 }
 
-/** "14:31" today, "29 Oct, 14:31" on other days, "–" when missing. */
+/** "14:31" today, the full timestamp on other days, "–" when missing (see `fmtTime`). */
 export function shortTime(iso: string | undefined, now = new Date()): string {
   if (!iso) return '–';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const sameDay = d.toDateString() === now.toDateString();
-  return d.toLocaleString(undefined, {
-    ...(sameDay ? {} : { day: 'numeric', month: 'short' }),
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return d.toDateString() === now.toDateString() ? fmtTime(d) : fmtTimestamp(d);
 }
 
-/** "30 Oct 2026, 14:03" in the viewer's locale. */
+/** "Oct 30, 2026, 8:37 PM" / "30 Oct 2026, 20:37" in the viewer's locale (see `fmtTimestamp`). */
 export function retrievedLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return fmtTimestamp(iso) || iso;
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago", else a date. */

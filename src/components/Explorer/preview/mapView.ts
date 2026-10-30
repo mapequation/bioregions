@@ -101,6 +101,18 @@ export function chooseZoom(scale: number): number {
 }
 
 /**
+ * Lowest zoom for density tiles of an area. GBIF's ad-hoc (search) tiles bin zoom 0 onto
+ * a coarse grid of about 10 x 5 degrees, so hexagons there come out as a sparse lattice of
+ * separate dots; from zoom 1 the records are fine enough for touching ~5 px hexagons.
+ */
+export const MIN_DENSITY_ZOOM = 1;
+
+/** Zoom of the density tiles for an area view of `scale` CSS px per degree. */
+export function densityZoom(scale: number): number {
+  return Math.max(MIN_DENSITY_ZOOM, chooseZoom(scale));
+}
+
+/**
  * Tiles of zoom `z` that cover the view, positioned in CSS px. Columns wrap around the
  * antimeridian; `within` (unwrapped lon/lat box) limits them to tiles touching it.
  */
@@ -363,13 +375,26 @@ export function bboxRings(bbox: BBox): [number, number][][] {
   ];
 }
 
+/** Px box kept free in the bottom-left corner of a view (e.g. its legend). */
+export interface CornerInset {
+  width: number;
+  height: number;
+}
+
 /**
  * Fit a polar view (projected metres; `scale` = CSS px per metre) around the rings,
- * leaving `insetTop` px free at the top for the map controls.
+ * leaving `insetTop` px free at the top for the map controls. When the fitted data would
+ * reach into the bottom-left `corner` box (the legend), the view moves beside or above
+ * it instead, whichever keeps the data larger.
  */
-export function fitPolarView(srs: PolarSrs, rings: [number, number][][], width: number, height: number, insetTop = 0): MapView {
-  const w = Math.max(1, width);
-  const h = Math.max(1, height - insetTop);
+export function fitPolarView(
+  srs: PolarSrs,
+  rings: [number, number][][],
+  width: number,
+  height: number,
+  insetTop = 0,
+  corner: CornerInset | null = null,
+): MapView {
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
@@ -385,17 +410,48 @@ export function fitPolarView(srs: PolarSrs, rings: [number, number][][], width: 
   }
   if (!Number.isFinite(x0)) [x0, y0, x1, y1] = [-1e6, -1e6, 1e6, 1e6];
   const pad = Math.max(1e5, 0.06 * Math.max(x1 - x0, y1 - y0));
-  const scale = Math.min(w / (x1 - x0 + 2 * pad), h / (y1 - y0 + 2 * pad));
   const cx = (x0 + x1) / 2;
   const cy = (y0 + y1) / 2;
-  const north = cy + h / 2 / scale + insetTop / scale;
-  return { west: cx - w / 2 / scale, east: cx + w / 2 / scale, north, south: north - height / scale, scale };
+  /** Fit the padded data into the frame minus `left` px on the left and `bottom` px at the bottom. */
+  const fitInto = (left: number, bottom: number): MapView => {
+    const w = Math.max(1, width - left);
+    const h = Math.max(1, height - insetTop - bottom);
+    const scale = Math.min(w / (x1 - x0 + 2 * pad), h / (y1 - y0 + 2 * pad));
+    const west = cx - (left + w / 2) / scale;
+    const north = cy + (insetTop + h / 2) / scale;
+    return { west, east: west + Math.max(1, width) / scale, north, south: north - height / scale, scale };
+  };
+  const base = fitInto(0, 0);
+  if (!corner || corner.width <= 0 || corner.height <= 0) return base;
+  // The data's (unpadded) bounding box in px of the centred fit.
+  const left = (x0 - base.west) * base.scale;
+  const right = (x1 - base.west) * base.scale;
+  const top = (base.north - y1) * base.scale;
+  const bottom = (base.north - y0) * base.scale;
+  const cornerTop = height - corner.height;
+  if (left >= corner.width || bottom <= cornerTop) return base;
+  const moved = (dx: number, dy: number): MapView => ({
+    ...base,
+    west: base.west - dx / base.scale,
+    east: base.east - dx / base.scale,
+    north: base.north - dy / base.scale,
+    south: base.south - dy / base.scale,
+  });
+  // Slide just clear of the corner (right, else up) at full size, else shrink beside or above it.
+  if (right + corner.width - left <= width) return moved(corner.width - left, 0);
+  if (top - (bottom - cornerTop) >= insetTop) return moved(0, bottom - cornerTop);
+  const beside = fitInto(corner.width, 0);
+  const above = fitInto(0, corner.height);
+  return beside.scale >= above.scale ? beside : above;
 }
 
-/** GBIF polar tiles (same 512 px grid for basemap and density) covering a polar view. */
-export function polarTilesForView(srs: PolarSrs, view: MapView): PlacedTile[] {
+/**
+ * GBIF polar tiles (same 512 px grid for basemap and density) covering a polar view, at
+ * the coarsest zoom (not below `minZoom`) that is as sharp as the view.
+ */
+export function polarTilesForView(srs: PolarSrs, view: MapView, minZoom = 0): PlacedTile[] {
   const extent = POLAR_EXTENT[srs];
-  let z = 0;
+  let z = Math.min(POLAR_MAX_ZOOM, minZoom);
   while (z < POLAR_MAX_ZOOM && (GBIF_TILE_SIZE * 2 ** z) / (2 * extent) < view.scale) z++;
   const n = 2 ** z;
   const span = (2 * extent) / n;

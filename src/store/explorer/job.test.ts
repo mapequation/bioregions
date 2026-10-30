@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RecordCleaner } from '../../sources/clean';
 import type { OccurrenceRecord, RecordBatch, SourceId } from '../../sources/types';
-import { LoadTally, SeededDedupe, etaSeconds, mergeBatches } from './job';
+import { LoadTally, PauseGate, SeededDedupe, etaSeconds, mergeBatches } from './job';
 
 const rec = (name: string, lon: number, lat: number, source: SourceId = 'gbif', extra: Partial<OccurrenceRecord> = {}) => ({
   name,
@@ -97,6 +97,58 @@ describe('LoadTally', () => {
     expect(t.yearRange).toEqual([1990, 2001]);
     expect(t.datasetTotal).toBe(2);
     expect(t.bySource).toEqual({ gbif: 2, obis: 1 });
+  });
+
+  it('snapshots the statistics of the accepted records', () => {
+    const t = new LoadTally();
+    t.add('gbif', [
+      rec('Aa bb', 1, 1, 'gbif', { datasetKey: 'd1', year: 1990, basisOfRecord: 'HUMAN_OBSERVATION', country: 'BR', uncertainty: 10 }),
+      rec('Aa bb', 2, 1, 'gbif', { datasetKey: 'd1', year: 1990, basisOfRecord: 'PRESERVED_SPECIMEN', country: 'BR', uncertainty: 30 }),
+      rec('Cc dd', 3, 1, 'gbif', { datasetKey: 'd2', year: 2001, basisOfRecord: 'HUMAN_OBSERVATION', country: 'PE' }),
+    ]);
+    t.add('obis', [rec('Cc dd', 4, 1, 'obis', { datasetKey: 'o1', basisOfRecord: 'HUMAN_OBSERVATION' })]);
+    const s = t.stats({ datasets: new Map([['d1', 'Dataset one']]), countries: new Map([['BR', 'Brasil']]) });
+    expect(s.total).toBe(4);
+    expect(s.basisOfRecord).toEqual([
+      { key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 3 },
+      { key: 'PRESERVED_SPECIMEN', label: 'Preserved specimen', count: 1 },
+    ]);
+    expect(s.datasets[0]).toEqual({ key: 'd1', label: 'Dataset one', count: 2, source: 'gbif' });
+    expect(s.datasets.map((d) => d.source)).toEqual(['gbif', 'gbif', 'obis']);
+    expect(s.years).toEqual([
+      { year: 1990, count: 2 },
+      { year: 2001, count: 1 },
+    ]);
+    expect(s.species).toEqual([
+      { key: 'Aa bb', label: 'Aa bb', count: 2 },
+      { key: 'Cc dd', label: 'Cc dd', count: 2 },
+    ]);
+    // Labels from the preview facets win; other codes get their English name.
+    expect(s.countries).toEqual([
+      { key: 'BR', label: 'Brasil', count: 2 },
+      { key: 'PE', label: 'Peru', count: 1 },
+    ]);
+    expect(s.withCountry).toEqual({ gbif: 3 });
+    expect(s.uncertainty).toEqual({ min: 10, max: 30, avg: 20 });
+  });
+});
+
+describe('PauseGate', () => {
+  it('holds waiters while closed and releases them on open', async () => {
+    const gate = new PauseGate();
+    expect(gate.wait()).toBeNull();
+    gate.close();
+    expect(gate.paused).toBe(true);
+    let passed = false;
+    void gate.wait()?.then(() => {
+      passed = true;
+    });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(passed).toBe(false);
+    gate.open();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(passed).toBe(true);
+    expect(gate.paused).toBe(false);
   });
 });
 

@@ -2,7 +2,7 @@ import { Badge, Box, Button, Flex, Grid, HStack, Icon, Menu, Progress, Spinner, 
 import { reaction } from 'mobx';
 import { observer } from 'mobx-react';
 import { useEffect, useRef, useState } from 'react';
-import { LuCheck, LuChevronDown, LuCircleX, LuMinimize2, LuPause, LuTrash2 } from 'react-icons/lu';
+import { LuCheck, LuChevronDown, LuCircleX, LuMinimize2, LuPause, LuPlay, LuSquare, LuTrash2 } from 'react-icons/lu';
 import type { SourceId } from '@/sources/types';
 import { useStore } from '@/store';
 import type { SourceProgress } from '@/store/explorer/types';
@@ -120,26 +120,53 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
   );
 }
 
+/** Optional pause API on the store (added alongside this menu; guarded until every path has it). */
+interface PausableStore {
+  pauseLoad?: () => void;
+  resumeLoad?: () => void;
+}
+
+type CancelChoice = 'keep' | 'continue' | 'discard';
+
 const CancelMenu = observer(function CancelMenu() {
   const { explorerStore: ex } = useStore();
+  const pausable = ex as unknown as PausableStore;
   const [open, setOpen] = useState(false);
-  const job = ex.job;
-  const accepted = job?.funnel.accepted ?? 0;
-  const speciesDone = job?.perSource.reduce((sum, p) => sum + (p.speciesDone ?? 0), 0) ?? 0;
-  const speciesTotal = job?.perSource.reduce((sum, p) => sum + (p.speciesTotal ?? 0), 0) ?? 0;
-  const storeCoverage = (job as { speciesCoverage?: number | null } | null)?.speciesCoverage;
-  const coverage = storeCoverage ?? (speciesTotal > 0 ? speciesDone / speciesTotal : null);
-  // With under half the species loaded, the partial dataset is mostly missing: discard first.
-  const discardFirst = coverage != null && coverage < 0.5;
-  const preferred = discardFirst || accepted === 0 ? 'discard' : 'keep';
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  // Set when an item is chosen, so closing the menu by its choice does not also resume.
+  const chose = useRef(false);
+  const job = ex.job;
+  // The load is paused while the menu is open, so these counts are what "Keep" keeps.
+  const accepted = job?.funnel.accepted ?? 0;
+  // Species with at least one kept record (what the loaded panel counts after a keep);
+  // falls back to the streams' finished-species counts.
+  const speciesDone = job?.speciesLoaded ?? job?.perSource.reduce((sum, p) => sum + (p.speciesDone ?? 0), 0) ?? 0;
+  const speciesTotal =
+    job?.speciesPlanned ?? job?.perSource.reduce((sum, p) => sum + (p.speciesTotal ?? 0), 0) ?? 0;
+  const coverage = job?.speciesCoverage ?? (speciesTotal > 0 ? speciesDone / speciesTotal : null);
+  // With under half the species loaded, the partial dataset is mostly missing: discard by default.
+  const discardFirst = coverage != null && coverage < 0.5;
+  const preferred: CancelChoice = discardFirst || accepted === 0 ? 'discard' : 'keep';
   const preferredRef = useRef(preferred);
   preferredRef.current = preferred;
+
+  const openMenu = useRef(() => {});
+  openMenu.current = () => {
+    chose.current = false;
+    pausable.pauseLoad?.call(ex);
+    setOpen(true);
+    setHighlighted(preferredRef.current);
+  };
+  const closeMenu = () => {
+    setOpen(false);
+    // Closed with Esc or a click outside: carry on loading.
+    queueMicrotask(() => {
+      if (!chose.current) pausable.resumeLoad?.call(ex);
+    });
+  };
+
   useEffect(() => {
-    const onEvent = () => {
-      setOpen(true);
-      setHighlighted(preferredRef.current);
-    };
+    const onEvent = () => openMenu.current();
     window.addEventListener(CANCEL_MENU_EVENT, onEvent);
     // Esc while streaming: the dialog bumps explorerUi.cancelMenuRequest.
     const stop = reaction(() => explorerUi.cancelMenuRequest, onEvent);
@@ -148,32 +175,8 @@ const CancelMenu = observer(function CancelMenu() {
       stop();
     };
   }, []);
-  const keepItem = (
-    <Menu.Item key="keep" value="keep" disabled={accepted === 0}>
-      <Icon as={LuCheck} />
-      <Box flex="1" fontVariantNumeric="tabular-nums">
-        Keep {fmtInt(accepted)} records
-        {speciesTotal > 0 ? ` (${fmtInt(speciesDone)} of ${fmtInt(speciesTotal)} species)` : ''}
-        {discardFirst && (
-          <Text as="span" display="block" textStyle="xs" color="fg.muted">
-            Too few species for representative bioregions
-          </Text>
-        )}
-      </Box>
-    </Menu.Item>
-  );
-  const discardItem = (
-    <Menu.Item
-      key="discard"
-      value="discard"
-      colorPalette="red"
-      color="colorPalette.fg"
-      _highlighted={{ bg: 'colorPalette.subtle', color: 'colorPalette.fg' }}
-    >
-      <Icon as={LuTrash2} />
-      <Box flex="1">Discard and restore previous data</Box>
-    </Menu.Item>
-  );
+
+  const speciesText = speciesTotal > 0 ? ` (${fmtInt(speciesDone)} of ${fmtInt(speciesTotal)} species)` : '';
   return (
     <Menu.Root
       // Mount the portalled content on open: the explorer dialog aria-hides body children present when it opens.
@@ -181,25 +184,51 @@ const CancelMenu = observer(function CancelMenu() {
       unmountOnExit
       open={open}
       onOpenChange={(e) => {
-        setOpen(e.open);
-        // The default item is highlighted on open, so Enter picks it.
-        if (e.open) setHighlighted(preferred);
+        if (e.open) openMenu.current();
+        else closeMenu();
       }}
       highlightedValue={highlighted}
       onHighlightChange={(e) => setHighlighted(e.highlightedValue)}
       positioning={{ placement: 'top-end' }}
       onSelect={(e) => {
-        if (e.value === 'keep' || e.value === 'discard') ex.cancel(e.value);
+        chose.current = true;
+        if (e.value === 'continue') pausable.resumeLoad?.call(ex);
+        else if (e.value === 'keep' || e.value === 'discard') ex.cancel(e.value);
       }}
     >
       <Menu.Trigger asChild>
-        <Button size="xs" variant="outline" data-testid="cancel-load">
+        <Button size="sm" variant="outline" data-testid="cancel-load">
           Cancel load <LuChevronDown />
         </Button>
       </Menu.Trigger>
       <Menu.Positioner>
-        <Menu.Content minW="18rem">
-          {discardFirst ? [discardItem, keepItem] : [keepItem, discardItem]}
+        <Menu.Content minW="20rem" maxW="26rem" data-testid="cancel-menu">
+          <Menu.Item value="keep" disabled={accepted === 0} data-testid="cancel-keep">
+            <Icon as={LuSquare} />
+            <Box flex="1" fontVariantNumeric="tabular-nums">
+              Keep {fmtInt(accepted)} records{speciesText} and stop
+              {discardFirst && (
+                <Text as="span" display="block" textStyle="xs" color="fg.muted">
+                  Too few species for representative bioregions
+                </Text>
+              )}
+            </Box>
+          </Menu.Item>
+          <Menu.Item value="continue" data-testid="cancel-continue">
+            <Icon as={LuPlay} />
+            <Box flex="1">Continue loading</Box>
+          </Menu.Item>
+          <Menu.Separator />
+          <Menu.Item
+            value="discard"
+            colorPalette="red"
+            color="colorPalette.fg"
+            _highlighted={{ bg: 'colorPalette.subtle', color: 'colorPalette.fg' }}
+            data-testid="cancel-discard"
+          >
+            <Icon as={LuTrash2} />
+            <Box flex="1">Discard and restore previous data</Box>
+          </Menu.Item>
         </Menu.Content>
       </Menu.Positioner>
     </Menu.Root>
@@ -244,12 +273,35 @@ export default observer(function LoadProgress() {
       ? job.perSource.filter((p) => !hasWork(p)).map((p) => p.source)
       : (['gbif', 'obis'] as SourceId[]).filter((id) => ex.query.sources[id] && hasPreview(id) && previewEmpty(id));
 
+  // Sources switched off are "off"; an enabled source with nothing to fetch had no matching records.
+  const off: SourceId[] = (['gbif', 'obis'] as SourceId[]).filter(
+    (id) => !ex.query.sources[id] && !job.perSource.some((p) => p.source === id && hasWork(p)),
+  );
+  const idleNote = [
+    ...idle.filter((id) => !off.includes(id)).map((id) => `${SOURCE_LABEL[id]}: ${idleReason(id)}`),
+    ...off.map((id) => `${SOURCE_LABEL[id]}: off`),
+  ].join(' · ');
+  const paused = (job as { paused?: boolean }).paused === true;
+  // Same words as the source chip: OBIS knows none of the taxa vs. a query with no records.
+  function idleReason(id: SourceId): string {
+    const taxa = ex.query.taxa;
+    const gbifOnly =
+      id === 'obis' &&
+      taxa.length > 0 &&
+      taxa.every((t) => t.obisId == null || ex.sources.obis.gbifOnlyTaxa.includes(t.name));
+    return gbifOnly ? 'no records for these taxa' : 'no matching records';
+  }
+
   return (
     <Flex direction="column" gap={2} minH="7.25rem" data-testid="load-progress" aria-busy={active}>
       <HStack gap={3} minW={0}>
-        <Spinner size="xs" color="colorPalette.solid" flexShrink={0} />
-        <Text fontSize="sm" fontWeight="semibold" truncate minW={0} flex="1">
-          {job.state === 'planning' ? 'Planning' : 'Loading'} “{job.label}”
+        {paused ? (
+          <Icon as={LuPause} boxSize={3} color="fg.muted" flexShrink={0} aria-hidden />
+        ) : (
+          <Spinner size="xs" color="colorPalette.solid" flexShrink={0} />
+        )}
+        <Text fontSize="sm" fontWeight="semibold" truncate minW={0} flex="1" data-state={paused ? 'paused' : undefined}>
+          {job.state === 'planning' ? 'Planning' : paused ? 'Paused' : 'Loading'} “{job.label}”
         </Text>
         <Text fontSize="xs" color="fg.muted" fontVariantNumeric="tabular-nums" flexShrink={0}>
           {fmtDuration(elapsed)} elapsed
@@ -259,7 +311,7 @@ export default observer(function LoadProgress() {
           {job.etaSeconds != null ? `~${fmtDuration(job.etaSeconds)} left` : 'estimating time left'}
         </Text>
         <HStack gap={1.5} flexShrink={0}>
-          <Button size="xs" variant="ghost" onClick={() => ex.setMinimized(true)}>
+          <Button size="sm" variant="ghost" onClick={() => ex.setMinimized(true)}>
             <LuMinimize2 /> Minimize
           </Button>
           <CancelMenu />
@@ -275,9 +327,9 @@ export default observer(function LoadProgress() {
           <SourceRow key={p.source} p={p} now={now} />
         ))}
       </Grid>
-      {idle.length > 0 && (
+      {idleNote && (
         <Text fontSize="xs" color="fg.muted" data-testid="load-progress-idle">
-          {idle.map((id) => SOURCE_LABEL[id]).join(', ')}: not queried (no matching records)
+          {idleNote}
         </Text>
       )}
       <VisuallyHidden aria-live="polite">{announcement}</VisuallyHidden>

@@ -5,6 +5,7 @@ import { LuCircleCheck, LuExternalLink, LuFileDown } from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { fmtInt } from '../format';
 import { downloadText, normalizeDoi } from './citeHelpers';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 
 export const DERIVED_DATASET_REGISTER_URL = 'https://www.gbif.org/derived-dataset/register';
 
@@ -55,8 +56,7 @@ export default observer(function DerivedDatasetCard() {
       <Step title="1 · Download counts">
         <Flex gap={3} align="center" wrap="wrap">
           <Button
-            size="sm"
-            variant="outline"
+            {...secondaryButtonProps}
             data-testid="derived-csv"
             disabled={noGbif}
             onClick={() => downloadText('gbif-derived-dataset.csv', csv, 'text/csv')}
@@ -73,7 +73,7 @@ export default observer(function DerivedDatasetCard() {
       </Step>
       <Step title="2 · Register">
         <Flex gap={3} align="center" wrap="wrap">
-          <Button size="sm" variant="outline" asChild>
+          <Button {...secondaryButtonProps} asChild>
             <a href={DERIVED_DATASET_REGISTER_URL} target="_blank" rel="noopener noreferrer">
               Open GBIF registration
               <LuExternalLink />
@@ -106,7 +106,7 @@ export default observer(function DerivedDatasetCard() {
               onBlur={() => setTouched(true)}
               disabled={noGbif}
             />
-            <Button size="sm" type="submit" disabled={noGbif || !normalized || isSaved}>
+            <Button {...primaryButtonProps} type="submit" disabled={noGbif || !normalized || isSaved}>
               Save
             </Button>
           </HStack>

@@ -312,12 +312,20 @@ describe('GBIF download zip checks', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
     const other = { ...sameAsGbif, predicates: [...sameAsGbif.predicates.slice(0, 3), { type: 'equals', key: 'TAXON_KEY', value: '2436436' }] };
     const r = await checkDownload('k', query(), undefined, async (key) => ({ key, status: 'SUCCEEDED', request: { predicate: other } }));
-    expect(r).toMatchObject({ match: 'mismatch', differences: ['taxa'], text: 'GBIF taxon 2436436 · lon -118 to -34, lat -56 to 33 · 1970–2025' });
+    expect(r).toMatchObject({ match: 'mismatch', differences: ['taxa'], text: 'unknown taxon (key 2436436) · lon -118 to -34, lat -56 to 33 · 1970–2025' });
     const failed = await checkDownload('k', query(), undefined, async () => {
       throw new TypeError('Failed to fetch');
     });
     expect(failed.match).toBe('unknown');
     fetchSpy.mockRestore();
+  });
+
+  it('names alphanumeric checklist keys through the resolver', async () => {
+    const other = { ...sameAsGbif, predicates: [...sameAsGbif.predicates.slice(0, 3), { type: 'equals', key: 'TAXON_KEY', value: '935Y2' }] };
+    const names = vi.fn(async (keys: string[]) => new Map(keys.map((k) => [k, k === '935Y2' ? 'Helleborus torquatus' : k])));
+    const r = await checkDownload('k', query(), undefined, async (key) => ({ key, status: 'SUCCEEDED', request: { predicate: other } }), names);
+    expect(names).toHaveBeenCalledWith(['935Y2'], expect.anything());
+    expect(r.text).toBe('Helleborus torquatus · lon -118 to -34, lat -56 to 33 · 1970–2025');
   });
 
   it('only replaces or cites with a matching download', () => {
@@ -328,7 +336,7 @@ describe('GBIF download zip checks', () => {
     expect(mismatch.note).not.toContain('GBIF changed');
     const match = zipVerdict({ ...base, accepted: 12_000, check: { match: 'match', differences: [] } });
     expect(match).toMatchObject({ queryMatch: 'match', canReplace: true, canCiteDoi: true });
-    expect(match.note).toContain('GBIF changed between the two snapshots: 12,000 records after cleaning here, 12,094 GBIF records on screen');
+    expect(match.note).toContain('GBIF changed between the two snapshots: 12,000 records after cleaning here, 12,094 GBIF records loaded on screen');
     expect(zipVerdict({ ...base, check: { match: 'match', differences: [] } })).toMatchObject({ canReplace: false, canCiteDoi: true });
     const unknown = zipVerdict({ ...base, accepted: 10, check: { match: 'unknown', differences: [], failure: 'offline' } });
     expect(unknown).toMatchObject({ queryMatch: 'unknown', canReplace: false, canCiteDoi: false });

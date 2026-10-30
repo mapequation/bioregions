@@ -3,7 +3,8 @@ import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
 import { LuCircleAlert, LuCircleCheck, LuMap, LuPlay, LuQuote, LuRotateCw, LuTriangleAlert } from 'react-icons/lu';
 import { useStore } from '@/store';
-import { fmtInt } from '../format';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
+import { fmtInt, fmtTime, fmtTimestamp } from '../format';
 import {
   acceptedOf,
   EMPTY_REASON_TEXT,
@@ -14,21 +15,16 @@ import {
   loadDrops,
   loadStory,
   notReceivedOf,
-  PARTIAL_BIAS,
   PREVIOUS_KEPT,
   partialSummary,
 } from '../preview/cleaningSteps';
+import { partialExplanation } from './partialText';
 
 const Sep = () => (
   <Box as="span" aria-hidden color="fg.muted" mx={1.5}>
     ·
   </Box>
 );
-
-function timeOf(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-}
 
 /** Shown instead of the success panel when a load kept no records: why, and that nothing was replaced. */
 const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reason: EmptyReason; previousKept?: boolean }) {
@@ -57,7 +53,7 @@ const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reas
         </Text>
         <Box>
           {retry && (
-            <Button size="sm" variant="outline" bg="bg" colorPalette="gray" onClick={() => ex.load()}>
+            <Button {...secondaryButtonProps} onClick={() => ex.load()}>
               <LuRotateCw /> Load again
             </Button>
           )}
@@ -92,7 +88,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const sources = Object.values(last.funnel.bySource).filter((s) => (s?.accepted ?? 0) > 0).length;
   const computing = infomapStore.isRunning || speciesStore.isLoading;
   const regions = infomapStore.numBioregions;
-  const time = timeOf(last.retrievedAt);
+  const time = fmtTime(last.retrievedAt);
   const partial = last.partial;
   const skipped = (last as { bioregionsSkipped?: boolean }).bioregionsSkipped === true;
   const runAnyway = (ex as { runBioregionsAnyway?: () => void }).runBioregionsAnyway;
@@ -113,6 +109,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
     // A cancelled load stops part-way: the rest was never received, not removed.
     cancelled: notReceivedOf(last),
     dedupeLabel,
+    partial: last.partial,
   });
   const story =
     matching != null && matching > 0 && last.mode !== 'add' ? loadStory({ matching, notSpecies, lowCount, drops }) : null;
@@ -121,7 +118,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   return (
     <Flex direction="column" gap={2} data-testid="loaded-panel" data-state={partial ? 'partial' : 'complete'}>
       <Grid
-        templateColumns="auto minmax(0, 1fr) auto"
+        templateColumns="auto minmax(0, 1fr)"
         columnGap={3}
         rowGap={0.5}
         alignItems="center"
@@ -145,41 +142,41 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
           mt="4px"
           aria-hidden
         />
-        <HStack gap={2} minW={0} align="baseline">
-          <Text fontSize="md" fontWeight="semibold" color="fg" truncate>
-            {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(records)} records
-          </Text>
-          {time && (
-            <Text as="span" title={last.retrievedAt} fontSize="xs" color="fg.muted" flexShrink={0}>
-              at {time}
+        {/* Title and actions share a row and wrap rather than truncate the title in a narrow panel. */}
+        <Flex gridColumn="2 / -1" align="center" columnGap={3} rowGap={1.5} wrap="wrap" minW={0}>
+          <HStack gap={2} minW={0} align="baseline" flex="1 0 auto">
+            <Text fontSize="md" fontWeight="semibold" color="fg">
+              {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(records)} records
             </Text>
-          )}
-        </HStack>
-        {/* Actions stay neutral, not in the panel's status colour (brand has no border token). */}
-        <HStack gap={2} flexShrink={0} colorPalette="gray">
-          {extra}
-          <Button size="sm" variant="outline" bg="bg" onClick={() => ex.setTab('cite')}>
-            <LuQuote /> Cite this data
-          </Button>
-          <Button
-            size="sm"
-            variant={partial ? 'outline' : 'solid'}
-            colorPalette={partial ? 'gray' : 'brand'}
-            bg={partial ? 'bg' : undefined}
-            onClick={() => ex.close()}
-            data-testid="view-bioregions"
-          >
-            <LuMap /> View bioregions
-          </Button>
-        </HStack>
+            {time && (
+              <Text as="span" title={fmtTimestamp(last.retrievedAt)} fontSize="xs" color="fg.muted" flexShrink={0}>
+                at {time}
+              </Text>
+            )}
+          </HStack>
+          {/* Actions stay neutral, not in the panel's status colour (brand has no border token). */}
+          <HStack gap={2} flexShrink={0} colorPalette="gray" ms="auto">
+            {extra}
+            <Button {...secondaryButtonProps} onClick={() => ex.setTab('cite')}>
+              <LuQuote /> Cite this data
+            </Button>
+            <Button
+              {...(partial ? secondaryButtonProps : primaryButtonProps)}
+              onClick={() => ex.close()}
+              data-testid="view-bioregions"
+            >
+              <LuMap /> View bioregions
+            </Button>
+          </HStack>
+        </Flex>
         {partial && (
           <Text gridColumn="2 / -1" fontSize="sm" color="fg" data-testid="loaded-partial">
             <Box as="span" fontWeight="semibold">
               Partial dataset:
             </Box>{' '}
             {partialSummary(partial)}{' '}
-            <Box as="span" color="fg.muted">
-              {PARTIAL_BIAS}
+            <Box as="span" color="fg.muted" data-testid="loaded-partial-reason">
+              {partialExplanation(partial)}
             </Box>
           </Text>
         )}
@@ -211,7 +208,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
               Bioregions not computed for a partial dataset{coverage}.
             </Text>
             {runAnyway && (
-              <Button size="sm" variant="outline" bg="bg" colorPalette="gray" onClick={() => runAnyway.call(ex)}>
+              <Button {...secondaryButtonProps} onClick={() => runAnyway.call(ex)}>
                 <LuPlay /> Run anyway
               </Button>
             )}

@@ -1,9 +1,11 @@
 import { Alert, Box, Button, Flex, Grid, HStack, Link, Progress, Text } from '@chakra-ui/react';
+import { runInAction } from 'mobx';
 import { observer } from 'mobx-react';
-import { LuExternalLink, LuFileArchive } from 'react-icons/lu';
+import { LuExternalLink, LuFileArchive, LuSend, LuX } from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { FileUploadDropzone, FileUploadRoot } from '../../ui/file-upload';
 import type { ZipImport } from '../../../store/explorer/types';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt, fmtPct } from '../format';
 
 /** Fields the store adds to a ready zip import (optional until every store path sets them). */
@@ -13,32 +15,53 @@ type ZipDetails = ZipImport & {
   queryMatch?: 'match' | 'mismatch' | 'unknown';
   downloadQueryText?: string;
   streamGbifRecords?: number | null;
+  /** GBIF records of the stream on screen before and after cleaning (added with clearZip). */
+  streamGbifReceived?: number | null;
+  streamGbifLoaded?: number | null;
   canReplace?: boolean;
   canCiteDoi?: boolean;
   note?: string;
 };
 
-function Figure({ label, value, emphasis }: { label: string; value: number | null; emphasis?: boolean }) {
+function Cell({ value, emphasis }: { value: number | null; emphasis?: boolean }) {
   return (
-    <Box>
-      <Text fontSize="xs" color="fg.muted">
-        {label}
-      </Text>
-      <Text
-        fontSize="md"
-        fontWeight={emphasis ? 'semibold' : 'medium'}
-        fontVariantNumeric="tabular-nums"
-        color={value == null ? 'fg.muted' : 'fg'}
-      >
-        {value == null ? '–' : fmtInt(value)}
-      </Text>
-    </Box>
+    <Text
+      fontSize="sm"
+      textAlign="end"
+      fontWeight={emphasis ? 'semibold' : 'normal'}
+      fontVariantNumeric="tabular-nums"
+      color={value == null ? 'fg.muted' : 'fg'}
+    >
+      {value == null ? '–' : fmtInt(value)}
+    </Text>
   );
 }
 
+const ColumnHead = ({ children }: { children: string }) => (
+  <Text fontSize="xs" color="fg.muted" textAlign="end">
+    {children}
+  </Text>
+);
+
+const RowHead = ({ children }: { children: string }) => (
+  <Text fontSize="sm" color="fg.muted" truncate>
+    {children}
+  </Text>
+);
+
+export interface ZipDropzoneProps {
+  /** Opens the download request dialog for the current query. */
+  onRequest?: () => void;
+}
+
 /** Drop zone for the official GBIF download zip, with the zip-vs-stream comparison. */
-export default observer(function ZipDropzone() {
+export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
   const { explorerStore } = useStore();
+  const removeZip = () => {
+    const store = explorerStore as unknown as { clearZip?: () => void };
+    if (store.clearZip) store.clearZip();
+    else runInAction(() => (explorerStore.zipImport = null));
+  };
   const zip = explorerStore.zipImport;
   const lastLoad = explorerStore.lastLoad;
   const streamed = lastLoad?.funnel.accepted ?? null;
@@ -78,7 +101,9 @@ export default observer(function ZipDropzone() {
     const accepted = zip.funnel.accepted;
     const mismatch = z.queryMatch === 'mismatch';
     // Compare with the GBIF part of the stream only: OBIS records are not in a GBIF download.
-    const gbifStreamed = z.streamGbifRecords ?? lastLoad?.funnel.bySource.gbif?.accepted ?? null;
+    const gbifStreamed =
+      z.streamGbifLoaded ?? z.streamGbifRecords ?? lastLoad?.funnel.bySource.gbif?.accepted ?? null;
+    const gbifReceived = z.streamGbifReceived ?? lastLoad?.funnel.bySource.gbif?.received ?? null;
     const obisStreamed = lastLoad?.funnel.bySource.obis?.accepted ?? 0;
     const hasStream = lastLoad != null;
     const diff = gbifStreamed != null ? accepted - gbifStreamed : null;
@@ -101,8 +126,8 @@ export default observer(function ZipDropzone() {
     }
     return (
       <Box data-testid="zip-dropzone" borderWidth="1px" borderColor="border" rounded="md" px={4} py={3.5}>
-        <HStack gap={2} fontSize="sm" mb={3} minW={0}>
-          <LuFileArchive aria-hidden />
+        <HStack gap={2} fontSize="sm" mb={z.downloadQueryText && !mismatch ? 1 : 3} minW={0}>
+          <LuFileArchive aria-hidden style={{ flexShrink: 0 }} />
           <Text truncate fontWeight="medium" title={zip.fileName} minW={0}>
             {zip.fileName}
           </Text>
@@ -112,6 +137,14 @@ export default observer(function ZipDropzone() {
             </Text>
           )}
         </HStack>
+        {z.downloadQueryText && !mismatch && (
+          <Text fontSize="xs" color="fg.muted" mb={3} wordBreak="break-word" data-testid="zip-query">
+            Download query:{' '}
+            <Box as="span" color="fg">
+              {z.downloadQueryText}
+            </Box>
+          </Text>
+        )}
         {mismatch && (
           <Alert.Root status="error" size="sm" variant="subtle" mb={3} role="alert" data-testid="zip-mismatch">
             <Alert.Indicator />
@@ -124,13 +157,30 @@ export default observer(function ZipDropzone() {
           </Alert.Root>
         )}
         <Text srOnly>
-          Zip: {fmtInt(received)} received, {fmtInt(accepted)} accepted
-          {gbifStreamed != null ? ` (GBIF records streamed: ${fmtInt(gbifStreamed)})` : ''}
+          Official zip: {fmtInt(received)} received, {fmtInt(accepted)} after cleaning.
+          {hasStream
+            ? ` GBIF stream: ${gbifReceived != null ? `${fmtInt(gbifReceived)} received, ` : ''}${
+                gbifStreamed != null ? fmtInt(gbifStreamed) : 'unknown'
+              } loaded after cleaning.`
+            : ''}
         </Text>
-        <Grid templateColumns="repeat(3, minmax(0, 1fr))" gap={4} aria-hidden>
-          <Figure label="Zip received" value={received} />
-          <Figure label="Zip accepted" value={accepted} emphasis />
-          <Figure label="GBIF streamed" value={hasStream ? gbifStreamed : null} />
+        <Grid
+          templateColumns="minmax(0, 1fr) minmax(5.5rem, auto) minmax(9rem, auto)"
+          columnGap={4}
+          rowGap={1}
+          alignItems="baseline"
+          aria-hidden
+          data-testid="zip-figures"
+        >
+          <Box />
+          <ColumnHead>Received</ColumnHead>
+          <ColumnHead>Loaded (after cleaning)</ColumnHead>
+          <RowHead>Official zip</RowHead>
+          <Cell value={received} />
+          <Cell value={accepted} emphasis />
+          <RowHead>GBIF stream on screen</RowHead>
+          <Cell value={hasStream ? gbifReceived : null} />
+          <Cell value={hasStream ? gbifStreamed : null} emphasis />
         </Grid>
         {comparison && (
           <Text fontSize="xs" color="fg.muted" mt={2} fontVariantNumeric="tabular-nums" data-testid="zip-comparison">
@@ -165,18 +215,43 @@ export default observer(function ZipDropzone() {
             {z.note}
           </Text>
         )}
-        <Flex gap={2} mt={3.5} wrap="wrap">
-          <Button size="sm" disabled={!canReplace} onClick={() => explorerStore.applyZip('replace')}>
+        <Flex gap={2} mt={3.5} wrap="wrap" align="center">
+          <Button
+            {...primaryButtonProps}
+            disabled={!canReplace}
+            onClick={() => explorerStore.applyZip('replace')}
+            data-testid="zip-replace"
+          >
             {hasStream ? 'Replace with official download' : 'Load official download'}
           </Button>
           {hasStream && (
             <Button
-              size="sm"
-              variant="outline"
+              {...secondaryButtonProps}
               disabled={!canCite}
               onClick={() => explorerStore.applyZip('keepStreamCiteDoi')}
+              data-testid="zip-keep-cite"
             >
               Keep streamed, cite DOI
+            </Button>
+          )}
+          <Button {...secondaryButtonProps} onClick={removeZip} data-testid="zip-remove">
+            <LuX />
+            Remove this zip
+          </Button>
+          {z.queryMatch !== 'match' && onRequest && (
+            <Button
+              size="sm"
+              variant="plain"
+              color="colorPalette.fg"
+              textDecoration="underline"
+              textUnderlineOffset="2px"
+              px={1}
+              focusVisibleRing="outside"
+              onClick={onRequest}
+              data-testid="zip-request-download"
+            >
+              <LuSend />
+              Request a download for this query
             </Button>
           )}
         </Flex>

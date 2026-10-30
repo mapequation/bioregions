@@ -5,12 +5,12 @@ import { LuCircleMinus } from 'react-icons/lu';
 import { ALL_BASIS, BASIS_LABELS, issueLabel } from '../../../sources';
 import type { BasisOfRecord, FacetBucket, SourceId } from '../../../sources/types';
 import { useStore } from '../../../store';
-import { mergeBuckets } from '../../../store/ExplorerStore';
 import { PopoverArrow, PopoverBody, PopoverContent, PopoverRoot, PopoverTrigger } from '../../ui/popover';
+import { Tooltip } from '../../ui/tooltip';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
 import { sectionHeading } from './BiasPanel';
-import { insightsScope, ScopeLine } from './ScopeLine';
+import { INSIGHTS_POSITIONING, INSIGHTS_TIP_PROPS, insightsScope, ScopeLine } from './ScopeLine';
 
 const COLLAPSED = 5;
 
@@ -36,12 +36,50 @@ interface ShareListProps {
   title: string;
   items: Item[];
   denom: number;
-  /** Note under the title, e.g. "GBIF only". */
+  /** Note beside the title, e.g. "GBIF · can overlap". */
   note?: string;
+  /** Tooltip explaining the note. */
+  noteTip?: string;
+  /** What the counts are (the confirm popover): the query preview or the loaded dataset. */
+  loaded?: boolean;
   exclude?: Exclude;
   highlight?: boolean;
   empty: string;
   footer?: ReactNode;
+}
+
+/** Muted note beside a list title; with a tip it is focusable and explains itself in a tooltip. */
+function Note({ text, tip }: { text: string; tip?: string }) {
+  if (!tip) {
+    return (
+      <Text textStyle="xs" color="fg.muted" whiteSpace="nowrap" flexShrink={0}>
+        {text}
+      </Text>
+    );
+  }
+  return (
+    <Tooltip content={tip} openDelay={300} positioning={INSIGHTS_POSITIONING} contentProps={INSIGHTS_TIP_PROPS}>
+      <Text
+        as="span"
+        tabIndex={0}
+        textStyle="xs"
+        color="fg.muted"
+        whiteSpace="nowrap"
+        flexShrink={0}
+        cursor="help"
+        textDecoration="underline dotted"
+        textUnderlineOffset="2px"
+        rounded="sm"
+        outline="none"
+        _focusVisible={{ outline: '2px solid', outlineColor: 'colorPalette.focusRing' }}
+      >
+        {text}
+        <Box as="span" srOnly>
+          : {tip}
+        </Box>
+      </Text>
+    </Tooltip>
+  );
 }
 
 const ShareList = observer(function ShareList({
@@ -50,6 +88,8 @@ const ShareList = observer(function ShareList({
   items,
   denom,
   note,
+  noteTip,
+  loaded,
   exclude,
   highlight,
   empty,
@@ -84,11 +124,7 @@ const ShareList = observer(function ShareList({
             </Text>
           )}
         </Text>
-        {note && (
-          <Text textStyle="xs" color="fg.muted">
-            {note}
-          </Text>
-        )}
+        {note && <Note text={note} tip={noteTip} />}
       </HStack>
       {items.length === 0 ? (
         <Text textStyle="xs" color="fg.muted" pb={1}>
@@ -155,7 +191,7 @@ const ShareList = observer(function ShareList({
                   <PopoverRoot
                     open={open}
                     onOpenChange={(e) => setConfirm(e.open ? item.key : null)}
-                    positioning={{ placement: 'left-start', gutter: 8 }}
+                    positioning={{ ...INSIGHTS_POSITIONING, placement: 'left-start' }}
                     initialFocusEl={() => confirmRef.current}
                     lazyMount
                     unmountOnExit
@@ -191,11 +227,11 @@ const ShareList = observer(function ShareList({
                           Exclude <b>{item.label}</b> {exclude.scope(item)}?
                         </Text>
                         <Text textStyle="xs" color="fg.muted" mb={3} fontVariantNumeric="tabular-nums">
-                          Removes about{' '}
+                          {loaded ? 'The loaded dataset has ' : 'Removes about '}
                           <Box as="span" whiteSpace="nowrap">
-                            {fmtInt(item.count)} records ({fmtPct(share)})
+                            {fmtInt(item.count)} such records ({fmtPct(share)})
                           </Box>
-                          . Undo it in the decision ledger.
+                          {loaded ? '; this applies from the next load.' : '.'} Undo it in the decision ledger.
                         </Text>
                         <HStack gap={2} justify="flex-end">
                           <Button size="xs" variant="ghost" onClick={() => setConfirm(null)}>
@@ -246,31 +282,34 @@ const ShareList = observer(function ShareList({
   );
 });
 
-function weightedUncertainty(previews: { total: number; uncertainty: { avg: number; max: number } | null }[]) {
-  let w = 0;
-  let sum = 0;
-  let max = 0;
-  for (const p of previews) {
-    if (!p.uncertainty || p.total <= 0) continue;
-    w += p.total;
-    sum += p.uncertainty.avg * p.total;
-    max = Math.max(max, p.uncertainty.max);
-  }
-  return w > 0 ? { avg: sum / w, max } : null;
-}
+const OVERLAP_TIP = 'A record can carry several issues, so the shares can add up to more than 100 %.';
 
 const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10_000 ? 0 : 1)} km` : `${Math.round(m)} m`);
 
-/** Basis, datasets, species, countries and issues of the current preview as share lists. */
+/** One facet's buckets with their denominator, and whether it fell back to the query preview. */
+interface Facet<T> {
+  items: T;
+  denom: number;
+  /** The scope is the loaded dataset but this facet is the query's (not available after a load). */
+  fromQuery: boolean;
+}
+
+const FOR_QUERY = 'for the query';
+
+/** Basis, datasets, species, countries and issues of the insights scope (query or loaded data) as share lists. */
 export default observer(function CompositionPanel() {
   const { explorerStore: ex } = useStore();
   const state = ex.previewState;
   const previews = ex.previews;
-  const total = previews.reduce((s, p) => s + p.total, 0);
   const gbif = previews.find((p) => p.source === 'gbif');
   const quality = ex.query.quality;
   const excluded = quality.excludeDatasets ?? [];
   const allowedBasis = quality.basisOfRecord.length > 0 ? quality.basisOfRecord : ALL_BASIS;
+  const comp = ex.composition;
+  const scopeKind = comp.scopeKind;
+  const total = comp.total;
+  const onLoaded = scopeKind !== 'query';
+  const onlyGbif = previews.length > 0 && previews.every((p) => p.source === 'gbif');
 
   const [highlight, setHighlight] = useState(false);
   const countriesRef = useRef<HTMLDivElement>(null);
@@ -288,23 +327,42 @@ export default observer(function CompositionPanel() {
     return () => clearTimeout(t);
   }, [focus, ex]);
 
-  const basis: Item[] = mergeBuckets(previews.map((p) => p.basisOfRecord)).map((b) => ({
+  const inScope = <T,>(items: T): Facet<T> => ({ items, denom: total, fromQuery: false });
+  // Dataset buckets carry no source: tag each with the source whose preview lists it (GBIF
+  // ones can be excluded, others get a badge). While previewing, keep each source's own list.
+  const sourceOf = new Map<string, SourceId>();
+  for (const p of previews) for (const d of p.topDatasets) if (!sourceOf.has(d.key)) sourceOf.set(d.key, p.source);
+  const datasets: Facet<(FacetBucket & { source?: SourceId })[]> = inScope(
+    onLoaded
+      ? comp.topDatasets.map((b) => ({ ...b, source: sourceOf.get(b.key) }))
+      : previews.flatMap((p) => p.topDatasets.map((b) => ({ ...b, source: p.source }))),
+  );
+  const basis = inScope(comp.basisOfRecord);
+  const species = inScope(comp.topSpecies);
+  const countries = inScope(comp.countries);
+  // GBIF issues are not streamed with the records: after a load, show the query's, labelled.
+  const issuesFromQuery = onLoaded && comp.issues.length === 0 && gbif != null;
+  const issues: Facet<FacetBucket[]> = issuesFromQuery
+    ? { items: gbif.issues, denom: gbif.total, fromQuery: true }
+    : { items: comp.issues, denom: onLoaded ? total : (gbif?.total ?? total), fromQuery: false };
+  const unc = comp.uncertainty;
+
+  const basisItems: Item[] = basis.items.map((b) => ({
     key: b.key,
     label: BASIS_LABELS[b.key as BasisOfRecord] ?? b.label,
     count: b.count,
   }));
-  const datasets: Item[] = previews
-    .flatMap((p) => p.topDatasets.map((b: FacetBucket) => ({ ...b, source: p.source })))
+  const datasetItems: Item[] = datasets.items
+    // A loaded dataset missing from the previews' lists is GBIF's when GBIF is the only source.
+    .map((b) => ({ ...b, source: b.source ?? (onlyGbif ? ('gbif' as const) : undefined) }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
-  const species: Item[] = mergeBuckets(previews.map((p) => p.topSpecies))
-    .slice(0, 10)
-    .map((b) => ({ ...b, italic: true }));
-  const countries: Item[] = mergeBuckets(previews.map((p) => p.countries)).slice(0, 10);
-  const issues: Item[] = (gbif?.issues ?? []).slice(0, 8).map((b) => ({ ...b, label: issueLabel(b.key) }));
-  const unc = weightedUncertainty(previews);
+  const speciesItems: Item[] = species.items.slice(0, 10).map((b) => ({ ...b, italic: true }));
+  const countryItems: Item[] = countries.items.slice(0, 10);
+  const issueItems: Item[] = issues.items.slice(0, 8).map((b) => ({ ...b, label: issueLabel(b.key) }));
+  const showIssues = gbif != null || comp.issues.length > 0;
 
-  if (state === 'first') {
+  if (state === 'first' && !onLoaded) {
     return (
       <Box as="section" aria-label="Composition" aria-busy>
         <Text as="h3" {...sectionHeading} mb={2}>
@@ -323,10 +381,10 @@ export default observer(function CompositionPanel() {
       </Box>
     );
   }
-  if (previews.length === 0 || total === 0) return null;
+  if (total === 0) return null;
 
-  const stale = state === 'stale';
-  const scope = insightsScope(ex);
+  // The loaded dataset's numbers don't change while the query preview refreshes.
+  const stale = state === 'stale' && !onLoaded;
   return (
     <Box as="section" aria-labelledby="composition-heading">
       <HStack justify="space-between" mb={1} minH={6}>
@@ -334,14 +392,15 @@ export default observer(function CompositionPanel() {
           Composition
         </Text>
       </HStack>
-      <ScopeLine scope={scope} partialNote={false} />
+      <ScopeLine kind={scopeKind} records={total} detail={insightsScope(ex)?.label} />
       <Stack gap={3} aria-busy={stale || undefined} opacity={stale ? 0.5 : 1} transition="opacity 0.15s">
         <ShareList
           id="basis"
           title="Basis of record"
           note="click to exclude"
-          items={basis}
-          denom={total}
+          loaded={onLoaded}
+          items={basisItems}
+          denom={basis.denom}
           empty="Not reported."
           exclude={{
             can: (it) =>
@@ -355,9 +414,10 @@ export default observer(function CompositionPanel() {
         <ShareList
           id="datasets"
           title="Top datasets"
-          note={datasets.some((d) => d.source === 'gbif') ? 'click GBIF to exclude' : undefined}
-          items={datasets}
-          denom={total}
+          note={datasetItems.some((d) => d.source === 'gbif') ? 'click GBIF to exclude' : undefined}
+          loaded={onLoaded}
+          items={datasetItems}
+          denom={datasets.denom}
           empty="Not reported."
           exclude={{
             can: (it) => (it.source === 'gbif' ? true : 'Dataset exclusion is available for GBIF datasets only.'),
@@ -385,24 +445,42 @@ export default observer(function CompositionPanel() {
             ) : undefined
           }
         />
-        <ShareList id="species" title="Top species" items={species} denom={total} empty="Not reported." />
+        <ShareList
+          id="species"
+          title="Top species"
+          items={speciesItems}
+          denom={species.denom}
+          empty="Not reported."
+        />
         <Box ref={countriesRef} scrollMarginTop={4}>
           <ShareList
             id="countries"
             title="Countries"
-            items={countries}
-            denom={total}
+            items={countryItems}
+            denom={countries.denom}
             highlight={highlight}
             empty="Not reported."
+            footer={
+              comp.notes?.countries ? (
+                <Text textStyle="xs" color="fg.muted" lineHeight="short" mt={1} fontVariantNumeric="tabular-nums">
+                  {comp.notes.countries}
+                </Text>
+              ) : undefined
+            }
           />
         </Box>
-        {gbif && (
+        {showIssues && (
           <ShareList
             id="issues"
             title="Issues"
-            note="GBIF · can overlap"
-            items={issues}
-            denom={gbif.total}
+            note={issues.fromQuery ? `GBIF · ${FOR_QUERY}` : 'GBIF · can overlap'}
+            noteTip={
+              issues.fromQuery
+                ? `${comp.notes?.issues ?? 'GBIF reports interpretation issues for the query only.'} This shows the query preview. ${OVERLAP_TIP}`
+                : OVERLAP_TIP
+            }
+            items={issueItems}
+            denom={issues.denom}
             empty="No interpretation issues reported."
           />
         )}

@@ -11,7 +11,10 @@ import {
 } from '@/sources';
 import { useStore } from '../../../store';
 import type { Provenance } from '../../../store/explorer/types';
-import { fmtInt, fmtPct } from '../format';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
+import { fmtInt } from '../format';
+import { partialExplanation } from '../load/partialText';
+import { partialSummary } from '../preview/cleaningSteps';
 import DecisionLedger from '../preview/DecisionLedger';
 import { contributingSources, gbifReference, obisCitationHead, retrievedLabel } from './citeHelpers';
 import DerivedDatasetCard from './DerivedDatasetCard';
@@ -146,7 +149,7 @@ const DownloadOption = observer(function DownloadOption({ onRequest }: { onReque
   return (
     <Stack gap={4}>
       <Flex gap={3} align="center" wrap="wrap">
-        <Button size="sm" data-testid="request-doi" onClick={onRequest} disabled={!!blocker}>
+        <Button {...primaryButtonProps} data-testid="request-doi" onClick={onRequest} disabled={!!blocker}>
           <LuSend />
           Request citable DOI…
         </Button>
@@ -155,7 +158,7 @@ const DownloadOption = observer(function DownloadOption({ onRequest }: { onReque
         </Text>
       </Flex>
       <DownloadStatus />
-      <ZipDropzone />
+      <ZipDropzone onRequest={onRequest} />
     </Stack>
   );
 });
@@ -207,7 +210,7 @@ const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void
             </Flex>
           ))}
         </Box>
-        <Button size="sm" variant="outline" mt={5} onClick={() => explorerStore.setTab('occurrences')}>
+        <Button {...secondaryButtonProps} mt={5} onClick={() => explorerStore.setTab('occurrences')}>
           Go to Occurrences
           <LuArrowRight />
         </Button>
@@ -310,11 +313,7 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
                 ))}
               </Flex>
             </Box>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => explorerStore.editAndReload()}
-            >
+            <Button {...secondaryButtonProps} onClick={() => explorerStore.editAndReload()}>
               <LuPencil />
               Edit query & reload
             </Button>
@@ -323,10 +322,11 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
         {last.partial && (
           <Alert.Root status="warning" size="sm" variant="subtle" mt={2}>
             <Alert.Indicator />
-            <Alert.Title fontWeight="normal" fontVariantNumeric="tabular-nums">
-              Partial dataset: {fmtInt(last.partial.accepted)} of ~{fmtInt(last.partial.planned)} planned records (
-              {fmtPct(last.partial.planned > 0 ? last.partial.accepted / last.partial.planned : 0)}). Some species may be
-              under-sampled. The methods text says so.
+            <Alert.Title fontWeight="normal" fontVariantNumeric="tabular-nums" data-testid="cite-partial">
+              <Box as="span" fontWeight="semibold">
+                Partial dataset:
+              </Box>{' '}
+              {partialSummary(last.partial)} {partialExplanation(last.partial)} The methods text says so.
             </Alert.Title>
           </Alert.Root>
         )}

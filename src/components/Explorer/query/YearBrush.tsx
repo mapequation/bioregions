@@ -57,8 +57,32 @@ export default observer(function YearBrush() {
   const maxCount = Math.max(1, ...counts.values());
   const y = (sqrt ? scaleSqrt() : scaleLinear()).domain([0, maxCount]).range([0, CHART_H - 2]);
   const barW = Math.max(0.5, x(lo + 1) - x(lo) - (width / (hi - lo + 1) > 3 ? 1 : 0));
-  // Inner ticks must keep clear of the edge labels (about 34 px each).
-  const ticks = x.ticks(4).filter((t) => Number.isInteger(t) && x(t) - x(lo) > 60 && x(hi + 1) - x(t) > 44);
+  // Axis labels sit under bar centres. The selected bounds are labelled under their bars in the
+  // foreground colour; domain edges and inner ticks are muted and give way to them, so the axis
+  // never implies a year outside the selection is selected (e.g. 2026 when the range ends in 2025).
+  const center = (yr: number) => (x(yr) + x(yr + 1)) / 2;
+  const GAP = 40;
+  const fromSel = from > lo || qFrom != null;
+  const toSel = to < hi || qTo != null;
+  const selLabels = [
+    ...(fromSel ? [{ year: from, cx: center(from), selected: true }] : []),
+    ...(toSel && (!fromSel || to !== from) ? [{ year: to, cx: center(to), selected: true }] : []),
+  ];
+  const domainLabels = [lo, ...x.ticks(4).filter((t) => Number.isInteger(t) && t > lo && t < hi), hi]
+    .map((year) => ({ year, cx: center(year), selected: false }))
+    .filter((l, i, arr) => {
+      // Keep inner ticks clear of the edges and of each other.
+      if (i > 0 && i < arr.length - 1 && (l.cx - center(lo) < GAP + 16 || center(hi) - l.cx < GAP)) return false;
+      return !selLabels.some((s) => Math.abs(s.cx - l.cx) < GAP);
+    });
+  const earlyTail = bins.some((b) => b.year < lo);
+  const axisLabels = [...domainLabels, ...selLabels].map((l) => {
+    const text = !l.selected && l.year === lo && earlyTail ? `≤${l.year}` : String(l.year);
+    // About 6.2 px per 10 px tabular digit (wider for '≤'): keep the whole label inside the chart.
+    const half = text.length * 3.4;
+    return { ...l, text, cx: Math.min(width - half, Math.max(half, l.cx)) };
+  });
+
 
   const commit = (f: number, t: number) => {
     explorerStore.setYears([f <= lo ? null : f, t >= hi ? null : t]);
@@ -251,17 +275,19 @@ export default observer(function YearBrush() {
                 );
               })}
               <line x1={inset} x2={width - inset} y1={CHART_H + 0.5} y2={CHART_H + 0.5} stroke={chartColors.grid} />
-              {[lo, ...ticks, hi].map((t, i, arr) => (
+              {axisLabels.map((l) => (
                 <text
-                  key={t}
-                  x={i === 0 ? 0 : i === arr.length - 1 ? width : x(t)}
+                  key={`${l.selected ? 's' : 'd'}${l.year}`}
+                  x={l.cx}
                   y={CHART_H + AXIS_H - 3}
                   fontSize={10}
-                  fill={chartColors.text}
-                  textAnchor={i === 0 ? 'start' : i === arr.length - 1 ? 'end' : 'middle'}
-                  style={{ fontVariantNumeric: 'tabular-nums' }}
+                  fontWeight={l.selected ? 600 : undefined}
+                  fill={l.selected ? 'var(--chakra-colors-fg)' : chartColors.text}
+                  textAnchor="middle"
+                  // Inline: a global text rule otherwise overrides the font-size attribute (14 px).
+                  style={{ fontVariantNumeric: 'tabular-nums', fontSize: 10 }}
                 >
-                  {i === 0 && bins.some((b) => b.year < lo) ? `≤${t}` : t}
+                  {l.text}
                 </text>
               ))}
             </svg>
@@ -296,18 +322,35 @@ export default observer(function YearBrush() {
           onCommit={(v) => explorerStore.setYears([qFrom, v])}
         />
       </HStack>
-      <Text fontSize="xs" color="fg.muted" fontVariantNumeric="tabular-nums" minH={4} opacity={busy ? 0.5 : 1}>
-        {hasData ? (
+      {/* Two fixed lines (range share, then the temporal-skew share) so nothing wraps or shifts. */}
+      <Stack
+        gap={0}
+        textStyle="xs"
+        lineHeight="short"
+        color="fg.muted"
+        fontVariantNumeric="tabular-nums"
+        minH={8}
+        opacity={busy ? 0.5 : 1}
+        aria-hidden={!hasData || undefined}
+      >
+        {hasData && (
           <>
-            {qFrom != null || qTo != null ? `${fmtPct(inRange)} of dated records in range · ` : ''}
-            <Box as="span" title={`Share of dated records from ${cutoffYear} on, as in the temporal-skew check`}>
-              since {cutoffYear}: {fmtPct(recent)}
-            </Box>
+            <Text truncate>
+              {qFrom != null || qTo != null
+                ? `${fmtPct(inRange)} of dated records in range`
+                : 'All years · no year filter'}
+            </Text>
+            <Tooltip
+              content={`Share of dated records from ${cutoffYear} on, as in the temporal-skew check`}
+              openDelay={300}
+            >
+              <Text truncate w="fit-content" maxW="full" cursor="help">
+                Since {cutoffYear}: {fmtPct(recent)}
+              </Text>
+            </Tooltip>
           </>
-        ) : (
-          ' '
         )}
-      </Text>
+      </Stack>
     </Stack>
   );
 });

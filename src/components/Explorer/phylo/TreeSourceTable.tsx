@@ -24,6 +24,7 @@ import type { TreeCandidate } from '../../../store/explorer/types';
 import { groupByStudy, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
+import { secondaryButtonProps } from '../buttonStyles';
 
 const OTOL_HOME = 'https://tree.opentreeoflife.org/';
 
@@ -31,14 +32,31 @@ function doiUrl(doi: string): string {
   return /^https?:\/\//.test(doi) ? doi : `https://doi.org/${doi.replace(/^doi:\s*/i, '')}`;
 }
 
-/** Branch lengths come from study metadata until the tree itself has been read. */
-function unverified(c: TreeCandidate): boolean {
-  return c.kind === 'study' && c.coverageState !== 'ready';
+/** A study tree whose newick is still being read: its branch lengths are not known yet. */
+function reading(c: TreeCandidate): boolean {
+  return c.kind === 'study' && c.coverageState === 'pending';
 }
 
-const UNVERIFIED_TIP = 'From the study record; confirmed once the tree is read.';
+/** A study tree that could not be read: its branch lengths come from the study record only. */
+function unread(c: TreeCandidate): boolean {
+  return c.kind === 'study' && c.coverageState === 'error';
+}
 
-/** A muted '?' after a value that is not confirmed yet. */
+const READING_TIP = 'Known once the tree is read (see Coverage).';
+const UNREAD_TIP = "Per the study record; the tree itself couldn't be read.";
+
+/** Neutral placeholder while a tree is read, so no guess is shown that later changes. */
+function Reading({ what }: { what: string }) {
+  return (
+    <Tooltip content={READING_TIP} showArrow openDelay={300}>
+      <Text as="span" color="fg.subtle" tabIndex={0} aria-label={`${what}: checking`}>
+        …
+      </Text>
+    </Tooltip>
+  );
+}
+
+/** A muted '?' after a value that comes from the study record only. */
 const Unsure = () => (
   <Text as="span" color="fg.subtle" ms={0.5} aria-hidden>
     ?
@@ -116,37 +134,45 @@ function CoverageCell({ c, onRetry }: { c: PhyloCandidate; onRetry: (id: string)
   );
 }
 
-/** Short branch-length unit for the table, '–' when the study does not state one. */
-function unitLabel(c: PhyloCandidate): string {
+/** Column label: the branch lengths the tree is used with ('Myr', 'Grafen (relative)', 'substitutions/site'). */
+function lengthsLabel(c: PhyloCandidate): string {
   const units = lengthUnits(c);
-  return units.short === 'unknown' ? '–' : units.short;
+  return units.short === 'unknown' ? 'units not stated' : units.short;
+}
+
+/** Tooltip: what the source tree has, then what is used on load. */
+function lengthsTip(c: PhyloCandidate): string {
+  const units = lengthUnits(c);
+  if (c.branchLengths === 'none') {
+    return c.kind === 'synthetic'
+      ? "Source: the synthesis has no branch lengths (topology only). Used with Grafen's lengths: relative ages, root = 1."
+      : "Source: no branch lengths (topology only). Used with Grafen's lengths: relative ages, root = 1.";
+  }
+  if (c.branchLengths === 'time') {
+    return c.timeUnit
+      ? `Source: time-calibrated, in ${units.long}. Used as given.`
+      : 'Source: time-calibrated; Open Tree records no unit, so millions of years is assumed. Used as given.';
+  }
+  return units.short === 'unknown'
+    ? 'Source: branch lengths in units the study does not state. Used as given, as relative time (not millions of years).'
+    : `Source: branch lengths in ${units.long}. Used as given, as relative time (not millions of years).`;
 }
 
 function LengthsCell({ c }: { c: PhyloCandidate }) {
-  const units = lengthUnits(c);
-  const unsure = unverified(c);
-  const known =
-    c.branchLengths === 'none'
-      ? 'No branch lengths: Grafen lengths (relative ages, root = 1) are added on load.'
-      : c.branchLengths === 'time'
-        ? c.timeUnit
-          ? `Time-calibrated; branch lengths in ${units.long}.`
-          : 'Time-calibrated; Open Tree records no unit, so millions of years is assumed.'
-        : units.short === 'unknown'
-          ? 'Branch-length units not stated in the study; they are used as relative time.'
-          : `Branch lengths in ${units.long}, used as relative time.`;
-  const tip = unsure ? `${known} ${UNVERIFIED_TIP}` : known;
+  if (reading(c)) return <Reading what="Branch lengths" />;
+  const unsure = unread(c);
+  const tip = unsure ? `${lengthsTip(c)} ${UNREAD_TIP}` : lengthsTip(c);
   return (
-    <Tooltip content={tip} showArrow openDelay={300} contentProps={{ maxW: '280px' }}>
+    <Tooltip content={tip} showArrow openDelay={300} contentProps={{ maxW: '300px' }}>
       <Text
         as="span"
         display="block"
         truncate
         tabIndex={0}
-        color={unsure ? 'fg.muted' : c.branchLengths === 'time' ? 'fg' : 'fg.muted'}
-        aria-label={units.short === 'unknown' ? 'units not stated' : undefined}
+        textStyle="xs"
+        color={!unsure && c.branchLengths === 'time' ? 'fg' : 'fg.muted'}
       >
-        {unitLabel(c)}
+        {lengthsLabel(c)}
         {unsure && <Unsure />}
       </Text>
     </Tooltip>
@@ -256,8 +282,9 @@ function SourceCell({
 function treeFacts(c: PhyloCandidate): string {
   const parts: string[] = [];
   if (c.tipCount != null) parts.push(`${fmtInt(c.tipCount)} ${c.tipCount === 1 ? 'tip' : 'tips'}`);
-  const unit = lengthUnits(c).short;
-  parts.push(unit === 'unknown' ? 'units not stated' : unit === 'Grafen' ? 'no branch lengths' : unit);
+  if (reading(c)) parts.push('reading tree…');
+  else if (c.branchLengths === 'none') parts.push('no branch lengths');
+  else parts.push(lengthsLabel(c));
   return parts.join(' · ');
 }
 
@@ -287,11 +314,19 @@ function AlternativeCell({ c, selected }: { c: PhyloCandidate; selected: boolean
 }
 
 function DatedCell({ c }: { c: TreeCandidate }) {
+  if (reading(c)) return <Reading what="Dated" />;
   const dated = c.branchLengths === 'time';
-  if (unverified(c)) {
+  if (unread(c)) {
     return (
-      <Tooltip content={`${dated ? 'Dated' : 'Not dated'} per the study record; confirmed once the tree is read.`} showArrow openDelay={300}>
-        <Text as="span" display="inline-flex" alignItems="center" color="fg.muted" tabIndex={0} aria-label={dated ? 'dated (unconfirmed)' : 'not dated (unconfirmed)'}>
+      <Tooltip content={`${dated ? 'Dated' : 'Not dated'}. ${UNREAD_TIP}`} showArrow openDelay={300}>
+        <Text
+          as="span"
+          display="inline-flex"
+          alignItems="center"
+          color="fg.muted"
+          tabIndex={0}
+          aria-label={dated ? 'dated (per the study record)' : 'not dated (per the study record)'}
+        >
           {dated ? <Icon as={LuCheck} /> : '–'}
           <Unsure />
         </Text>
@@ -369,7 +404,7 @@ export default observer(function TreeSourceTable() {
           <Alert.Title>Couldn't search Open Tree for trees</Alert.Title>
           <Alert.Description>The Open Tree service did not answer. Your matches are kept.</Alert.Description>
         </Alert.Content>
-        <Button size="xs" variant="outline" alignSelf="center" onClick={() => void phyloStore.matchNames()}>
+        <Button {...secondaryButtonProps} alignSelf="center" onClick={() => void phyloStore.matchNames()}>
           <LuRotateCw /> Retry
         </Button>
       </Alert.Root>
@@ -401,7 +436,7 @@ export default observer(function TreeSourceTable() {
           {fmtInt(candidates.length)} {candidates.length === 1 ? 'tree has' : 'trees have'} no time-calibrated branch
           lengths.
         </Text>
-        <Button size="xs" variant="outline" onClick={() => phyloStore.setDatedOnly(false)}>
+        <Button {...secondaryButtonProps} onClick={() => phyloStore.setDatedOnly(false)}>
           Show all trees
         </Button>
       </Flex>
@@ -421,7 +456,7 @@ export default observer(function TreeSourceTable() {
               <Table.Column />
               <Table.Column htmlWidth="120px" />
               <Table.Column htmlWidth="60px" />
-              <Table.Column htmlWidth="100px" />
+              <Table.Column htmlWidth="128px" />
               <Table.Column htmlWidth="48px" />
             </Table.ColumnGroup>
             <Table.Header>
@@ -432,7 +467,18 @@ export default observer(function TreeSourceTable() {
                 <Table.ColumnHeader>Source</Table.ColumnHeader>
                 <Table.ColumnHeader>Coverage</Table.ColumnHeader>
                 <Table.ColumnHeader textAlign="center">Dated</Table.ColumnHeader>
-                <Table.ColumnHeader>Lengths</Table.ColumnHeader>
+                <Table.ColumnHeader>
+                  <Tooltip
+                    content="The branch lengths each tree is used with. Hover a value for what the source tree has."
+                    showArrow
+                    openDelay={300}
+                    contentProps={{ maxW: '280px' }}
+                  >
+                    <Text as="span" tabIndex={0} textDecoration="underline dotted" textUnderlineOffset="3px">
+                      Lengths
+                    </Text>
+                  </Tooltip>
+                </Table.ColumnHeader>
                 <Table.ColumnHeader textAlign="center">DOI</Table.ColumnHeader>
               </Table.Row>
             </Table.Header>
