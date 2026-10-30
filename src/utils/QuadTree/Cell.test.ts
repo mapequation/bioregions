@@ -84,3 +84,37 @@ describe('Cell.add: points on the domain edge (B2)', () => {
     expect([cell.x1, cell.y1, cell.x2, cell.y2]).toEqual([0, 0, 4, 4]);
   });
 });
+
+describe('Cell.add: split at unclipped midpoints (B8)', () => {
+  it('splits a polar row cell into square children', () => {
+    // The 4-degree top row [0, 4] x [88, 92] is clipped to [88, 90]. Its
+    // children are 2-degree squares; the northern half lies off the globe.
+    const points = [point(0.5, 88.5), point(2.5, 88.5), point(0.5, 89.5)];
+    const root = build(points, { capacity: 2 });
+    for (const p of points) {
+      const cell = cellOf(root, p);
+      expect(cell.size).toBe(2);
+      expect(cell.x2 - cell.x1).toBe(2);
+      expect(cell.y2 - cell.y1).toBe(2);
+      expect(cell.y1).toBe(88);
+    }
+    const parent = cellOf(root, points[0]).parent;
+    expect(parent?.size).toBe(4);
+    expect(parent?.y2).toBe(90); // still clipped for display
+  });
+
+  it('keeps the unclipped width east of lon 180', () => {
+    // With 8-degree cells, the last column [176, 184] is clipped to [176, 180]
+    // but is still 8 degrees wide, and splits at lon 180.
+    const a = point(177, 1);
+    const b = point(179, 1);
+    const c = point(177, 3);
+    const root = build([a, b, c], { min: 2, max: 3, capacity: 2 });
+    const cell = cellOf(root, a);
+    expect(cell.size).toBe(4);
+    expect([cell.x1, cell.y1, cell.x2, cell.y2]).toEqual([176, 0, 180, 4]);
+    expect(cell.parent?.size).toBe(8);
+    expect(cell.parent?.x2).toBe(180);
+    expect(cellOf(root, b)).toBe(cell);
+  });
+});
