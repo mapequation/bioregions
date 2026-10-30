@@ -598,7 +598,8 @@ export default class InfomapStore {
   }
 
   getTaxonLinkWeight(numGridCells: number, numGridCellsTotal: number) {
-    if (!this.useWeightedSpeciesLinks) {
+    // With a single grid cell the weight is 1 - 0/0.
+    if (!this.useWeightedSpeciesLinks || numGridCellsTotal <= 1) {
       return 1;
     }
     const { spatialNormalizationOrder: q } = this;
@@ -1106,8 +1107,8 @@ export default class InfomapStore {
       ? sumTreeLinkWeight
       : (treeWeightBalance * sumNonTreeLinkWeight) / (1 - treeWeightBalance);
 
-    // sumTreeLinkWeight * scale = totalTreeStrength
-    const scale = totalTreeStrength / sumTreeLinkWeight;
+    // sumTreeLinkWeight * scale = totalTreeStrength, nothing to scale without tree links
+    const scale = sumTreeLinkWeight > 0 ? totalTreeStrength / sumTreeLinkWeight : 0;
     console.log(
       `Sum non-tree link weight: ${sumNonTreeLinkWeight
       }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
@@ -1682,7 +1683,8 @@ export default class InfomapStore {
       ? sumTreeLinkWeight
       : treeWeightBalance * unscaledNonTreeStrength;
 
-    const scale = totalTreeStrength / sumTreeLinkWeight;
+    // Nothing to scale without tree links
+    const scale = sumTreeLinkWeight > 0 ? totalTreeStrength / sumTreeLinkWeight : 0;
 
     console.log(
       `Sum non-tree link weight: ${unscaledNonTreeStrength * (1 - treeWeightBalance)
