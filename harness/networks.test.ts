@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BioregionsNetwork, BioregionsStateNetwork } from '../src/store/InfomapStore';
 import type { GeoFeature } from '../src/store/SpeciesStore';
 import { createPointFeature } from '../src/store/SpeciesStore';
 import { parseTree, prepareTree } from '../src/utils/tree';
@@ -34,15 +35,52 @@ function occurrences(): GeoFeature[] {
   return features;
 }
 
-function buildNetwork(params: Record<string, unknown>) {
+function createRoot(params: Record<string, unknown>, newick = NEWICK) {
   const root = createHeadlessRoot('test');
   Object.assign(root.speciesStore.binner, { minCellCapacity: 1, maxCellCapacity: 4 });
   setOccurrences(root, occurrences());
-  const tree = prepareTree(parseTree(NEWICK));
+  const tree = prepareTree(parseTree(newick));
   root.treeStore.tree = tree;
   root.treeStore.treeNodeMap = buildTreeNodeMap(tree);
   Object.assign(root.infomapStore, params);
-  return root.infomapStore.createNetwork();
+  return root;
+}
+
+function buildNetwork(params: Record<string, unknown>, newick = NEWICK) {
+  return createRoot(params, newick).infomapStore.createNetwork();
+}
+
+function buildStateNetwork(params: Record<string, unknown>, newick = NEWICK) {
+  const network = buildNetwork({ segregationTime: 0.5, ...params }, newick);
+  if (!('states' in network)) {
+    throw new Error('expected a state network');
+  }
+  return network;
+}
+
+/** Links by name: taxon, the target cell and, in state networks, the target state. */
+function namedLinks(network: BioregionsNetwork | BioregionsStateNetwork) {
+  return network.links.map(({ source, target, weight = 1 }) => {
+    if ('states' in network) {
+      const state = network.states[target];
+      return {
+        taxon: network.states[source].name ?? '',
+        cell: network.nodes[state.id].name ?? '',
+        state: state.name ?? '',
+        weight,
+      };
+    }
+    const cell = network.nodes[target].name ?? '';
+    return { taxon: network.nodes[source].name ?? '', cell, state: cell, weight };
+  });
+}
+
+function sumByTaxon(network: BioregionsNetwork | BioregionsStateNetwork) {
+  const sums = new Map<string, number>();
+  for (const { taxon, weight } of namedLinks(network)) {
+    sums.set(taxon, (sums.get(taxon) ?? 0) + weight);
+  }
+  return sums;
 }
 
 beforeEach(() => {
@@ -92,5 +130,21 @@ describe('species without a tip in the tree (#85)', () => {
     const network = buildNetwork({ useWholeTree: true, treeWeightBalance: 0.5 });
     expect(network.numSpeciesExcluded).toBeUndefined();
     expect(network.nodeIdMap).toHaveProperty('G');
+  });
+});
+
+describe('state network species links (S3)', () => {
+  it('use the information weight, as bipartite species links do', () => {
+    const params = {
+      treeWeightBalance: 0,
+      useWeightedSpeciesLinks: true,
+      useWeightedTreeNodeLinksIfTimeSlice: false,
+    };
+    const bipartite = sumByTaxon(buildNetwork(params));
+    const state = sumByTaxon(buildStateNetwork(params));
+    expect([...state.keys()].sort()).toEqual([...bipartite.keys()].sort());
+    for (const [taxon, weight] of bipartite) {
+      expect(state.get(taxon)).toBeCloseTo(weight, 10);
+    }
   });
 });

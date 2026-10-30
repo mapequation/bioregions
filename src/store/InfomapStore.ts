@@ -1470,7 +1470,7 @@ export default class InfomapStore {
         const treeNode = treeNodeMap.get(name);
         if (!treeNode) {
           // Use root node as memory if species not part of tree
-          const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+          const unscaledWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
           const weight = (1 - treeWeightBalance) * unscaledWeight;
           unscaledNonTreeStrength += unscaledWeight * cells.size;
 
@@ -1484,7 +1484,8 @@ export default class InfomapStore {
           throw new Error(`InfomapStore: tree node '${name}' has no memory branch`);
         }
 
-        const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+        // Species links get the information weight, as in bipartite networks.
+        const unscaledWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
         const weight = (1 - treeWeightBalance) * unscaledWeight;
         // TODO: Don't aggregate weight if below threshold or weight aggregated?
         unscaledNonTreeStrength += unscaledWeight * cells.size;
