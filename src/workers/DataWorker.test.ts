@@ -70,4 +70,18 @@ describe('DataWorker shapefile loading', () => {
     expect(features).toHaveLength(250);
     expect(features[features.length - 1]?.properties.name).toBe('Species 249');
   });
+
+  it('loads shapefiles whose name column is numeric', async () => {
+    const features = await loadShapes(
+      Array.from({ length: 5 }, (_, i) => shape(1000 + i, i)),
+    );
+
+    expect(features.map((feature) => feature.properties.name)).toEqual([
+      '1000',
+      '1001',
+      '1002',
+      '1003',
+      '1004',
+    ]);
+  });
 });
