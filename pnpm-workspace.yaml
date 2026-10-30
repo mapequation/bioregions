@@ -1,3 +1,6 @@
+allowBuilds:
+  # Needed by tsx/vitest (used by the headless validation harness under harness/).
+  esbuild: true
 # Exclude first-party @mapequation packages from the `minimumReleaseAge` supply-chain
 # gate. The environment (local dev + CI) rejects lockfile entries newer than a 24h
 # cutoff; our own freshly-published packages (e.g. @mapequation/d3gl) are trusted, so

@@ -15,7 +15,9 @@
     "prebuild": "node scripts/fetch-data.mjs",
     "fetch-data": "node scripts/fetch-data.mjs",
     "changeset": "changeset",
-    "version": "changeset version"
+    "version": "changeset version",
+    "test": "vitest run",
+    "build-network": "tsx harness/build-network.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "^3.35.0",
@@ -62,13 +64,16 @@
     "@types/file-saver": "^2.0.7",
     "@types/geojson": "^7946.0.16",
     "@types/lodash": "^4.17.24",
+    "@types/node": "^24.19.2",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/shapefile": "^0.6.4",
     "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^6.0.2",
+    "tsx": "4.23.12",
     "typescript": "~6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "4.1.11"
   }
 }

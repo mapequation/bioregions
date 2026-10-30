@@ -1,4 +1,6 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from "node:url";
 
@@ -14,5 +16,9 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
     tsconfigPaths: true,
+  },
+  test: {
+    // Agent worktrees under .claude/ are full checkouts with their own tests.
+    exclude: [...configDefaults.exclude, '.claude/**'],
   },
 })
