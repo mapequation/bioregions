@@ -199,9 +199,9 @@ const EmptyPreview = observer(function EmptyPreview() {
 /** The drawer button alone, for the frozen state where the success panel replaces the KPIs. */
 const InsightsButton = observer(function InsightsButton() {
   const { explorerStore } = useStore();
-  const flags = explorerStore.biasFlags.filter((f) => f.triggered).length;
+  const flags = explorerStore.biasFlags.filter((f) => f.triggered && f.level === 'warning').length;
   const [compact] = useMediaQuery(['(max-width: 1179.98px)'], { ssr: false });
-  const label = `Insights, ${flags} bias ${flags === 1 ? 'flag' : 'flags'}`;
+  const label = `Insights, ${flags} bias ${flags === 1 ? 'warning' : 'warnings'}`;
   return (
     <Tooltip content={label} disabled={!compact} openDelay={200}>
     <Button

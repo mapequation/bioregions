@@ -733,7 +733,8 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     steps != null &&
     funnel != null &&
     (mode === 'live' || truncated.length > 0 || path.some((p) => p.id === 'cleaning' || p.id === 'notReceived'));
-  const stale = state === 'stale';
+  // Dim while the preview refreshes or while ledger counts lag behind the KPIs.
+  const stale = state === 'stale' || (mode === 'preview' && ex.impactPending);
 
   const csv = () => {
     downloadText(ex.ledgerCsv, 'decision-ledger.csv');

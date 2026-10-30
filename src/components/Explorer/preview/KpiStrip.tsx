@@ -152,8 +152,8 @@ export default observer(function KpiStrip() {
   const first = !kpis && (previewState === 'first' || previewState === 'stale');
   const drawer = useInsightsDrawer();
   const [compact] = useMediaQuery([COMPACT_QUERY], { ssr: false });
-  const flags = explorerStore.biasFlags.filter((f) => f.triggered).length;
-  const flagText = `${flags} bias ${flags === 1 ? 'flag' : 'flags'}`;
+  const flags = explorerStore.biasFlags.filter((f) => f.triggered && f.level === 'warning').length;
+  const flagText = `${flags} bias ${flags === 1 ? 'warning' : 'warnings'}`;
   // Records identified to species: what a load requests (known once the load is planned).
   const speciesLevel = explorerStore.countStory.speciesLevel;
 
