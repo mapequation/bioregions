@@ -337,6 +337,7 @@ export default class Cell
       feature.bbox = turf.bbox(feature.geometry);
     }
 
+    this.isLeaf = false;
     const [x1, y1, x2, y2] = this.bounds;
     const [xm, ym] = this.splitPoint;
 
