@@ -1562,11 +1562,13 @@ export default class InfomapStore {
 
           for (const cellId of nameToCellIds[speciesName]) {
             const currentWeight = memLinks.get(cellId) ?? 0;
-
-            if (currentWeight === 0 || !this.uniformTreeLinks) {
-              memLinks.set(cellId, currentWeight + memWeight);
-              sumWeight += memWeight;
-            }
+            // Uniform tree links keep the largest memory weight per (cell, memory),
+            // so the weights do not depend on the order of the species.
+            const newWeight = this.uniformTreeLinks
+              ? Math.max(currentWeight, memWeight)
+              : currentWeight + memWeight;
+            memLinks.set(cellId, newWeight);
+            sumWeight += newWeight - currentWeight;
           }
         }
       }
