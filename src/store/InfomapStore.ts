@@ -603,7 +603,10 @@ export default class InfomapStore {
       return 1;
     }
     const { spatialNormalizationOrder: q } = this;
-    return 1 - uniformTsallisEntropy(numGridCells, q) / uniformTsallisEntropy(numGridCellsTotal, q);
+    // State networks pass a strength that can be below 1 (memory weights sum to
+    // less than 1); count at least one cell so the weight stays at most 1.
+    const k = Math.max(numGridCells, 1);
+    return 1 - uniformTsallisEntropy(k, q) / uniformTsallisEntropy(numGridCellsTotal, q);
   }
 
   getTaxonLinkWeightOnTimeSlice(numGridCells: number, numGridCellsTotal: number) {
