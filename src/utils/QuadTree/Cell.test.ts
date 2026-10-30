@@ -85,4 +85,16 @@ describe('Cell polygon binning', () => {
     // every later range goes into the children instead of refilling the parent.
     expect(cellsWith(root, ranges[3]).map((cell) => cell.sizeLog2)).toEqual([1]);
   });
+
+  it('skips the zero-width cells clamped at longitude 180', () => {
+    // The east half [180, 184] of this root is clamped to [180, 180].
+    const range = rectangle(178, 1, 180, 3);
+    const root = build([range], { extent: [176, 0, 184, 8] });
+
+    const cells = cellsWith(root, range);
+    expect(cells.map((cell) => cell.extent)).toEqual([[176, 0, 180, 4]]);
+    root.visit((cell) => {
+      expect(cell.x2).toBeGreaterThan(cell.x1);
+    });
+  });
 });

@@ -370,6 +370,12 @@ export default class Cell
     for (let i = 0; i < 4; ++i) {
       const child = getChild(i);
 
+      // Sub-cells beyond lon ±180 or lat ±90 are clamped by the Cell
+      // constructor and can end up with zero width or height.
+      if (child.x2 <= child.x1 || child.y2 <= child.y1) {
+        continue;
+      }
+
       if (booleanIntersects(child.geometry, feature.geometry)) {
         if (!this.children[i]) {
           addChild(i, child);
