@@ -109,19 +109,23 @@ function batches(source: 'gbif' | 'obis', list: RecordBatch['records'][], gate?:
 function setup() {
   const consumed: { name: string }[][] = [];
   let loadedName = '';
-  const rootStore = {
-    clearData: vi.fn(),
-    speciesStore: {
-      collection: { features: [] as unknown[] },
-      loadRecords: vi.fn(async (iter: AsyncIterable<{ name: string }[]>, opts: { name: string; controller: AbortController }) => {
-        loadedName = opts.name;
-        for await (const b of iter) {
-          if (opts.controller.signal.aborted) break;
-          consumed.push(b);
-        }
-      }),
-    },
-  } as unknown as RootStore;
+  const speciesStore = {
+    collection: { features: [] as unknown[] },
+    loaded: false,
+    numRecords: 0,
+    loadRecords: vi.fn(async (iter: AsyncIterable<{ name: string }[]>, opts: { name: string; controller: AbortController }) => {
+      loadedName = opts.name;
+      let received = 0;
+      for await (const b of iter) {
+        if (opts.controller.signal.aborted) break;
+        consumed.push(b);
+        received += b.length;
+      }
+      if (received > 0) speciesStore.loaded = true;
+      return { received };
+    }),
+  };
+  const rootStore = { clearData: vi.fn(), speciesStore } as unknown as RootStore;
   const store = new ExplorerStore(rootStore);
   store.query = structuredClone(QUERY);
   vi.mocked(planSource).mockImplementation(async (id, q) => (id === 'gbif' ? gbifPlan(q) : obisPlan(q)));
@@ -198,8 +202,13 @@ describe('ExplorerStore.load', () => {
     open();
     await running;
     expect(store.job?.state).toBe('cancelled');
-    expect(store.lastLoad?.partial).toEqual({ planned: 5, accepted: 1 });
-    expect(store.methodsText).toContain('Loading was stopped early');
+    // GBIF fetched 1 of 3, OBIS 0 of 2; the plans name 2 species, 1 arrived.
+    expect(store.lastLoad?.partial).toEqual({ planned: 5, accepted: 1, speciesLoaded: 1, speciesPlanned: 2, notReceived: 4 });
+    expect(store.lastLoad?.accepted).toBe(1);
+    expect(store.lastLoad?.emptyReason).toBeUndefined();
+    expect(store.methodsText).toContain(
+      'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; because records stream species by species',
+    );
     expect(rootStore.clearData).not.toHaveBeenCalled();
   });
 
@@ -222,6 +231,55 @@ describe('ExplorerStore.load', () => {
     // SpeciesStore reads the reason to skip binning and Infomap.
     const opts = vi.mocked(rootStore.speciesStore.loadRecords).mock.calls[0][1];
     expect(opts.controller?.signal.reason).toBe('discard');
+  });
+
+  it('ends a load that matched nothing as an empty, non-success load', async () => {
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', []));
+    vi.mocked(streamObis).mockImplementation(batches('obis', []));
+    const { store, rootStore } = setup();
+    await store.load();
+    expect(store.job?.state).toBe('error');
+    expect(store.job?.error).toBe('No records matched this query');
+    expect(store.lastLoad).toMatchObject({ accepted: 0, emptyReason: 'noMatches', previousKept: false, partial: null });
+    expect(store.recent).toHaveLength(0);
+    expect(rootStore.clearData).not.toHaveBeenCalled();
+  });
+
+  it('reports a load whose records were all dropped, and that the previous dataset was kept', async () => {
+    // First a real load, then a query whose only record falls outside the area.
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', []));
+    const { store } = setup();
+    await store.load();
+    const first = store.lastLoad;
+    expect(first?.accepted).toBe(1);
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', 100, 10, 'gbif', 'd1')]]));
+    store.setYears([1980, 2025]);
+    await store.load();
+    expect(store.job?.state).toBe('error');
+    expect(store.job?.error).toBe('Cleaning removed every record');
+    expect(store.lastLoad).toMatchObject({ accepted: 0, emptyReason: 'allDropped', previousKept: true });
+    expect((store.lastLoad as { previous?: unknown }).previous).toBe(first);
+    expect(store.recent).toHaveLength(1);
+  });
+
+  it('marks a load cancelled before any record arrived', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]], gate));
+    vi.mocked(streamObis).mockImplementation(batches('obis', [], gate));
+    const { store, rootStore } = setup();
+    const running = store.load();
+    await vi.waitFor(() => expect(store.job?.state).toBe('streaming'));
+    store.cancel('keep');
+    open();
+    await running;
+    expect(store.job?.state).toBe('cancelled');
+    expect(store.lastLoad).toMatchObject({ accepted: 0, emptyReason: 'cancelledEarly', previousKept: false });
+    expect(store.lastLoad?.partial).toMatchObject({ planned: 5, accepted: 0, speciesLoaded: 0, notReceived: 5 });
+    expect(rootStore.clearData).not.toHaveBeenCalled();
   });
 
   it('reports a failing source and keeps the other', async () => {

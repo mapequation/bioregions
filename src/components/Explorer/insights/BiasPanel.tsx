@@ -1,4 +1,4 @@
-import { Badge, Box, Button, HStack, Icon, IconButton, Skeleton, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, HStack, Icon, IconButton, Skeleton, Stack, Text, VisuallyHidden } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
 import { LuCheck, LuCircleDashed, LuInfo, LuTriangleAlert } from 'react-icons/lu';
@@ -101,7 +101,21 @@ function WhyTip({ flag }: { flag: BiasFlag }) {
   );
 }
 
-/** The remedy as one full-width button: label left, the records it removes right. */
+/**
+ * The action title minus what the visible label already says, for the button's hidden name
+ * ("Exclude this dataset" + "Exclude iNaturalist …" -> "iNaturalist …").
+ */
+function hiddenDetail(label: string, title: string | undefined): string | null {
+  if (!title || title === label) return null;
+  const verb = label.split(' ')[0];
+  return title.startsWith(`${verb} `) ? title.slice(verb.length + 1) : title;
+}
+
+/**
+ * The remedy as one full-width button: label left, the records it removes right. The accessible
+ * name starts with the visible text ("Exclude this dataset: iNaturalist …, −10,543 records") so
+ * voice control can target it by what it shows; the full name sits in hidden spans and the tooltip.
+ */
 function ActionRow({ flag }: { flag: BiasFlag }) {
   const action = flag.action;
   if (!action) {
@@ -114,6 +128,7 @@ function ActionRow({ flag }: { flag: BiasFlag }) {
   const name = action.title ?? action.label;
   const cost = action.cost != null && action.cost > 0 ? action.cost : null;
   const described = cost != null ? `${name} (removes ${fmtInt(cost)} records)` : name;
+  const detail = hiddenDetail(action.label, action.title);
   return (
     <Tooltip content={described} openDelay={400}>
       <Button
@@ -123,15 +138,17 @@ function ActionRow({ flag }: { flag: BiasFlag }) {
         w="full"
         justifyContent="space-between"
         gap={2}
-        aria-label={described}
         onClick={() => action.run()}
       >
         <Text as="span" truncate>
           {action.label}
+          {detail && <VisuallyHidden>: {detail}</VisuallyHidden>}
         </Text>
         {cost != null && (
           <Text as="span" color="fg.muted" fontWeight="normal" fontVariantNumeric="tabular-nums" flexShrink={0}>
+            <VisuallyHidden>, </VisuallyHidden>
             {`\u2212${fmtInt(cost)}`}
+            <VisuallyHidden> records</VisuallyHidden>
           </Text>
         )}
       </Button>
@@ -233,7 +250,7 @@ function QuietFlag({ flag, pending }: { flag: BiasFlag; pending: boolean }) {
             {pending ? ': not checked yet.' : ': passes.'}
           </Box>
         </Text>
-        <Text textStyle="xs" color="fg.subtle" lineHeight="short" fontVariantNumeric="tabular-nums">
+        <Text textStyle="xs" color="fg.muted" lineHeight="short" fontVariantNumeric="tabular-nums">
           {detail}
         </Text>
       </Box>

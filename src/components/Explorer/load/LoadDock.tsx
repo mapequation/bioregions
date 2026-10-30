@@ -1,11 +1,13 @@
 import { Box, Button, chakra, Flex, HStack, Icon, SegmentGroup, Skeleton, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useState } from 'react';
-import { LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuTriangleAlert } from 'react-icons/lu';
+import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
+import { NO_MATCHES_REASON } from '@/store/ExplorerStore';
 import { fmtBytes, fmtCompact, fmtInt } from '../format';
+import { acceptedOf, EMPTY_REASON_SHORT, EMPTY_TITLE, emptyReasonOf } from '../preview/cleaningSteps';
 import LoadProgress from './LoadProgress';
 import { fmtApproxMinutes, modEnterLabel, niceCapAbove, yearsToFitCap } from './loadMath';
 
@@ -33,6 +35,32 @@ const EstimateLine = observer(function EstimateLine() {
   const { explorerStore: ex } = useStore();
   const { estimate, kpis, previewState, canLoad } = ex;
   const busy = previewState === 'first' || previewState === 'stale' || ex.plans.state === 'loading';
+
+  if (!canLoad.ok && canLoad.reason === NO_MATCHES_REASON) {
+    return (
+      <HStack
+        gap={2}
+        fontSize="sm"
+        minW={0}
+        opacity={busy ? 0.55 : 1}
+        transition="opacity 0.2s"
+        aria-busy={busy}
+        data-testid="load-estimate"
+        data-state="no-matches"
+      >
+        <Icon as={LuSearchX} boxSize={4} color="fg.muted" flexShrink={0} aria-hidden />
+        <Text truncate>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {NO_MATCHES_REASON}
+          </Box>
+          <Sep />
+          <Box as="span" color="fg.muted">
+            widen the area, years or filters
+          </Box>
+        </Text>
+      </HStack>
+    );
+  }
 
   if (!estimate && !kpis) {
     if (previewState === 'first') {
@@ -115,7 +143,42 @@ const DoneRow = observer(function DoneRow() {
   const { explorerStore: ex } = useStore();
   const last = ex.lastLoad;
   if (!last) return null;
-  const accepted = last.funnel.accepted;
+  const empty = emptyReasonOf(last);
+  if (empty) {
+    // A cancelled-early load offers "Load again" in the panel above; the others need a new query.
+    const retry = empty === 'cancelledEarly' && ex.canLoad.ok;
+    return (
+      <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done" data-state="empty">
+        <Icon
+          as={LuCircleAlert}
+          boxSize={4}
+          color={empty === 'cancelledEarly' ? 'fg.muted' : 'orange.fg'}
+          flexShrink={0}
+          aria-hidden
+        />
+        <Text fontSize="sm" color="fg.muted" truncate minW={0}>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {EMPTY_TITLE}
+          </Box>
+          <Sep />
+          {EMPTY_REASON_SHORT[empty]}
+          {last.previousKept && (
+            <>
+              <Sep />
+              previous data unchanged
+            </>
+          )}
+          {!retry && (
+            <>
+              <Sep />
+              Edit the query to load again
+            </>
+          )}
+        </Text>
+      </HStack>
+    );
+  }
+  const accepted = acceptedOf(last);
   return (
     <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done">
       <Icon as={LuCircleCheck} boxSize={4} color="green.fg" flexShrink={0} aria-hidden />
@@ -123,6 +186,11 @@ const DoneRow = observer(function DoneRow() {
         <Box as="span" color="fg" fontWeight="semibold">
           {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
         </Box>
+        {last.partial && (
+          <Box as="span" color="orange.fg" fontWeight="medium">
+            {' (partial)'}
+          </Box>
+        )}
         <Sep />
         Edit the query to load again
       </Text>
@@ -224,7 +292,7 @@ const OverCapRow = observer(function OverCapRow() {
 
 /** Bottom dock: estimate, cap, Replace/Add and the Load button; grows into LoadProgress while loading. */
 export default observer(function LoadDock() {
-  const { explorerStore: ex } = useStore();
+  const { explorerStore: ex, speciesStore } = useStore();
   const { job, canLoad, estimate, lastLoad, loadMode } = ex;
 
   if (job && (job.state === 'planning' || job.state === 'streaming')) return (
@@ -233,7 +301,9 @@ export default observer(function LoadDock() {
       </Box>
     );
 
-  if (ex.loadedMatchesQuery && job?.state !== 'error') {
+  // An empty load ends as a job error; the dock says why in the neutral empty row instead.
+  const emptyLoad = lastLoad != null && emptyReasonOf(lastLoad) != null;
+  if (ex.loadedMatchesQuery && (job?.state !== 'error' || emptyLoad)) {
     return (
       <Box px={3} py={2} data-testid="load-dock">
         <DoneRow />
@@ -246,7 +316,10 @@ export default observer(function LoadDock() {
   const label = loadMode === 'add' ? 'Add records' : dirty ? 'Reload with changes' : 'Load records';
   const reason = canLoad.ok ? null : canLoad.reason;
   // Reasons already said elsewhere in the dock are not repeated next to the button.
-  const inlineReason = reason && reason !== EMPTY_REASON && !(estimate?.overCap && reason === 'Over the cap') ? reason : null;
+  const inlineReason =
+    reason && reason !== EMPTY_REASON && reason !== NO_MATCHES_REASON && !(estimate?.overCap && reason === 'Over the cap')
+      ? reason
+      : null;
 
   return (
     <Flex direction="column" gap={2} px={3} py={2} data-testid="load-dock">
@@ -264,7 +337,8 @@ export default observer(function LoadDock() {
         >
           <Icon as={LuCircleX} boxSize={4} flexShrink={0} />
           <Text fontSize="sm" flex="1" minW={0} truncate>
-            Load failed{job.error ? `: ${job.error}` : ''}. Loaded data was kept.
+            Load failed{job.error ? `: ${job.error}` : ''}.
+            {(emptyLoad ? lastLoad?.previousKept : speciesStore.numRecords > 0) && ' Your previous data is unchanged.'}
           </Text>
           <Button size="xs" variant="outline" onClick={() => ex.load()}>
             Try again

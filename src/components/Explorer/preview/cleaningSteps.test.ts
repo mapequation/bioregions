@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Funnel } from '../../../sources/types';
-import { cleaningSteps } from './cleaningSteps';
+import { cleaningSteps, emptyReasonOf, notReceivedOf, partialSummary } from './cleaningSteps';
 
 const funnel = (over: Partial<Funnel> = {}): Funnel => ({
   received: 1000,
@@ -35,5 +35,34 @@ describe('cleaningSteps', () => {
   it('never starts a bar below zero while streaming', () => {
     const steps = cleaningSteps(funnel({ received: 10 }), false);
     expect(steps.every((s) => s.start >= 0)).toBe(true);
+  });
+});
+
+describe('load outcome', () => {
+  const load = (over: Partial<Funnel>, rest: object = {}) => ({ funnel: funnel(over), partial: null, ...rest });
+
+  it('has no empty reason when records were accepted', () => {
+    expect(emptyReasonOf(load({}))).toBeNull();
+  });
+
+  it('prefers the store reason, else infers it from the funnel', () => {
+    expect(emptyReasonOf(load({ accepted: 0 }, { emptyReason: 'noMatches' }))).toBe('noMatches');
+    expect(emptyReasonOf(load({ accepted: 0 }))).toBe('allDropped');
+    expect(emptyReasonOf(load({ accepted: 0, received: 0 }))).toBe('noMatches');
+    const cancelled = load({ accepted: 0, received: 0 }, { partial: { planned: 500, accepted: 0 } });
+    expect(emptyReasonOf(cancelled)).toBe('cancelledEarly');
+  });
+
+  it('counts records not received after a cancel', () => {
+    expect(notReceivedOf(load({}))).toBe(0);
+    expect(notReceivedOf(load({}, { partial: { planned: 5000, accepted: 800 } }))).toBe(4000);
+    expect(notReceivedOf(load({}, { partial: { planned: 5000, accepted: 800, notReceived: 3900 } }))).toBe(3900);
+  });
+
+  it('states the share and the species covered', () => {
+    expect(partialSummary({ planned: 272546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210 })).toBe(
+      '819 of ~272,546 records (<1 %) from 1 of 210 species.',
+    );
+    expect(partialSummary({ planned: 1000, accepted: 500 })).toBe('500 of ~1,000 records (50 %).');
   });
 });

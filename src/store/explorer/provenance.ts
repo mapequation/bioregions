@@ -2,7 +2,7 @@
 // GBIF derived-dataset CSV and the decision ledger as CSV.
 import { type PhylogenyInfo, derivedDatasetCsv, methodsParagraph, obisCitation } from '../../sources/methods';
 import type { DropReason, Funnel, OccurrenceQuery, ProvenanceEntry, SourceId } from '../../sources/types';
-import type { GbifDownload, LedgerRow, Provenance } from './types';
+import type { GbifDownload, LedgerRow, PartialLoad, Provenance } from './types';
 
 /** Provenance kept for the last load: the shared shape plus the exact requests sent. */
 export interface LoadProvenance extends Provenance {
@@ -12,6 +12,11 @@ export interface LoadProvenance extends Provenance {
   gbifDownloadDoi?: string;
   /** The GBIF records came from the download zip rather than the API. */
   fromZip?: boolean;
+  /**
+   * After an empty load that left the previous dataset on screen (`previousKept`): the
+   * provenance of that dataset, for citing what is still shown.
+   */
+  previous?: LoadProvenance;
 }
 
 const SOURCE_LABELS: Record<SourceId, string> = {
@@ -77,10 +82,29 @@ function draftEntries(query: OccurrenceQuery, now: string, gbifDoi?: string, sou
     }));
 }
 
-/** "Loading was stopped early; the dataset holds 230,446 of ~412,380 planned records (56 %)." */
-export function partialSentence(partial: { planned: number; accepted: number }): string {
-  const pct = partial.planned > 0 ? Math.round((100 * partial.accepted) / partial.planned) : 0;
-  return `Loading was stopped early; the dataset holds ${fmt(partial.accepted)} of ~${fmt(partial.planned)} planned records (${pct} %).`;
+/** Share of planned records as text: "56 %", "<1 %" or ">99 %" (never a misleading 0 % or 100 %). */
+function partialPct(accepted: number, planned: number): string {
+  if (planned <= 0) return '0 %';
+  const pct = (100 * accepted) / planned;
+  if (pct > 0 && pct < 1) return '<1 %';
+  if (pct > 99 && pct < 100) return '>99 %';
+  return `${Math.round(pct)} %`;
+}
+
+/**
+ * "Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species
+ * were loaded; because records stream species by species, the missing species are absent
+ * rather than thinned."
+ */
+export function partialSentence(partial: PartialLoad): string {
+  const { planned, accepted, speciesLoaded, speciesPlanned } = partial;
+  const records = `${fmt(accepted)} of ~${fmt(planned)} planned records (${partialPct(accepted, planned)})`;
+  const head = 'Loading was stopped early:';
+  if (speciesPlanned != null && speciesPlanned > 0 && speciesLoaded >= speciesPlanned) {
+    return `${head} ${records} from all ${fmt(speciesPlanned)} species were loaded.`;
+  }
+  const species = speciesPlanned != null && speciesPlanned > 0 ? `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}` : fmt(speciesLoaded);
+  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned.`;
 }
 
 export interface MethodsTextInput {

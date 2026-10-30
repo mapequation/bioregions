@@ -69,12 +69,14 @@ import type {
   BiasId,
   CountStory,
   DownloadCredentials,
+  EmptyReason,
   Estimate,
   GbifDownload,
   Kpis,
   LedgerRow,
   LedgerRowId,
   LoadJob,
+  PartialLoad,
   PlanState,
   Preset,
   Provenance,
@@ -199,6 +201,58 @@ export function previewKey(query: OccurrenceQuery): string {
     ...query,
     quality: { ...query.quality, dedupe: 'none', minRecordsPerSpecies: undefined },
   });
+}
+
+/** Load-button reason when every source's preview matched no record. */
+export const NO_MATCHES_REASON = 'No records match this query';
+
+/** Job error text for a load that ended with no record. */
+const EMPTY_MESSAGES: Record<EmptyReason, string> = {
+  noMatches: 'No records matched this query',
+  allDropped: 'Cleaning removed every record',
+  cancelledEarly: 'Stopped before any record arrived',
+};
+
+/** Why a load holds no record, from its funnel. */
+export function emptyReasonOf(funnel: Funnel, cancelled: boolean): EmptyReason {
+  if (cancelled) return 'cancelledEarly';
+  return funnel.received > 0 ? 'allDropped' : 'noMatches';
+}
+
+/** Whether the app holds a dataset (points or polygons) a load could replace. */
+function hasLoadedData(rootStore: RootStore): boolean {
+  const species = rootStore.speciesStore;
+  return !!species && (species.loaded || species.numRecords > 0);
+}
+
+/** Species the plans promise: the union of their species lists, else a lone plan's count. */
+export function plannedSpecies(plans: StreamPlan[]): number | null {
+  if (plans.length === 0) return null;
+  if (plans.every((p) => p.speciesCounts)) return planSpeciesNames(plans).length;
+  return plans.length === 1 ? plans[0].expectedSpecies : null;
+}
+
+/** Partial-load figures; `notReceived` counts planned records that were never fetched. */
+export function partialLoad(p: {
+  planned: number;
+  accepted: number;
+  speciesLoaded: number;
+  speciesPlanned: number | null;
+  fetched: number;
+}): PartialLoad {
+  return {
+    planned: p.planned,
+    accepted: p.accepted,
+    speciesLoaded: p.speciesLoaded,
+    speciesPlanned: p.speciesPlanned,
+    notReceived: Math.max(0, p.planned - p.fetched),
+  };
+}
+
+/** The provenance of the dataset still on screen after an empty load. */
+function keptLoad(load: LoadProvenance | null): LoadProvenance | undefined {
+  if (!load) return undefined;
+  return load.accepted > 0 || !load.previous ? load : load.previous;
 }
 
 /**
@@ -1441,8 +1495,23 @@ export default class ExplorerStore {
     if (this.job && (this.job.state === 'planning' || this.job.state === 'streaming')) {
       return { ok: false, reason: 'A load is already running' };
     }
+    if (this.previewsAllZero) return { ok: false, reason: NO_MATCHES_REASON };
     if (this.estimate?.overCap) return { ok: false, reason: 'Over the cap' };
     return { ok: true };
+  }
+
+  /**
+   * True when every enabled source that supports the query has a settled preview of 0
+   * records: loading would fetch nothing. False while any of those previews is pending.
+   */
+  get previewsAllZero(): boolean {
+    const q = this.query;
+    const ids = SOURCE_IDS.filter((id) => q.sources[id] && ADAPTERS[id].supports(q).ok);
+    if (ids.length === 0) return false;
+    return ids.every((id) => {
+      const s = this.sources[id];
+      return s.state === 'ready' && !s.stale && s.preview != null && s.preview.total === 0;
+    });
   }
 
   /** Query sections changed since the last load. */
@@ -1594,6 +1663,7 @@ export default class ExplorerStore {
     const startedAt = Date.now();
     const ledger = this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row }));
     const ledgerBase = this.ledgerBase;
+    const hadData = hasLoadedData(this.rootStore);
     const titles = new Map<string, string>();
     for (const p of this.previews) for (const d of p.topDatasets) titles.set(d.key, d.label);
     this.job = {
@@ -1702,6 +1772,8 @@ export default class ExplorerStore {
         ledger,
         ledgerBase,
         planned,
+        fetched: [...progress.values()].reduce((s, p) => s + p.fetched, 0),
+        hadData,
         errors,
         plans,
       });
@@ -1769,6 +1841,10 @@ export default class ExplorerStore {
     ledger: LedgerRow[];
     ledgerBase: number | null;
     planned: number;
+    /** Raw records fetched over all sources. */
+    fetched: number;
+    /** The app held a dataset when the load started. */
+    hadData: boolean;
     errors: string[];
     plans: StreamPlan[];
   }) {
@@ -1778,10 +1854,16 @@ export default class ExplorerStore {
     job.funnel = funnel;
     job.etaSeconds = cancelled ? null : 0;
     if (errors.length > 0) job.error = errors.join('; ');
+    const failed = !cancelled && errors.length >= plans.length && funnel.accepted === 0;
+    const empty = funnel.accepted === 0 && !failed ? emptyReasonOf(funnel, cancelled != null) : undefined;
     if (cancelled) job.state = 'cancelled';
-    else if (errors.length >= plans.length && funnel.accepted === 0) job.state = 'error';
-    else job.state = 'done';
-    if (cancelled === 'discard' || job.state === 'error') return;
+    else if (failed) job.state = 'error';
+    else if (empty) {
+      // Nothing to show: SpeciesStore kept the previous dataset and skipped Infomap.
+      job.state = 'error';
+      job.error = [EMPTY_MESSAGES[empty], ...errors].join('; ');
+    } else job.state = 'done';
+    if (cancelled === 'discard' || failed) return;
 
     const requests: Partial<Record<SourceId, unknown>> = {};
     for (const p of plans) {
@@ -1807,11 +1889,24 @@ export default class ExplorerStore {
           : r,
       ),
       kpis,
-      partial: cancelled || errors.length > 0 ? { planned: ctx.planned, accepted: funnel.accepted } : null,
+      accepted: funnel.accepted,
+      ...(empty && { emptyReason: empty, previousKept: ctx.hadData }),
+      partial:
+        cancelled || errors.length > 0
+          ? partialLoad({
+              planned: ctx.planned,
+              accepted: funnel.accepted,
+              speciesLoaded: tally.species.size,
+              speciesPlanned: plannedSpecies(plans),
+              fetched: ctx.fetched,
+            })
+          : null,
       datasetCounts: tally.datasetCounts(ctx.titles),
       requests,
+      ...(empty && ctx.hadData && { previous: keptLoad(this.lastLoad as LoadProvenance | null) }),
     };
     this.lastLoad = load;
+    if (empty) return;
     this.recent = pushRecent(
       this.recent,
       { id: libraryId('recent'), name: queryTitle(query), query, savedAt: load.retrievedAt, kpis },
@@ -2002,6 +2097,7 @@ export default class ExplorerStore {
       truncated: [],
     };
     this.job = job;
+    const hadData = hasLoadedData(this.rootStore);
     const cleaner = new RecordCleaner({ dedupe: query.quality.dedupe, area: query.area });
     const tally = new LoadTally();
     const expected = this.zipImport?.funnel?.received ?? summary.rows;
@@ -2032,9 +2128,12 @@ export default class ExplorerStore {
       runInAction(() => {
         const funnel = cleaner.funnel;
         const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
-        job.state = cancelled ? 'cancelled' : job.state === 'error' ? 'error' : 'done';
+        const failed = !cancelled && job.state === 'error';
+        const empty = funnel.accepted === 0 && !failed ? emptyReasonOf(funnel, cancelled != null) : undefined;
+        job.state = cancelled ? 'cancelled' : failed || empty ? 'error' : 'done';
+        if (empty && !cancelled) job.error = EMPTY_MESSAGES[empty];
         job.etaSeconds = null;
-        if (cancelled === 'discard' || job.state === 'error') return;
+        if (cancelled === 'discard' || failed) return;
         const load: LoadProvenance = {
           query,
           retrievedAt: new Date().toISOString(),
@@ -2049,7 +2148,18 @@ export default class ExplorerStore {
             yearRange: tally.yearRange,
             bySource: { ...tally.bySource },
           },
-          partial: cancelled ? { planned: expected, accepted: funnel.accepted } : null,
+          accepted: funnel.accepted,
+          ...(empty && { emptyReason: empty, previousKept: hadData }),
+          partial: cancelled
+            ? partialLoad({
+                planned: expected,
+                accepted: funnel.accepted,
+                speciesLoaded: tally.species.size,
+                speciesPlanned: null,
+                fetched: progress.fetched,
+              })
+            : null,
+          ...(empty && hadData && { previous: keptLoad(previous) }),
           datasetCounts: tally.datasetCounts(),
           requests: { gbif: gbifDownloadPredicate(query) },
           gbifDownloadKey: summary.downloadKey,

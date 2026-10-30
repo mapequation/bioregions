@@ -513,6 +513,34 @@ describe('preview pipeline', () => {
     expect(s.canLoad).toEqual({ ok: false, reason: "You're offline" });
     s.dispose();
   });
+
+  it('disables Load when every settled preview matches no record', async () => {
+    vi.mocked(previewGbif).mockResolvedValue(preview('gbif', { total: 0, species: 0 }));
+    vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 0, species: 0 }));
+    const s = newStore();
+    s.addTaxon(felidae);
+    // Previews still pending: Load keeps its usual state.
+    expect(s.canLoad).toEqual({ ok: true });
+    await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
+    expect(s.previewState).toBe('ready');
+    expect(s.previewsAllZero).toBe(true);
+    expect(s.canLoad).toEqual({ ok: false, reason: 'No records match this query' });
+
+    // One source with records is enough.
+    vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 12 }));
+    s.setYears([1980, 2025]);
+    expect(s.canLoad).toEqual({ ok: true });
+    await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
+    expect(s.previewsAllZero).toBe(false);
+    expect(s.canLoad).toEqual({ ok: true });
+
+    // A disabled source does not count.
+    s.setSourceEnabled('obis', false);
+    expect(s.query.sources.obis).toBe(false);
+    await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
+    expect(s.canLoad).toEqual({ ok: false, reason: 'No records match this query' });
+    s.dispose();
+  });
 });
 
 describe('suggestTaxa', () => {

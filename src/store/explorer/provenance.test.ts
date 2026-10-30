@@ -33,6 +33,7 @@ function load(extra: Partial<LoadProvenance> = {}): LoadProvenance {
     funnel: cleaner.funnel,
     ledger: [{ id: 'years', label: 'Years 1970–2025', toggleable: true, active: true, impact: 120, share: 0.1 }],
     kpis: { records: 2, recordsUpperBound: false, species: 2, datasets: 2, yearRange: null, bySource: {} },
+    accepted: 2,
     partial: null,
     datasetCounts: { gbif: [{ key: 'd1', label: 'Dataset one', count: 1 }], obis: [{ key: 'o1', label: 'o1', count: 1 }] },
     ...extra,
@@ -59,8 +60,11 @@ describe('buildMethodsText', () => {
   });
 
   it('says when the load was partial, before the citations', () => {
-    const text = buildMethodsText({ load: load({ partial: { planned: 412_380, accepted: 230_446 } }), query: query() });
-    expect(text).toContain('Loading was stopped early; the dataset holds 230,446 of ~412,380 planned records (56 %).');
+    const partial = { planned: 272_546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210, notReceived: 271_000 };
+    const text = buildMethodsText({ load: load({ partial }), query: query() });
+    expect(text).toContain(
+      'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; because records stream species by species, the missing species are absent rather than thinned.',
+    );
     expect(text.indexOf('Loading was stopped')).toBeLessThan(text.indexOf('Data citations:'));
   });
 
@@ -107,6 +111,14 @@ describe('citations and CSVs', () => {
   });
 
   it('formats the partial sentence', () => {
-    expect(partialSentence({ planned: 10, accepted: 5 })).toContain('(50 %)');
+    const p = { planned: 10, accepted: 5, speciesLoaded: 2, speciesPlanned: 4, notReceived: 5 };
+    expect(partialSentence(p)).toContain('5 of ~10 planned records (50 %) from 2 of 4 species');
+    expect(partialSentence({ ...p, accepted: 999, planned: 1000 })).toContain('(>99 %)');
+    // Unknown species total: no "of".
+    expect(partialSentence({ ...p, speciesPlanned: null })).toContain('from 2 species were loaded; because');
+    // Every species present: nothing is absent.
+    expect(partialSentence({ ...p, speciesLoaded: 4 })).toBe(
+      'Loading was stopped early: 5 of ~10 planned records (50 %) from all 4 species were loaded.',
+    );
   });
 });

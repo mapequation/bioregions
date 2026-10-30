@@ -24,7 +24,7 @@ import { chartPalettes } from '../charts/colors';
 import ShareBar from '../charts/ShareBar';
 import ViewAsTable from '../charts/ViewAsTable';
 import { fmtInt, fmtPct, fmtSigned } from '../format';
-import { type CleaningStep, cleaningSteps } from './cleaningSteps';
+import { type CleaningStep, cleaningSteps, notReceivedOf, PARTIAL_BIAS, partialSummary } from './cleaningSteps';
 
 export interface DecisionLedgerProps {
   /** preview: filter impact only; live: plus the streaming cleaning funnel; frozen: after a load. */
@@ -683,8 +683,18 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     const f = snapshot.funnel;
     const dup = (f.dropped as Partial<Record<string, number>>).duplicate ?? dupRow?.impact ?? 0;
     const cleaned = Math.max(0, f.received - f.accepted - dup);
-    const notReceived = toLoad != null ? toLoad - f.received : 0;
-    if (notReceived !== 0) {
+    // A cancelled load: the planned records never received are "not loaded", not removed.
+    const cancelled = snapshot.partial != null ? notReceivedOf(snapshot) : 0;
+    const notReceived = cancelled > 0 ? cancelled : toLoad != null ? toLoad - f.received : 0;
+    if (cancelled > 0) {
+      path.push({
+        id: 'notReceived',
+        kind: 'drop',
+        label: 'Not loaded (cancelled)',
+        value: cancelled,
+        tip: `Planned records that never arrived because the load was stopped. ${PARTIAL_BIAS}`,
+      });
+    } else if (notReceived !== 0) {
       path.push({
         id: 'notReceived',
         kind: 'drop',
@@ -703,7 +713,13 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
         tip: 'Records dropped by the other cleaning steps; the cleaning detail below breaks them down.',
       });
     }
-    path.push({ id: 'loaded', kind: 'end', label: snapshot.mode === 'add' ? 'Added' : 'Loaded', value: f.accepted });
+    path.push({
+      id: 'loaded',
+      kind: 'end',
+      label: `${snapshot.mode === 'add' ? 'Added' : 'Loaded'}${snapshot.partial ? ' (partial)' : ''}`,
+      value: f.accepted,
+      tip: snapshot.partial ? `Partial dataset: ${partialSummary(snapshot.partial)} ${PARTIAL_BIAS}` : undefined,
+    });
   } else {
     path.push(
       {
@@ -772,10 +788,17 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       variant="ghost"
       onClick={csv}
       disabled={!showRows}
-      aria-label="Download the decision ledger as CSV"
     >
       <LuDownload />
-      {frozen ? 'Download ledger CSV' : 'CSV'}
+      {frozen ? (
+        <>
+          Download ledger CSV<VisuallyHidden> (decision ledger)</VisuallyHidden>
+        </>
+      ) : (
+        <>
+          CSV<VisuallyHidden>: download the decision ledger</VisuallyHidden>
+        </>
+      )}
     </Button>
   );
 

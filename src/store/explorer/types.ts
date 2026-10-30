@@ -148,6 +148,26 @@ export interface LoadJob {
   error?: string;
 }
 
+/**
+ * Why a load holds no records: nothing matched, cleaning dropped everything, or the
+ * load was cancelled before the first record arrived.
+ */
+export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly';
+
+/** How much of a load arrived when it stopped early. */
+export interface PartialLoad {
+  /** Records the plans promised (capped). */
+  planned: number;
+  /** Records loaded. */
+  accepted: number;
+  /** Species with at least one loaded record. */
+  speciesLoaded: number;
+  /** Species the plans promised, null when unknown. */
+  speciesPlanned: number | null;
+  /** Planned records never fetched because the load stopped. */
+  notReceived: number;
+}
+
 export interface Provenance {
   query: OccurrenceQuery;
   retrievedAt: string;
@@ -155,7 +175,14 @@ export interface Provenance {
   funnel: Funnel;
   ledger: LedgerRow[];
   kpis: Kpis;
-  partial: { planned: number; accepted: number } | null;
+  /** Records loaded (the funnel's accepted count). */
+  accepted: number;
+  /** Why nothing was loaded; set only when `accepted` is 0. */
+  emptyReason?: EmptyReason;
+  /** A replace-mode load received nothing and the previous dataset was left untouched. */
+  previousKept?: boolean;
+  /** Set when the load stopped early (cancelled) or a source failed. */
+  partial: PartialLoad | null;
   datasetCounts: Partial<Record<SourceId, FacetBucket[]>>;
   derivedDoi?: string;
   gbifDownloadKey?: string;

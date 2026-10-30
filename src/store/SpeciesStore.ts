@@ -75,6 +75,12 @@ export type Species = {
   numGridCellsWithinModule?: number;
 };
 
+/** Outcome of `SpeciesStore.loadRecords`. */
+export interface LoadRecordsResult {
+  /** Records added to the store (0: the previous dataset was left untouched). */
+  received: number;
+}
+
 export default class SpeciesStore {
   rootStore: RootStore;
   name: string = 'data';
@@ -442,6 +448,10 @@ export default class SpeciesStore {
    * A failing stream also keeps them, and the error is rethrown after `postLoad`.
    * Aborting `controller` with the reason `'discard'` drops the records instead and
    * skips binning and Infomap.
+   *
+   * With `clear`, the previous data is cleared lazily, on the first batch that holds a
+   * record. When no record arrives at all, the previous dataset is left untouched and
+   * neither `postLoad` nor Infomap runs; the result reports `received: 0`.
    */
   async loadRecords(
     batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
@@ -450,24 +460,34 @@ export default class SpeciesStore {
       clear = true,
       controller = new AbortController(),
     }: { name: string; clear?: boolean; controller?: AbortController },
-  ) {
-    if (clear) {
-      this.clearData();
-    }
-    runInAction(() => {
-      this.name = name;
-    });
+  ): Promise<LoadRecordsResult> {
+    // Restored when nothing arrives, so a dataset that is kept stays marked as loaded.
+    const wasLoaded = this.loaded;
     this.preLoad(controller);
 
     const { mapStore } = this.rootStore;
-    mapStore.setRenderType('records');
-
+    let received = 0;
     let failure: unknown = null;
     try {
       for await (const batch of batches) {
         if (controller.signal.aborted) {
           break;
         }
+        if (batch.length === 0) {
+          continue;
+        }
+        if (received === 0) {
+          // First record: only now replace the previous dataset.
+          if (clear) {
+            this.clearData();
+            this.setIsLoading();
+          }
+          runInAction(() => {
+            this.name = name;
+          });
+          mapStore.setRenderType('records');
+        }
+        received += batch.length;
         const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
         for (const record of batch) {
           const pointFeature = createPointFeature([record.lon, record.lat], {
@@ -492,12 +512,24 @@ export default class SpeciesStore {
         this.loadController = null;
       });
       this.clearData();
-      return;
+      return { received };
+    }
+    if (received === 0) {
+      // Nothing arrived: keep the previous dataset as it was and skip binning and Infomap.
+      runInAction(() => {
+        this.loadController = null;
+        this.setIsLoaded(wasLoaded);
+      });
+      if (failure) {
+        throw failure;
+      }
+      return { received };
     }
     await this.postLoad();
     if (failure) {
       throw failure;
     }
+    return { received };
   }
 
   /** Stop the running load; it finishes with the records received so far. */

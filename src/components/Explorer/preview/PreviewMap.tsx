@@ -199,6 +199,46 @@ interface ObisCell {
   count: number;
 }
 
+/**
+ * Fetch density tiles as blob URLs. An <img> renders any decodable body whatever the HTTP status,
+ * and GBIF answers an overloaded tile with a 503 PNG that reads "503"; fetching lets error and
+ * empty (204) tiles resolve to false instead of being drawn on the map.
+ */
+function useTileBlobs(urls: string[]): ReadonlyMap<string, string | false> {
+  const cache = useRef(new Map<string, string | false>());
+  const inflight = useRef(new Set<string>());
+  const [, bump] = useState(0);
+  const latest = useRef(urls);
+  latest.current = urls;
+  const key = urls.join('\n');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` stands for the url list read via `latest`.
+  useEffect(() => {
+    for (const url of latest.current) {
+      if (cache.current.has(url) || inflight.current.has(url)) continue;
+      inflight.current.add(url);
+      fetch(url)
+        .then(async (res) => (res.ok && res.status !== 204 ? URL.createObjectURL(await res.blob()) : false))
+        .catch(() => false as const)
+        .then((blob) => {
+          inflight.current.delete(url);
+          if (cache.current.size > 400) {
+            for (const u of cache.current.values()) if (u) URL.revokeObjectURL(u);
+            cache.current.clear();
+          }
+          cache.current.set(url, blob);
+          bump((n) => n + 1);
+        });
+    }
+  }, [key]);
+  useEffect(() => {
+    const blobs = cache.current;
+    return () => {
+      for (const u of blobs.values()) if (u) URL.revokeObjectURL(u);
+    };
+  }, []);
+  return cache.current;
+}
+
 /** OBIS record grid for the query, debounced and abortable. */
 function useObisGrid(query: OccurrenceQuery, enabled: boolean, precision: number) {
   const key = enabled ? JSON.stringify([query.taxa.map((t) => t.name), query.area, query.years, query.depth, query.quality, precision]) : '';
@@ -298,15 +338,9 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
       )
     : [];
 
-  // Track which density tiles have settled, and which failed (204 = empty).
-  const settled = useRef(new Map<string, boolean>());
-  const [, bump] = useState(0);
-  const settle = (src: string, ok: boolean) => {
-    if (settled.current.size > 400) settled.current.clear();
-    settled.current.set(src, ok);
-    bump((n) => n + 1);
-  };
-  const densityPending = densityUrls.some((u) => !settled.current.has(u));
+  // Density tiles as blob URLs: false = empty (204) or failed, missing = still loading.
+  const tileBlobs = useTileBlobs(densityUrls);
+  const densityPending = densityUrls.some((u) => !tileBlobs.has(u));
 
   // OBIS grid overlay.
   const showObis = query.sources.obis && supportsObis(query).ok && (query.taxa.length > 0 || hasArea) && !faint;
@@ -446,16 +480,14 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             />
           ))}
           {densityTiles.map((t, i) => {
-            const src = densityUrls[i];
-            if (!src) return null;
+            const blob = tileBlobs.get(densityUrls[i] ?? '');
+            if (!blob) return null;
             return (
               <img
                 key={`d-${t.z}-${t.col}-${t.y}`}
-                src={src}
+                src={blob}
                 alt=""
                 draggable={false}
-                onLoad={() => settle(src, true)}
-                onError={() => settle(src, false)}
                 style={{
                   position: 'absolute',
                   left: t.left,
@@ -464,7 +496,6 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                   height: t.size,
                   maxWidth: 'none',
                   userSelect: 'none',
-                  visibility: settled.current.get(src) === false ? 'hidden' : 'visible',
                 }}
               />
             );

@@ -75,7 +75,7 @@ const MapTooltip = observer(function _MapTooltip() {
 // Centre card on the empty map: the two ways to get data in.
 const EmptyMapCta = observer(function EmptyMapCta() {
   const { speciesStore, explorerStore } = useStore();
-  const busy = speciesStore.isLoading || (explorerStore.job != null && explorerStore.job.state !== 'done');
+  const busy = speciesStore.isLoading || explorerStore.isLoading;
   if (busy || speciesStore.numRecords > 0 || speciesStore.loaded) {
     return null;
   }
