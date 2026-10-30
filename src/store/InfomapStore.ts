@@ -1583,6 +1583,11 @@ export default class InfomapStore {
     ) => {
       // TODO: Make sure internal tree nodes don't have same name as leaf nodes
       const taxonName = treeNode.name;
+      // The information weight is negative when the node's strength exceeds the
+      // number of cells; drop the contribution rather than subtract it.
+      if (interpolationWeight <= 0) {
+        return;
+      }
 
       for (const [memTaxonName, memLinks] of links.entries()) {
         for (const [cellId, memWeight] of memLinks.entries()) {
