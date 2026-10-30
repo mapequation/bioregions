@@ -296,3 +296,14 @@ describe('species without a tip in state networks', () => {
     expect(network.nodeIdMap).toHaveProperty('G');
   });
 });
+
+describe('multilayer layer times', () => {
+  it('are k / L for linear time', () => {
+    const numLayers = 10;
+    const { infomapStore } = createRoot({ numLayers, multilayerLogTime: false });
+    const createStandardNetwork = vi.spyOn(infomapStore, 'createStandardNetwork');
+    infomapStore.createMultilayerNetwork();
+    const times = createStandardNetwork.mock.calls.map(([t]) => t);
+    expect(times).toEqual(Array.from({ length: numLayers }, (_, k) => (k + 1) / numLayers));
+  });
+});

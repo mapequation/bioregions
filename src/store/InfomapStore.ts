@@ -1154,11 +1154,9 @@ export default class InfomapStore {
         integrationTimes.push(t);
       });
     } else {
-      let t = 0;
-      const dt = 1 / numLayers;
-      layerIds.forEach(() => {
-        t += dt;
-        integrationTimes.push(t);
+      // k / L, not a cumulative sum, so the last layer is exactly at the tips.
+      layerIds.forEach((k) => {
+        integrationTimes.push((k + 1) / numLayers);
       });
     }
     const { timeFormatter } = this.rootStore.treeStore;
