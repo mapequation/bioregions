@@ -1449,6 +1449,19 @@ export default class InfomapStore {
       }
     };
 
+    if (treeWeightBalance >= 1) {
+      // As in createStandardNetwork: at full tree weight there are no species
+      // links, so occurrence species with no tip in the tree are left out.
+      const names = Object.keys(nameToCellIds);
+      const numSpeciesNotInTree = names.filter((name) => !treeNodeMap.has(name)).length;
+      network.numSpeciesExcluded = numSpeciesNotInTree;
+      if (numSpeciesNotInTree > 0) {
+        console.warn(
+          `treeWeightBalance = 1: ${numSpeciesNotInTree} of ${names.length} species have no tip in the tree and are excluded from the network.`,
+        );
+      }
+    }
+
     let unscaledNonTreeStrength = 0;
 
     if (treeWeightBalance < 1) {

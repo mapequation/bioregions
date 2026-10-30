@@ -282,3 +282,17 @@ describe('tree weight balance just below 1', () => {
     expect(network.nodeIdMap).toHaveProperty('G');
   });
 });
+
+describe('species without a tip in state networks', () => {
+  it('counts them when treeWeightBalance = 1 leaves them out', () => {
+    const network = buildStateNetwork({ useWholeTree: true, treeWeightBalance: 1 });
+    expect(network.numSpeciesExcluded).toBe(1);
+    expect(network.nodeIdMap).not.toHaveProperty('G');
+  });
+
+  it('does not report them when species are still linked', () => {
+    const network = buildStateNetwork({ useWholeTree: true, treeWeightBalance: 0.5 });
+    expect(network.numSpeciesExcluded).toBeUndefined();
+    expect(network.nodeIdMap).toHaveProperty('G');
+  });
+});
