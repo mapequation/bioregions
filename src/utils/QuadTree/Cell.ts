@@ -269,8 +269,12 @@ export default class Cell
     const geom = feature.geometry;
 
     const [x, y] = geom.coordinates;
-    const isRight = x >= xMid;
-    const isBelow = y >= yMid;
+    // A point on the midline goes east/north, except on the eastern/northern
+    // domain edge (lon 180, lat 90): there the east/north child would lie
+    // outside the domain and be clamped to zero width, so the point belongs
+    // to the last column/row instead.
+    const isRight = x > xMid || (x === xMid && xMid < 180);
+    const isBelow = y > yMid || (y === yMid && yMid < 90);
     const i = (Number(isBelow) << 1) | Number(isRight);
 
     // Update the bounds as we recurse.
