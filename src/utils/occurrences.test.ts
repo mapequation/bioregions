@@ -1,6 +1,10 @@
 import Papa from 'papaparse';
 import { describe, expect, it } from 'vitest';
-import { parseCoordinate, parseOccurrence } from './occurrences';
+import {
+  parseCoordinate,
+  parseOccurrence,
+  parseOccurrenceTable,
+} from './occurrences';
 
 const columns = {
   nameColumn: 'species',
@@ -66,5 +70,44 @@ describe('parseOccurrence', () => {
         ].join('\n'),
       ),
     ).toEqual([null, null, null, null, null, null]);
+  });
+});
+
+describe('parseOccurrenceTable', () => {
+  it('reads quoted fields and CRLF line endings', () => {
+    const csv =
+      '"species","longitude","latitude"\r\n"Puma concolor (Linnaeus, 1771)",-60.5,"-10.25"\r\n\r\n';
+    expect(parseOccurrenceTable(csv, columns)).toEqual({
+      occurrences: [
+        {
+          name: 'Puma concolor (Linnaeus, 1771)',
+          coordinates: [-60.5, -10.25],
+        },
+      ],
+      numSkipped: 0,
+      fields: ['species', 'longitude', 'latitude'],
+    });
+  });
+
+  it('detects tab-separated input', () => {
+    const tsv = 'species\tlongitude\tlatitude\nPuma concolor\t-60.5\t-10.25\n';
+    expect(parseOccurrenceTable(tsv, columns).occurrences).toEqual([
+      { name: 'Puma concolor', coordinates: [-60.5, -10.25] },
+    ]);
+  });
+
+  it('counts rows with an empty, hex, infinite or out-of-range coordinate as skipped', () => {
+    const csv = [
+      'species,longitude,latitude',
+      'A,1,2',
+      'A,,2',
+      'A,0x10,2',
+      'A,Infinity,2',
+      'A,1,91',
+      ',1,2',
+    ].join('\n');
+    const { occurrences, numSkipped } = parseOccurrenceTable(csv, columns);
+    expect(occurrences).toEqual([{ name: 'A', coordinates: [1, 2] }]);
+    expect(numSkipped).toBe(5);
   });
 });
