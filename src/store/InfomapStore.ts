@@ -67,6 +67,28 @@ const defaultArgs: RequiredArgs = {
   output: ['json', 'tree'],
 };
 
+/**
+ * The network as Infomap should get it: without vertices (bipartite) or state
+ * nodes that no link touches. Infomap would keep each of them as a zero-flow
+ * singleton module, which shows up as an empty bioregion; left out, their cells
+ * get no bioregion.
+ */
+export function withoutUnlinkedNodes<
+  N extends BioregionsNetwork | BioregionsStateNetwork,
+>(network: N): N {
+  const linked = new Set<number>();
+  for (const { source, target } of network.links) {
+    linked.add(source);
+    linked.add(target);
+  }
+  if ('states' in network) {
+    const states = network.states.filter(({ stateId }) => linked.has(stateId));
+    return states.length === network.states.length ? network : { ...network, states };
+  }
+  const nodes = network.nodes.filter(({ id }) => linked.has(id));
+  return nodes.length === network.nodes.length ? network : { ...network, nodes };
+}
+
 export class Bioregion {
   flow = 0;
   bioregionId = 0;
@@ -692,7 +714,7 @@ export default class InfomapStore {
           reject(err);
         })
         .run({
-          network,
+          network: withoutUnlinkedNodes(network),
           args,
         });
     });
