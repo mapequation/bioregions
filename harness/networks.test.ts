@@ -230,3 +230,17 @@ describe('state network nodes (B10)', () => {
     expect(network.nodes.length).toBe(network.numGridCellNodes + taxa.size);
   });
 });
+
+describe('uniform tree links in state networks (B11)', () => {
+  it('do not depend on the order of children in the tree', () => {
+    // A and B share cells but have different memory weights under P at the cut.
+    const params = { treeWeightBalance: 1, useWholeTree: true, uniformTreeLinks: true };
+    const sorted = (newick: string) =>
+      namedLinks(buildStateNetwork(params, newick))
+        .map(({ taxon, state, weight }) => `${taxon} ${state} ${weight.toFixed(12)}`)
+        .sort();
+    expect(sorted('((B: 1, A: 0.5)P: 0.5, C: 1.5)R;')).toEqual(
+      sorted('((A: 0.5, B: 1)P: 0.5, C: 1.5)R;'),
+    );
+  });
+});
