@@ -34,7 +34,10 @@ const rectangle = (
 
 const build = (
   features: GeoFeature[],
-  { extent = [0, 0, 8, 8] as [number, number, number, number], capacity = 10 } = {},
+  {
+    extent = [0, 0, 8, 8] as [number, number, number, number],
+    capacity = 10,
+  } = {},
 ) => {
   const root = new Cell(extent, MAX_SIZE_LOG2);
   for (const feature of features) {
@@ -96,5 +99,42 @@ describe('Cell polygon binning', () => {
     root.visit((cell) => {
       expect(cell.x2).toBeGreaterThan(cell.x1);
     });
+  });
+
+  it('counts a range only in cells whose interior it overlaps', () => {
+    const quadrant = rectangle(0, 0, 4, 4);
+    const corner = rectangle(4, 4, 5, 5);
+    const covering = rectangle(-1, -1, 9, 9);
+    const root = build([quadrant, corner, covering]);
+
+    expect(cellsWith(root, quadrant).map((cell) => cell.extent)).toEqual([
+      [0, 0, 4, 4],
+    ]);
+    expect(cellsWith(root, corner).map((cell) => cell.extent)).toEqual([
+      [4, 4, 8, 8],
+    ]);
+    expect(cellsWith(root, covering)).toHaveLength(4);
+  });
+
+  it('does not count a range in a cell that lies in one of its holes', () => {
+    const ring = rectangle(-1, -1, 9, 9);
+    ring.geometry.coordinates.push([
+      [0, 0],
+      [0, 4],
+      [4, 4],
+      [4, 0],
+      [0, 0],
+    ]);
+    const root = build([ring]);
+
+    expect(
+      cellsWith(root, ring)
+        .map((cell) => cell.extent)
+        .sort(),
+    ).toEqual([
+      [0, 4, 4, 8],
+      [4, 0, 8, 4],
+      [4, 4, 8, 8],
+    ]);
   });
 });
