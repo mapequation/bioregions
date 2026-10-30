@@ -342,7 +342,8 @@ export default class Cell
         [xm, y1],
       ],
     ]);
-    const subPolygons = [topLeft, topRight, lowerLeft, lowerRight];
+    // Same quadrant order as addChildPoint: 0 = SW, 1 = SE, 2 = NW, 3 = NE.
+    const subPolygons = [lowerLeft, lowerRight, topLeft, topRight];
 
     const getChild = (i: number) => {
       let child = this.children[i];
