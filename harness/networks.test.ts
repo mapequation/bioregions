@@ -167,3 +167,24 @@ describe('time slice cut at a parent node (B4)', () => {
     expect(taxa).not.toContain('D');
   });
 });
+
+describe('NaN weights (B5)', () => {
+  it('gives the information weight 1 with a single grid cell', () => {
+    const root = createHeadlessRoot('test');
+    root.infomapStore.useWeightedSpeciesLinks = true;
+    expect(root.infomapStore.getTaxonLinkWeight(1, 1)).toBe(1);
+  });
+
+  it.each([
+    { segregationTime: 0 },
+    { segregationTime: 0.5 },
+  ])('skips the tree scaling when there are no tree links, with %o', (params) => {
+    // No tip matches an occurrence species, so the tree adds no links.
+    const network = buildNetwork({ ...params, treeWeightBalance: 0.5 }, '(X: 1, Y: 1);');
+    expect(network.sumTreeLinkWeight).toBe(0);
+    expect(network.links.length).toBeGreaterThan(0);
+    for (const { weight } of network.links) {
+      expect(Number.isFinite(weight)).toBe(true);
+    }
+  });
+});
