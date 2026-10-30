@@ -826,13 +826,18 @@ export default class InfomapStore {
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = 0;
+    // Cells and taxa have separate names: a taxon may be named like a cell id.
+    const cellNodeIds = new Map<string, number>();
+    const taxonNodeIds = new Map<string, number>();
 
     const addNode = (name: string, isGridCell: boolean) => {
-      let id = network.nodeIdMap[name];
+      const nodeIds = isGridCell ? cellNodeIds : taxonNodeIds;
+      let id = nodeIds.get(name);
       if (id != null) {
         return id;
       }
       id = nodeId++;
+      nodeIds.set(name, id);
       network.nodeIdMap[name] = id;
       network.nodes.push({ id, name });
       if (!isGridCell) {
@@ -1186,6 +1191,16 @@ export default class InfomapStore {
     // const integrationTimes = [0.5, 0.7, 0.8, 0.9, 1];
     console.log('Multilayer integration times:', integrationTimes);
     let nodeIdCounter = 0;
+    // Cells and taxa have separate names: a taxon may be named like a cell id.
+    const cellNodeIds = new Map<string, number>();
+    const taxonNodeIds = new Map<string, number>();
+    const getNodeId = (nodeIds: Map<string, number>, name: string | undefined) => {
+      const id = name == null ? undefined : nodeIds.get(name);
+      if (id == null) {
+        throw new Error('InfomapStore: network link references unknown node');
+      }
+      return id;
+    };
 
     integrationTimes.forEach((t, layerId) => {
       console.log(`=== Creating layer ${layerId} at time ${t}`);
@@ -1195,22 +1210,19 @@ export default class InfomapStore {
         if (name == null) {
           throw new Error(`InfomapStore: network node ${node.id} has no name`);
         }
-        if (multilayerNetwork.nodeIdMap[name] === undefined) {
+        const nodeIds = node.id < network.bipartiteStartId ? cellNodeIds : taxonNodeIds;
+        if (!nodeIds.has(name)) {
           const id = nodeIdCounter++;
+          nodeIds.set(name, id);
           multilayerNetwork.nodeIdMap[name] = id;
           multilayerNetwork.nodes?.push({ id, name });
         }
       });
       network.links.forEach((link) => {
-        const sourceName = network.nodes[link.source].name;
-        const targetName = network.nodes[link.target].name;
-        if (sourceName == null || targetName == null) {
-          throw new Error('InfomapStore: network link references unnamed node');
-        }
         const intraLink = {
           layerId,
-          source: multilayerNetwork.nodeIdMap[sourceName],
-          target: multilayerNetwork.nodeIdMap[targetName],
+          source: getNodeId(taxonNodeIds, network.nodes[link.source].name),
+          target: getNodeId(cellNodeIds, network.nodes[link.target].name),
           weight: link.weight,
         }
         multilayerNetwork.intra.push(intraLink);
@@ -1341,12 +1353,14 @@ export default class InfomapStore {
       return treeNode && !treeNode.data.isLeaf;
     };
 
+    // Taxa have their own names, apart from cells: a taxon may be named like a cell id.
+    const taxonToPhysicalId = new Map<string, number>();
     const addTaxonNode = (taxonName: string) => {
       // Add physical node
-      let taxonId = nameToPhysicalId.get(taxonName);
+      let taxonId = taxonToPhysicalId.get(taxonName);
       if (taxonId == null) {
         taxonId = physicalId++;
-        nameToPhysicalId.set(taxonName, taxonId);
+        taxonToPhysicalId.set(taxonName, taxonId);
         network.nodes.push({ id: taxonId, name: taxonName });
         if (isInternalTaxonNode(taxonName)) {
           ++network.numInternalTaxonNodes;

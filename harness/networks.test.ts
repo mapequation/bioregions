@@ -35,10 +35,10 @@ function occurrences(): GeoFeature[] {
   return features;
 }
 
-function createRoot(params: Record<string, unknown>, newick = NEWICK) {
+function createRoot(params: Record<string, unknown>, newick = NEWICK, features = occurrences()) {
   const root = createHeadlessRoot('test');
   Object.assign(root.speciesStore.binner, { minCellCapacity: 1, maxCellCapacity: 4 });
-  setOccurrences(root, occurrences());
+  setOccurrences(root, features);
   const tree = prepareTree(parseTree(newick));
   root.treeStore.tree = tree;
   root.treeStore.treeNodeMap = buildTreeNodeMap(tree);
@@ -305,5 +305,45 @@ describe('multilayer layer times', () => {
     infomapStore.createMultilayerNetwork();
     const times = createStandardNetwork.mock.calls.map(([t]) => t);
     expect(times).toEqual(Array.from({ length: numLayers }, (_, k) => (k + 1) / numLayers));
+  });
+});
+
+describe('taxa named like a cell id', () => {
+  // Cell ids are digit strings, as are numeric species keys in occurrence data.
+  // Names do not affect the binning, so find a cell id first, then use it as a name.
+  const withSpecies = (name: string) => [
+    ...occurrences(),
+    createPointFeature([-39.5, -9.5], { name }),
+  ];
+  const cellId = createRoot({}, NEWICK, withSpecies('X')).speciesStore.binner.cells[0].id;
+  const params = { treeWeightBalance: 0.5, useWholeTree: true };
+  const build = (extra: Record<string, unknown>) =>
+    createRoot({ ...params, ...extra }, NEWICK, withSpecies(cellId));
+
+  it('get their own node in bipartite networks', () => {
+    const network = build({ segregationTime: 0 }).infomapStore.createNetwork();
+    if (!('bipartiteStartId' in network)) {
+      throw new Error('expected a bipartite network');
+    }
+    expect(network.links.every(({ source }) => source >= network.bipartiteStartId)).toBe(true);
+    expect(network.nodes.length).toBe(
+      network.numGridCellNodes + network.numLeafTaxonNodes + network.numInternalTaxonNodes,
+    );
+  });
+
+  it('get their own node in state networks', () => {
+    const network = build({ segregationTime: 0.5 }).infomapStore.createNetwork();
+    if (!('states' in network)) {
+      throw new Error('expected a state network');
+    }
+    const taxonStates = network.links.map(({ source }) => network.states[source]);
+    expect(taxonStates.every(({ id }) => id >= network.numGridCellNodes)).toBe(true);
+  });
+
+  it('get their own node in multilayer networks', () => {
+    const { infomapStore, speciesStore } = build({});
+    const network = infomapStore.createMultilayerNetwork();
+    const numCells = speciesStore.binner.cells.length;
+    expect(network.intra.every(({ source }) => source >= numCells)).toBe(true);
   });
 });
