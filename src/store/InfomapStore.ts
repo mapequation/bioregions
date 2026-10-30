@@ -1068,7 +1068,7 @@ export default class InfomapStore {
         if (isEqual(childWeight, 0)) {
           const links = getLinksFromTreeNode(parent);
           const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.numLinks, network.numGridCellNodes);
-          addLinks(child, links.links, nodeWeight);
+          addLinks(parent, links.links, nodeWeight);
           return;
         }
         const parentLinks = getLinksFromTreeNode(parent);
