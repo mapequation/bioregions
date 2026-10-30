@@ -8,7 +8,7 @@ import {
   type IReactionDisposer,
 } from 'mobx';
 import type RootStore from './RootStore';
-import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
+import { prepareTree, parseTree, lineagesThroughTime } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
@@ -33,7 +33,6 @@ import { format } from 'd3-format';
 import { scaleLinear } from 'd3-scale';
 // d3 umbrella has the shape/scale helpers (d3-shape, d3-scale are transitive via `d3`).
 import { scaleSqrt } from 'd3';
-import { isEqual } from '../utils/math';
 import {
   plot,
   type Plot,
@@ -205,11 +204,7 @@ export default class TreeStore {
     if (this.tree === null) {
       return [];
     }
-    return getAccumulatedTreeData(this.tree, {
-      getNodeData: (node) =>
-        !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
-      initialValue: 1,
-    });
+    return lineagesThroughTime(this.tree);
   }
 
   get nodeStyles() {

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
+import {
+  lineagesThroughTime,
+  parseTree,
+  prepareTree,
+  visitTreeDepthFirstPostOrder,
+} from '.';
 import type { PhyloNode } from '.';
 
 function postOrder(tree: PhyloNode, f: (node: PhyloNode) => unknown = (node) => node.name) {
@@ -94,5 +99,25 @@ describe('tree utils', () => {
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toMatch(/2 negative branch lengths/);
     warn.mockRestore();
+  });
+});
+
+describe('lineages through time', () => {
+  const ltt = (newick: string) =>
+    lineagesThroughTime(prepareTree(parseTree(newick))).map(({ t, value }) => [
+      t,
+      value,
+    ]);
+
+  it('adds one lineage per extra child at a polytomy', () => {
+    expect(ltt('(a:1,b:1,c:1);')).toEqual([
+      [0, 1], [0, 3], [1, 3], [1, 3],
+    ]);
+  });
+
+  it('keeps tips that end before the present', () => {
+    expect(ltt('((a:1,b:1):1,c:0.5);')).toEqual([
+      [0, 1], [0, 2], [0.25, 2], [0.5, 3], [1, 3], [1, 3],
+    ]);
   });
 });

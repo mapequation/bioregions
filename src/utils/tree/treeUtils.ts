@@ -166,6 +166,18 @@ export function getAccumulatedTreeData(
   return histogram;
 }
 
+/**
+ * Number of lineages through time. A node with k children adds k - 1
+ * lineages at its time, and tips count as lineages up to the present, also
+ * when they end before it (extinct tips in a non-ultrametric tree).
+ */
+export function lineagesThroughTime(tree: PhyloNode) {
+  return getAccumulatedTreeData(tree, {
+    getNodeData: (node) => (node.isLeaf ? 0 : node.children.length - 1),
+    initialValue: 1,
+  });
+}
+
 type TreeHistogramOptions = {
   getNodeData: (n: PhyloNode) => number;
   numBins: number;
