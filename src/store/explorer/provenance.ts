@@ -96,8 +96,10 @@ function partialPct(accepted: number, planned: number): string {
 
 /**
  * "Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species
- * were loaded; because records stream species by species, the missing species are absent
- * rather than thinned."
+ * were loaded; requests alternate packed batches of small species with parts of large
+ * ones, so the missing species are absent rather than thinned, and species still being
+ * fetched have fewer records than they would. The largest of the 209 missing species are
+ * A b (~9,000 planned records), C d (~450) and E f (~30). Species coverage is <1 %."
  */
 export function partialSentence(partial: PartialLoad, bioregionsSkipped = false): string {
   const { planned, accepted, speciesLoaded, speciesPlanned } = partial;
@@ -112,7 +114,20 @@ export function partialSentence(partial: PartialLoad, bioregionsSkipped = false)
     return `${head} ${records} were loaded; all ${fmt(speciesPlanned)} species are present, but later records were not received, so record counts per species are not representative${regions}`;
   }
   const species = `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}`;
-  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned. Species coverage is ${partialPct(speciesLoaded, speciesPlanned)}${regions}`;
+  return `${head} ${records} from ${species} species were loaded; requests alternate packed batches of small species with parts of large ones, so the missing species are absent rather than thinned, and species still being fetched have fewer records than they would.${missingSentence(partial)} Species coverage is ${partialPct(speciesLoaded, speciesPlanned)}${regions}`;
+}
+
+/** " The largest of the 209 missing species are A b (~9,000 planned records), C d (~450) and E f (~30)." */
+function missingSentence(partial: PartialLoad): string {
+  const top = (partial.missingSpecies ?? []).slice(0, 3);
+  if (top.length === 0) return '';
+  const missing = Math.max(top.length, (partial.speciesPlanned ?? 0) - partial.speciesLoaded);
+  const names = top.map((m, i) => `${m.name} (~${fmt(m.expected)}${i === 0 ? ' planned records' : ''})`);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  if (missing <= top.length) {
+    return missing === 1 ? ` The missing species is ${list}.` : ` The missing species are ${list}.`;
+  }
+  return ` The largest of the ${fmt(missing)} missing species are ${list}.`;
 }
 
 /** Whole species are missing (fewer arrived than planned), or only later records were cut. */

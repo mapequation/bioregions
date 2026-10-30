@@ -12,7 +12,7 @@ import {
   VisuallyHidden,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { Fragment, type ReactNode, useId, useRef, useState } from 'react';
 import { LuCheck, LuChevronDown, LuChevronRight, LuDownload, LuMinus, LuPlus } from 'react-icons/lu';
 import type { Funnel } from '../../../sources/types';
 import { useStore } from '../../../store';
@@ -30,6 +30,8 @@ import {
   cleaningSteps,
   dedupeText,
   loadDrops,
+  type MissingSpecies,
+  missingSpeciesOf,
   notReceivedOf,
   partialBiasText,
   partialSummary,
@@ -322,6 +324,74 @@ export interface PathStep {
   approx?: boolean;
   tip?: string;
   testId?: string;
+  /** Species a stopped load never reached: an expandable "Not loaded (n species)" row follows. */
+  missing?: MissingSpecies[];
+}
+
+/** "Not loaded (n species)": the planned species a stopped load never reached, expandable. */
+function MissingSpeciesRow({ species, compare }: { species: MissingSpecies[]; compare: boolean }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const n = species.length;
+  const known = species.every((s) => s.expected != null);
+  return (
+    <Box role="listitem" data-testid="ledger-missing-species">
+      <Button
+        size="sm"
+        variant="ghost"
+        px={1}
+        mx={-1}
+        h={7}
+        color="fg.muted"
+        fontWeight="normal"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Icon as={open ? LuChevronDown : LuChevronRight} boxSize={3.5} aria-hidden />
+        Not loaded ({fmtInt(n)} species)
+        <Text as="span" textStyle="xs" color="fg.muted" ms={1}>
+          {open ? 'hide' : known ? 'list with expected records' : 'list'}
+        </Text>
+      </Button>
+      {open && (
+        <Box
+          id={id}
+          role="list"
+          aria-label={`Species not loaded, ${known ? 'with the records each was expected to add' : 'in plan order'}`}
+          maxH="180px"
+          overflowY="auto"
+          pl={5}
+          pb={1}
+        >
+          {species.map((sp) => (
+            <Grid
+              key={sp.name}
+              role="listitem"
+              templateColumns={columns(compare)}
+              columnGap={3}
+              alignItems="center"
+              minH={6}
+            >
+              <Text as="span" textStyle="xs" fontStyle="italic" truncate title={sp.name} gridColumn="1 / 3">
+                {sp.name}
+              </Text>
+              <Text as="span" textStyle="xs" color="fg.muted" {...num}>
+                {sp.expected != null ? (
+                  <>
+                    ~{fmtInt(sp.expected)}
+                    <VisuallyHidden> records expected</VisuallyHidden>
+                  </>
+                ) : (
+                  '–'
+                )}
+              </Text>
+            </Grid>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 function PathRows({
@@ -344,13 +414,7 @@ function PathRows({
           s.kind === 'drop' ? (s.value != null && s.value < 0 ? '+ ' : '− ') : i === 0 ? '' : '= ';
         const v = s.value == null ? null : Math.abs(s.value);
         const prefix = s.upper ? '≤ ' : s.approx ? '≈' : '';
-        const labelText = (
-          <Text as="span" textStyle="sm" fontWeight={strong ? 'semibold' : 'normal'} truncate title={s.label}>
-            {sign}
-            {s.label}
-          </Text>
-        );
-        return (
+        const row = (
           <Grid
             key={s.id}
             role="listitem"
@@ -365,7 +429,10 @@ function PathRows({
             borderColor="border.muted"
           >
             <HStack gap={1} minW={0} gridColumn={v == null ? '1 / 3' : undefined}>
-              {labelText}
+              <Text as="span" textStyle="sm" fontWeight={strong ? 'semibold' : 'normal'} truncate title={s.label}>
+                {sign}
+                {s.label}
+              </Text>
               {s.tip && (
                 <InfoTip>
                   <Box maxW="260px">{s.tip}</Box>
@@ -412,6 +479,14 @@ function PathRows({
               </>
             )}
           </Grid>
+        );
+        return s.missing && s.missing.length > 0 ? (
+          <Fragment key={s.id}>
+            {row}
+            <MissingSpeciesRow species={s.missing} compare={compare} />
+          </Fragment>
+        ) : (
+          row
         );
       })}
     </Box>
@@ -615,6 +690,20 @@ function LedgerTable({
             <Table.Cell {...num}>{s.value != null ? fmtPct(Math.abs(s.value) / pathBase) : ''}</Table.Cell>
           </Table.Row>
         ))}
+        {path.flatMap((s) =>
+          (s.missing ?? []).map((sp) => (
+            <Table.Row key={`missing-${sp.name}`}>
+              <Table.Cell ps={6} fontStyle="italic">
+                {sp.name}
+              </Table.Cell>
+              <Table.Cell color="fg.muted">not loaded</Table.Cell>
+              <Table.Cell {...num} color="fg.muted">
+                {sp.expected != null ? `~${fmtInt(sp.expected)} expected` : '–'}
+              </Table.Cell>
+              <Table.Cell />
+            </Table.Row>
+          )),
+        )}
         {steps && (
           <>
             <Table.Row>
@@ -786,9 +875,19 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     const f = snapshot.funnel;
     // A cancelled load: the planned records never received are "not loaded", not removed.
     const cancelled = snapshot.partial != null ? notReceivedOf(snapshot) : 0;
+    const missing = missingSpeciesOf(snapshot.partial);
     for (const drop of loadDrops({ funnel: f, toLoad, cancelled, dedupeLabel, partial: snapshot.partial })) {
-      path.push({ id: drop.id, kind: 'drop', label: drop.label, value: drop.value, tip: drop.tip });
+      path.push({
+        id: drop.id,
+        kind: 'drop',
+        label: drop.label,
+        value: drop.value,
+        tip: drop.tip,
+        missing: drop.id === 'notReceived' && missing.length > 0 ? missing : undefined,
+      });
     }
+    // Without a "not loaded" drop the list still belongs to the path, under the last drop.
+    if (missing.length > 0 && !path.some((p) => p.missing)) path[path.length - 1].missing = missing;
     path.push({
       id: 'loaded',
       kind: 'end',
@@ -888,24 +987,25 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     </HStack>
   );
 
+  // One label everywhere; below xl the column is narrow, so the button collapses to its icon
+  // (same accessible name, the label moves to the tooltip).
   const actions = (
-    <Button
-      size="xs"
-      variant="ghost"
-      onClick={csv}
-      disabled={!showRows}
-    >
-      <LuDownload />
-      {frozen ? (
-        <>
-          Download ledger CSV<VisuallyHidden> (decision ledger)</VisuallyHidden>
-        </>
-      ) : (
-        <>
-          CSV<VisuallyHidden>: download the decision ledger</VisuallyHidden>
-        </>
-      )}
-    </Button>
+    <Tooltip content="Download ledger CSV" openDelay={300}>
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={csv}
+        disabled={!showRows}
+        aria-label="Download ledger CSV"
+        data-testid="ledger-csv"
+        px={{ base: 1.5, xl: 2 }}
+      >
+        <LuDownload aria-hidden />
+        <Text as="span" hideBelow="xl">
+          Download ledger CSV
+        </Text>
+      </Button>
+    </Tooltip>
   );
 
   const table = (

@@ -161,6 +161,35 @@ export function planSpeciesNames(plans: (StreamPlan | undefined)[]): string[] {
   return [...names].sort();
 }
 
+/** Most entries `missingPlannedSpecies` returns (`PartialLoad.missingSpecies`). */
+export const MISSING_SPECIES_LIMIT = 100;
+
+/**
+ * Planned species with no loaded record, largest first (ties by name), with the records
+ * the plans promised for each (summed over sources); at most `limit` entries.
+ */
+export function missingPlannedSpecies(
+  plans: (StreamPlan | undefined)[],
+  loaded: Iterable<string>,
+  limit = MISSING_SPECIES_LIMIT,
+): { name: string; expected: number }[] {
+  const expected = new Map<string, number>();
+  for (const plan of plans) {
+    for (const b of plan?.speciesCounts ?? []) {
+      const name = toSpeciesName(b.label);
+      if (name) expected.set(name, (expected.get(name) ?? 0) + b.count);
+    }
+  }
+  for (const raw of loaded) {
+    const name = toSpeciesName(raw) ?? raw;
+    expected.delete(name);
+  }
+  return [...expected]
+    .map(([name, count]) => ({ name, expected: count }))
+    .sort((a, b) => b.expected - a.expected || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}
+
 /** Seconds to stream a source's requests at the modelled rate. */
 export function streamSeconds(source: SourceId, requests: number): number {
   if (requests <= 0) return 0;

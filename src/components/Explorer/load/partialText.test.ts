@@ -10,13 +10,13 @@ describe('partial load wording', () => {
 
   it('names the missing species when species never arrived', () => {
     expect(partialExplanation({ kind: 'speciesMissing', speciesLoaded: 42, speciesPlanned: 46 })).toBe(
-      'Records stream species by species, so the 4 missing species are absent, not thinned.',
+      'A stopped load under-represents the species that had not streamed yet: records arrive species by species, so 4 species are missing entirely.',
     );
   });
 
   it('says density is not representative when every species arrived', () => {
     expect(partialExplanation({ kind: 'recordsTruncated', speciesLoaded: 46, speciesPlanned: 46 })).toBe(
-      'All 46 species are present, but later records were not received, so record density per species is not representative.',
+      'All 46 species are present, but records that had not streamed yet are missing, so record counts per species are not representative.',
     );
   });
 });

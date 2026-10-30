@@ -7,6 +7,7 @@ import {
   branchLengthKind,
   capByStudy,
   cleanTreeLabel,
+  coverageProgressLabel,
   groupByStudy,
   humanizeTreeLabel,
   initialOrder,
@@ -19,6 +20,7 @@ import {
   synthVersionLabel,
   syntheticCandidate,
   treeCitationText,
+  treeCountLabel,
   truncateWords,
 } from './candidates';
 
@@ -127,8 +129,18 @@ describe('candidates', () => {
   it('writes the citation text', () => {
     const text = treeCitationText({ kind: 'synthetic', citation: 'Hinchliff 2015.' }, 12, true);
     expect(text).toMatch(/12 dataset species/);
-    expect(text).toMatch(/Grafen/);
+    expect(text).toMatch(/Grafen's arbitrary heights/);
+    expect(text).not.toMatch(/\bages?\b/);
     expect(text.endsWith('Hinchliff 2015.')).toBe(true);
+  });
+
+  it('counts study trees the same way everywhere', () => {
+    expect(treeCountLabel(26, 15, true)).toBe('26 study trees from 15 studies + Open Tree synthesis');
+    expect(treeCountLabel(3, 3, true)).toBe('3 study trees + Open Tree synthesis');
+    expect(treeCountLabel(1, 1, false)).toBe('1 study tree');
+    expect(treeCountLabel(0, 0, true)).toBe('Open Tree synthesis');
+    expect(treeCountLabel(26, 15, true, true)).toBe('26 study trees + synthesis');
+    expect(coverageProgressLabel({ done: 3, total: 26 })).toBe('Checking coverage of 26 study trees (3/26)');
   });
 
   it('mapLimit caps concurrency', async () => {

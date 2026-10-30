@@ -1,6 +1,6 @@
 import { Box, Button, chakra, Flex, HStack, Icon, SegmentGroup, Skeleton, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
 import { InfoTip } from '@/components/ui/toggle-tip';
@@ -300,22 +300,38 @@ const OverCapRow = observer(function OverCapRow() {
   );
 });
 
-/** Bottom dock: estimate, cap, Replace/Add and the Load button; grows into LoadProgress while loading. */
+/** Bottom dock: estimate, cap, Replace/Add and the Load button; becomes LoadProgress (same height) while loading. */
 export default observer(function LoadDock() {
   const { explorerStore: ex, speciesStore } = useStore();
   const { job, canLoad, estimate, lastLoad, loadMode } = ex;
+  const loading = !!job && (job.state === 'planning' || job.state === 'streaming');
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Height of the dock before the load started: the progress row keeps it, so nothing above moves.
+  const idleHeight = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (!loading && rootRef.current) idleHeight.current = rootRef.current.offsetHeight;
+  });
 
-  if (job && (job.state === 'planning' || job.state === 'streaming')) return (
-      <Box px={3} py={2} data-testid="load-dock">
+  if (loading)
+    return (
+      <Flex
+        ref={rootRef}
+        direction="column"
+        justify="center"
+        px={3}
+        py={2}
+        minH={idleHeight.current != null ? `${idleHeight.current}px` : undefined}
+        data-testid="load-dock"
+      >
         <LoadProgress />
-      </Box>
+      </Flex>
     );
 
   // An empty load ends as a job error; the dock says why in the neutral empty row instead.
   const emptyLoad = lastLoad != null && emptyReasonOf(lastLoad) != null;
   if (ex.loadedMatchesQuery && (job?.state !== 'error' || emptyLoad)) {
     return (
-      <Box px={3} py={2} data-testid="load-dock">
+      <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
         <DoneRow />
       </Box>
     );
@@ -332,7 +348,7 @@ export default observer(function LoadDock() {
       : null;
 
   return (
-    <Flex direction="column" gap={2} px={3} py={2} data-testid="load-dock">
+    <Flex ref={rootRef} direction="column" gap={2} px={3} py={2} data-testid="load-dock">
       {job?.state === 'error' && (
         <Flex
           colorPalette="red"

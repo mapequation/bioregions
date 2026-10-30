@@ -66,6 +66,40 @@ export interface PartialLoad {
   speciesPlanned?: number | null;
   /** Planned records never received because the load stopped. */
   notReceived?: number | null;
+  /** Planned species with no record received (store contract; absent on older snapshots). */
+  missingSpecies?: readonly unknown[] | null;
+}
+
+/** A planned species the stopped load never reached, with the records its plan expected. */
+export interface MissingSpecies {
+  name: string;
+  /** Records the plan expected for it; null when unknown. */
+  expected: number | null;
+}
+
+/**
+ * The species a partial load never reached, largest expected count first. Accepts plain names or
+ * `{ name, expected | records | count }` objects, so the ledger works whichever shape the store
+ * records; anything else is skipped.
+ */
+export function missingSpeciesOf(p: object | null | undefined): MissingSpecies[] {
+  // A plain object parameter: the store's PartialLoad may not declare `missingSpecies` yet.
+  const list = (p as { missingSpecies?: unknown } | null | undefined)?.missingSpecies;
+  if (!Array.isArray(list)) return [];
+  const out: MissingSpecies[] = [];
+  for (const item of list) {
+    if (typeof item === 'string') {
+      if (item) out.push({ name: item, expected: null });
+      continue;
+    }
+    if (item == null || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === 'string' ? o.name : typeof o.species === 'string' ? o.species : null;
+    if (!name) continue;
+    const n = [o.expected, o.records, o.count, o.planned].find((v) => typeof v === 'number' && Number.isFinite(v));
+    out.push({ name, expected: typeof n === 'number' ? n : null });
+  }
+  return out.sort((a, b) => (b.expected ?? -1) - (a.expected ?? -1) || a.name.localeCompare(b.name));
 }
 
 /** The load-outcome fields of a load snapshot (some are optional until every store path sets them). */

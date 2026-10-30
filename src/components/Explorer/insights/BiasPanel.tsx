@@ -1,4 +1,4 @@
-import { Badge, Box, Button, HStack, Icon, IconButton, Skeleton, Stack, Text, VisuallyHidden } from '@chakra-ui/react';
+import { Badge, Box, Button, Flex, HStack, Icon, IconButton, Skeleton, Stack, Text, VisuallyHidden } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
 import { LuCheck, LuCircleDashed, LuInfo, LuTriangleAlert } from 'react-icons/lu';
@@ -44,6 +44,33 @@ const flaggedAbove = (flag: BiasFlag) => `flagged above ${fmtPct(flag.threshold)
 const warningFrom = (flag: BiasFlag) => fmtPct(flag.threshold * BIAS_WARNING_FACTOR);
 
 const BAR_HEIGHT = 6;
+
+/** A remedy, plus the store-contract fields that may not be declared on BiasFlag yet. */
+type FlagAction = NonNullable<BiasFlag['action']> & {
+  /** The remedy would leave too few records to be useful: shown as text, not offered as a button. */
+  discouraged?: boolean;
+  /** Records the remedy would leave. */
+  leaves?: number;
+};
+type Flag = Omit<BiasFlag, 'action'> & {
+  action?: FlagAction;
+  /** A lighter second remedy (e.g. "Show countries"), offered as a link beside the action. */
+  secondaryAction?: FlagAction;
+  /** The value is estimated (e.g. from a sample or the preview's facets). */
+  approximate?: boolean;
+  approximateNote?: string;
+};
+const ext = (flag: BiasFlag) => flag as Flag;
+
+/** "55 %", or "~55 %" for an approximate value. */
+const valueText = (flag: BiasFlag) => `${ext(flag).approximate ? '~' : ''}${fmtPct(flag.value)}`;
+
+/**
+ * Warning borders: amber in both themes. `orange.muted` is a dark red-brown in dark mode, which
+ * read as an error, so dark mode uses a translucent orange.400 instead.
+ */
+const WARN_BORDER = { base: 'orange.muted', _dark: 'orange.400/55' } as const;
+const WARN_ICON = { base: 'orange.fg', _dark: 'orange.400' } as const;
 
 function why(flag: BiasFlag): string {
   return `${whyCheck(flag)} From ${warningFrom(flag)} it is a warning, below that a note. On the bar, the dotted line marks the ${fmtPct(flag.threshold)} threshold.`;
@@ -101,19 +128,11 @@ function hiddenDetail(label: string, title: string | undefined): string | null {
 }
 
 /**
- * The remedy as one full-width button: label left, the records it removes right. The accessible
- * name starts with the visible text ("Exclude this dataset: iNaturalist …, −10,543 records") so
- * voice control can target it by what it shows; the full name sits in hidden spans and the tooltip.
+ * The remedy as one button: label left, the records it removes right. The accessible name starts
+ * with the visible text ("Exclude this dataset: iNaturalist …, −10,543 records") so voice control
+ * can target it by what it shows; the full name sits in hidden spans and the tooltip.
  */
-function ActionRow({ flag }: { flag: BiasFlag }) {
-  const action = flag.action;
-  if (!action) {
-    return flag.id === 'datasetDominance' ? (
-      <Text mt={2} textStyle="xs" color="fg.muted">
-        OBIS datasets can't be excluded.
-      </Text>
-    ) : null;
-  }
+function ActionButton({ action }: { action: FlagAction }) {
   const name = action.title ?? action.label;
   const cost = action.cost != null && action.cost > 0 ? action.cost : null;
   const described = cost != null ? `${name} (removes ${fmtInt(cost)} records)` : name;
@@ -121,15 +140,20 @@ function ActionRow({ flag }: { flag: BiasFlag }) {
   return (
     <Tooltip content={described} openDelay={400} positioning={INSIGHTS_POSITIONING} contentProps={INSIGHTS_TIP_PROPS}>
       <Button
-        mt={2}
         size="xs"
         variant="outline"
-        w="full"
+        flex="1 1 150px"
+        minW={0}
+        h="auto"
+        minH="8"
+        py={1}
+        whiteSpace="normal"
         justifyContent="space-between"
         gap={2}
         onClick={() => action.run()}
       >
-        <Text as="span" truncate>
+        {/* Long labels ("Use recent records only (2012–2025)") wrap instead of truncating. */}
+        <Text as="span" textAlign="start" lineHeight="short" lineClamp={2} wordBreak="break-word">
           {action.label}
           {detail && <VisuallyHidden>: {detail}</VisuallyHidden>}
         </Text>
@@ -145,7 +169,84 @@ function ActionRow({ flag }: { flag: BiasFlag }) {
   );
 }
 
-function TriggeredFlag({ flag }: { flag: BiasFlag }) {
+/** A remedy that would leave too few records: said, not offered ("Specimens only would leave 143 records"). */
+function DiscouragedAction({ action, total }: { action: FlagAction; total: number }) {
+  const leaves = action.leaves ?? (action.cost != null ? Math.max(0, total - action.cost) : null);
+  const text =
+    leaves != null
+      ? `${action.label} would leave ${fmtInt(leaves)} ${leaves === 1 ? 'record' : 'records'}`
+      : `${action.label} would leave almost no records`;
+  return (
+    <Text
+      flex="1 1 150px"
+      minW={0}
+      textStyle="xs"
+      color="fg.muted"
+      lineHeight="short"
+      fontVariantNumeric="tabular-nums"
+      data-testid="bias-action-discouraged"
+    >
+      {text}
+      <VisuallyHidden>, so it is not offered.</VisuallyHidden>
+    </Text>
+  );
+}
+
+/** A lighter, second remedy as a link-style button. */
+function SecondaryAction({ action }: { action: FlagAction }) {
+  const detail = hiddenDetail(action.label, action.title);
+  const button = (
+    <Button
+      size="xs"
+      variant="plain"
+      px={1}
+      h="auto"
+      minH={6}
+      maxW="full"
+      whiteSpace="normal"
+      textAlign="start"
+      lineHeight="short"
+      color="fg"
+      fontWeight="medium"
+      textDecoration="underline"
+      textDecorationColor="fg.subtle"
+      textUnderlineOffset="3px"
+      _hover={{ textDecorationColor: 'fg' }}
+      onClick={() => action.run()}
+    >
+      {action.label}
+      {detail && <VisuallyHidden>: {detail}</VisuallyHidden>}
+    </Button>
+  );
+  return action.title && action.title !== action.label ? (
+    <Tooltip content={action.title} openDelay={400} positioning={INSIGHTS_POSITIONING} contentProps={INSIGHTS_TIP_PROPS}>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+}
+
+function ActionRow({ flag, total }: { flag: BiasFlag; total: number }) {
+  const { action, secondaryAction } = ext(flag);
+  if (!action && !secondaryAction) {
+    return flag.id === 'datasetDominance' ? (
+      <Text mt={2} textStyle="xs" color="fg.muted">
+        OBIS datasets can't be excluded.
+      </Text>
+    ) : null;
+  }
+  return (
+    <Flex mt={2} gap={2} align="center" wrap="wrap">
+      {action &&
+        (action.discouraged ? <DiscouragedAction action={action} total={total} /> : <ActionButton action={action} />)}
+      {secondaryAction && <SecondaryAction action={secondaryAction} />}
+    </Flex>
+  );
+}
+
+function TriggeredFlag({ flag, total }: { flag: BiasFlag; total: number }) {
+  const { approximate, approximateNote } = ext(flag);
   const title = BIAS_TITLES[flag.id];
   const warning = flag.level === 'warning';
   const levelText = warning ? 'warning' : 'note';
@@ -159,7 +260,7 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
       aria-label={`${title}: ${levelText}`}
       bg="bg"
       borderWidth="1px"
-      borderColor={warning ? 'orange.muted' : 'border'}
+      borderColor={warning ? WARN_BORDER : 'border'}
       rounded="lg"
       px={3}
       py={2.5}
@@ -168,7 +269,7 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
         <Icon
           as={warning ? LuTriangleAlert : LuInfo}
           boxSize={4}
-          color={warning ? 'orange.fg' : 'fg.muted'}
+          color={warning ? WARN_ICON : 'fg.muted'}
           aria-hidden
         />
         <Text
@@ -187,7 +288,9 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
       {/* Value in a fixed right column beside its bar, so the title keeps one line. */}
       <HStack gap={2} mt={1} mb={2} align="center">
         <Tooltip
-          content={`${fmtPct(flag.value)} ${MEASURE[flag.id]}. The dotted line marks the threshold: ${thresholds}.`}
+          content={`${approximate ? 'About ' : ''}${fmtPct(flag.value)} ${MEASURE[flag.id]}${
+            approximate ? ' (estimated)' : ''
+          }. The dotted line marks the threshold: ${thresholds}.`}
           openDelay={150}
           positioning={INSIGHTS_POSITIONING}
           contentProps={INSIGHTS_TIP_PROPS}
@@ -201,7 +304,7 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
               ghostValue={flag.threshold}
               height={BAR_HEIGHT}
               track
-              label={`${fmtPct(flag.value)} ${MEASURE[flag.id]}; ${thresholds}`}
+              label={`${approximate ? 'about ' : ''}${fmtPct(flag.value)} ${MEASURE[flag.id]}; ${thresholds}`}
             />
           </Box>
         </Tooltip>
@@ -211,18 +314,23 @@ function TriggeredFlag({ flag }: { flag: BiasFlag }) {
           color={warning ? 'fg' : 'fg.muted'}
           fontVariantNumeric="tabular-nums"
           textAlign="end"
-          w="5ch"
+          w="6ch"
           flexShrink={0}
           whiteSpace="nowrap"
           lineHeight="short"
         >
-          {fmtPct(flag.value)}
+          {valueText(flag)}
         </Text>
       </HStack>
       <Text textStyle="xs" color="fg.muted" lineHeight="short">
         {flag.text}
       </Text>
-      <ActionRow flag={flag} />
+      {approximate && approximateNote && (
+        <Text mt={1} textStyle="xs" color="fg.muted" fontStyle="italic" lineHeight="short">
+          ~ {approximateNote}
+        </Text>
+      )}
+      <ActionRow flag={flag} total={total} />
     </Box>
   );
 }
@@ -231,7 +339,8 @@ function QuietFlag({ flag, pending }: { flag: BiasFlag; pending: boolean }) {
   const title = BIAS_TITLES[flag.id];
   const detail = pending
     ? `${DEFINITION[flag.id]}: known once the load is planned`
-    : `${DEFINITION[flag.id]}: ${fmtPct(flag.value)} \u00b7 ${flaggedAbove(flag)}`;
+    : `${DEFINITION[flag.id]}: ${valueText(flag)} \u00b7 ${flaggedAbove(flag)}`;
+  const note = !pending && ext(flag).approximate ? ext(flag).approximateNote : undefined;
   return (
     <HStack gap={2} py={1} align="flex-start" data-bias={flag.id}>
       <Icon
@@ -251,6 +360,11 @@ function QuietFlag({ flag, pending }: { flag: BiasFlag; pending: boolean }) {
         <Text textStyle="xs" color="fg.muted" lineHeight="short" fontVariantNumeric="tabular-nums">
           {detail}
         </Text>
+        {note && (
+          <Text textStyle="xs" color="fg.muted" fontStyle="italic" lineHeight="short">
+            ~ {note}
+          </Text>
+        )}
       </Box>
       <WhyTip flag={flag} />
     </HStack>
@@ -325,7 +439,7 @@ export default observer(function BiasPanel() {
     body = (
       <Stack gap={2}>
         {cards.map((f) => (
-          <TriggeredFlag key={f.id} flag={f} />
+          <TriggeredFlag key={f.id} flag={f} total={comp.total} />
         ))}
         {quiet.length > 0 && (
           <Box mt={cards.length > 0 ? 1 : 0}>

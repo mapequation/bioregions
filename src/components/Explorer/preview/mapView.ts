@@ -257,6 +257,24 @@ export function mapNote(ignored: string[]): string {
   return parts.join(' ');
 }
 
+/**
+ * Header caption of the map's 'Query' scope: the layers it draws and, for GBIF tiles,
+ * which query parts they leave out (from `gbifTileFilterCoverage(query).ignored`).
+ */
+export function queryCaption(layers: { gbif: boolean; obis: boolean }, ignored: string[]): string {
+  const { gbif, obis } = layers;
+  const what = gbif && obis ? 'GBIF tiles + OBIS grid' : gbif ? 'GBIF tiles' : obis ? 'OBIS grid' : 'no occurrence layer';
+  const parts = [`Query · ${what}`];
+  if (gbif) {
+    if (ignored.includes('Taxa after the first')) parts.push('first taxon only');
+    if (ignored.includes('Countries after the first')) parts.push('first country only');
+    parts.push(
+      ignored.some((i) => !NOT_SHOWN.has(i)) ? 'quality filters apply to the counts' : 'every filter applied',
+    );
+  }
+  return parts.join('; ');
+}
+
 /** "1", "10", "100", "1k", "10k" ... for legend steps. */
 export function legendLabel(n: number): string {
   if (n >= 1e6) return `${n / 1e6}M`;

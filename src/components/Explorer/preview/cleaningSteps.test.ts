@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Funnel } from '../../../sources/types';
-import { cleaningSteps, emptyReasonOf, loadDrops, loadStory, notReceivedOf, partialSummary } from './cleaningSteps';
+import {
+  cleaningSteps,
+  emptyReasonOf,
+  loadDrops,
+  loadStory,
+  missingSpeciesOf,
+  notReceivedOf,
+  partialSummary,
+} from './cleaningSteps';
 
 const funnel = (over: Partial<Funnel> = {}): Funnel => ({
   received: 1000,
@@ -99,5 +107,23 @@ describe('load drops and story', () => {
   it('reports a cancelled load as not loaded', () => {
     const drops = loadDrops({ funnel: f(), toLoad: 5000, cancelled: 4000, dedupeLabel: 'x' });
     expect(drops[0]).toMatchObject({ id: 'notReceived', label: 'Not loaded (cancelled)', value: 4000 });
+  });
+});
+
+describe('missingSpeciesOf', () => {
+  it('normalises names and objects, largest expected count first', () => {
+    const out = missingSpeciesOf({
+      missingSpecies: ['Saguinus oedipus', { name: 'Callithrix jacchus', expected: 120 }, { species: 'Mico argentatus', records: 40 }, 7, null],
+    });
+    expect(out).toEqual([
+      { name: 'Callithrix jacchus', expected: 120 },
+      { name: 'Mico argentatus', expected: 40 },
+      { name: 'Saguinus oedipus', expected: null },
+    ]);
+  });
+
+  it('is empty without a partial load or a list', () => {
+    expect(missingSpeciesOf(null)).toEqual([]);
+    expect(missingSpeciesOf({})).toEqual([]);
   });
 });

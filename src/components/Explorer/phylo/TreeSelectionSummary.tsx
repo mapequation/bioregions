@@ -12,7 +12,12 @@ import {
 } from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
-import { GRAFEN_NOTE, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
+import {
+  coverageProgressLabel,
+  GRAFEN_NOTE,
+  lengthUnits,
+  type PhyloCandidate,
+} from '../../../store/phylo/candidates';
 import { fmtInt } from '../format';
 
 function lengthsNote(c: PhyloCandidate): string {
@@ -26,7 +31,7 @@ function lengthsNote(c: PhyloCandidate): string {
   return `Dated tree: branch lengths are in ${units.long} and are used as given.`;
 }
 
-/** '31 tips with branch lengths in Myr' / '44 tips, relative ages (Grafen)'. */
+/** '31 tips with branch lengths in Myr' / "44 tips, Grafen's arbitrary heights". */
 function tipsWithLengths(tips: number, c: PhyloCandidate): string {
   const units = lengthUnits(c);
   const n = `${fmtInt(tips)} ${tips === 1 ? 'tip' : 'tips'}`;
@@ -47,6 +52,9 @@ function absentEffect(absent: number, treeWeight: number, synthetic: boolean): s
   }
   return `At Tree weight ${pct(treeWeight)}, the ${who} ${absent === 1 ? 'keeps' : 'keep'} only ${absent === 1 ? 'its' : 'their'} occurrence links (weight ${pct(1 - treeWeight)}), without tree links.`;
 }
+
+/** Height of the action slot: a two-line sm alert with py 2 (title + description). */
+const ACTION_SLOT_H = '52px';
 
 /** Longest name list rendered; the rest is summarised. */
 const LIST_MAX = 300;
@@ -111,7 +119,7 @@ function Stat({ value, label, tone }: { value: number; label: string; tone?: 'mu
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
   const { explorerStore, phyloStore, infomapStore } = useStore();
-  const { selectedId, selection, loadState, loadedTree, selectionReason, selectionNotInData } = phyloStore;
+  const { selectedId, selection, loadState, loadedTree, preselectedDated, selectionNotInData } = phyloStore;
   // The open name list belongs to one tree: picking another closes it.
   const [open, setOpen] = useState<{ id: string | null; list: 'absent' | 'extra' } | null>(null);
   const openList = open && open.id === selectedId ? open.list : null;
@@ -127,7 +135,7 @@ export default observer(function TreeSelectionSummary() {
   const coverage = phyloStore.coverageProgress;
   const searching = phyloStore.searchingTrees;
 
-  // Trade-off between a dated tree and the synthesis (more tips, relative ages only).
+  // Trade-off between a dated tree and the synthesis (more tips, topology only).
   const synthetic = phyloStore.syntheticTree;
   const syntheticTips = synthetic?.coverageState === 'ready' ? (synthetic.coverage?.matched ?? null) : null;
   const best = phyloStore.bestDated;
@@ -186,7 +194,7 @@ export default observer(function TreeSelectionSummary() {
                 </Text>
               )}
             </Text>
-            {selectionReason === 'dated' && (
+            {preselectedDated && (
               <Badge size="sm" variant="subtle" colorPalette="green" flexShrink={0} alignSelf="center">
                 Best dated match
               </Badge>
@@ -310,7 +318,7 @@ export default observer(function TreeSelectionSummary() {
           <HStack gap={2} align="flex-start" textStyle="xs" color="fg.muted">
             <Icon as={LuInfo} mt="2px" flexShrink={0} />
             <Text>
-              {selectionReason === 'dated' &&
+              {preselectedDated &&
                 'Pre-selected as the dated tree with the best coverage (at least 60 % of your species). '}
               {lengthsNote(candidate)}
             </Text>
@@ -353,79 +361,83 @@ export default observer(function TreeSelectionSummary() {
             </Flex>
           )}
 
-          {done ? (
-            <Alert.Root status="success" size="sm" borderRadius="md" alignItems="center">
-              <Alert.Indicator>
-                <LuCircleCheck />
-              </Alert.Indicator>
-              <Alert.Content>
-                <Alert.Title fontVariantNumeric="tabular-nums">
-                  Tree loaded with {fmtInt(loadedTree.tips)} tips. Bioregions are updating.
-                </Alert.Title>
-                <Alert.Description>The tree citation is now part of the methods text.</Alert.Description>
-              </Alert.Content>
-              <Button {...primaryButtonProps} flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
-                <LuMap /> View bioregions
-              </Button>
-            </Alert.Root>
-          ) : loadState === 'error' ? (
-            <Alert.Root status="error" size="sm" borderRadius="md" alignItems="center">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Title>Couldn't load the tree</Alert.Title>
-                <Alert.Description>Open Tree did not return the tree. Your current data is unchanged.</Alert.Description>
-              </Alert.Content>
-              <Button {...secondaryButtonProps} flexShrink={0} onClick={() => void phyloStore.loadSelected()}>
-                <LuRotateCw /> Retry
-              </Button>
-            </Alert.Root>
-          ) : awaiting ? (
-            <Flex align="center" justify="flex-end" gap={3} wrap="wrap" rowGap={2}>
-              <HStack gap={1.5} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" me="auto" minW={0}>
-                <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" flexShrink={0} />
-                <Text>
-                  {searching
-                    ? 'Searching Open Tree for published trees'
-                    : `Checking coverage ${fmtInt(coverage.done)}/${fmtInt(coverage.total)}`}{' '}
-                  · a dated tree may fit better
-                </Text>
-              </HStack>
-              <Button
-                data-testid="load-tree"
-                {...secondaryButtonProps}
-                loading={loading}
-                loadingText="Loading tree…"
-                disabled={selection == null || tooFew}
-                onClick={() => void phyloStore.loadSelected()}
-              >
-                {candidate.kind === 'synthetic' ? 'Load synthesis now (topology only)' : `Load ${candidate.title} now`}
-              </Button>
-            </Flex>
-          ) : (
-            <Flex align="center" justify="flex-end" gap={3}>
-              {tooFew && (
-                <Text textStyle="xs" color="fg.muted" id="load-tree-reason">
-                  This tree keeps fewer than 2 of your species.
-                </Text>
-              )}
-              {!tooFew && loadedTree && (
-                <Text textStyle="xs" color="fg.muted" truncate>
-                  Replaces the tree loaded now.
-                </Text>
-              )}
-              <Button
-                data-testid="load-tree"
-                {...primaryButtonProps}
-                loading={loading}
-                loadingText="Loading tree…"
-                disabled={selection == null || tooFew}
-                aria-describedby={tooFew ? 'load-tree-reason' : undefined}
-                onClick={() => void phyloStore.loadSelected()}
-              >
-                Load tree &amp; re-run bioregions
-              </Button>
-            </Flex>
-          )}
+          {/* One slot for the load button, the success and the error banners: its min height
+              fits the two-line banners, so finishing a load does not push the panel up. */}
+          <Flex direction="column" justify="center" minH={ACTION_SLOT_H} data-testid="tree-action-slot">
+            {done ? (
+              <Alert.Root status="success" size="sm" borderRadius="md" alignItems="center" py={2}>
+                <Alert.Indicator>
+                  <LuCircleCheck />
+                </Alert.Indicator>
+                <Alert.Content>
+                  <Alert.Title fontVariantNumeric="tabular-nums">
+                    Tree loaded with {fmtInt(loadedTree.tips)} tips. Bioregions are updating.
+                  </Alert.Title>
+                  <Alert.Description>The tree citation is now part of the methods text.</Alert.Description>
+                </Alert.Content>
+                <Button {...primaryButtonProps} flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
+                  <LuMap /> View bioregions
+                </Button>
+              </Alert.Root>
+            ) : loadState === 'error' ? (
+              <Alert.Root status="error" size="sm" borderRadius="md" alignItems="center" py={2}>
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Title>Couldn't load the tree</Alert.Title>
+                  <Alert.Description>Open Tree did not return the tree. Your current data is unchanged.</Alert.Description>
+                </Alert.Content>
+                <Button {...secondaryButtonProps} flexShrink={0} onClick={() => void phyloStore.loadSelected()}>
+                  <LuRotateCw /> Retry
+                </Button>
+              </Alert.Root>
+            ) : awaiting ? (
+              <Flex align="center" justify="flex-end" gap={3} wrap="wrap" rowGap={2}>
+                <HStack gap={1.5} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" me="auto" minW={0}>
+                  <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" flexShrink={0} />
+                  <Text>
+                    {searching
+                      ? 'Searching Open Tree for published trees'
+                      : coverageProgressLabel(coverage)}{' '}
+                    · a dated tree may fit better
+                  </Text>
+                </HStack>
+                <Button
+                  data-testid="load-tree"
+                  {...secondaryButtonProps}
+                  loading={loading}
+                  loadingText="Loading tree…"
+                  disabled={selection == null || tooFew}
+                  onClick={() => void phyloStore.loadSelected()}
+                >
+                  {candidate.kind === 'synthetic' ? 'Load synthesis now (topology only)' : `Load ${candidate.title} now`}
+                </Button>
+              </Flex>
+            ) : (
+              <Flex align="center" justify="flex-end" gap={3}>
+                {tooFew && (
+                  <Text textStyle="xs" color="fg.muted" id="load-tree-reason">
+                    This tree keeps fewer than 2 of your species.
+                  </Text>
+                )}
+                {!tooFew && loadedTree && (
+                  <Text textStyle="xs" color="fg.muted" truncate>
+                    Replaces the tree loaded now.
+                  </Text>
+                )}
+                <Button
+                  data-testid="load-tree"
+                  {...primaryButtonProps}
+                  loading={loading}
+                  loadingText="Loading tree…"
+                  disabled={selection == null || tooFew}
+                  aria-describedby={tooFew ? 'load-tree-reason' : undefined}
+                  onClick={() => void phyloStore.loadSelected()}
+                >
+                  Load tree &amp; re-run bioregions
+                </Button>
+              </Flex>
+            )}
+          </Flex>
         </Stack>
       )}
     </Box>

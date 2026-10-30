@@ -45,7 +45,7 @@ const STATUS_WORD: Record<ChipStatus, string> = {
   ready: 'ready',
   error: 'preview failed',
   rateLimited: 'busy, retrying',
-  empty: 'no records for this query',
+  empty: 'on, but nothing matches this query',
 };
 
 function StatusMark({ status }: { status: ChipStatus }) {
@@ -59,8 +59,10 @@ function StatusMark({ status }: { status: ChipStatus }) {
     case 'unsupported':
       return <Icon as={LuBan} color="fg.muted" boxSize={3.5} />;
     case 'off':
-    case 'empty':
       return <Box boxSize={2} borderRadius="full" borderWidth="1.5px" borderColor="fg.subtle" />;
+    case 'empty':
+      // Hollow like "off", but in full contrast: the source is on, it just found nothing.
+      return <Box boxSize={2} borderRadius="full" borderWidth="1.5px" borderColor="fg.muted" />;
     default:
       return <Box boxSize={2} borderRadius="full" bg={status === 'ready' ? 'green.solid' : 'fg.subtle'} />;
   }
@@ -75,15 +77,19 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
   const noTaxa =
     id === 'obis' && taxa.length > 0 && taxa.every((t) => t.obisId == null || s.gbifOnlyTaxa.includes(t.name));
   const status = chipStatus(enabled, s, noTaxa);
-  // One off look for "switched off" and "nothing for these taxa"; the reason is in the tooltip and name.
-  const statusWord = status === 'empty' && noTaxa ? 'no records for these taxa' : STATUS_WORD[status];
-  const muted = !enabled || status === 'empty';
+  // "Switched off" is the only hollow, muted chip; an enabled source without records keeps full
+  // contrast with a hollow dot and a "no records" suffix, so the two never read alike.
+  const statusWord = status === 'empty' && noTaxa ? 'on, but these taxa are not in its checklist' : STATUS_WORD[status];
+  const muted = !enabled;
   const seconds = useCountdown(status === 'rateLimited' ? s.retryAt : undefined);
+  // The accessible name starts with the chip's visible text (WCAG 2.5.3, label in name).
+  const visibleSuffix =
+    status === 'empty' ? ' no records' : status === 'rateLimited' && seconds != null ? ` ${seconds} s` : '';
   const label = SOURCES[id].label;
   const locked = explorerStore.job?.state === 'planning' || explorerStore.job?.state === 'streaming';
 
   let detail: string;
-  if (status === 'off') detail = `${label} is switched off. Click to include it.`;
+  if (status === 'off') detail = `${label} is switched off, so it adds no records. Click to include it.`;
   else if (status === 'unsupported') detail = s.supports.ok ? '' : s.supports.reason;
   else if (status === 'error') detail = `${label} preview failed${s.error ? ` (${s.error})` : ''}.`;
   else if (status === 'rateLimited')
@@ -93,8 +99,8 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
   else if (status === 'loading') detail = `Updating the ${label} preview…`;
   else if (status === 'empty')
     detail = noTaxa
-      ? `${label} has no records for these taxa (not in its checklist). Click to leave it out.`
-      : `No ${label} records for this query. Click to leave it out.`;
+      ? `${label} is on, but has no records for these taxa (they are not in its checklist). Click to switch it off.`
+      : `${label} is on, but no records match this query. Click to switch it off.`;
   else detail = `${label} is on. Click to leave it out.`;
   const gbifOnly = id === 'obis' && enabled && s.gbifOnlyTaxa.length > 0;
 
@@ -123,12 +129,21 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
           gap={1.5}
           data-testid={`source-chip-${id}`}
           aria-pressed={enabled}
-          aria-label={`${label}: ${statusWord}`}
+          aria-label={`${label}${visibleSuffix}: ${statusWord}`}
           disabled={locked}
           onClick={() => explorerStore.setSourceEnabled(id, !enabled)}
           color={muted ? 'fg.muted' : 'fg'}
-          borderColor={status === 'error' ? 'red.muted' : status === 'rateLimited' ? 'orange.muted' : 'border'}
-          bg="bg"
+          borderColor={
+            status === 'error'
+              ? 'red.muted'
+              : status === 'rateLimited'
+                ? 'orange.muted'
+                : muted
+                  ? 'border.muted'
+                  : 'border.emphasized'
+          }
+          borderStyle={muted ? 'dashed' : 'solid'}
+          bg={muted ? 'transparent' : 'bg'}
         >
           <Box display="inline-flex" alignItems="center" justifyContent="center" boxSize={3.5}>
             <StatusMark status={status} />
@@ -139,8 +154,15 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
           {enabled && status !== 'error' && status !== 'unsupported' && status !== 'empty' && (
             <Icon as={LuCheck} boxSize={3} color="fg.muted" />
           )}
+          {status === 'empty' && (
+            <Text as="span" textStyle="2xs" fontWeight="normal" color="fg.muted" aria-hidden>
+              {/* Leading space keeps the text content "OBIS no records" (label in name). */}{' '}
+              no records
+            </Text>
+          )}
           {status === 'rateLimited' && seconds != null && (
             <Text as="span" fontVariantNumeric="tabular-nums" color="orange.fg">
+              {' '}
               {seconds} s
             </Text>
           )}

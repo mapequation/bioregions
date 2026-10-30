@@ -132,7 +132,15 @@ export interface RecentShare {
   cutoffYear: number;
   /** null without dated records. */
   share: number | null;
+  /**
+   * What the share describes, following `insightsScope`: the query preview, or the
+   * loaded records ('loaded' also for a partial load).
+   */
+  scope: 'query' | 'loaded';
 }
+
+/** What the map shows: the query's preview density, or the loaded records. */
+export type MapScope = 'query' | 'loaded';
 
 export type BiasId =
   | 'datasetDominance'
@@ -155,13 +163,32 @@ export interface BiasFlag {
   /** Legend text for the threshold, e.g. "warns above 50 %". */
   thresholdLabel?: string;
   text: string;
+  /**
+   * The value may change once the data is loaded: set on a query preview to which GBIF
+   * and OBIS both contribute, since their overlap is removed only while loading.
+   */
+  approximate?: boolean;
+  /** Why the value is approximate, e.g. "may change after GBIF/OBIS overlap removal". */
+  approximateNote?: string;
   action?: {
-    /** Short button label that fits a 280 px column, e.g. "Exclude this dataset". */
+    /** Short button label, e.g. "Exclude this dataset". */
     label: string;
     /** Full description for the tooltip and accessible name, e.g. "Exclude eBird". */
     title?: string;
     /** Records the remedy would remove from the scope's total (never more than it), when known. */
     cost?: number;
+    /**
+     * The remedy would remove more than `BIAS_DISCOURAGE_SHARE` (80 %) of the scope:
+     * show it as text ("Specimens only would leave 143 records"), not as a button.
+     */
+    discouraged?: boolean;
+    /** Records left if the remedy is applied (set with `discouraged`). */
+    leaves?: number;
+    run(): void;
+  };
+  /** A second remedy, e.g. "Compare first: pin baseline, then restrict". */
+  secondaryAction?: {
+    label: string;
     run(): void;
   };
 }
@@ -234,6 +261,13 @@ export interface PartialLoad {
    * are unknown. Below 0.5 a stopped load skips Infomap (see `Provenance.bioregionsSkipped`).
    */
   coverage: number;
+  /**
+   * Planned species with no loaded record, largest first: `expected` is the records the
+   * plans promised for it (summed over sources). At most `MISSING_SPECIES_LIMIT` (100)
+   * entries; `speciesPlanned - speciesLoaded` is the full count. Empty when the planned
+   * species are unknown. Optional for provenance saved before it existed.
+   */
+  missingSpecies?: { name: string; expected: number }[];
 }
 
 export interface Provenance {

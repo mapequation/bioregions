@@ -311,6 +311,33 @@ describe('streamGbif', () => {
     ]);
   });
 
+  it('interleaves large species with the small-species batches', async () => {
+    const r = rng(7);
+    const names = new Map<number, string>([[1, 'Common']]);
+    const db: FakeRecord[] = species(1, 13_000, () => ({
+      decimalLongitude: r() * 360 - 180,
+      decimalLatitude: r() * 180 - 90,
+      year: 2001,
+    }));
+    for (let k = 2; k <= 31; k++) {
+      names.set(k, `Rare ${k}`);
+      db.push(...species(k, 5000, () => ({ decimalLongitude: r(), decimalLatitude: r(), year: 2001 })));
+    }
+    const { plan: p } = await plan(db, names);
+    const { batches } = await collect(streamGbif(p, { maxRecords: Infinity, concurrency: 1 }));
+    expect(batches.flatMap((b) => b.records)).toHaveLength(db.length);
+    // Before: the common species' parts queued behind all 30 rare-species requests.
+    const firstCommon = batches.findIndex((b) => b.records.some((x) => x.name === 'Common'));
+    expect(firstCommon).toBeGreaterThanOrEqual(0);
+    expect(firstCommon).toBeLessThan(4);
+    // Its parts keep alternating with the rare batches instead of all coming last.
+    const commonAt = batches.flatMap((b, i) => (b.records.some((x) => x.name === 'Common') ? [i] : []));
+    expect(commonAt[commonAt.length - 1]).toBeLessThan(batches.length - 10);
+    const totals = batches.map((b) => b.progress.requestsTotal);
+    expect(totals[0]).toBeGreaterThanOrEqual(p.requests);
+    expect(last(batches)?.progress.requestsDone).toBe(last(totals));
+  });
+
   it('respects concurrency and stops at maxRecords', async () => {
     const r = rng(5);
     const names = new Map<number, string>();

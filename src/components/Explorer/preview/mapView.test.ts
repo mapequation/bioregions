@@ -20,6 +20,7 @@ import {
   fitView,
   mapNote,
   pxToLonLat,
+  queryCaption,
   tilesForView,
   unionBbox,
   unwrapBbox,
@@ -258,5 +259,18 @@ describe('polar views', () => {
   it('drags a box the short way across 180 degrees', () => {
     expect(polarDragBbox([170, 70], [-170, 80])).toEqual([170, 70, -170, 80]);
     expect(polarDragBbox([10, 70], [10.2, 70.3])).toBeNull();
+  });
+});
+
+describe('queryCaption', () => {
+  it('names the layers and what the GBIF tiles leave out', () => {
+    expect(queryCaption({ gbif: true, obis: false }, ['Coordinate uncertainty'])).toBe(
+      'Query · GBIF tiles; quality filters apply to the counts',
+    );
+    expect(queryCaption({ gbif: true, obis: true }, [])).toBe('Query · GBIF tiles + OBIS grid; every filter applied');
+    expect(queryCaption({ gbif: true, obis: false }, ['Taxa after the first'])).toBe(
+      'Query · GBIF tiles; first taxon only; every filter applied',
+    );
+    expect(queryCaption({ gbif: false, obis: true }, ['Depth'])).toBe('Query · OBIS grid');
   });
 });

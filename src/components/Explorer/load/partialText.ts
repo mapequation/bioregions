@@ -22,10 +22,11 @@ export function partialKindOf(p: PartialLike): PartialKind {
 }
 
 /**
- * Why the partial dataset is biased, in the words of its kind:
- * "Records stream species by species, so the 4 missing species are absent, not thinned." or
- * "All 46 species are present, but later records were not received, so record density per
- * species is not representative."
+ * Why the partial dataset is biased, in plain words for its kind:
+ * "A stopped load under-represents the species that had not streamed yet: records arrive
+ * species by species, so 4 species are missing entirely." or
+ * "All 46 species are present, but records that had not streamed yet are missing, so record
+ * counts per species are not representative."
  */
 export function partialExplanation(p: PartialLike): string {
   if (partialKindOf(p) === 'speciesMissing') {
@@ -33,13 +34,13 @@ export function partialExplanation(p: PartialLike): string {
       p.speciesPlanned != null && p.speciesLoaded != null ? Math.max(0, p.speciesPlanned - p.speciesLoaded) : null;
     const what =
       missing == null || missing === 0
-        ? 'missing species are'
+        ? 'some species are'
         : missing === 1
-          ? 'the 1 missing species is'
-          : `the ${fmtInt(missing)} missing species are`;
-    return `Records stream species by species, so ${what} absent, not thinned.`;
+          ? '1 species is'
+          : `${fmtInt(missing)} species are`;
+    return `A stopped load under-represents the species that had not streamed yet: records arrive species by species, so ${what} missing entirely.`;
   }
   const all = p.speciesPlanned ?? p.speciesLoaded ?? 0;
   const species = all > 0 ? `All ${fmtInt(all)} ${all === 1 ? 'species is' : 'species are'}` : 'All species are';
-  return `${species} present, but later records were not received, so record density per species is not representative.`;
+  return `${species} present, but records that had not streamed yet are missing, so record counts per species are not representative.`;
 }

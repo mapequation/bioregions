@@ -21,7 +21,14 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '../../../store';
 import type { TreeCandidate } from '../../../store/explorer/types';
-import { groupByStudy, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
+import {
+  coverageProgressLabel,
+  groupByStudy,
+  lengthUnits,
+  type PhyloCandidate,
+  studyTreesLabel,
+  treeCountLabel,
+} from '../../../store/phylo/candidates';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
 import { secondaryButtonProps } from '../buttonStyles';
@@ -145,8 +152,8 @@ function lengthsTip(c: PhyloCandidate): string {
   const units = lengthUnits(c);
   if (c.branchLengths === 'none') {
     return c.kind === 'synthetic'
-      ? "Source: the synthesis has no branch lengths (topology only). Used with Grafen's lengths: relative ages, root = 1."
-      : "Source: no branch lengths (topology only). Used with Grafen's lengths: relative ages, root = 1.";
+      ? "Source: the synthesis has no branch lengths (topology only). Used with Grafen's arbitrary heights (ρ = 1, root = 1), which carry no time information."
+      : "Source: no branch lengths (topology only). Used with Grafen's arbitrary heights (ρ = 1, root = 1), which carry no time information.";
   }
   if (c.branchLengths === 'time') {
     return c.timeUnit
@@ -368,6 +375,21 @@ const COLS = 6;
 
 const SKELETON_ROWS = [0, 1, 2, 3];
 
+/**
+ * Row radio: a plain ring when unchecked; checked is filled with the text colour, with
+ * a bg-coloured centre dot and a soft halo, so it reads in both themes on the tinted row.
+ */
+const radioIndicatorProps = {
+  bg: 'bg',
+  borderColor: 'border.emphasized',
+  _checked: {
+    bg: 'fg',
+    borderColor: 'fg',
+    color: 'bg',
+    boxShadow: '0 0 0 3px color-mix(in srgb, var(--chakra-colors-fg) 22%, transparent)',
+  },
+} as const;
+
 /** TREES FOR <clade>: candidate trees with radio-row selection, sort and Dated only. */
 export default observer(function TreeSourceTable() {
   const { phyloStore } = useStore();
@@ -387,7 +409,9 @@ export default observer(function TreeSourceTable() {
     });
   const checking = phyloStore.checkingCoverage;
   const searching = phyloStore.searchingTrees;
-  const sources = new Set(candidates.map((c) => c.studyId ?? c.id)).size;
+  const studyTrees = candidates.filter((c) => c.kind === 'study');
+  const studies = new Set(studyTrees.map((c) => c.studyId ?? c.id)).size;
+  const hasSynthesis = candidates.some((c) => c.kind === 'synthetic');
   const progress = phyloStore.coverageProgress;
   const waiting = matchProgress != null || (candidatesState === 'loading' && candidates.length === 0);
   const retry = (id: string) => void phyloStore.retryCoverage(id);
@@ -485,7 +509,7 @@ export default observer(function TreeSourceTable() {
             <Table.Body>
               {waiting
                 ? SKELETON_ROWS.map((i) => (
-                    <Table.Row key={i} h={ROW_H}>
+                    <Table.Row key={`skeleton-${i}`} h={ROW_H}>
                       <Table.Cell>
                         <Skeleton boxSize="14px" borderRadius="full" />
                       </Table.Cell>
@@ -513,7 +537,7 @@ export default observer(function TreeSourceTable() {
                     const altId = (i: number) => `phylo-alt-${key}-${i}`;
                     const leadRow = (
                       <Table.Row
-                        key={key}
+                        key={`group:${key}`}
                         data-testid="tree-row"
                         data-selected={selected || undefined}
                         aria-selected={selected}
@@ -526,7 +550,7 @@ export default observer(function TreeSourceTable() {
                         <Table.Cell>
                           <RadioGroup.Item value={c.id} display="flex">
                             <RadioGroup.ItemHiddenInput aria-label={c.subtitle ? `${c.title}, ${c.subtitle}` : c.title} />
-                            <RadioGroup.ItemIndicator />
+                            <RadioGroup.ItemIndicator {...radioIndicatorProps} />
                           </RadioGroup.Item>
                         </Table.Cell>
                         <Table.Cell>
@@ -560,7 +584,7 @@ export default observer(function TreeSourceTable() {
                         const altSelected = alt.id === selectedId;
                         return (
                           <Table.Row
-                            key={alt.id}
+                            key={`group:${key}:${alt.id}`}
                             id={altId(i)}
                             data-testid="tree-row-alt"
                             data-selected={altSelected || undefined}
@@ -576,7 +600,7 @@ export default observer(function TreeSourceTable() {
                                 <RadioGroup.ItemHiddenInput
                                   aria-label={`${alt.title}, ${alt.fullLabel ?? alt.subtitle ?? alt.id}`}
                                 />
-                                <RadioGroup.ItemIndicator />
+                                <RadioGroup.ItemIndicator {...radioIndicatorProps} />
                               </RadioGroup.Item>
                             </Table.Cell>
                             <Table.Cell>
@@ -664,7 +688,7 @@ export default observer(function TreeSourceTable() {
                 showNoOverlap &&
                 noOverlapGroups.map(({ key, lead: c, others }) => (
                   <Table.Row
-                    key={key}
+                    key={`no-overlap:${key}`}
                     data-testid="tree-row-no-overlap"
                     h={ROW_H}
                     color="fg.muted"
@@ -706,6 +730,11 @@ export default observer(function TreeSourceTable() {
           textTransform="uppercase"
           color="fg.muted"
           truncate
+          title={
+            clade && candidates.length > 0 && !checking
+              ? `Trees for ${clade.name} · ${treeCountLabel(studyTrees.length, studies, hasSynthesis)}`
+              : undefined
+          }
           flex="1"
           minW={0}
         >
@@ -722,8 +751,13 @@ export default observer(function TreeSourceTable() {
           {candidates.length > 0 && !checking && (
             <Text as="span" textTransform="none" letterSpacing="normal" fontWeight="normal" fontVariantNumeric="tabular-nums">
               {' '}
-              · {fmtInt(candidates.length)} {candidates.length === 1 ? 'tree' : 'trees'}
-              {sources < candidates.length && ` from ${fmtInt(sources)} sources`}
+              ·{' '}
+              <Text as="span" hideBelow="xl">
+                {treeCountLabel(studyTrees.length, studies, hasSynthesis)}
+              </Text>
+              <Text as="span" hideFrom="xl">
+                {treeCountLabel(studyTrees.length, studies, hasSynthesis, true)}
+              </Text>
             </Text>
           )}
         </Text>
@@ -742,11 +776,10 @@ export default observer(function TreeSourceTable() {
             ) : (
               <>
                 <Text as="span" hideBelow="xl">
-                  Checking coverage of {fmtInt(progress.total)} {progress.total === 1 ? 'tree' : 'trees'}…{' '}
-                  {fmtInt(progress.done)}/{fmtInt(progress.total)}
+                  {coverageProgressLabel(progress)}
                 </Text>
                 <Text as="span" hideFrom="xl">
-                  Checking coverage {fmtInt(progress.done)}/{fmtInt(progress.total)}
+                  Checking {fmtInt(progress.done)}/{studyTreesLabel(progress.total)}
                 </Text>
               </>
             )}

@@ -122,8 +122,10 @@ export default observer(function CladeCard() {
               bg="bg.subtle"
               py={1}
             >
-              {broken.map((name) => (
-                <Box as="li" key={name} px={2.5} py={0.5} textStyle="xs" fontStyle="italic">
+              {broken.map((name, i) => (
+                // Taxon names can repeat (homonyms in different clades).
+                // biome-ignore lint/suspicious/noArrayIndexKey: static list, index disambiguates repeats
+                <Box as="li" key={`${name}:${i}`} px={2.5} py={0.5} textStyle="xs" fontStyle="italic">
                   {name}
                 </Box>
               ))}

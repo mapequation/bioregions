@@ -1,10 +1,19 @@
-import { Box, Button, Flex, Grid, HStack, Icon, Spinner, Text } from '@chakra-ui/react';
+import { Box, Button, Collapsible, Flex, Grid, HStack, Icon, Spinner, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
-import { LuCircleAlert, LuCircleCheck, LuMap, LuPlay, LuQuote, LuRotateCw, LuTriangleAlert } from 'react-icons/lu';
+import {
+  LuChevronRight,
+  LuCircleAlert,
+  LuCircleCheck,
+  LuMap,
+  LuPlay,
+  LuQuote,
+  LuRotateCw,
+  LuTriangleAlert,
+} from 'react-icons/lu';
 import { useStore } from '@/store';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
-import { fmtInt, fmtTime, fmtTimestamp } from '../format';
+import { fmtInt, fmtTimestamp } from '../format';
 import {
   acceptedOf,
   EMPTY_REASON_TEXT,
@@ -14,6 +23,8 @@ import {
   emptyReasonOf,
   loadDrops,
   loadStory,
+  type MissingSpecies,
+  missingSpeciesOf,
   notReceivedOf,
   PREVIOUS_KEPT,
   partialSummary,
@@ -67,6 +78,69 @@ const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reas
   );
 });
 
+/** Expandable "Not loaded (23 species)" list: the species a stopped load never received. */
+function MissingSpeciesList({ species }: { species: MissingSpecies[] }) {
+  const known = species.filter((m) => m.expected != null);
+  const total = known.reduce((s, m) => s + (m.expected ?? 0), 0);
+  return (
+    <Collapsible.Root gridColumn="2 / -1" mt={0.5} data-testid="loaded-missing-species">
+      <Collapsible.Trigger asChild>
+        <Button
+          size="xs"
+          variant="ghost"
+          colorPalette="gray"
+          color="fg"
+          px={1.5}
+          ms={-1.5}
+          fontWeight="medium"
+          focusVisibleRing="outside"
+          css={{ '&[data-state=open] svg': { transform: 'rotate(90deg)' } }}
+        >
+          <Icon as={LuChevronRight} boxSize={3.5} transition="transform 0.15s" aria-hidden />
+          Not loaded ({fmtInt(species.length)} species)
+          {known.length > 0 && (
+            <Box as="span" color="fg.muted" fontWeight="normal" fontVariantNumeric="tabular-nums">
+              · ≈{fmtInt(total)} expected records
+            </Box>
+          )}
+        </Button>
+      </Collapsible.Trigger>
+      <Collapsible.Content>
+        <Box
+          as="ul"
+          listStyleType="none"
+          mt={1}
+          maxH="12rem"
+          overflowY="auto"
+          overscrollBehavior="contain"
+          borderWidth="1px"
+          borderColor="colorPalette.muted"
+          borderRadius="sm"
+          bg="bg"
+          px={2.5}
+          py={1.5}
+          css={{ columnWidth: '16rem', columnGap: '1.5rem' }}
+          tabIndex={0}
+          focusRing="inside"
+          aria-label="Species not loaded, with expected record counts"
+          data-testid="loaded-missing-list"
+        >
+          {species.map((m) => (
+            <HStack as="li" key={m.name} gap={3} fontSize="xs" py={0.5} css={{ breakInside: 'avoid' }}>
+              <Text fontStyle="italic" color="fg" truncate minW={0} flex="1" title={m.name}>
+                {m.name}
+              </Text>
+              <Text color="fg.muted" fontVariantNumeric="tabular-nums" flexShrink={0}>
+                {m.expected != null ? fmtInt(m.expected) : '–'}
+              </Text>
+            </HStack>
+          ))}
+        </Box>
+      </Collapsible.Content>
+    </Collapsible.Root>
+  );
+}
+
 export interface LoadedPanelProps {
   /** Extra action before "Cite this data", e.g. the insights drawer button. */
   extra?: ReactNode;
@@ -88,7 +162,8 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const sources = Object.values(last.funnel.bySource).filter((s) => (s?.accepted ?? 0) > 0).length;
   const computing = infomapStore.isRunning || speciesStore.isLoading;
   const regions = infomapStore.numBioregions;
-  const time = fmtTime(last.retrievedAt);
+  // Same full timestamp as the Cite tab header.
+  const time = fmtTimestamp(last.retrievedAt);
   const partial = last.partial;
   const skipped = (last as { bioregionsSkipped?: boolean }).bioregionsSkipped === true;
   const runAnyway = (ex as { runBioregionsAnyway?: () => void }).runBioregionsAnyway;
@@ -114,6 +189,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const story =
     matching != null && matching > 0 && last.mode !== 'add' ? loadStory({ matching, notSpecies, lowCount, drops }) : null;
   const palette = partial ? 'orange' : 'green';
+  const missing = partial ? missingSpeciesOf(partial) : [];
 
   return (
     <Flex direction="column" gap={2} data-testid="loaded-panel" data-state={partial ? 'partial' : 'complete'}>
@@ -149,8 +225,8 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
               {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(records)} records
             </Text>
             {time && (
-              <Text as="span" title={fmtTimestamp(last.retrievedAt)} fontSize="xs" color="fg.muted" flexShrink={0}>
-                at {time}
+              <Text as="span" fontSize="xs" color="fg.muted" flexShrink={0} data-testid="loaded-time">
+                retrieved {time}
               </Text>
             )}
           </HStack>
@@ -180,6 +256,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
             </Box>
           </Text>
         )}
+        {missing.length > 0 && <MissingSpeciesList species={missing} />}
         <Flex gridColumn="2 / -1" fontSize="xs" color="fg.muted" wrap="wrap" align="center" minW={0} rowGap={1}>
           <Text>
             {[

@@ -136,14 +136,35 @@ const MAIN_FIELDS = `
       datasetKey(size: 12) { key count label }
     }`;
 
-/** The fast request: totals, cardinality, stats, histogram and facets. */
+const YEAR_HISTOGRAM = 'histogram { year(interval: 1) { buckets { key count } } }';
+
+/**
+ * The fast request: totals, cardinality, stats, histogram and facets. With a year filter
+ * it also asks for the year histogram without that filter (`allYears`, for `yearsAll`):
+ * an alias in the same request runs in parallel on the server and measured no slower
+ * (median of 12 cold Aves-by-country requests: 610 ms without, 629 ms with), whereas in
+ * the ledger request it would arrive later and add ~80 ms there.
+ */
 export function buildSummaryRequest(query: OccurrenceQuery): {
   document: string;
-  variables: { p: GraphqlPredicate };
+  variables: { p: GraphqlPredicate; p_allYears?: GraphqlPredicate };
 } {
+  const p = gbifPredicate(query);
+  const allYears = gbifPredicate(query, { omit: ['years'] });
+  if (JSON.stringify(allYears) === JSON.stringify(p)) {
+    return {
+      document: `query PreviewSummary($p: Predicate) {\n  main: occurrenceSearch(predicate: $p) {${MAIN_FIELDS}\n  }\n}`,
+      variables: { p },
+    };
+  }
   return {
-    document: `query PreviewSummary($p: Predicate) {\n  main: occurrenceSearch(predicate: $p) {${MAIN_FIELDS}\n  }\n}`,
-    variables: { p: gbifPredicate(query) },
+    document: [
+      'query PreviewSummary($p: Predicate, $p_allYears: Predicate) {',
+      `  main: occurrenceSearch(predicate: $p) {${MAIN_FIELDS}\n  }`,
+      `  allYears: occurrenceSearch(predicate: $p_allYears) { ${YEAR_HISTOGRAM} }`,
+      '}',
+    ].join('\n'),
+    variables: { p, p_allYears: allYears },
   };
 }
 
@@ -183,6 +204,14 @@ export function buildImpactRequest(query: OccurrenceQuery): {
 const buckets = (raw: RawBucket[] | null | undefined, label: (b: RawBucket) => string) =>
   (raw ?? []).map((b): FacetBucket => ({ key: String(b.key), label: label(b), count: b.count }));
 
+/** Ascending year bins of a histogram (empty years and odd keys dropped). */
+function yearBins(raw: RawBucket[] | null | undefined): { year: number; count: number }[] {
+  return (raw ?? [])
+    .map((b) => ({ year: Math.round(Number(b.key)), count: b.count }))
+    .filter((b) => Number.isFinite(b.year) && b.count > 0)
+    .sort((a, b) => a.year - b.year);
+}
+
 /** Ledger base and per-filter impact (the second preview request; none without filters). */
 export async function previewGbifImpact(
   query: OccurrenceQuery,
@@ -213,15 +242,17 @@ export async function previewGbifSummary(
   signal?: AbortSignal,
 ): Promise<PreviewSummary> {
   const { document, variables } = buildSummaryRequest(query);
-  const data = await gbifGraphql<{ main: MainResult }>(document, variables, { signal });
+  const data = await gbifGraphql<{
+    main: MainResult;
+    allYears?: { histogram: MainResult['histogram'] } | null;
+  }>(document, variables, { signal });
   const main = data.main;
   const total = main.documents.total;
   const filtered = buildImpactRequest(query) != null;
 
-  const years = (main.histogram?.year?.buckets ?? [])
-    .map((b) => ({ year: Math.round(Number(b.key)), count: b.count }))
-    .filter((b) => Number.isFinite(b.year) && b.count > 0)
-    .sort((a, b) => a.year - b.year);
+  const years = yearBins(main.histogram?.year?.buckets);
+  // Without a year filter the query's own histogram is the unfiltered one.
+  const yearsAll = variables.p_allYears ? yearBins(data.allYears?.histogram?.year?.buckets) : years;
 
   const yearStats = main.stats?.year;
   const yearRange: [number, number] | null =
@@ -246,6 +277,7 @@ export async function previewGbifSummary(
     datasets: main.cardinality?.datasetKey ?? null,
     yearRange,
     years,
+    yearsAll,
     basisOfRecord: buckets(facet?.basisOfRecord, (b) => basisOfRecordLabel(b.key)),
     topSpecies: buckets(facet?.speciesKey, (b) => b.label || `Species ${b.key}`),
     topDatasets: buckets(facet?.datasetKey, (b) => b.label || b.key),

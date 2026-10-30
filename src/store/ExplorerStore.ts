@@ -42,7 +42,15 @@ import {
   readStorage,
   writeStorage,
 } from './explorer/library';
-import { type ObisExplorerDetail, applyMinRecords, computeEstimate, planSource, planSpeciesNames } from './explorer/plan';
+import {
+  type ObisExplorerDetail,
+  applyMinRecords,
+  computeEstimate,
+  missingPlannedSpecies,
+  planSource,
+  planSpeciesNames,
+} from './explorer/plan';
+import { regionByBbox } from '../sources/regions';
 import {
   type LoadProvenance,
   buildDatasetCsv,
@@ -103,6 +111,7 @@ import type {
   PlanState,
   Preset,
   Provenance,
+  MapScope,
   QuerySection,
   RecentShare,
   SavedQuery,
@@ -153,6 +162,12 @@ export const BIAS_THRESHOLD_LABELS: Record<BiasId, string> = {
 };
 /** A triggered bias flag is a warning at this multiple of its threshold, else a note. */
 export const BIAS_WARNING_FACTOR = 1.5;
+/** A bias remedy that would remove more than this share of the scope is discouraged. */
+export const BIAS_DISCOURAGE_SHARE = 0.8;
+/** OBIS share of a scope from which human observations read as marine survey effort. */
+export const MARINE_OBIS_SHARE = 0.2;
+/** Why a merged GBIF + OBIS preview's bias values are approximate. */
+export const OVERLAP_NOTE = 'may change after GBIF/OBIS overlap removal';
 /** "Recent" for the temporal-skew check: the last 15 years, inclusive. */
 export const RECENT_YEARS = 15;
 /** Species with fewer records than this count as low-count. */
@@ -266,6 +281,8 @@ export function partialLoad(p: {
   speciesLoaded: number;
   speciesPlanned: number | null;
   fetched: number;
+  /** Planned species with no loaded record, largest first (`missingPlannedSpecies`). */
+  missingSpecies?: PartialLoad['missingSpecies'];
 }): PartialLoad {
   const out = {
     kind: partialKind(p.speciesLoaded, p.speciesPlanned),
@@ -275,7 +292,7 @@ export function partialLoad(p: {
     speciesPlanned: p.speciesPlanned,
     notReceived: Math.max(0, p.planned - p.fetched),
   };
-  return { ...out, coverage: partialCoverage(out) };
+  return { ...out, coverage: partialCoverage(out), missingSpecies: p.speciesPlanned != null ? (p.missingSpecies ?? []) : [] };
 }
 
 /** A stopped load below this coverage keeps its records but does not run Infomap. */
@@ -560,6 +577,10 @@ export interface BiasActions {
   narrowYears(from: number): void;
   showCountries(): void;
   setMinRecords(n: number): void;
+  /** Turn OBIS off (its datasets cannot be excluded on the server). */
+  useGbifOnly(): void;
+  /** Pin the current numbers as the "what if" baseline. */
+  pinBaseline(label: string): void;
 }
 
 export interface BiasInput {
@@ -584,6 +605,10 @@ interface BiasData {
   /** Records the country shares are taken of (loaded records with a country code). */
   countryTotal: number;
   speciesCounts: FacetBucket[] | null;
+  /** Records per source in the scope (before overlap removal on a preview). */
+  bySource: Partial<Record<SourceId, number>>;
+  /** A query preview (the checks describe the query, not loaded records). */
+  preview: boolean;
 }
 
 function biasData({ previews, speciesCounts, stats }: BiasInput): BiasData {
@@ -597,10 +622,16 @@ function biasData({ previews, speciesCounts, stats }: BiasInput): BiasData {
       countries: stats.countries,
       countryTotal,
       speciesCounts: stats.species,
+      bySource: { ...stats.bySource },
+      preview: false,
     };
   }
   const total = previews.reduce((sum, p) => sum + p.total, 0);
+  const bySource: Partial<Record<SourceId, number>> = {};
+  for (const p of previews) bySource[p.source] = (bySource[p.source] ?? 0) + p.total;
   return {
+    bySource,
+    preview: true,
     total,
     datasets: previews.flatMap((p) => p.topDatasets.map((b) => ({ ...b, source: p.source }))),
     basis: mergeBuckets(previews.map((p) => p.basisOfRecord)),
@@ -619,9 +650,21 @@ export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFl
   if (total <= 0) return [];
   /** A remedy never removes more records than the scope holds. */
   const capped = (n: number) => Math.min(total, Math.max(0, n));
-  const flag = (id: BiasId, value: number, text: string, action?: BiasFlag['action']): BiasFlag => {
+  const gbifRecords = data.bySource.gbif ?? 0;
+  const obisRecords = data.bySource.obis ?? 0;
+  // A preview counts records shared by GBIF and OBIS twice; loading removes the overlap.
+  const approximate = data.preview && gbifRecords > 0 && obisRecords > 0;
+  const flag = (
+    id: BiasId,
+    value: number,
+    text: string,
+    action?: BiasFlag['action'],
+    secondaryAction?: BiasFlag['secondaryAction'],
+  ): BiasFlag => {
     const threshold = BIAS_THRESHOLDS[id];
     const triggered = value > threshold;
+    // A remedy that leaves under a fifth of the records is shown as a consequence, not offered.
+    const discouraged = action?.cost != null && action.cost > BIAS_DISCOURAGE_SHARE * total;
     return {
       id,
       triggered,
@@ -630,7 +673,9 @@ export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFl
       threshold,
       thresholdLabel: BIAS_THRESHOLD_LABELS[id],
       text,
-      ...(action && { action }),
+      ...(approximate && { approximate: true, approximateNote: OVERLAP_NOTE }),
+      ...(action && { action: discouraged ? { ...action, discouraged: true, leaves: total - (action.cost ?? 0) } : action }),
+      ...(secondaryAction && !discouraged && { secondaryAction }),
     };
   };
 
@@ -652,17 +697,32 @@ export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFl
           cost: capped(top.count),
           run: () => actions.excludeDataset(topKey),
         }
-      : undefined,
+      : // OBIS datasets cannot be excluded on the server: the remedy is leaving OBIS out.
+        top?.source === 'obis' && query.sources.gbif
+        ? {
+            label: 'Use GBIF only',
+            title: `Turn OBIS off: ${top.label} cannot be excluded on its own`,
+            cost: capped(total - gbifRecords),
+            run: () => actions.useGbifOnly(),
+          }
+        : undefined,
   );
 
   // Human observations.
   const basis = data.basis;
   const human = basis.find((b) => b.key === 'HUMAN_OBSERVATION')?.count ?? 0;
   const humanShare = human / total;
+  // Marine human observations are mostly survey effort (ship, aerial), not citizen science:
+  // OBIS holds a real share of the scope (not a few stray records), or the area is an ocean.
+  const marine =
+    obisRecords >= MARINE_OBIS_SHARE * total ||
+    (query.area.kind === 'bbox' && regionByBbox(query.area.bbox)?.group === 'Ocean');
   const humanFlag = flag(
     'humanObservation',
     humanShare,
-    `${pctLabel(humanShare)} are human observations, often citizen science: dense near people and roads.`,
+    marine
+      ? `${pctLabel(humanShare)} are human observations, mostly survey and sighting effort; coverage follows survey tracks.`
+      : `${pctLabel(humanShare)} are human observations, often citizen science: dense near people and roads.`,
     sameBasis(query.quality.basisOfRecord, SPECIMEN_BASIS)
       ? undefined
       : {
@@ -681,17 +741,27 @@ export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFl
   const [fromYear, toYear] = query.years;
   const lastYear = toYear ?? (years.length > 0 ? years[years.length - 1].year : currentYear);
   const canNarrow = (fromYear == null || fromYear < cutoff) && lastYear >= cutoff;
-  const narrowLabel = lastYear > cutoff ? `Restrict to ${cutoff}–${lastYear}` : `Restrict to ${cutoff}`;
+  const recentRange = lastYear > cutoff ? `${cutoff}–${lastYear}` : `${cutoff}`;
   const temporalFlag = flag(
     'temporalSkew',
     recentShare,
     `${pctLabel(recentShare)} of records are from ${cutoff} or later; historical ranges may be missing.`,
     canNarrow
       ? {
-          label: narrowLabel,
+          label: `Use recent records only (${recentRange})`,
+          title: `Restrict to ${recentRange}: drops older and undated records, so historical ranges stay missing`,
           // Undated records go too, so the cost is everything outside the recent years.
           cost: capped(total - recent),
           run: () => actions.narrowYears(cutoff),
+        }
+      : undefined,
+    canNarrow
+      ? {
+          label: 'Compare first: pin baseline, then restrict',
+          run: () => {
+            actions.pinBaseline(`Before: ${recentRange} only`);
+            actions.narrowYears(cutoff);
+          },
         }
       : undefined,
   );
@@ -739,7 +809,11 @@ export function computeBiasFlags(input: BiasInput, actions: BiasActions): BiasFl
  * Share of dated records from the last `RECENT_YEARS` years (inclusive) in a merged,
  * filtered year histogram: the temporal-skew check and the year brush both read it.
  */
-export function recentShareOf(years: { year: number; count: number }[], currentYear: number): RecentShare {
+export function recentShareOf(
+  years: { year: number; count: number }[],
+  currentYear: number,
+  scope: RecentShare['scope'] = 'query',
+): RecentShare {
   const cutoffYear = currentYear - (RECENT_YEARS - 1);
   let dated = 0;
   let recent = 0;
@@ -747,7 +821,7 @@ export function recentShareOf(years: { year: number; count: number }[], currentY
     dated += y.count;
     if (y.year >= cutoffYear) recent += y.count;
   }
-  return { cutoffYear, share: dated > 0 ? recent / dated : null };
+  return { cutoffYear, share: dated > 0 ? recent / dated : null, scope };
 }
 
 const SECTION_KEYS: Record<QuerySection, (q: OccurrenceQuery) => string> = {
@@ -978,6 +1052,8 @@ export default class ExplorerStore {
   job: LoadJob | null = null;
   /** Provenance of the last completed load (a `LoadProvenance`, with the exact requests). */
   lastLoad: Provenance | null = null;
+  /** The user's map scope while a load matches the query; null = the default (`mapScope`). */
+  mapScopeChoice: MapScope | null = null;
   /** Stream plans for the current query, with `minRecordsPerSpecies` applied. */
   plans: PlanState = { state: 'idle', plans: {} };
   /** GBIF download requests, persisted. */
@@ -1089,6 +1165,13 @@ export default class ExplorerStore {
       reaction(
         () => this.query.quality.minRecordsPerSpecies,
         () => this.applyPlanFilter(),
+      ),
+      // The map scope returns to its default when the load stops matching or a new one lands.
+      reaction(
+        () => [this.mapLoadedAvailable, this.lastLoad?.retrievedAt] as const,
+        () => {
+          this.mapScopeChoice = null;
+        },
       ),
       // Poll GBIF downloads every 30 s while any is preparing or running.
       reaction(
@@ -1698,9 +1781,35 @@ export default class ExplorerStore {
     return { kind: 'query', records, label: `For the query · ${fmtCount(records)} matching records` };
   }
 
-  /** Share of dated records in the last 15 years of the merged, filtered year histogram. */
+  /**
+   * Share of dated records in the last 15 years, in the insights scope: the merged,
+   * filtered preview histogram, or the loaded records' years ('loaded', also for a
+   * partial load).
+   */
   get recentShare(): RecentShare {
-    return recentShareOf(mergeYears(this.previews.map((p) => p.years)), new Date().getFullYear());
+    const year = new Date().getFullYear();
+    const stats = this.scopeStats;
+    if (stats) return recentShareOf(stats.years, year, 'loaded');
+    return recentShareOf(mergeYears(this.previews.map((p) => p.years)), year);
+  }
+
+  /** Whether the map can show loaded records that match the query on screen. */
+  get mapLoadedAvailable(): boolean {
+    return this.loadedMatchesQuery && (this.lastLoad?.accepted ?? 0) > 0;
+  }
+
+  /**
+   * What the map shows: 'loaded' by default once a load matches the query (not dirty,
+   * not loading), else 'query'. `setMapScope` overrides the default until the query
+   * diverges from the load or a new load lands.
+   */
+  get mapScope(): MapScope {
+    if (!this.mapLoadedAvailable) return 'query';
+    return this.mapScopeChoice ?? 'loaded';
+  }
+
+  setMapScope(scope: MapScope) {
+    this.mapScopeChoice = scope;
   }
 
   /** Records matching all filters, summed over sources. */
@@ -1808,6 +1917,8 @@ export default class ExplorerStore {
         narrowYears: (from) => this.setYears([from, this.query.years[1]]),
         showCountries: () => this.setInsightFocus('countries'),
         setMinRecords: (n) => this.setQuality({ minRecordsPerSpecies: n }),
+        useGbifOnly: () => this.setSourceEnabled('obis', false),
+        pinBaseline: (label) => this.pinBaseline(label),
       },
     );
   }
@@ -2306,6 +2417,7 @@ export default class ExplorerStore {
             speciesLoaded: tally.species.size,
             speciesPlanned: plannedSpecies(plans),
             fetched: ctx.fetched,
+            missingSpecies: missingPlannedSpecies(plans, tally.species.keys()),
           })
         : null;
     // Stopped with too few species: keep the records, leave bioregions to the user.

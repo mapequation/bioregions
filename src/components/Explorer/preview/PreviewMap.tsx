@@ -1,8 +1,8 @@
-import { Box, Button, Group, HStack, Icon, Spinner, Text } from '@chakra-ui/react';
+import { Box, Button, Group, HStack, Icon, SegmentGroup, Spinner, Text } from '@chakra-ui/react';
 import { toJS } from 'mobx';
 import { observer } from 'mobx-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LuGlobe, LuInfo, LuScan, LuSquareDashed } from 'react-icons/lu';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { LuCloudOff, LuGlobe, LuInfo, LuScan, LuSquareDashed } from 'react-icons/lu';
 import { useColorMode } from '@/components/ui/color-mode';
 import { Tooltip } from '@/components/ui/tooltip';
 import {
@@ -21,6 +21,7 @@ import type { AreaFilter, BBox, OccurrenceQuery } from '@/sources/types';
 import { useStore } from '../../../store';
 import { explorerUi } from '../explorerUi';
 import { fmtInt } from '../format';
+import { binHexagons, cachedPoints, type HexBins, RAMP_LEVELS, rampLevel, rampLut } from './loadedHexbin';
 import {
   alphaExtent,
   bboxRings,
@@ -31,6 +32,7 @@ import {
   fitView,
   legendLabel,
   type MapView,
+  type PlacedTile,
   mapNote,
   MIN_DENSITY_ZOOM,
   mapProjection,
@@ -38,6 +40,7 @@ import {
   polarDragBbox,
   polarSrsFor,
   polarTilesForView,
+  queryCaption,
   ringsPath,
   tilesForView,
   unionBbox,
@@ -45,6 +48,7 @@ import {
   wktBbox,
   wrapBbox,
 } from './mapView';
+import { useTileBlobs } from './useTileBlobs';
 
 /** Approximate colour ramps of the GBIF point styles (sampled from rendered tiles). */
 const GBIF_RAMP = {
@@ -57,6 +61,8 @@ const GBIF_HEX_RAMP = {
   dark: ['#ffff00', '#ffcc00', '#ff9900', '#ff6600', '#d60a00'],
 };
 const OBIS_FILL = 'var(--chakra-colors-teal-solid)';
+/** OBIS cells drawn over the GBIF hexagons: an outline only, on a thin halo. */
+const OBIS_STROKE = 'var(--chakra-colors-teal-fg)';
 const OBIS_MIN_OPACITY = 0.18;
 const OBIS_MAX_OPACITY = 0.8;
 /** Opacity steps of the OBIS grid (one SVG path each). */
@@ -80,6 +86,23 @@ function polarUrl(url: string, srs: PolarSrs | null): string {
   return u.toString();
 }
 const NO_CELLS: ObisCell[] = [];
+/**
+ * gbif-dark draws land almost black (#030303) and the ocean dark grey (#252525), about
+ * 1.3:1. This linear map (sRGB, per channel) turns them into land #454545 and ocean #0f0f0f,
+ * about 2:1 with land the lighter, as in the light basemap.
+ */
+const DARK_LAND = 0.27;
+const DARK_OCEAN = 0.06;
+const DARK_SLOPE = (DARK_OCEAN - DARK_LAND) / ((37 - 3) / 255);
+const DARK_INTERCEPT = DARK_LAND - (DARK_SLOPE * 3) / 255;
+/** Dilation (CSS px) of the 1-2 px GBIF point marks at world scale, so single records stay visible. */
+const WORLD_MARK_DILATE = 0.6;
+
+export type MapScope = 'query' | 'loaded';
+const SCOPE_ITEMS = [
+  { value: 'query', label: 'Query' },
+  { value: 'loaded', label: 'Loaded' },
+];
 const MAX_HEIGHT = 'calc((100dvh - 132px) * 0.42)';
 /** Hexagon size on screen (CSS px) for the density layer of an area view. */
 const HEX_PX = 5;
@@ -253,46 +276,6 @@ interface ObisCell {
   count: number;
 }
 
-/**
- * Fetch density tiles as blob URLs. An <img> renders any decodable body whatever the HTTP status,
- * and GBIF answers an overloaded tile with a 503 PNG that reads "503"; fetching lets error and
- * empty (204) tiles resolve to false instead of being drawn on the map.
- */
-function useTileBlobs(urls: string[]): ReadonlyMap<string, string | false> {
-  const cache = useRef(new Map<string, string | false>());
-  const inflight = useRef(new Set<string>());
-  const [, bump] = useState(0);
-  const latest = useRef(urls);
-  latest.current = urls;
-  const key = urls.join('\n');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `key` stands for the url list read via `latest`.
-  useEffect(() => {
-    for (const url of latest.current) {
-      if (cache.current.has(url) || inflight.current.has(url)) continue;
-      inflight.current.add(url);
-      fetch(url)
-        .then(async (res) => (res.ok && res.status !== 204 ? URL.createObjectURL(await res.blob()) : false))
-        .catch(() => false as const)
-        .then((blob) => {
-          inflight.current.delete(url);
-          if (cache.current.size > 400) {
-            for (const u of cache.current.values()) if (u) URL.revokeObjectURL(u);
-            cache.current.clear();
-          }
-          cache.current.set(url, blob);
-          bump((n) => n + 1);
-        });
-    }
-  }, [key]);
-  useEffect(() => {
-    const blobs = cache.current;
-    return () => {
-      for (const u of blobs.values()) if (u) URL.revokeObjectURL(u);
-    };
-  }, []);
-  return cache.current;
-}
-
 /** OBIS record grid for the query, debounced and abortable. */
 function useObisGrid(query: OccurrenceQuery, enabled: boolean, precision: number) {
   const key = enabled ? JSON.stringify([query.taxa.map((t) => t.name), query.area, query.years, query.depth, query.quality, precision]) : '';
@@ -343,6 +326,53 @@ function useObisGrid(query: OccurrenceQuery, enabled: boolean, precision: number
   return state;
 }
 
+/** The loaded records as hexagons on a canvas (CSS px of the map frame, HiDPI-sharp). */
+function LoadedHexLayer({ bins, ramp, width, height }: { bins: HexBins; ramp: string[]; width: number; height: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const dpr = typeof window !== 'undefined' ? Math.min(3, window.devicePixelRatio || 1) : 1;
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const lut = rampLut(ramp);
+    // Cells grouped by colour, one fill per level; a hair larger than the cell to hide seams.
+    const levels: number[][] = Array.from({ length: RAMP_LEVELS }, () => []);
+    const { counts, cols } = bins;
+    for (let c = 0; c < counts.length; c++) if (counts[c] > 0) levels[rampLevel(counts[c])].push(c);
+    const r = bins.r + 0.35 / dpr;
+    const corners = Array.from({ length: 6 }, (_, k) => {
+      const a = (Math.PI / 3) * k;
+      return [r * Math.cos(a), r * Math.sin(a)] as const; // flat-top, like GBIF's hexagons
+    });
+    levels.forEach((cells, level) => {
+      if (!cells.length) return;
+      ctx.beginPath();
+      for (const c of cells) {
+        const j = Math.floor(c / cols);
+        const i = c - j * cols;
+        const cx = bins.ox + i * bins.dx;
+        const cy = bins.oy + (j + (i & 1) / 2) * bins.dy;
+        ctx.moveTo(cx + corners[0][0], cy + corners[0][1]);
+        for (let k = 1; k < 6; k++) ctx.lineTo(cx + corners[k][0], cy + corners[k][1]);
+        ctx.closePath();
+      }
+      ctx.fillStyle = lut[level];
+      ctx.fill();
+    });
+  }, [bins, ramp, width, height, dpr]);
+  return (
+    <canvas
+      ref={ref}
+      data-testid="preview-map-loaded"
+      style={{ position: 'absolute', left: 0, top: 0, width, height }}
+    />
+  );
+}
+
 // --- Component -----------------------------------------------------------------------
 
 export interface PreviewMapProps {
@@ -351,8 +381,9 @@ export interface PreviewMapProps {
 }
 
 export default observer(function PreviewMap({ faint = false }: PreviewMapProps) {
-  const { explorerStore } = useStore();
+  const { explorerStore, speciesStore } = useStore();
   const query = explorerStore.query;
+  const filterId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const dark = useColorMode().colorMode === 'dark';
   const [frameRef, size] = useSize<HTMLDivElement>();
   const [fit, setFit] = useState<'area' | 'world'>('area');
@@ -398,35 +429,80 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         : tilesForView(view, densityZoom(view.scale), bbox);
   const tileScale: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1.25 ? 2 : 1;
 
+  // Map scope: the query's GBIF/OBIS layers, or the records loaded into Infomap (once a load exists).
+  // The store owns the scope: 'loaded' by default while a load with records matches the query.
+  const loadedCount = speciesStore.numPointsDebounced;
+  const hasLoad = !faint && loadedCount > 0 && explorerStore.mapLoadedAvailable;
+  const scope: MapScope = hasLoad ? explorerStore.mapScope : 'query';
+  const setScope = (next: MapScope) => explorerStore.setMapScope(next);
+  const loadedScope = scope === 'loaded';
+
   // GBIF density layer: only when GBIF is on, supports the query and knows a taxon.
   const gbifKnowsTaxa = query.taxa.length === 0 || query.taxa.some((t) => t.gbifKey != null);
   const showGbif = query.sources.gbif && supportsGbif(query).ok && gbifKnowsTaxa;
+  const gbifLayer = showGbif && !loadedScope;
   const coverage = gbifTileFilterCoverage(query);
-  const densityUrls = showGbif
-    ? densityTiles.map((t) =>
-        polarUrl(
-          gbifDensityTileUrl(query, {
-            z: t.z,
-            x: t.x,
-            y: t.y,
-            scale: tileScale,
-            dark,
-            ...(zoomedToArea && { bin: 'hex' as const, hexPerTile: hexPerTile(t.size) }),
-          }),
-          srs,
-        ),
-      )
-    : [];
+  const tileUrl = (t: PlacedTile, hex: boolean) =>
+    polarUrl(
+      gbifDensityTileUrl(query, {
+        z: t.z,
+        x: t.x,
+        y: t.y,
+        scale: tileScale,
+        dark,
+        ...(hex && { bin: 'hex' as const, hexPerTile: hexPerTile(t.size) }),
+      }),
+      srs,
+    );
+  const densityUrls = gbifLayer ? densityTiles.map((t) => tileUrl(t, zoomedToArea)) : [];
 
-  // Density tiles as blob URLs: false = empty (204) or failed, missing = still loading.
-  const tileBlobs = useTileBlobs(densityUrls);
-  const densityPending = densityUrls.some((u) => !tileBlobs.has(u));
+  // Density tiles as blob URLs (missing = still loading; failed tiles are retried with backoff).
+  const density = useTileBlobs(densityUrls);
+  // Hexagon tiles GBIF still cannot render (it answers 503 under load) fall back to its point style.
+  const fallbackUrls = zoomedToArea
+    ? densityTiles.map((t, i) => (density.tiles.get(densityUrls[i] ?? '') === 'failed' ? tileUrl(t, false) : ''))
+    : [];
+  const fallback = useTileBlobs(fallbackUrls.filter(Boolean));
+  const tileImage = (i: number): string | null => {
+    const state = density.tiles.get(densityUrls[i] ?? '');
+    const shown = state === 'failed' && fallbackUrls[i] ? fallback.tiles.get(fallbackUrls[i]) : state;
+    return shown && shown !== 'empty' && shown !== 'failed' ? shown : null;
+  };
+  const densityPending =
+    densityUrls.some((u) => !density.tiles.has(u)) || fallbackUrls.some((u) => u !== '' && !fallback.tiles.has(u));
+  const tilesFailed = densityUrls.some((u) => density.tiles.get(u) === 'failed');
+  const retryTiles = () => {
+    density.retry();
+    fallback.retry();
+  };
+
+  // Loaded records, flattened once per load and binned like the GBIF hexagons of the view.
+  const lastLoad = explorerStore.lastLoad;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `loadedCount` and `lastLoad` stand for the (non-observable) point collection
+  const loadedPoints = useMemo(
+    () => (loadedScope ? cachedPoints(speciesStore.multiPointCollection) : null),
+    [loadedScope, loadedCount, lastLoad, speciesStore],
+  );
+  const hexTile = zoomedToArea ? densityTiles[0] : undefined;
+  const hexDx = hexTile ? hexTile.size / hexPerTile(hexTile.size) : HEX_PX;
+  const hexOx = hexTile?.left ?? 0;
+  const hexOy = hexTile?.top ?? 0;
+  const loadedBins = useMemo(
+    () =>
+      loadedPoints && ready
+        ? binHexagons(loadedPoints, view, srs, size.width, size.height, { dx: hexDx, ox: hexOx, oy: hexOy })
+        : null,
+    [loadedPoints, ready, view, srs, size.width, size.height, hexDx, hexOx, hexOy],
+  );
+  const loadedTotal = loadedPoints ? loadedPoints.length / 2 : loadedCount;
 
   // OBIS grid overlay.
   const showObis = query.sources.obis && supportsObis(query).ok && (query.taxa.length > 0 || hasArea) && !faint;
   const precision: number = 3;
   const obis = useObisGrid(query, showObis, precision);
-  const obisCells = showObis && obis.key ? obis.cells : NO_CELLS;
+  const obisCells = showObis && obis.key && !loadedScope ? obis.cells : NO_CELLS;
+  // Over GBIF hexagons the OBIS cells are outlines, so neither layer hides the other.
+  const obisOutlined = gbifLayer;
 
   // Rectangle draw (Esc cancels the drag, a second Esc leaves draw mode).
   const drawing = explorerUi.drawing;
@@ -514,6 +590,16 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         paths[level].push(`M${corners.map(([lon, lat]) => proj.toPx(lon, lat).map((v) => v.toFixed(1)).join(',')).join('L')}Z`);
       }
     }
+    if (obisOutlined) {
+      const d = paths.flat().join('');
+      if (!d) return null;
+      return (
+        <>
+          <path d={d} fill="none" stroke="var(--chakra-colors-bg)" strokeOpacity={0.5} strokeWidth={2.25} strokeLinejoin="round" />
+          <path d={d} fill="none" stroke={OBIS_STROKE} strokeWidth={1.25} strokeLinejoin="round" />
+        </>
+      );
+    }
     return paths.map((d, i) =>
       d.length ? (
         <path
@@ -525,7 +611,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         />
       ) : null,
     );
-  }, [obisCells, obis.max, proj, srs, view.east]);
+  }, [obisCells, obis.max, proj, srs, view.east, obisOutlined]);
   // The density layer is clipped to the area outline; the basemap outside it is dimmed.
   const densityClip = outline && fit === 'area' ? `path(evenodd, '${outline}')` : undefined;
   const dragPath = useMemo(() => {
@@ -550,15 +636,19 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     ]);
   }, [drag, proj, srs]);
 
-  const updating = (densityPending || (showObis && obis.loading)) && !faint;
+  const updating = (densityPending || (showObis && !loadedScope && obis.loading)) && !faint;
+  // Tiles GBIF could not serve after the retries: say so instead of 'Updating' forever.
+  const unavailable = tilesFailed && !densityPending && !faint;
   const summary = [
     `Preview map of ${taxaLabel(query.taxa).toLowerCase() === 'all taxa' ? 'all' : taxaLabel(query.taxa)} records`,
     areaLabel(query.area),
     yearsLabel(query.years).toLowerCase(),
   ].join(', ');
-  const layers = [showGbif && 'GBIF record density', obisCells.length > 0 && `OBIS grid with ${fmtInt(obisCells.length)} cells`]
-    .filter(Boolean)
-    .join(' and ');
+  const layers = loadedScope
+    ? `the ${fmtInt(loadedTotal)} loaded records binned into hexagons`
+    : [gbifLayer && 'GBIF record density', obisCells.length > 0 && `OBIS grid with ${fmtInt(obisCells.length)} cells`]
+        .filter(Boolean)
+        .join(' and ');
   const ariaLabel = `${summary}. ${layers ? `Shows ${layers}.` : 'No occurrence layer.'}${updating ? ' Updating.' : ''}`;
 
   const note = showGbif
@@ -566,15 +656,56 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     : showObis
       ? 'Map shows the OBIS record grid for this query; GBIF density is off.'
       : 'No occurrence layer for this query.';
-  const ramps = zoomedToArea ? GBIF_HEX_RAMP : GBIF_RAMP;
+  const caption = loadedScope
+    ? `Loaded · ${fmtInt(loadedTotal)} records`
+    : queryCaption({ gbif: showGbif, obis: showObis }, coverage.ignored);
+  const captionTitle = loadedScope
+    ? 'The loaded records, binned into hexagons like the GBIF layer: the data that goes into Infomap.'
+    : `${note}${coverage.ignored.length ? ` Not drawn: ${coverage.ignored.join(', ')}.` : ''}`;
+  // The loaded layer always uses the hexagon ramp; GBIF uses it in area views, points elsewhere.
+  const ramps = zoomedToArea || loadedScope ? GBIF_HEX_RAMP : GBIF_RAMP;
   const ramp = dark ? ramps.dark : ramps.light;
   const obisSteps = decadeSteps(obis.max).slice(0, 5);
+  const showRamp = gbifLayer || loadedScope;
+  // GBIF point tiles (world scale, or standing in for failed hexagon tiles) draw 1-2 px
+  // marks: grow them a little so single records stay visible.
+  const dilate = gbifLayer && (!zoomedToArea || tilesFailed);
+  const obisLabel = `OBIS ${precision === 2 ? '11°' : '1.4°'} cell`;
 
   return (
     <Box>
+      {hasLoad && (
+        <HStack mb={2} gap={3} minW={0}>
+          <SegmentGroup.Root
+            size="sm"
+            flexShrink={0}
+            value={scope}
+            onValueChange={(e) => {
+              if (e.value === 'query' || e.value === 'loaded') setScope(e.value);
+            }}
+            aria-label="Map shows"
+            data-testid="map-scope"
+          >
+            <SegmentGroup.Indicator />
+            <SegmentGroup.Items items={SCOPE_ITEMS} />
+          </SegmentGroup.Root>
+          <Text
+            fontSize="xs"
+            color="fg.muted"
+            fontVariantNumeric="tabular-nums"
+            truncate
+            minW={0}
+            title={captionTitle}
+            data-testid="map-caption"
+          >
+            {caption}
+          </Text>
+        </HStack>
+      )}
       <Box
         ref={frameRef}
         data-testid="preview-map"
+        data-scope={scope}
         position="relative"
         w="full"
         aspectRatio="2 / 1"
@@ -586,6 +717,20 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         borderColor="border"
         bg="bg.muted"
       >
+        <svg width="0" height="0" aria-hidden="true" style={{ position: 'absolute' }}>
+          <defs>
+            <filter id={`${filterId}-base`} colorInterpolationFilters="sRGB">
+              <feComponentTransfer>
+                <feFuncR type="linear" slope={DARK_SLOPE} intercept={DARK_INTERCEPT} />
+                <feFuncG type="linear" slope={DARK_SLOPE} intercept={DARK_INTERCEPT} />
+                <feFuncB type="linear" slope={DARK_SLOPE} intercept={DARK_INTERCEPT} />
+              </feComponentTransfer>
+            </filter>
+            <filter id={`${filterId}-dilate`} colorInterpolationFilters="sRGB">
+              <feMorphology operator="dilate" radius={WORLD_MARK_DILATE} />
+            </filter>
+          </defs>
+        </svg>
         {/* Only the map imagery is faded in the empty state, so the Draw button keeps its contrast. */}
         <Box
           role="img"
@@ -596,35 +741,15 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           opacity={faint && !drawing ? 0.45 : 1}
           transition="opacity 0.2s"
         >
-          {tiles.map((t) => (
-            <img
-              key={`b-${t.z}-${t.col}-${t.y}`}
-              src={
-                srs
-                  ? polarBasemapUrl(srs, t, tileScale, dark)
-                  : gbifBasemapUrl({ z: t.z, x: t.x, y: t.y, scale: tileScale, dark })
-              }
-              alt=""
-              draggable={false}
-              style={{
-                position: 'absolute',
-                left: t.left,
-                top: t.top,
-                width: t.size,
-                height: t.size,
-                maxWidth: 'none',
-                userSelect: 'none',
-              }}
-            />
-          ))}
-          <Box position="absolute" inset={0} style={{ clipPath: densityClip }}>
-          {densityTiles.map((t, i) => {
-            const blob = tileBlobs.get(densityUrls[i] ?? '');
-            if (!blob) return null;
-            return (
+          <Box position="absolute" inset={0} style={{ filter: dark ? `url(#${filterId}-base)` : undefined }}>
+            {tiles.map((t) => (
               <img
-                key={`d-${t.z}-${t.col}-${t.y}`}
-                src={blob}
+                key={`b-${t.z}-${t.col}-${t.y}`}
+                src={
+                  srs
+                    ? polarBasemapUrl(srs, t, tileScale, dark)
+                    : gbifBasemapUrl({ z: t.z, x: t.x, y: t.y, scale: tileScale, dark })
+                }
                 alt=""
                 draggable={false}
                 style={{
@@ -637,8 +762,38 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                   userSelect: 'none',
                 }}
               />
-            );
-          })}
+            ))}
+          </Box>
+          <Box
+            position="absolute"
+            inset={0}
+            style={{ clipPath: densityClip, filter: dilate ? `url(#${filterId}-dilate)` : undefined }}
+          >
+            {gbifLayer &&
+              densityTiles.map((t, i) => {
+                const src = tileImage(i);
+                if (!src) return null;
+                return (
+                  <img
+                    key={`d-${t.z}-${t.col}-${t.y}`}
+                    src={src}
+                    alt=""
+                    draggable={false}
+                    style={{
+                      position: 'absolute',
+                      left: t.left,
+                      top: t.top,
+                      width: t.size,
+                      height: t.size,
+                      maxWidth: 'none',
+                      userSelect: 'none',
+                    }}
+                  />
+                );
+              })}
+            {loadedScope && loadedBins && (
+              <LoadedHexLayer bins={loadedBins} ramp={ramp} width={size.width} height={size.height} />
+            )}
           </Box>
           {ready && (
             <Box asChild position="absolute" inset={0} w="full" h="full" color="fg">
@@ -696,6 +851,36 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           <Text>Updating map…</Text>
         </HStack>
 
+        {unavailable && !drawing && (
+          <HStack
+            position="absolute"
+            top={2}
+            left={2}
+            gap={1.5}
+            pl={2}
+            pr={0.5}
+            py={0.5}
+            borderRadius="sm"
+            bg="bg/90"
+            backdropFilter="blur(4px)"
+            borderWidth="1px"
+            borderColor="border"
+            fontSize="xs"
+            color="fg.muted"
+            role="status"
+            data-testid="map-tiles-unavailable"
+          >
+            <Icon as={LuCloudOff} flexShrink={0} />
+            <Text title={zoomedToArea ? 'Missing hexagon tiles are drawn as GBIF points instead.' : undefined}>
+              Map tiles unavailable from GBIF
+            </Text>
+            <Text aria-hidden="true">·</Text>
+            <Button size="2xs" variant="ghost" colorPalette="brand" onClick={retryTiles}>
+              Retry
+            </Button>
+          </HStack>
+        )}
+
         {drawing && (
           <HStack
             position="absolute"
@@ -719,36 +904,34 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           </HStack>
         )}
 
-        {(
-          <Group attached position="absolute" top={2} right={2} boxShadow="xs" borderRadius="l2">
-            {hasArea && !faint && (
-              <Tooltip content={fit === 'area' ? 'Show the whole world' : 'Zoom to the area'} portalled={false}>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  bg="bg"
-                  onClick={() => setFit(fit === 'area' ? 'world' : 'area')}
-                  aria-label={fit === 'area' ? 'Show the whole world' : 'Zoom to the area'}
-                >
-                  <Icon as={fit === 'area' ? LuGlobe : LuScan} />
-                  {fit === 'area' ? 'World' : 'Area'}
-                </Button>
-              </Tooltip>
-            )}
-            <Button
-              size="xs"
-              variant={drawing ? 'solid' : 'outline'}
-              bg={drawing ? undefined : 'bg'}
-              aria-pressed={drawing}
-              onClick={() => explorerUi.setDrawing(!drawing)}
-            >
-              <Icon as={LuSquareDashed} />
-              {drawing ? 'Drawing…' : 'Draw area'}
-            </Button>
-          </Group>
-        )}
+        <Group attached position="absolute" top={2} right={2} boxShadow="xs" borderRadius="l2">
+          {hasArea && !faint && (
+            <Tooltip content={fit === 'area' ? 'Show the whole world' : 'Zoom to the area'} portalled={false}>
+              <Button
+                size="xs"
+                variant="outline"
+                bg="bg"
+                onClick={() => setFit(fit === 'area' ? 'world' : 'area')}
+                aria-label={fit === 'area' ? 'Show the whole world' : 'Zoom to the area'}
+              >
+                <Icon as={fit === 'area' ? LuGlobe : LuScan} />
+                {fit === 'area' ? 'World' : 'Area'}
+              </Button>
+            </Tooltip>
+          )}
+          <Button
+            size="xs"
+            variant={drawing ? 'solid' : 'outline'}
+            bg={drawing ? undefined : 'bg'}
+            aria-pressed={drawing}
+            onClick={() => explorerUi.setDrawing(!drawing)}
+          >
+            <Icon as={LuSquareDashed} />
+            {drawing ? 'Drawing…' : 'Draw area'}
+          </Button>
+        </Group>
 
-        {(showGbif || obisCells.length > 0) && (
+        {(showRamp || obisCells.length > 0) && (
           <Box
             ref={legendRef}
             position="absolute"
@@ -764,13 +947,13 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             fontVariantNumeric="tabular-nums"
             pointerEvents="none"
             display="flex"
-            flexDirection={srs ? 'column' : 'row'}
-            gap={srs ? 2 : 4}
+            flexDirection={srs || obisOutlined ? 'column' : 'row'}
+            gap={srs || obisOutlined ? 1.5 : 4}
           >
-            {showGbif && (
+            {showRamp && (
               <Box>
                 <Text lineHeight="short" mb={1}>
-                  GBIF records per {zoomedToArea ? 'hexagon' : 'pixel'}
+                  {loadedScope ? 'Loaded' : 'GBIF'} records per {zoomedToArea || loadedScope ? 'hexagon' : 'pixel'}
                 </Text>
                 <Box
                   h="8px"
@@ -786,7 +969,21 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                 </HStack>
               </Box>
             )}
-            {obisCells.length > 0 && (
+            {obisCells.length > 0 && obisOutlined && (
+              <HStack gap={1.5} lineHeight="short">
+                <Box
+                  w="12px"
+                  h="10px"
+                  flexShrink={0}
+                  borderWidth="1.5px"
+                  borderColor="teal.fg"
+                  borderRadius="1px"
+                  bg="transparent"
+                />
+                <Text>{obisLabel} with records</Text>
+              </HStack>
+            )}
+            {obisCells.length > 0 && !obisOutlined && (
               <Box>
                 <Text lineHeight="short" mb={1}>
                   OBIS records per {precision === 2 ? '11°' : '1.4°'} cell
@@ -806,7 +1003,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           </Box>
         )}
       </Box>
-      {!faint && (
+      {!faint && !hasLoad && (
         <HStack mt={1.5} gap={1.5} align="start" fontSize="xs" color="fg.muted">
           <Icon as={LuInfo} mt="2px" flexShrink={0} />
           <Text title={coverage.ignored.length ? `Not drawn: ${coverage.ignored.join(', ')}` : undefined}>{note}</Text>

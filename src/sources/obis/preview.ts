@@ -104,6 +104,7 @@ export function emptyObisPreview(): PreviewSummary {
     datasets: 0,
     yearRange: null,
     years: [],
+    yearsAll: [],
     basisOfRecord: [],
     topSpecies: [],
     topDatasets: [],
@@ -153,6 +154,14 @@ export function previewObisParts(query: OccurrenceQuery, signal?: AbortSignal): 
   return { summary, impact };
 }
 
+/** Ascending year bins of a /statistics/years response (undated and empty years dropped). */
+function yearBins(raw: { year: number | null; records: number }[]): { year: number; count: number }[] {
+  return raw
+    .filter((y): y is { year: number; records: number } => y.year != null && y.records > 0)
+    .map(({ year, records }) => ({ year, count: records }))
+    .sort((a, b) => a.year - b.year);
+}
+
 async function summarize(
   query: OccurrenceQuery,
   signal?: AbortSignal,
@@ -164,11 +173,13 @@ async function summarize(
   const params = obisParams(query, { taxonIds: taxa.ids });
   const filtered = serverFilters(query).length > 0;
 
-  const [stats, years, checklist, datasets, facet] = await Promise.all([
+  // With a year filter, also the year histogram without it (`yearsAll`, the year brush).
+  const yearFiltered = query.years.some((y) => y != null);
+  const fetchYears = (p: URLSearchParams) =>
+    fetchJson<{ year: number | null; records: number }[]>(obisUrl('statistics/years', p), { signal });
+  const [stats, years, checklist, datasets, facet, allYears] = await Promise.all([
     obisStatistics(params, signal),
-    fetchJson<{ year: number | null; records: number }[]>(obisUrl('statistics/years', params), {
-      signal,
-    }),
+    fetchYears(params),
     // Higher taxa are listed too; ask for more and keep the species.
     fetchJson<{ results: ChecklistItem[] }>(
       obisUrl('checklist', withParam(params, 'size', String(TOP_N * 3))),
@@ -182,6 +193,7 @@ async function summarize(
       obisUrl('facet', withParam(withParam(params, 'facets', 'basisOfRecord'), 'size', '100')),
       { signal },
     ),
+    yearFiltered ? fetchYears(obisParams(query, { taxonIds: taxa.ids, omit: ['years'] })) : null,
   ]);
 
   const basisOfRecord = basisBuckets(facet.results.basisOfRecord ?? []);
@@ -205,10 +217,8 @@ async function summarize(
     species: stats.species,
     datasets: stats.datasets,
     yearRange: minYear != null && maxYear != null ? [minYear, maxYear] : null,
-    years: years
-      .filter((y): y is { year: number; records: number } => y.year != null && y.records > 0)
-      .map(({ year, records }) => ({ year, count: records }))
-      .sort((a, b) => a.year - b.year),
+    years: yearBins(years),
+    yearsAll: yearBins(allYears ?? years),
     basisOfRecord,
     topSpecies: checklist.results
       .filter((t) => t.taxonRank === 'Species')

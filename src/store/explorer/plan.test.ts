@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { BYTES_PER_RECORD, type GbifPlanDetail } from '../../sources/gbif/stream';
 import { defaultQuery } from '../../sources/query';
 import type { PreviewSummary, StreamPlan } from '../../sources/types';
-import { type ObisExplorerDetail, applyMinRecords, computeEstimate, fetchObisChecklist, planSpeciesNames } from './plan';
+import {
+  type ObisExplorerDetail,
+  applyMinRecords,
+  computeEstimate,
+  fetchObisChecklist,
+  missingPlannedSpecies,
+  planSpeciesNames,
+} from './plan';
 
 vi.mock('../../sources/http', async (orig) => ({
   ...(await orig<typeof import('../../sources/http')>()),
@@ -131,5 +138,33 @@ describe('planSpeciesNames', () => {
       'Aa bb',
       'Cc dd',
     ]);
+  });
+});
+
+describe('missingPlannedSpecies', () => {
+  it('lists planned species without loaded records, largest first, summed over sources', () => {
+    const plans = [
+      applyMinRecords(
+        gbifPlan([
+          ['Aa bb', 10],
+          ['Ee ff', 9000],
+          ['Gg hh', 40],
+        ]),
+        1,
+      ),
+      obisPlan([
+        ['Aa bb', 2],
+        ['Cc dd ssp. e', 30],
+        ['Gg hh', 5],
+      ]),
+    ];
+    expect(missingPlannedSpecies(plans, ['Aa bb'])).toEqual([
+      { name: 'Ee ff', expected: 9000 },
+      { name: 'Gg hh', expected: 45 },
+      { name: 'Cc dd', expected: 30 },
+    ]);
+    expect(missingPlannedSpecies(plans, ['Aa bb', 'Ee ff', 'Gg hh', 'Cc dd'])).toEqual([]);
+    expect(missingPlannedSpecies(plans, [], 2).map((m) => m.name)).toEqual(['Ee ff', 'Gg hh']);
+    expect(missingPlannedSpecies([undefined], ['Aa bb'])).toEqual([]);
   });
 });

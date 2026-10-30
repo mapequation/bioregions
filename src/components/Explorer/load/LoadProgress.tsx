@@ -1,8 +1,32 @@
-import { Badge, Box, Button, Flex, Grid, HStack, Icon, Menu, Progress, Spinner, Text, VisuallyHidden } from '@chakra-ui/react';
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  Grid,
+  HStack,
+  Icon,
+  Popover,
+  Portal,
+  Progress,
+  Spinner,
+  Text,
+  VisuallyHidden,
+} from '@chakra-ui/react';
 import { reaction } from 'mobx';
 import { observer } from 'mobx-react';
-import { useEffect, useRef, useState } from 'react';
-import { LuCheck, LuChevronDown, LuCircleX, LuMinimize2, LuPause, LuPlay, LuSquare, LuTrash2 } from 'react-icons/lu';
+import { type ComponentProps, useEffect, useId, useRef, useState } from 'react';
+import {
+  LuCheck,
+  LuChevronDown,
+  LuChevronUp,
+  LuCircleX,
+  LuMinimize2,
+  LuPause,
+  LuPlay,
+  LuSquare,
+  LuTrash2,
+} from 'react-icons/lu';
 import type { SourceId } from '@/sources/types';
 import { useStore } from '@/store';
 import type { SourceProgress } from '@/store/explorer/types';
@@ -10,7 +34,7 @@ import { explorerUi } from '../explorerUi';
 import { fmtBytes, fmtDuration, fmtInt } from '../format';
 import { progressPercent, secondsUntil } from './loadMath';
 
-/** Window event that opens the cancel menu (Esc while streaming, from the shortcut hook). */
+/** Window event that opens the cancel popover (Esc while streaming, from the shortcut hook). */
 export const CANCEL_MENU_EVENT = 'explorer:cancel-menu';
 
 const SOURCE_LABEL: Record<SourceId, string> = { gbif: 'GBIF', obis: 'OBIS' };
@@ -120,23 +144,71 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
   );
 }
 
-/** Optional pause API on the store (added alongside this menu; guarded until every path has it). */
+/** Optional pause API on the store (guarded until every path has it). */
 interface PausableStore {
   pauseLoad?: () => void;
   resumeLoad?: () => void;
 }
 
-type CancelChoice = 'keep' | 'continue' | 'discard';
+/** Choice row in the cancel popover: equal weight, nothing pre-selected, label and an optional note. */
+function ChoiceButton({
+  icon,
+  label,
+  note,
+  danger,
+  ...rest
+}: {
+  icon: typeof LuPlay;
+  label: string;
+  note?: string;
+  danger?: boolean;
+} & ComponentProps<typeof Button>) {
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      colorPalette={danger ? 'red' : 'gray'}
+      color={danger ? 'colorPalette.fg' : 'fg'}
+      borderColor="border.emphasized"
+      justifyContent="flex-start"
+      alignItems="flex-start"
+      textAlign="start"
+      whiteSpace="normal"
+      h="auto"
+      minH={9}
+      py={2}
+      gap={2.5}
+      w="full"
+      focusVisibleRing="outside"
+      _hover={{ bg: danger ? 'colorPalette.subtle' : 'bg.muted' }}
+      {...rest}
+    >
+      <Icon as={icon} boxSize={4} mt="1px" flexShrink={0} aria-hidden />
+      <Box flex="1" minW={0} fontVariantNumeric="tabular-nums">
+        {label}
+        {note && (
+          <Text as="span" display="block" textStyle="xs" color="fg.muted" fontWeight="normal" mt={0.5}>
+            {note}
+          </Text>
+        )}
+      </Box>
+    </Button>
+  );
+}
 
-const CancelMenu = observer(function CancelMenu() {
+/**
+ * "Cancel load" opens (on click only) a popover with three explicit choices. The load is paused
+ * while it is open and resumes when it closes without a choice (Esc, click outside, trigger).
+ */
+const CancelPopover = observer(function CancelPopover() {
   const { explorerStore: ex } = useStore();
   const pausable = ex as unknown as PausableStore;
   const [open, setOpen] = useState(false);
-  const [highlighted, setHighlighted] = useState<string | null>(null);
-  // Set when an item is chosen, so closing the menu by its choice does not also resume.
+  const continueRef = useRef<HTMLButtonElement>(null);
+  // Set when a choice is made, so closing the popover by its choice does not also resume.
   const chose = useRef(false);
   const job = ex.job;
-  // The load is paused while the menu is open, so these counts are what "Keep" keeps.
+  // The load is paused while the popover is open, so these counts are what "Keep" keeps.
   const accepted = job?.funnel.accepted ?? 0;
   // Species with at least one kept record (what the loaded panel counts after a keep);
   // falls back to the streams' finished-species counts.
@@ -144,29 +216,30 @@ const CancelMenu = observer(function CancelMenu() {
   const speciesTotal =
     job?.speciesPlanned ?? job?.perSource.reduce((sum, p) => sum + (p.speciesTotal ?? 0), 0) ?? 0;
   const coverage = job?.speciesCoverage ?? (speciesTotal > 0 ? speciesDone / speciesTotal : null);
-  // With under half the species loaded, the partial dataset is mostly missing: discard by default.
-  const discardFirst = coverage != null && coverage < 0.5;
-  const preferred: CancelChoice = discardFirst || accepted === 0 ? 'discard' : 'keep';
-  const preferredRef = useRef(preferred);
-  preferredRef.current = preferred;
+  const fewSpecies = coverage != null && coverage < 0.5;
 
-  const openMenu = useRef(() => {});
-  openMenu.current = () => {
+  const openPopover = useRef(() => {});
+  openPopover.current = () => {
     chose.current = false;
     pausable.pauseLoad?.call(ex);
     setOpen(true);
-    setHighlighted(preferredRef.current);
   };
-  const closeMenu = () => {
+  const dismiss = () => {
     setOpen(false);
-    // Closed with Esc or a click outside: carry on loading.
+    // Closed with Esc, a click outside or the trigger: carry on loading.
     queueMicrotask(() => {
       if (!chose.current) pausable.resumeLoad?.call(ex);
     });
   };
+  const choose = (choice: 'continue' | 'keep' | 'discard') => {
+    chose.current = true;
+    setOpen(false);
+    if (choice === 'continue') pausable.resumeLoad?.call(ex);
+    else ex.cancel(choice);
+  };
 
   useEffect(() => {
-    const onEvent = () => openMenu.current();
+    const onEvent = () => openPopover.current();
     window.addEventListener(CANCEL_MENU_EVENT, onEvent);
     // Esc while streaming: the dialog bumps explorerUi.cancelMenuRequest.
     const stop = reaction(() => explorerUi.cancelMenuRequest, onEvent);
@@ -178,76 +251,90 @@ const CancelMenu = observer(function CancelMenu() {
 
   const speciesText = speciesTotal > 0 ? ` (${fmtInt(speciesDone)} of ${fmtInt(speciesTotal)} species)` : '';
   return (
-    <Menu.Root
+    <Popover.Root
       // Mount the portalled content on open: the explorer dialog aria-hides body children present when it opens.
       lazyMount
       unmountOnExit
       open={open}
       onOpenChange={(e) => {
-        if (e.open) openMenu.current();
-        else closeMenu();
+        if (e.open) openPopover.current();
+        else dismiss();
       }}
-      highlightedValue={highlighted}
-      onHighlightChange={(e) => setHighlighted(e.highlightedValue)}
-      positioning={{ placement: 'top-end' }}
-      onSelect={(e) => {
-        chose.current = true;
-        if (e.value === 'continue') pausable.resumeLoad?.call(ex);
-        else if (e.value === 'keep' || e.value === 'discard') ex.cancel(e.value);
-      }}
+      initialFocusEl={() => continueRef.current}
+      positioning={{ placement: 'top-end', gutter: 8 }}
     >
-      <Menu.Trigger asChild>
+      <Popover.Trigger asChild>
         <Button size="sm" variant="outline" data-testid="cancel-load">
-          Cancel load <LuChevronDown />
+          <LuSquare /> Cancel load
         </Button>
-      </Menu.Trigger>
-      <Menu.Positioner>
-        <Menu.Content minW="20rem" maxW="26rem" data-testid="cancel-menu">
-          <Menu.Item value="keep" disabled={accepted === 0} data-testid="cancel-keep">
-            <Icon as={LuSquare} />
-            <Box flex="1" fontVariantNumeric="tabular-nums">
-              Keep {fmtInt(accepted)} records{speciesText} and stop
-              {discardFirst && (
-                <Text as="span" display="block" textStyle="xs" color="fg.muted">
-                  Too few species for representative bioregions
-                </Text>
-              )}
-            </Box>
-          </Menu.Item>
-          <Menu.Item value="continue" data-testid="cancel-continue">
-            <Icon as={LuPlay} />
-            <Box flex="1">Continue loading</Box>
-          </Menu.Item>
-          <Menu.Separator />
-          <Menu.Item
-            value="discard"
-            colorPalette="red"
-            color="colorPalette.fg"
-            _highlighted={{ bg: 'colorPalette.subtle', color: 'colorPalette.fg' }}
-            data-testid="cancel-discard"
-          >
-            <Icon as={LuTrash2} />
-            <Box flex="1">Discard and restore previous data</Box>
-          </Menu.Item>
-        </Menu.Content>
-      </Menu.Positioner>
-    </Menu.Root>
+      </Popover.Trigger>
+      <Portal>
+        <Popover.Positioner>
+          <Popover.Content w="24rem" maxW="calc(100vw - 2rem)" data-testid="cancel-menu">
+            <Popover.Body p={3} display="flex" flexDirection="column" gap={2}>
+              <Box>
+                <Popover.Title fontSize="sm" fontWeight="semibold">
+                  Stop this load?
+                </Popover.Title>
+                <Popover.Description fontSize="xs" color="fg.muted">
+                  Loading is paused until you choose.
+                </Popover.Description>
+              </Box>
+              <ChoiceButton
+                ref={continueRef}
+                icon={LuPlay}
+                label="Continue loading"
+                onClick={() => choose('continue')}
+                data-testid="cancel-continue"
+              />
+              <ChoiceButton
+                icon={LuSquare}
+                label={`Keep ${fmtInt(accepted)} records${speciesText} and stop`}
+                note={
+                  accepted === 0
+                    ? 'Nothing received yet'
+                    : fewSpecies
+                      ? 'Under half the species: too few for representative bioregions'
+                      : undefined
+                }
+                disabled={accepted === 0}
+                onClick={() => choose('keep')}
+                data-testid="cancel-keep"
+              />
+              <ChoiceButton
+                icon={LuTrash2}
+                danger
+                label="Discard and restore previous data"
+                onClick={() => choose('discard')}
+                data-testid="cancel-discard"
+              />
+            </Popover.Body>
+          </Popover.Content>
+        </Popover.Positioner>
+      </Portal>
+    </Popover.Root>
   );
 });
 
-/** Live load progress: replaces the dock row while a load plans or streams. */
+/**
+ * Live load progress. The dock keeps one row (status, totals, actions) so its height does not
+ * change; the per-source rows open as a sheet overlaid above the dock.
+ */
 export default observer(function LoadProgress() {
   const { explorerStore: ex } = useStore();
   const job = ex.job;
   const active = !!job && (job.state === 'planning' || job.state === 'streaming');
   const now = useNow(active);
   const [announcement, setAnnouncement] = useState('');
+  const [details, setDetails] = useState(true);
+  const sheetId = useId();
   const lastAnnounce = useRef(0);
 
   const elapsed = job ? (now - job.startedAt) / 1000 : 0;
   const received = job?.perSource.reduce((s, p) => s + p.fetched, 0) ?? 0;
   const expected = job?.perSource.reduce((s, p) => s + p.expected, 0) ?? 0;
-  const summary = job?.state === 'planning' ? 'Planning the load' : `${fmtInt(received)} of ${fmtInt(expected)} records received`;
+  const planning = job?.state === 'planning' || (job?.perSource.length ?? 0) === 0;
+  const summary = planning ? 'Planning the load' : `${fmtInt(received)} of ${fmtInt(expected)} records received`;
 
   useEffect(() => {
     if (now - lastAnnounce.current >= ANNOUNCE_MS) {
@@ -282,6 +369,7 @@ export default observer(function LoadProgress() {
     ...off.map((id) => `${SOURCE_LABEL[id]}: off`),
   ].join(' · ');
   const paused = (job as { paused?: boolean }).paused === true;
+  const busySource = job.perSource.find((p) => p.state === 'rateLimited');
   // Same words as the source chip: OBIS knows none of the taxa vs. a query with no records.
   function idleReason(id: SourceId): string {
     const taxa = ex.query.taxa;
@@ -293,46 +381,93 @@ export default observer(function LoadProgress() {
   }
 
   return (
-    <Flex direction="column" gap={2} minH="7.25rem" data-testid="load-progress" aria-busy={active}>
-      <HStack gap={3} minW={0}>
+    <Box position="relative">
+      {details && (
+        <Flex
+          id={sheetId}
+          direction="column"
+          gap={2}
+          position="absolute"
+          // Flush with the dock's top edge (the dock has py={2} around this box).
+          bottom="calc(100% + var(--chakra-spacing-2))"
+          right={0}
+          w="min(60rem, 100%)"
+          zIndex="docked"
+          bg="bg.panel"
+          borderWidth="1px"
+          borderBottomWidth={0}
+          borderTopRadius="md"
+          boxShadow="md"
+          px={3}
+          pt={2.5}
+          pb={3}
+          data-testid="load-progress-sheet"
+        >
+          <Grid
+            templateColumns="3.25rem minmax(8rem, 1fr) minmax(0, max-content) minmax(0, 10rem)"
+            columnGap={3}
+            rowGap={2}
+            alignItems="center"
+          >
+            {rows.map((p) => (
+              <SourceRow key={p.source} p={p} now={now} />
+            ))}
+          </Grid>
+          {idleNote && (
+            <Text fontSize="xs" color="fg.muted" data-testid="load-progress-idle">
+              {idleNote}
+            </Text>
+          )}
+        </Flex>
+      )}
+      <HStack gap={3} minW={0} minH={10} data-testid="load-progress" aria-busy={active}>
         {paused ? (
-          <Icon as={LuPause} boxSize={3} color="fg.muted" flexShrink={0} aria-hidden />
+          <Icon as={LuPause} boxSize={4} color="fg.muted" flexShrink={0} aria-hidden />
         ) : (
-          <Spinner size="xs" color="colorPalette.solid" flexShrink={0} />
+          <Spinner size="sm" color="colorPalette.solid" flexShrink={0} />
         )}
         <Text fontSize="sm" fontWeight="semibold" truncate minW={0} flex="1" data-state={paused ? 'paused' : undefined}>
           {job.state === 'planning' ? 'Planning' : paused ? 'Paused' : 'Loading'} “{job.label}”
         </Text>
-        <Text fontSize="xs" color="fg.muted" fontVariantNumeric="tabular-nums" flexShrink={0}>
-          {fmtDuration(elapsed)} elapsed
-          <Box as="span" aria-hidden color="fg.muted" mx={1.5}>
+        <Text fontSize="xs" color="fg.muted" fontVariantNumeric="tabular-nums" flexShrink={0} whiteSpace="nowrap">
+          {busySource ? (
+            <Box as="span" color="orange.fg">
+              {SOURCE_LABEL[busySource.source]} busy, retrying
+            </Box>
+          ) : planning ? (
+            'Counting records…'
+          ) : (
+            `${fmtInt(received)} / ${fmtInt(expected)} records`
+          )}
+          <Box as="span" aria-hidden mx={1.5}>
             ·
           </Box>
-          {job.etaSeconds != null ? `~${fmtDuration(job.etaSeconds)} left` : 'estimating time left'}
+          {fmtDuration(elapsed)} elapsed
+          <Box as="span" aria-hidden mx={1.5}>
+            ·
+          </Box>
+          {paused ? 'paused' : job.etaSeconds != null ? `~${fmtDuration(job.etaSeconds)} left` : 'estimating time left'}
         </Text>
         <HStack gap={1.5} flexShrink={0}>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={details}
+            // The chevron shows the state; an expanded fill would read like a second primary action.
+            _expanded={{ bg: 'transparent', _hover: { bg: 'colorPalette.subtle' } }}
+            aria-controls={details ? sheetId : undefined}
+            onClick={() => setDetails((d) => !d)}
+            data-testid="load-progress-details"
+          >
+            {details ? <LuChevronDown /> : <LuChevronUp />} Details
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => ex.setMinimized(true)}>
             <LuMinimize2 /> Minimize
           </Button>
-          <CancelMenu />
+          <CancelPopover />
         </HStack>
       </HStack>
-      <Grid
-        templateColumns="3.25rem minmax(6rem, 1fr) minmax(0, 26rem) 11rem"
-        columnGap={3}
-        rowGap={2}
-        alignItems="center"
-      >
-        {rows.map((p) => (
-          <SourceRow key={p.source} p={p} now={now} />
-        ))}
-      </Grid>
-      {idleNote && (
-        <Text fontSize="xs" color="fg.muted" data-testid="load-progress-idle">
-          {idleNote}
-        </Text>
-      )}
       <VisuallyHidden aria-live="polite">{announcement}</VisuallyHidden>
-    </Flex>
+    </Box>
   );
 });

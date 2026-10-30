@@ -4,6 +4,7 @@ import { observer } from 'mobx-react';
 import { LuExternalLink, LuFileArchive, LuSend, LuX } from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { FileUploadDropzone, FileUploadRoot } from '../../ui/file-upload';
+import { Tooltip } from '../../ui/tooltip';
 import type { ZipImport } from '../../../store/explorer/types';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt, fmtPct } from '../format';
@@ -48,6 +49,30 @@ const RowHead = ({ children }: { children: string }) => (
     {children}
   </Text>
 );
+
+/**
+ * An action that cannot run here: the same sm outline disabled look for every such button, and
+ * `aria-disabled` (not `disabled`) so it stays focusable and its tooltip can give the reason.
+ */
+function BlockedButton({ label, reason, testId }: { label: string; reason: string; testId: string }) {
+  return (
+    <Tooltip content={reason} openDelay={200} showArrow>
+      <Button
+        {...secondaryButtonProps}
+        aria-disabled
+        aria-description={reason}
+        data-testid={testId}
+        opacity={0.5}
+        cursor="not-allowed"
+        _hover={{ bg: 'bg' }}
+        _active={{ bg: 'bg' }}
+        onClick={(e) => e.preventDefault()}
+      >
+        {label}
+      </Button>
+    </Tooltip>
+  );
+}
 
 export interface ZipDropzoneProps {
   /** Opens the download request dialog for the current query. */
@@ -110,6 +135,25 @@ export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
     const canReplace = !mismatch && accepted > 0 && (z.canReplace ?? true);
     const canCite = !mismatch && hasStream && (z.canCiteDoi ?? true);
     const obisNote = obisStreamed > 0 ? '; OBIS records are kept' : '';
+    // Reconcile the GBIF row with the loaded total: "867 GBIF + 3,661 OBIS = 4,528 loaded; 5,289
+    // GBIF records were the same as OBIS records" (cross-source duplicates are kept once, as OBIS).
+    const loadedTotal = lastLoad?.funnel.accepted ?? null;
+    const sameAsObis = (lastLoad?.funnel.dropped as Partial<Record<string, number>> | undefined)?.crossSource ?? 0;
+    const reconcile =
+      hasStream && gbifStreamed != null && loadedTotal != null && (obisStreamed > 0 || sameAsObis > 0)
+        ? `${fmtInt(gbifStreamed)} GBIF + ${fmtInt(obisStreamed)} OBIS = ${fmtInt(loadedTotal)} loaded${
+            sameAsObis > 0
+              ? `; ${fmtInt(sameAsObis)} GBIF ${sameAsObis === 1 ? 'record was' : 'records were'} the same as OBIS records`
+              : ''
+          }`
+        : null;
+    // Why an action is unavailable, for the tooltip on its disabled button.
+    const replaceReason = mismatch
+      ? 'Different query'
+      : accepted === 0
+        ? 'No records in the zip passed cleaning'
+        : 'Not available for this zip';
+    const citeReason = mismatch ? 'Different query' : 'Not available for this zip';
     let comparison: string | null = null;
     if (!mismatch && diff != null && gbifStreamed != null && gbifStreamed > 0) {
       const vs = `${fmtInt(gbifStreamed)} GBIF records streamed${obisNote}`;
@@ -159,10 +203,11 @@ export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
         <Text srOnly>
           Official zip: {fmtInt(received)} received, {fmtInt(accepted)} after cleaning.
           {hasStream
-            ? ` GBIF stream: ${gbifReceived != null ? `${fmtInt(gbifReceived)} received, ` : ''}${
+            ? ` GBIF part of the loaded data: ${gbifReceived != null ? `${fmtInt(gbifReceived)} received, ` : ''}${
                 gbifStreamed != null ? fmtInt(gbifStreamed) : 'unknown'
               } loaded after cleaning.`
             : ''}
+          {reconcile ? ` ${reconcile}.` : ''}
         </Text>
         <Grid
           templateColumns="minmax(0, 1fr) minmax(5.5rem, auto) minmax(9rem, auto)"
@@ -178,10 +223,22 @@ export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
           <RowHead>Official zip</RowHead>
           <Cell value={received} />
           <Cell value={accepted} emphasis />
-          <RowHead>GBIF stream on screen</RowHead>
+          <RowHead>GBIF part of the loaded data</RowHead>
           <Cell value={hasStream ? gbifReceived : null} />
           <Cell value={hasStream ? gbifStreamed : null} emphasis />
         </Grid>
+        {reconcile && (
+          <Text
+            fontSize="xs"
+            color="fg.muted"
+            mt={0.5}
+            fontVariantNumeric="tabular-nums"
+            aria-hidden
+            data-testid="zip-reconcile"
+          >
+            {reconcile}
+          </Text>
+        )}
         {comparison && (
           <Text fontSize="xs" color="fg.muted" mt={2} fontVariantNumeric="tabular-nums" data-testid="zip-comparison">
             {comparison}
@@ -216,44 +273,39 @@ export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
           </Text>
         )}
         <Flex gap={2} mt={3.5} wrap="wrap" align="center">
-          <Button
-            {...primaryButtonProps}
-            disabled={!canReplace}
-            onClick={() => explorerStore.applyZip('replace')}
-            data-testid="zip-replace"
-          >
-            {hasStream ? 'Replace with official download' : 'Load official download'}
-          </Button>
-          {hasStream && (
-            <Button
-              {...secondaryButtonProps}
-              disabled={!canCite}
-              onClick={() => explorerStore.applyZip('keepStreamCiteDoi')}
-              data-testid="zip-keep-cite"
-            >
-              Keep streamed, cite DOI
+          {canReplace ? (
+            <Button {...primaryButtonProps} onClick={() => explorerStore.applyZip('replace')} data-testid="zip-replace">
+              {hasStream ? 'Replace with official download' : 'Load official download'}
             </Button>
+          ) : (
+            <BlockedButton
+              label={hasStream ? 'Replace with official download' : 'Load official download'}
+              reason={replaceReason}
+              testId="zip-replace"
+            />
           )}
-          <Button {...secondaryButtonProps} onClick={removeZip} data-testid="zip-remove">
-            <LuX />
-            Remove this zip
-          </Button>
+          {hasStream &&
+            (canCite ? (
+              <Button
+                {...secondaryButtonProps}
+                onClick={() => explorerStore.applyZip('keepStreamCiteDoi')}
+                data-testid="zip-keep-cite"
+              >
+                Keep streamed, cite DOI
+              </Button>
+            ) : (
+              <BlockedButton label="Keep streamed, cite DOI" reason={citeReason} testId="zip-keep-cite" />
+            ))}
           {z.queryMatch !== 'match' && onRequest && (
-            <Button
-              size="sm"
-              variant="plain"
-              color="colorPalette.fg"
-              textDecoration="underline"
-              textUnderlineOffset="2px"
-              px={1}
-              focusVisibleRing="outside"
-              onClick={onRequest}
-              data-testid="zip-request-download"
-            >
+            <Button {...secondaryButtonProps} onClick={onRequest} data-testid="zip-request-download">
               <LuSend />
               Request a download for this query
             </Button>
           )}
+          <Button {...secondaryButtonProps} variant="ghost" bg="transparent" borderColor="transparent" onClick={removeZip} data-testid="zip-remove">
+            <LuX />
+            Remove this zip
+          </Button>
         </Flex>
       </Box>
     );

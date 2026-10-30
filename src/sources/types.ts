@@ -153,7 +153,11 @@ export interface PreviewSummary {
   yearRange: [number, number] | null;
   /** Ascending, one bin per year (empty years omitted). */
   years: { year: number; count: number }[];
-  /** Per-year histogram ignoring the year filter, for the year brush. */
+  /**
+   * Per-year histogram ignoring the year filter, for the year brush (equals `years`
+   * without a year filter). Both adapters always set it; optional only for older
+   * fixtures and saved state.
+   */
   yearsAll?: { year: number; count: number }[];
   basisOfRecord: FacetBucket[];
   topSpecies: FacetBucket[];

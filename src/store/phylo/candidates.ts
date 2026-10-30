@@ -35,7 +35,7 @@ export const DATED_MIN_SHARE = 0.6;
 export const FEW_STUDY_TREES = 5;
 
 export const GRAFEN_NOTE =
-  "Topology only. Branch lengths use Grafen's method (ρ = 1): ages are relative (root = 1), not millions of years.";
+  "Topology only. Branch lengths are Grafen's arbitrary heights (ρ = 1, root = 1) and carry no time information.";
 
 /** 'opentree15.1' -> 'v15.1'. */
 export function synthVersionLabel(synthId: string | undefined): string | undefined {
@@ -182,7 +182,7 @@ export function humanizeTreeLabel(label: string): string {
 export function lengthUnits(
   c: Pick<PhyloCandidate, 'branchLengths' | 'lengthMode' | 'timeUnit'>,
 ): { short: string; long: string } {
-  if (c.branchLengths === 'none') return { short: 'Grafen (relative)', long: 'relative ages (Grafen)' };
+  if (c.branchLengths === 'none') return { short: 'Grafen (relative)', long: "Grafen's arbitrary heights" };
   if (c.branchLengths === 'time') {
     const unit = c.timeUnit?.trim();
     if (!unit || /^(?:my|myr|mya|ma|million(?:s)? (?:of )?years?.*)$/i.test(unit)) return { short: 'Myr', long: 'Myr' };
@@ -426,6 +426,35 @@ export function bestDatedCandidate<C extends TreeCandidate>(candidates: C[], tot
   return best;
 }
 
+const countFormat = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+
+/** 1 -> '1 study tree', 26 -> '26 study trees'. Every count of published trees uses this. */
+export function studyTreesLabel(n: number): string {
+  return `${countFormat.format(n)} ${n === 1 ? 'study tree' : 'study trees'}`;
+}
+
+/**
+ * '26 study trees from 16 studies + Open Tree synthesis' (the study part only when it
+ * differs); `compact` gives '26 study trees + synthesis' for narrow headers.
+ */
+export function treeCountLabel(trees: number, studies: number, synthesis: boolean, compact = false): string {
+  const parts: string[] = [];
+  if (trees > 0) {
+    parts.push(
+      studies < trees && !compact
+        ? `${studyTreesLabel(trees)} from ${countFormat.format(studies)} ${studies === 1 ? 'study' : 'studies'}`
+        : studyTreesLabel(trees),
+    );
+  }
+  if (synthesis) parts.push(compact ? 'synthesis' : 'Open Tree synthesis');
+  return parts.join(' + ');
+}
+
+/** 'Checking coverage of 26 study trees (3/26)'. */
+export function coverageProgressLabel({ done, total }: { done: number; total: number }): string {
+  return `Checking coverage of ${studyTreesLabel(total)} (${countFormat.format(done)}/${countFormat.format(total)})`;
+}
+
 /** Citation paragraph for the methods text. */
 export function treeCitationText(
   candidate: Pick<TreeCandidate, 'kind' | 'citation'>,
@@ -440,7 +469,9 @@ export function treeCitationText(
     `${source}, with names matched by the Open Tree TNRS and pruned to the ${tips} dataset species it contains.`,
   ];
   if (grafen) {
-    parts.push("Branch lengths were computed with Grafen's method (ρ = 1) and are relative, not in time units.");
+    parts.push(
+      "The tree has topology only; branch lengths are Grafen's arbitrary heights (ρ = 1, root = 1) and carry no time information.",
+    );
   }
   parts.push(candidate.citation);
   return parts.join(' ');

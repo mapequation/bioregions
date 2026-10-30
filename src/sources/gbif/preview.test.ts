@@ -129,12 +129,21 @@ describe('activeGbifFilters', () => {
 });
 
 describe('buildSummaryRequest', () => {
-  it('asks only for the main search, with no count aliases', () => {
+  it('asks for the main search and, with a year filter, the histogram without it', () => {
     const { document, variables } = buildSummaryRequest(filtered);
     expect(document).toContain('main: occurrenceSearch(predicate: $p)');
-    expect(document).toContain('histogram');
+    expect(document).toContain('allYears: occurrenceSearch(predicate: $p_allYears) { histogram');
     expect(document).not.toContain('f_');
     expect(document).not.toContain('base:');
+    expect(Object.keys(variables)).toEqual(['p', 'p_allYears']);
+    expect(JSON.stringify(variables.p)).toContain('"key":"year"');
+    expect(JSON.stringify(variables.p_allYears)).not.toContain('"key":"year"');
+    expect(JSON.stringify(variables.p_allYears)).toContain('"key":"basisOfRecord"');
+  });
+
+  it('asks only for the main search without a year filter', () => {
+    const { document, variables } = buildSummaryRequest(query());
+    expect(document).not.toContain('allYears');
     expect(Object.keys(variables)).toEqual(['p']);
   });
 });
@@ -173,6 +182,18 @@ describe('previewGbif', () => {
   it('summarizes the response and computes filter impact', async () => {
     const fetchMock = stubGraphql({
       main: mainResult,
+      allYears: {
+        histogram: {
+          year: {
+            buckets: [
+              { key: '1950', count: 400 },
+              { key: '1990', count: 12 },
+              { key: '1991', count: 20 },
+              { key: '2020', count: 30 },
+            ],
+          },
+        },
+      },
       f_basisOfRecord: { documents: { total: 1100 } },
       f_uncertainty: { documents: { total: 1500 } },
       f_geospatialIssues: { documents: { total: 1010 } },
@@ -188,7 +209,7 @@ describe('previewGbif', () => {
       return JSON.parse(String(init?.body));
     });
     expect(bodies.some((b) => b.variables.p_uncertainty != null)).toBe(true);
-    expect(bodies.some((b) => Object.keys(b.variables).length === 1)).toBe(true);
+    expect(bodies.some((b) => b.variables.p_allYears != null && b.variables.p_uncertainty == null)).toBe(true);
 
     expect(summary).toMatchObject({
       source: 'gbif',
@@ -205,6 +226,8 @@ describe('previewGbif', () => {
       { year: 1991, count: 20 },
       { year: 2020, count: 30 },
     ]);
+    // The brush histogram ignores the year filter.
+    expect(summary.yearsAll?.map((y) => y.year)).toEqual([1950, 1990, 1991, 2020]);
     expect(summary.basisOfRecord[0]).toEqual({
       key: 'HUMAN_OBSERVATION',
       label: 'Human observation',
@@ -244,7 +267,15 @@ describe('previewGbif', () => {
     expect(summary.yearRange).toBeNull();
     expect(summary.uncertainty).toBeNull();
     expect(summary.years).toEqual([]);
+    expect(summary.yearsAll).toEqual([]);
     expect(summary.filterImpact).toEqual({});
+  });
+
+  it('reuses the query histogram as yearsAll without a year filter', async () => {
+    stubGraphql({ main: mainResult });
+    const summary = await previewGbifSummary(query());
+    expect(summary.yearsAll).toEqual(summary.years);
+    expect(summary.yearsAll?.length).toBeGreaterThan(0);
   });
 
   it.skipIf(!process.env.LIVE_API)('queries GBIF live', async () => {

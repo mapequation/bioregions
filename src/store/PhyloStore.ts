@@ -140,6 +140,11 @@ export default class PhyloStore {
    * click or a load). Automatic picks are re-run when coverage checks finish.
    */
   selectionReason: 'default' | 'dated' | 'user' | null = null;
+  /**
+   * The selected tree was pre-selected as the best dated match. Unlike selectionReason,
+   * loading the tree keeps it, so the badge and note stay put after a load.
+   */
+  preselectedDated = false;
   /** Tips of the selected tree that are not in the dataset (readable names), or null while unknown. */
   selectionNotInData: string[] | null = null;
 
@@ -387,6 +392,7 @@ export default class PhyloStore {
     this.candidatesState = 'idle';
     this.selectedId = null;
     this.selectionReason = null;
+    this.preselectedDated = false;
     this.selection = null;
     this.selectionNotInData = null;
     this.error = null;
@@ -663,6 +669,7 @@ export default class PhyloStore {
     const candidate = this.candidates.find((c) => c.id === id);
     if (!candidate) return;
     this.selectionReason = reason;
+    this.preselectedDated = reason === 'dated';
     if (id === this.selectedId && this.selection) return;
     this.selectedId = id;
     this.selection = null;

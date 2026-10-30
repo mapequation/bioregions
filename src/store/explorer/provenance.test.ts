@@ -65,7 +65,7 @@ describe('buildMethodsText', () => {
     const partial = { kind: 'speciesMissing' as const, planned: 272_546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210, notReceived: 271_000, coverage: 1 / 210 };
     const text = buildMethodsText({ load: load({ partial, bioregionsSkipped: true }), query: query() });
     expect(text).toContain(
-      'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; because records stream species by species, the missing species are absent rather than thinned. Species coverage is <1 %; bioregions were not computed for this incomplete dataset.',
+      'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; requests alternate packed batches of small species with parts of large ones, so the missing species are absent rather than thinned, and species still being fetched have fewer records than they would. Species coverage is <1 %; bioregions were not computed for this incomplete dataset.',
     );
     const ran = buildMethodsText({ load: load({ partial: { ...partial, speciesLoaded: 150, coverage: 150 / 210 } }), query: query() });
     expect(ran).toContain('from 150 of 210 species were loaded;');
@@ -141,7 +141,28 @@ describe('citations and CSVs', () => {
       coverage: 0.5,
     };
     expect(partialSentence(p)).toContain('5 of ~10 planned records (50 %) from 2 of 4 species');
-    expect(partialSentence(p)).toContain('missing species are absent rather than thinned. Species coverage is 50 %.');
+    expect(partialSentence(p)).toContain('missing species are absent rather than thinned, and species still being fetched');
+    expect(partialSentence(p)).toContain('fewer records than they would. Species coverage is 50 %.');
+    // The largest missing species are named.
+    const named = partialSentence({
+      ...p,
+      missingSpecies: [
+        { name: 'Ee ff', expected: 9000 },
+        { name: 'Gg hh', expected: 45 },
+      ],
+    });
+    expect(named).toContain('The missing species are Ee ff (~9,000 planned records) and Gg hh (~45). Species coverage');
+    const many = partialSentence({
+      ...p,
+      speciesPlanned: 40,
+      missingSpecies: [
+        { name: 'Aa', expected: 900 },
+        { name: 'Bb', expected: 80 },
+        { name: 'Cc', expected: 7 },
+        { name: 'Dd', expected: 6 },
+      ],
+    });
+    expect(many).toContain('The largest of the 38 missing species are Aa (~900 planned records), Bb (~80) and Cc (~7).');
     expect(partialSentence({ ...p, accepted: 999, planned: 1000 })).toContain('(>99 %)');
     // Unknown species total: no "of", record coverage instead.
     const unknown = partialSentence({ ...p, kind: 'recordsTruncated', speciesPlanned: null });

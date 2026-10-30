@@ -3,6 +3,7 @@ import { scaleLinear, scaleSqrt } from 'd3';
 import { observer } from 'mobx-react';
 import { type KeyboardEvent, type PointerEvent, type RefObject, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../../store';
+import { mergeYears, recentShareOf } from '../../../store/ExplorerStore';
 import { Tooltip } from '../../ui/tooltip';
 import { chartColors } from '../charts/colors';
 import { fmtInt, fmtPct } from '../format';
@@ -12,7 +13,6 @@ import { brushDomain, rangeShare } from './yearBrushMath';
 const CHART_H = 56;
 const AXIS_H = 16;
 const HANDLE_W = 12;
-const RECENT_YEARS = 15;
 
 type Handle = 'from' | 'to';
 
@@ -136,11 +136,27 @@ export default observer(function YearBrush() {
 
   const total = [...counts.values()].reduce((s, c) => s + c, 0);
   const inRange = rangeShare(bins, qFrom, qTo);
-  // Same cutoff and share as the temporal-skew check (store contract `recentShare`).
-  const storeRecent = (explorerStore as unknown as { recentShare?: { cutoffYear: number; share: number } | null })
-    .recentShare;
-  const cutoffYear = storeRecent?.cutoffYear ?? currentYear - (RECENT_YEARS - 1);
-  const recent = storeRecent?.share ?? explorerStore.yearShareAfter(cutoffYear);
+  // The brush always describes the query: share of its (year-filtered) dated records from the
+  // temporal-skew cutoff on. The insights column may describe a load instead (`recentShare.scope`,
+  // else the composition scope); then the caption names its own scope, so 88 % here and 90 % in
+  // the check don't read as a contradiction.
+  const queryRecent = recentShareOf(mergeYears(explorerStore.previews.map((p) => p.years)), currentYear);
+  const cutoffYear = queryRecent.cutoffYear;
+  const recent = queryRecent.share ?? 0;
+  const storeRecent = explorerStore.recentShare;
+  const compKind = explorerStore.composition.scopeKind;
+  const otherScope: 'loaded' | 'partial' | null =
+    compKind === 'partial' ? 'partial' : storeRecent.scope === 'loaded' || compKind === 'loaded' ? 'loaded' : null;
+  const otherShare = otherScope && storeRecent.scope === 'loaded' ? storeRecent.share : null;
+  const otherLabel = otherScope === 'partial' ? 'Partial load' : 'Loaded';
+  const recentText = `${otherScope ? 'Query · since' : 'Since'} ${cutoffYear}: ${fmtPct(recent)}`;
+  const recentTip = otherScope
+    ? `Query preview: ${fmtPct(recent)} of dated records are from ${cutoffYear} on.${
+        otherShare != null
+          ? ` The temporal-skew check describes the ${otherScope === 'partial' ? 'partially loaded' : 'loaded'} records instead (${otherLabel} · since ${cutoffYear}: ${fmtPct(otherShare)}).`
+          : ''
+      }`
+    : `Share of dated records from ${cutoffYear} on, as in the temporal-skew check`;
   const hasData = total > 0;
   const busy = state === 'stale' || state === 'first';
 
@@ -270,7 +286,7 @@ export default observer(function YearBrush() {
                     width={barW}
                     height={h}
                     fill={inside ? chartColors.accepted : chartColors.outline}
-                    opacity={inside ? 1 : 0.35}
+                    opacity={inside ? 1 : 0.4}
                   />
                 );
               })}
@@ -340,12 +356,9 @@ export default observer(function YearBrush() {
                 ? `${fmtPct(inRange)} of dated records in range`
                 : 'All years · no year filter'}
             </Text>
-            <Tooltip
-              content={`Share of dated records from ${cutoffYear} on, as in the temporal-skew check`}
-              openDelay={300}
-            >
+            <Tooltip content={recentTip} openDelay={300} contentProps={{ maxW: '260px', whiteSpace: 'normal' }}>
               <Text truncate w="fit-content" maxW="full" cursor="help">
-                Since {cutoffYear}: {fmtPct(recent)}
+                {recentText}
               </Text>
             </Tooltip>
           </>

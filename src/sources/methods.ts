@@ -236,7 +236,7 @@ function phylogenySentence(p: PhylogenyInfo, speciesCount: number): string {
   const lengths = {
     original: 'with its original branch lengths',
     grafen:
-      "with branch lengths computed by Grafen's (1989) method (ρ = 1), since the tree has topology only",
+      "with branch lengths set by Grafen's (1989) method (ρ = 1, root = 1; arbitrary heights that carry no time information), since the tree has topology only",
     none: 'as a topology without branch lengths',
   }[p.branchLengths];
   return `Phylogenetic relationships were taken from ${p.label} (${p.citation}), used ${lengths}; ${fmt(p.matched)} of its ${fmt(p.tips)} tips matched species in the occurrence data${share}.`;

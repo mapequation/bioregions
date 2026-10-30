@@ -4,7 +4,8 @@
 // partitioned by species (enumerated with the speciesKey facet). Small species are
 // packed into aliased multi-search requests; species above the cap are split into
 // spatial quadrants, then year halves, and a leaf that is still too large is
-// truncated and reported.
+// truncated and reported. Requests for large species alternate with the packed small
+// batches, so a stopped stream is not biased towards rare species.
 
 import { normalizeSpeciesName } from '../../utils/names';
 import { abortError, createLimiter, isAbortError, type FetchOptions } from '../http';
@@ -260,6 +261,9 @@ function rootCell(query: OccurrenceQuery): BBox {
   return area.kind === 'bbox' && area.bbox[0] < area.bbox[2] ? area.bbox : WORLD_BBOX;
 }
 
+/** Lane of the packed species that fit one search (large species use their key, >= 0). */
+const SMALL_LANE = -1;
+
 type Event = { kind: 'batch'; batch: RecordBatch } | { kind: 'error'; error: unknown };
 
 /**
@@ -297,9 +301,53 @@ export async function* streamGbif(
   /** Requests sent, and fetches still expected for parts waiting to be split. */
   let spawned = 0;
   let splitEstimate = 0;
+  /**
+   * Requests not yet handed to the limiter, in lanes: one for the packed small species
+   * and one per species too large for one search (its split, then its parts). `feed`
+   * alternates a small-species batch with one request of a large species, taking the
+   * large lanes round-robin from the largest, so a stopped load holds part of every
+   * species started rather than only the rare ones; a split's parts join its lane and
+   * so never wait behind every queued small batch.
+   */
+  const lanes = new Map<number, (() => void)[]>();
+  const largeLanes: number[] = [];
+  let largeCursor = 0;
+  let queued = 0;
+  let smallTurn = true;
   /** `requestsTotal` starts at the plan's count and never shrinks. */
   const updateTotal = () => {
-    progress.requestsTotal = Math.max(progress.requestsTotal, spawned + splitEstimate);
+    progress.requestsTotal = Math.max(progress.requestsTotal, spawned + queued + splitEstimate);
+  };
+  const enqueue = (lane: number, start: () => void) => {
+    let items = lanes.get(lane);
+    if (!items) {
+      items = [];
+      lanes.set(lane, items);
+      if (lane !== SMALL_LANE) largeLanes.push(lane);
+    }
+    items.push(start);
+    queued++;
+    updateTotal();
+  };
+  const nextLarge = (): (() => void) | undefined => {
+    for (let i = 0; i < largeLanes.length; i++) {
+      const at = (largeCursor + i) % largeLanes.length;
+      const item = lanes.get(largeLanes[at])?.shift();
+      if (item) {
+        largeCursor = at + 1;
+        return item;
+      }
+    }
+    return undefined;
+  };
+  const takeNext = (): (() => void) | undefined => {
+    const small = lanes.get(SMALL_LANE);
+    if (smallTurn && small && small.length > 0) {
+      smallTurn = false;
+      return small.shift();
+    }
+    smallTurn = true;
+    return nextLarge() ?? small?.shift();
   };
   const events: Event[] = [];
   let pending = 0;
@@ -347,15 +395,26 @@ export async function* streamGbif(
       .catch((error: unknown) => events.push({ kind: 'error', error }))
       .finally(() => {
         pending--;
+        feed();
         notify();
       });
   };
 
-  const fetchParts = (parts: Part[]) => {
+  /** Hand queued requests to the limiter while it has idle slots. */
+  const feed = () => {
+    while (pending < concurrency && queued > 0 && !signal.aborted) {
+      const start = takeNext();
+      if (!start) break;
+      queued--;
+      start();
+    }
+  };
+
+  const fetchParts = (lane: number, parts: Part[]) => {
     for (const part of parts) {
       openPart(part);
     }
-    spawn(async () => {
+    enqueue(lane, () => spawn(async () => {
       const bodies = parts.map(
         (part) => `documents(size: ${part.count}) { results { ${RECORD_FIELDS} } }`,
       );
@@ -387,11 +446,15 @@ export async function* streamGbif(
         kind: 'batch',
         batch: { source: 'gbif', records: kept, progress: { ...progress } },
       });
-    });
+    }));
   };
 
-  /** Fetch parts that fit (packed), truncate too-large leaves, split the rest. */
-  const schedule = (parts: Part[]) => {
+  /**
+   * Fetch parts that fit (packed), truncate too-large leaves, split the rest. Parts of a
+   * split go to `lane` (their species'); the first call sends fitting species to the
+   * small lane and each larger one to its own.
+   */
+  const schedule = (parts: Part[], lane?: number) => {
     const fitting: Part[] = [];
     for (const part of parts) {
       if (part.count <= 0) {
@@ -401,10 +464,10 @@ export async function* streamGbif(
         fitting.push(part);
       } else if (!part.cell || bboxWidth(part.cell.bbox) >= MIN_CELL_DEGREES * 2) {
         splitEstimate += splitFetchRequests(part.count);
-        splitSpatially(part);
+        splitSpatially(part, lane ?? part.species.key);
       } else if (part.years !== 'missing' && (!part.years || part.years[0] < part.years[1])) {
         splitEstimate += splitFetchRequests(part.count);
-        splitByYear(part);
+        splitByYear(part, lane ?? part.species.key);
       } else {
         const t = truncations.get(part.species.key) ?? {
           name: part.species.name,
@@ -420,14 +483,14 @@ export async function* streamGbif(
       }
     }
     for (const group of planRequests(fitting)) {
-      fetchParts(group);
+      fetchParts(lane ?? SMALL_LANE, group);
     }
   };
 
   /** Count the four quadrants of the part's cell in one request. */
-  const splitSpatially = (part: Part) => {
+  const splitSpatially = (part: Part, lane: number) => {
     openPart(part);
-    spawn(async () => {
+    enqueue(lane, () => spawn(async () => {
       const root = part.cell?.root ?? rootCell(query);
       const children: Part[] = bboxQuadrants(part.cell?.bbox ?? root).map((bbox) => ({
         ...part,
@@ -444,16 +507,16 @@ export async function* streamGbif(
       });
       progress.requestsDone++;
       splitEstimate -= splitFetchRequests(part.count);
-      schedule(children);
+      schedule(children, lane);
       updateTotal();
       closePart(part);
-    });
+    }));
   };
 
   /** Split a narrow cell by year: first find its year range, then halve it. */
-  const splitByYear = (part: Part) => {
+  const splitByYear = (part: Part, lane: number) => {
     openPart(part);
-    spawn(async () => {
+    enqueue(lane, () => spawn(async () => {
       let children: Part[];
       if (part.years && part.years !== 'missing') {
         const [lo, hi] = part.years;
@@ -489,10 +552,10 @@ export async function* streamGbif(
       }
       progress.requestsDone++;
       splitEstimate -= splitFetchRequests(part.count);
-      schedule(children);
+      schedule(children, lane);
       updateTotal();
       closePart(part);
-    });
+    }));
   };
 
   const summary = () => ({
@@ -502,7 +565,9 @@ export async function* streamGbif(
   });
 
   try {
-    schedule(detail.species.map(toPart));
+    // Largest first, so the large lanes start in size order.
+    schedule([...detail.species].sort((a, b) => b.count - a.count).map(toPart));
+    feed();
     while (true) {
       if (opts.signal?.aborted) {
         throw abortError();

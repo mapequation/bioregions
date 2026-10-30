@@ -33,7 +33,9 @@ function respond(url: string): Response {
     return json({ records, species: 24, taxa: 35, datasets: 457, specieslevel: 900, yearrange: [1970, 2026] });
   }
   if (u.pathname.endsWith('/statistics/years')) {
-    return json([{ year: 2001, records: 3 }, { year: null, records: 5 }, { year: 1999, records: 7 }]);
+    // Without the year filter, older records appear too.
+    const older = p.has('startdate') ? [] : [{ year: 1950, records: 40 }];
+    return json([{ year: 2001, records: 3 }, { year: null, records: 5 }, { year: 1999, records: 7 }, ...older]);
   }
   if (u.pathname.endsWith('/checklist')) {
     return json({
@@ -70,8 +72,9 @@ describe('previewObis', () => {
     const fetch = vi.fn(async (url: string) => respond(url));
     vi.stubGlobal('fetch', fetch);
     const preview = await previewObis(query);
-    // 5 summary calls + the ledger base + 3 impact calls (years, presentOnly, geospatialIssues).
-    expect(fetch).toHaveBeenCalledTimes(9);
+    // 6 summary calls (incl. the years without the year filter) + the ledger base + 3
+    // impact calls (years, presentOnly, geospatialIssues).
+    expect(fetch).toHaveBeenCalledTimes(10);
     expect(preview).toMatchObject({
       source: 'obis',
       total: 920,
@@ -81,6 +84,11 @@ describe('previewObis', () => {
       datasets: 457,
       yearRange: [1970, 2026],
       years: [{ year: 1999, count: 7 }, { year: 2001, count: 3 }],
+      yearsAll: [
+        { year: 1950, count: 40 },
+        { year: 1999, count: 7 },
+        { year: 2001, count: 3 },
+      ],
       topSpecies: [
         { key: '137094', label: 'Delphinus delphis', count: 500 },
         { key: '137111', label: 'Tursiops truncatus', count: 400 },
@@ -101,13 +109,29 @@ describe('previewObis', () => {
     const parts = previewObisParts(query);
     const summary = await parts.summary;
     const paths = () => fetch.mock.calls.map(([url]) => new URL(url).pathname.replace('/v3/', ''));
-    expect(paths().slice(0, 5).sort()).toEqual(['checklist', 'dataset', 'facet', 'statistics', 'statistics/years']);
+    expect(paths().slice(0, 6).sort()).toEqual([
+      'checklist',
+      'dataset',
+      'facet',
+      'statistics',
+      'statistics/years',
+      'statistics/years',
+    ]);
     expect(summary.total).toBe(920);
     expect(summary.baseTotal).toBeUndefined();
     expect(summary.filterImpact).toEqual({ basisOfRecord: 80 });
     const impact = await parts.impact;
-    expect(paths().slice(5)).toEqual(['statistics', 'statistics', 'statistics', 'statistics']);
+    expect(paths().slice(6)).toEqual(['statistics', 'statistics', 'statistics', 'statistics']);
     expect(impact).toEqual({ baseTotal: 1280, filterImpact: { years: 200, presentOnly: 50, geospatialIssues: 30 } });
+  });
+
+  it('reuses the query histogram as yearsAll without a year filter', async () => {
+    const fetch = vi.fn(async (url: string) => respond(url));
+    vi.stubGlobal('fetch', fetch);
+    const summary = await previewObisParts({ ...query, years: [null, null] }).summary;
+    expect(fetch.mock.calls.filter(([url]) => String(url).includes('/statistics/years'))).toHaveLength(1);
+    expect(summary.yearsAll).toEqual(summary.years);
+    expect(summary.yearsAll?.[0]).toEqual({ year: 1950, count: 40 });
   });
 
   it('returns an empty preview when no taxon resolves', async () => {

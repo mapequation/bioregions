@@ -244,11 +244,19 @@ describe('recentShareOf', () => {
       { year: 2000, count: 280 },
       { year: 2011, count: 720 },
     ];
-    expect(recentShareOf(years, 2025)).toEqual({ cutoffYear: 2011, share: 0.72 });
-    expect(recentShareOf([], 2025)).toEqual({ cutoffYear: 2011, share: null });
+    expect(recentShareOf(years, 2025)).toEqual({ cutoffYear: 2011, share: 0.72, scope: 'query' });
+    expect(recentShareOf([], 2025, 'loaded')).toEqual({ cutoffYear: 2011, share: null, scope: 'loaded' });
     const flags = computeBiasFlags(
       { query: explorerDefaultQuery(), previews: [preview('gbif', { total: 1000, years })], speciesCounts: null, currentYear: 2025 },
-      { excludeDataset: vi.fn(), specimensOnly: vi.fn(), narrowYears: vi.fn(), showCountries: vi.fn(), setMinRecords: vi.fn() },
+      {
+        excludeDataset: vi.fn(),
+        specimensOnly: vi.fn(),
+        narrowYears: vi.fn(),
+        showCountries: vi.fn(),
+        setMinRecords: vi.fn(),
+        useGbifOnly: vi.fn(),
+        pinBaseline: vi.fn(),
+      },
     );
     expect(flags.find((f) => f.id === 'temporalSkew')?.value).toBe(recentShareOf(years, 2025).share);
   });
@@ -351,6 +359,8 @@ describe('computeBiasFlags', () => {
     narrowYears: vi.fn(),
     showCountries: vi.fn(),
     setMinRecords: vi.fn(),
+    useGbifOnly: vi.fn(),
+    pinBaseline: vi.fn(),
   });
 
   it('triggers each check strictly above its threshold', () => {
@@ -401,7 +411,7 @@ describe('computeBiasFlags', () => {
     // Concrete action labels and legend text.
     expect(byId.datasetDominance.action?.label).toBe('Exclude this dataset');
     expect(byId.datasetDominance.action?.title).toBe('Exclude eBird');
-    expect(byId.temporalSkew.action?.label).toBe('Restrict to 2011');
+    expect(byId.temporalSkew.action?.label).toBe('Use recent records only (2011)');
     expect(byId.humanObservation.action?.label).toBe('Specimens only');
     expect(byId.lowCountSpecies.action?.label).toBe('5+ records per species');
     expect(byId.countryConcentration.thresholdLabel).toBe('flagged above 50 % of records');
@@ -479,11 +489,11 @@ describe('computeBiasFlags', () => {
       currentYear: 2026,
     });
     const open = Object.fromEntries(computeBiasFlags(input([null, null]), actions()).map((f) => [f.id, f]));
-    expect(open.temporalSkew.action?.label).toBe('Restrict to 2012–2024');
+    expect(open.temporalSkew.action?.label).toBe('Use recent records only (2012–2024)');
     expect(open.humanObservation.action).toBeUndefined();
     expect(open.lowCountSpecies.action).toBeUndefined();
     const bounded = Object.fromEntries(computeBiasFlags(input([1980, 2020]), actions()).map((f) => [f.id, f]));
-    expect(bounded.temporalSkew.action?.label).toBe('Restrict to 2012–2020');
+    expect(bounded.temporalSkew.action?.label).toBe('Use recent records only (2012–2020)');
     const narrowed = Object.fromEntries(computeBiasFlags(input([2015, null]), actions()).map((f) => [f.id, f]));
     expect(narrowed.temporalSkew.action).toBeUndefined();
   });
@@ -508,8 +518,123 @@ describe('computeBiasFlags', () => {
     const byId = Object.fromEntries(flags.map((f) => [f.id, f]));
     expect(byId.countryConcentration.triggered).toBe(false);
     expect(byId.datasetDominance.triggered).toBe(true);
-    expect(byId.datasetDominance.action).toBeUndefined();
+    // Leaving OBIS out is the only remedy, and with no GBIF records it would leave none.
+    expect(byId.datasetDominance.action).toMatchObject({ label: 'Use GBIF only', discouraged: true, leaves: 0 });
     expect(byId.lowCountSpecies.triggered).toBe(false);
+  });
+
+  it('marks merged GBIF + OBIS preview values approximate and offers GBIF only for an OBIS dataset', () => {
+    const a = actions();
+    const previews = [
+      preview('gbif', {
+        total: 700,
+        topDatasets: [{ key: 'g', label: 'GBIF set', count: 100 }],
+        basisOfRecord: [{ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 650 }],
+      }),
+      preview('obis', {
+        total: 300,
+        topDatasets: [{ key: 'o', label: 'OBIS survey', count: 280 }],
+        basisOfRecord: [{ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 300 }],
+      }),
+    ];
+    const flags = computeBiasFlags({ query: explorerDefaultQuery(), previews, speciesCounts: null, currentYear: 2025 }, a);
+    const byId = Object.fromEntries(flags.map((f) => [f.id, f]));
+    for (const f of flags) {
+      expect(f).toMatchObject({ approximate: true, approximateNote: 'may change after GBIF/OBIS overlap removal' });
+    }
+    expect(byId.datasetDominance.action).toMatchObject({ label: 'Use GBIF only', cost: 300 });
+    expect(byId.datasetDominance.action?.discouraged).toBeUndefined();
+    byId.datasetDominance.action?.run();
+    expect(a.useGbifOnly).toHaveBeenCalled();
+    // OBIS contributes: human observations are survey effort, not citizen science.
+    expect(byId.humanObservation.text).toBe(
+      '95 % are human observations, mostly survey and sighting effort; coverage follows survey tracks.',
+    );
+    // One source, or loaded records (overlap already removed): exact.
+    const one = computeBiasFlags({ query: explorerDefaultQuery(), previews: [previews[0]], speciesCounts: null, currentYear: 2025 }, a);
+    expect(one.some((f) => f.approximate)).toBe(false);
+    expect(one.find((f) => f.id === 'humanObservation')?.text).toContain('often citizen science');
+    // OBIS dataset dominance without GBIF enabled: nothing to fall back on.
+    const noGbif = explorerDefaultQuery();
+    noGbif.sources = { gbif: false, obis: true };
+    const obisOnly = computeBiasFlags({ query: noGbif, previews: [previews[1]], speciesCounts: null, currentYear: 2025 }, a);
+    expect(obisOnly.find((f) => f.id === 'datasetDominance')?.action).toBeUndefined();
+  });
+
+  it('uses the survey wording for a marine preset area', () => {
+    const query = explorerDefaultQuery();
+    query.area = { kind: 'bbox', bbox: [114, -11, 163, 20], label: 'Coral Triangle' };
+    const flags = computeBiasFlags(
+      {
+        query,
+        previews: [preview('gbif', { total: 100, basisOfRecord: [{ key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 90 }] })],
+        speciesCounts: null,
+        currentYear: 2025,
+      },
+      actions(),
+    );
+    expect(flags.find((f) => f.id === 'humanObservation')?.text).toContain('mostly survey and sighting effort');
+  });
+
+  it('discourages a remedy that would remove more than 80 % of the scope', () => {
+    const flags = computeBiasFlags(
+      {
+        query: explorerDefaultQuery(),
+        previews: [
+          preview('gbif', {
+            total: 5000,
+            basisOfRecord: [
+              { key: 'HUMAN_OBSERVATION', label: 'Human observation', count: 4857 },
+              { key: 'PRESERVED_SPECIMEN', label: 'Preserved specimen', count: 143 },
+            ],
+            years: [
+              { year: 1950, count: 4100 },
+              { year: 2020, count: 900 },
+            ],
+          }),
+        ],
+        speciesCounts: null,
+        currentYear: 2025,
+      },
+      actions(),
+    );
+    const byId = Object.fromEntries(flags.map((f) => [f.id, f]));
+    expect(byId.humanObservation.action).toMatchObject({ label: 'Specimens only', cost: 4857, discouraged: true, leaves: 143 });
+    // 82 % older: restricting to recent years is discouraged too, and so is its compare variant.
+    expect(byId.temporalSkew.action).toMatchObject({ discouraged: true, leaves: 900 });
+    expect(byId.temporalSkew.secondaryAction).toBeUndefined();
+  });
+
+  it('offers to compare before restricting to recent years', () => {
+    const a = actions();
+    const calls: string[] = [];
+    vi.mocked(a.pinBaseline).mockImplementation(() => calls.push('pin'));
+    vi.mocked(a.narrowYears).mockImplementation(() => calls.push('narrow'));
+    const flags = computeBiasFlags(
+      {
+        query: explorerDefaultQuery(),
+        previews: [
+          preview('gbif', {
+            total: 1000,
+            years: [
+              { year: 2000, count: 200 },
+              { year: 2025, count: 800 },
+            ],
+          }),
+        ],
+        speciesCounts: null,
+        currentYear: 2025,
+      },
+      a,
+    );
+    const temporal = flags.find((f) => f.id === 'temporalSkew');
+    expect(temporal?.action?.label).toBe('Use recent records only (2011–2025)');
+    expect(temporal?.action?.discouraged).toBeUndefined();
+    expect(temporal?.secondaryAction?.label).toBe('Compare first: pin baseline, then restrict');
+    temporal?.secondaryAction?.run();
+    expect(calls).toEqual(['pin', 'narrow']);
+    expect(a.pinBaseline).toHaveBeenCalledWith('Before: 2011–2025 only');
+    expect(a.narrowYears).toHaveBeenCalledWith(2011);
   });
 
   it('returns no flags without records', () => {

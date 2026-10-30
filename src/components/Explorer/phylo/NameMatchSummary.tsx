@@ -80,8 +80,10 @@ function NameList({
           bg="bg.subtle"
           py={1}
         >
-          {rows.map((row) => (
-            <Box as="li" key={row.datasetName} px={2.5} py={0.5} textStyle="xs" lineHeight="tall">
+          {rows.map((row, i) => (
+            // Dataset names are unique per load, but the index guards against repeats.
+            // biome-ignore lint/suspicious/noArrayIndexKey: static list, index disambiguates repeats
+            <Box as="li" key={`${row.datasetName}:${i}`} px={2.5} py={0.5} textStyle="xs" lineHeight="tall">
               {render(row)}
             </Box>
           ))}

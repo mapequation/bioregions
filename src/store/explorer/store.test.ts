@@ -232,6 +232,8 @@ describe('ExplorerStore.load', () => {
       speciesPlanned: 2,
       notReceived: 4,
       coverage: 0.5,
+      // The planned species with no record, largest first, with the records planned for it.
+      missingSpecies: [{ name: 'Saguinus oedipus', expected: 1 }],
     });
     // Half the species arrived: bioregions run as usual.
     expect(store.lastLoad?.bioregionsSkipped).toBeUndefined();
@@ -241,8 +243,12 @@ describe('ExplorerStore.load', () => {
     expect(store.lastLoad?.accepted).toBe(1);
     expect(store.lastLoad?.emptyReason).toBeUndefined();
     expect(store.methodsText).toContain(
-      'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; because records stream species by species',
+      'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; requests alternate packed batches',
     );
+    expect(store.methodsText).toContain('The missing species is Saguinus oedipus (~1 planned records).');
+    // A partial load is on the map and in the insights: both describe the loaded records.
+    expect(store.recentShare.scope).toBe('loaded');
+    expect(store.mapScope).toBe('loaded');
     expect(rootStore.clearData).not.toHaveBeenCalled();
   });
 
@@ -359,7 +365,66 @@ describe('ExplorerStore.load', () => {
     expect(flags.find((f) => f.id === 'datasetDominance')).toMatchObject({ value: 0.5, action: { cost: 2 } });
     expect(flags.find((f) => f.id === 'temporalSkew')?.action?.cost).toBe(1);
     expect(flags.find((f) => f.id === 'countryConcentration')?.text).toContain('of records with a country are from Brazil');
-    expect(flags.find((f) => f.id === 'lowCountSpecies')?.action?.cost).toBe(4);
+    expect(flags.find((f) => f.id === 'lowCountSpecies')?.action).toMatchObject({ cost: 4, discouraged: true, leaves: 0 });
+    // Loaded records: the overlap is gone, so nothing is approximate.
+    expect(flags.some((f) => f.approximate)).toBe(false);
+    // The temporal share describes the loaded records too: 3 of 4 dated records since the cutoff.
+    expect(store.recentShare).toMatchObject({ scope: 'loaded', share: 0.75 });
+  });
+
+  it('shows the loaded records on the map by default until the query diverges', async () => {
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]]));
+    const { store } = setup();
+    expect(store.mapScope).toBe('query');
+    store.setMapScope('loaded');
+    expect(store.mapScope).toBe('query'); // nothing loaded yet
+    await store.load();
+    expect(store.mapScope).toBe('loaded');
+    store.setMapScope('query');
+    expect(store.mapScope).toBe('query');
+    // Editing the query makes the load stale: back to the query, and to the default after.
+    store.setYears([2000, 2025]);
+    expect(store.mapScope).toBe('query');
+    store.setYears([1970, 2025]);
+    expect(store.mapScope).toBe('loaded');
+    expect(store.recentShare.scope).toBe('loaded');
+    store.setYears([2000, 2025]);
+    expect(store.recentShare.scope).toBe('query');
+  });
+
+  it('keeps the year brush histogram free of the year filter', () => {
+    const { store } = setup();
+    const base = {
+      total: 10,
+      species: 1,
+      datasets: 1,
+      yearRange: null,
+      basisOfRecord: [],
+      topSpecies: [],
+      topDatasets: [],
+      countries: [],
+      issues: [],
+      uncertainty: null,
+      filterImpact: {},
+    };
+    store.sources.gbif.preview = {
+      ...base,
+      source: 'gbif',
+      years: [{ year: 2010, count: 10 }],
+      yearsAll: [
+        { year: 1950, count: 90 },
+        { year: 2010, count: 10 },
+      ],
+    };
+    store.sources.obis.preview = { ...base, source: 'obis', years: [{ year: 2010, count: 5 }], yearsAll: [{ year: 1950, count: 5 }, { year: 2010, count: 5 }] };
+    store.sources.gbif.state = 'ready';
+    store.sources.obis.state = 'ready';
+    expect(store.mergedYearsAll).toEqual([
+      { year: 1950, count: 95 },
+      { year: 2010, count: 15 },
+    ]);
+    expect(store.yearShareAfter(2000)).toBeCloseTo(15 / 110);
   });
 
   it('keeps a load stopped with few species but skips bioregions until asked', async () => {

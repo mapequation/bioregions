@@ -106,24 +106,29 @@ describe('PhyloStore', () => {
     // The dated tree covers 3 of 5 species (>= 60 %), so it replaces the synthesis default.
     await when(() => store.selection !== null && store.selectedId === 'ot_1@tree1');
     expect(store.selectionReason).toBe('dated');
+    expect(store.preselectedDated).toBe(true);
     expect(store.coverageProgress).toEqual({ done: 1, total: 1 });
     expect(store.checkingCoverage).toBe(false);
 
     store.select('synthetic');
     expect(store.selectionReason).toBe('user');
+    expect(store.preselectedDated).toBe(false);
     await when(() => store.selection !== null);
     expect(store.selection).toEqual({ kept: 4, absentFromTree: ['Fakeus name'], pruned: 0, broken: ['Mico argentatus'] });
     expect(store.absentBreakdown).toEqual({ unmatched: ['Fakeus name'], notInTree: [] });
 
     store.setDatedOnly(true);
     expect(store.visibleCandidates.map((c) => c.id)).toEqual(['ot_1@tree1']);
-    store.select('ot_1@tree1');
+    store.select('ot_1@tree1', 'dated');
     await when(() => store.selection !== null);
     expect(store.selection?.pruned).toBe(1);
 
     root.speciesStore.loaded = false;
     await store.loadSelected();
     expect(store.loadState).toBe('done');
+    // Loading makes the pick the user's, but it is still shown as the best dated match.
+    expect(store.selectionReason).toBe('user');
+    expect(store.preselectedDated).toBe(true);
     const newick = root.treeStore.loadString.mock.calls[0][0] as string;
     expect(newick).toContain('Mico_argentatus:');
     expect(newick).not.toContain("'");
