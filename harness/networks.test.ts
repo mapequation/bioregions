@@ -209,3 +209,24 @@ describe('time slice species sets (B9)', () => {
     expect(new Set(cells)).toEqual(expected);
   });
 });
+
+describe('state network nodes (B10)', () => {
+  it('creates taxa and states only for links above the threshold', () => {
+    const params = { treeWeightBalance: 0.5, useWholeTree: true };
+    const weights = buildStateNetwork(params)
+      .links.map(({ weight = 1 }) => weight)
+      .sort((a, b) => a - b);
+    const median = weights[Math.floor(weights.length / 2)];
+    const network = buildStateNetwork({
+      ...params,
+      linkWeightThresholdExponent: Math.log10(median),
+    });
+    expect(network.numLinksBelowThreshold).toBeGreaterThan(0);
+
+    const linked = new Set(network.links.flatMap(({ source, target }) => [source, target]));
+    expect(network.states.filter(({ stateId }) => !linked.has(stateId))).toEqual([]);
+    const taxa = new Set(network.links.map(({ source }) => source));
+    expect(network.numLeafTaxonNodes + network.numInternalTaxonNodes).toBe(taxa.size);
+    expect(network.nodes.length).toBe(network.numGridCellNodes + taxa.size);
+  });
+});
