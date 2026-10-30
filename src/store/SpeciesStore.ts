@@ -16,7 +16,7 @@ import type {
 import { getName } from '../utils/filename';
 import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
-import { normalizeSpeciesName } from '../utils/names';
+import { parseOccurrence } from '../utils/occurrences';
 
 // export type FeatureProperties = GeoJsonProperties & {
 //   name: string;
@@ -83,6 +83,8 @@ export default class SpeciesStore {
   numPointsDebounced: number = 0;
   numPolygons: number = 0;
   numPolygonsDebounced: number = 0;
+  // Occurrence rows skipped for a missing name or an invalid coordinate.
+  numSkippedRecords: number = 0;
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
   collection: GeometryFeatureCollection = createFeatureCollection();
@@ -102,6 +104,7 @@ export default class SpeciesStore {
       isLoading: observable,
       numPointsDebounced: observable,
       numPolygonsDebounced: observable,
+      numSkippedRecords: observable,
       speed: observable,
       seconds: observable,
       collection: observable.ref,
@@ -119,6 +122,7 @@ export default class SpeciesStore {
   clearData = action(() => {
     this.loaded = false;
     this.isLoading = false;
+    this.numSkippedRecords = 0;
     this.multiPointCollection = createMultiPointGeometryCollection();
     this.updateCollection(createFeatureCollection());
     this.binner.setTreeNeedUpdate();
@@ -356,24 +360,22 @@ export default class SpeciesStore {
     this.preLoad();
 
     const records = csvParse(data);
+    const columns = { nameColumn, longColumn, latColumn };
 
-    const mapper = createMapper<string | undefined>(
-      nameColumn,
-      longColumn,
-      latColumn,
-    );
-
+    let numSkipped = 0;
     for (const item of records) {
-      const mappedItem = mapper(item);
-      const pointFeature = createPointFeature(
-        [mappedItem.longitude, mappedItem.latitude],
-        { name: normalizeSpeciesName(mappedItem.name) },
+      const occurrence = parseOccurrence(item, columns);
+      if (!occurrence) {
+        ++numSkipped;
+        continue;
+      }
+      this.addFeature(
+        createPointFeature(occurrence.coordinates, { name: occurrence.name }),
       );
-
-      this.addFeature(pointFeature);
     }
+    this.addSkippedRecords(numSkipped);
 
-    this.postLoad();
+    await this.postLoad();
   }
 
   async load(
@@ -397,7 +399,7 @@ export default class SpeciesStore {
     this.preLoad();
 
     const { mapStore } = this.rootStore;
-    const mapper = createMapper(nameColumn, longColumn, latColumn);
+    const columns = { nameColumn, longColumn, latColumn };
 
     const nameHistogram: { [key: string]: number } = {};
     const countName = (name: string) => {
@@ -408,24 +410,22 @@ export default class SpeciesStore {
       nameHistogram[name]++;
     };
 
-    const ignoredRows: { [key: string]: string | number }[] = [];
+    let numSkipped = 0;
 
     await this.loadData(file, (items) => {
       const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
 
       for (const item of items) {
-        const mappedItem = mapper(item);
-        const name = normalizeSpeciesName(mappedItem.name);
-        if (!name || name === 'NA') {
-          ignoredRows.push(item);
+        const occurrence = parseOccurrence(item, columns);
+        if (!occurrence) {
+          ++numSkipped;
           continue;
         }
-        const pointFeature = createPointFeature(
-          [mappedItem.longitude, mappedItem.latitude],
-          { name },
-        );
+        const pointFeature = createPointFeature(occurrence.coordinates, {
+          name: occurrence.name,
+        });
 
-        countName(mappedItem.name);
+        countName(occurrence.name);
 
         this.addFeature(pointFeature);
 
@@ -438,13 +438,18 @@ export default class SpeciesStore {
 
     // await (await loader).next();
     this.loadEnd();
-    console.log(
-      `Ignored ${ignoredRows.length} rows due to no name:`,
-      ignoredRows,
-    );
+    this.addSkippedRecords(numSkipped);
 
     await this.postLoad();
   }
+
+  addSkippedRecords = action((numSkipped: number) => {
+    if (numSkipped === 0) return;
+    this.numSkippedRecords += numSkipped;
+    console.warn(
+      `Skipped ${numSkipped} rows with a missing name or a missing, non-numeric or out-of-range coordinate`,
+    );
+  });
 
   onFeatures = action((features: GeometryFeature[]) => {
     features.forEach(this.addFeature);
@@ -637,16 +642,4 @@ export default class SpeciesStore {
     return tsvFormatRows(data);
   }
 
-}
-
-function createMapper<ItemType = string | number>(
-  nameColumn: string,
-  longColumn: string,
-  latColumn: string,
-) {
-  return (item: { [key: string]: ItemType }) => ({
-    name: `${item[nameColumn]}`,
-    longitude: +item[longColumn],
-    latitude: +item[latColumn],
-  });
 }
