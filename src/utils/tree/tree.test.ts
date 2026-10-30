@@ -80,7 +80,9 @@ describe('tree utils', () => {
   it('treats missing lengths as zero when the tree has lengths', () => {
     const tree = prepareTree(parseTree('((a:1,b:1),c:2);'));
 
-    expect(postOrder(tree, (node) => node.branchLength)).toEqual([1, 1, 0, 2, 0]);
+    expect(postOrder(tree, (node) => node.branchLength)).toEqual([
+      1, 1, 0, 2, 0,
+    ]);
     expect(postOrder(tree, (node) => node.time)).toEqual([0.5, 0.5, 0, 1, 0]);
   });
 
@@ -94,7 +96,9 @@ describe('tree utils', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const tree = prepareTree(parseTree('((a:1,b:-0.5):1,c:-2);'));
 
-    expect(postOrder(tree, (node) => node.branchLength)).toEqual([1, 0, 1, 0, 0]);
+    expect(postOrder(tree, (node) => node.branchLength)).toEqual([
+      1, 0, 1, 0, 0,
+    ]);
     expect(postOrder(tree, (node) => node.time)).toEqual([1, 0.5, 0.5, 0, 0]);
     expect(warn).toHaveBeenCalledOnce();
     expect(warn.mock.calls[0][0]).toMatch(/2 negative branch lengths/);
