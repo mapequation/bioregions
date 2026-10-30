@@ -148,3 +148,22 @@ describe('state network species links (S3)', () => {
     }
   });
 });
+
+describe('time slice cut at a parent node (B4)', () => {
+  it("files the parent's links under the parent, not under its children", () => {
+    const root = createRoot({ treeWeightBalance: 1, useWholeTree: false, segregationTime: 0 });
+    const tree = root.treeStore.tree;
+    const parent = tree?.children
+      .flatMap((child) => child.children)
+      .find((node) => node.children.some((child) => child.name === 'C'));
+    if (!parent) {
+      throw new Error('expected the (C, D) node');
+    }
+    root.infomapStore.integrationTime = parent.time;
+    const links = namedLinks(root.infomapStore.createNetwork());
+    const taxa = new Set(links.map(({ taxon }) => taxon));
+    expect(taxa).toContain(parent.name);
+    expect(taxa).not.toContain('C');
+    expect(taxa).not.toContain('D');
+  });
+});
