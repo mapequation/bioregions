@@ -16,11 +16,17 @@ export interface PhyloCandidate extends TreeCandidate {
   lengthMode?: string;
   /** Why the coverage check failed (coverageState 'error'): it took too long, or the download failed. */
   coverageError?: 'timeout' | 'failed';
+  /** The curator's full tree label, when given. */
+  fullLabel?: string;
+  /** Number of tips in the tree, once it has been read. */
+  tipCount?: number;
 }
 
 export const SYNTHETIC_ID = 'synthetic';
-/** Exact coverage is computed for at most this many study trees. */
+/** Exact coverage is computed for the trees of at most this many studies. */
 export const MAX_COVERAGE_CHECKS = 15;
+/** At most this many trees of one study are listed (and checked). */
+export const MAX_TREES_PER_STUDY = 8;
 /** Concurrent study-tree downloads. */
 export const COVERAGE_CONCURRENCY = 6;
 /** A dated tree is pre-selected when it covers at least this share of the dataset species. */
@@ -120,8 +126,8 @@ export function cleanTreeLabel(label: string | undefined, treeId: string, surnam
   return text.length > 1 ? text : null;
 }
 
-/** Longest subtitle before it is cut at a word boundary (curator labels are capped at 50 characters). */
-export const SUBTITLE_MAX = 44;
+/** Longest subtitle before it is cut at a word boundary; the table wraps it to two lines. */
+export const SUBTITLE_MAX = 80;
 
 /** Open Tree stores at most this many characters of a curator's tree label. */
 const LABEL_CAP = 50;
@@ -227,6 +233,7 @@ export function studyCandidate(tree: StudyTree, position: [number, number] = [1,
     title: studyTitle(tree),
     subtitle: label ?? fallback,
     subtitleDetail: `${full ? `${full} · ` : ''}${tree.studyId}/${tree.treeId}`,
+    fullLabel: full || undefined,
     lengthMode: tree.branchLengthMode,
     citation: studyCitation(tree),
     year: tree.year ?? null,
@@ -256,6 +263,69 @@ export function studyCandidates(lists: StudyTree[][]): PhyloCandidate[] {
     const index = (seen.get(tree.studyId) ?? 0) + 1;
     seen.set(tree.studyId, index);
     return studyCandidate(tree, [index, perStudy.get(tree.studyId) ?? 1]);
+  });
+}
+
+/**
+ * Keep the trees of the first `maxStudies` studies (in order), at most `perStudy`
+ * trees each: the table shows one row per study, and one download covers a study.
+ */
+export function capByStudy<C extends Pick<TreeCandidate, 'studyId'>>(
+  candidates: C[],
+  maxStudies = MAX_COVERAGE_CHECKS,
+  perStudy = MAX_TREES_PER_STUDY,
+): C[] {
+  const kept = new Map<string, number>();
+  return candidates.filter((c) => {
+    const key = c.studyId ?? '';
+    const n = kept.get(key);
+    if (n === undefined) {
+      if (kept.size >= maxStudies) return false;
+      kept.set(key, 1);
+      return true;
+    }
+    if (n >= perStudy) return false;
+    kept.set(key, n + 1);
+    return true;
+  });
+}
+
+/** One table row: a study's trees together, led by the selected or the best-coverage tree. */
+export interface CandidateGroup<C extends TreeCandidate = PhyloCandidate> {
+  /** Stable row key: the study id (the candidate id for the synthesis). */
+  key: string;
+  /** The tree the row shows and selects. */
+  lead: C;
+  /** The study's other trees, best coverage first once known. */
+  others: C[];
+}
+
+/**
+ * Group rows (already in display order) by study. A group sits where its first tree
+ * is. Its lead is the selected tree when it is in the group; else, once coverage is
+ * `settled`, the tree with the most dataset species (dated wins a tie), else the first.
+ */
+export function groupByStudy<C extends TreeCandidate>(
+  rows: C[],
+  selectedId: string | null,
+  settled: boolean,
+): CandidateGroup<C>[] {
+  const groups = new Map<string, C[]>();
+  for (const c of rows) {
+    const key = c.kind === 'study' && c.studyId ? c.studyId : c.id;
+    groups.set(key, [...(groups.get(key) ?? []), c]);
+  }
+  const score = (c: C) => (c.coverageState === 'ready' && c.coverage ? c.coverage.matched : -1);
+  const dated = (c: C) => (c.branchLengths === 'time' ? 1 : 0);
+  return [...groups.entries()].map(([key, members]) => {
+    const ranked = settled
+      ? members
+          .map((c, i) => ({ c, i }))
+          .sort((a, b) => score(b.c) - score(a.c) || dated(b.c) - dated(a.c) || a.i - b.i)
+          .map(({ c }) => c)
+      : members;
+    const lead = ranked.find((c) => c.id === selectedId) ?? ranked[0];
+    return { key, lead, others: ranked.filter((c) => c !== lead) };
   });
 }
 

@@ -207,7 +207,10 @@ export type DropReason =
   | 'invalidCoordinates'
   | 'zeroCoordinates'
   | 'outsideArea'
+  /** Same species at the same site (or ~1 km cell) as a record first seen from the same source. */
   | 'duplicate'
+  /** The same record (species and site) already received from another source (GBIF and OBIS). */
+  | 'crossSource'
   /** Species below `minRecordsPerSpecies` (OBIS records; GBIF drops them at plan time). */
   | 'lowCount';
 

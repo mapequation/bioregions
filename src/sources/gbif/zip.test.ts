@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { OccurrenceRecord } from '../types';
-import { importGbifZip } from './zip';
+import { downloadKeyFromName, importGbifZip } from './zip';
 
 // Header and row layout follow GBIF's SIMPLE_CSV (download 0017434-261023074918325).
 const SIMPLE_HEADER = [
@@ -141,5 +141,13 @@ describe('importGbifZip', () => {
     await expect(
       readAll(zipBlob({ 'a.csv': simpleCsv(10) }), { signal: controller.signal }),
     ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('downloadKeyFromName', () => {
+  it('finds the key in a downloaded file name', () => {
+    expect(downloadKeyFromName('0012345-241007104925546.zip')).toBe('0012345-241007104925546');
+    expect(downloadKeyFromName('0012345-241007104925546 (1).zip')).toBe('0012345-241007104925546');
+    expect(downloadKeyFromName('occurrences.zip')).toBeUndefined();
   });
 });

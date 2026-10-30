@@ -57,15 +57,16 @@ export interface Kpis {
 export type ToggleableRowId = FilterId | 'minRecords';
 
 /**
- * Every ledger row: the toggleable filters plus two fixed rules that always apply,
- * records not identified to species and duplicates removed while loading.
+ * Every ledger row: the toggleable filters plus three fixed rules that always apply,
+ * records not identified to species, duplicates removed while loading (same species
+ * at one site within a source) and the same record received from both GBIF and OBIS.
  */
-export type LedgerRowId = ToggleableRowId | 'speciesLevel' | 'duplicates';
+export type LedgerRowId = ToggleableRowId | 'speciesLevel' | 'duplicates' | 'crossSource';
 
 export interface LedgerRow {
   id: LedgerRowId;
   label: string;
-  /** Whether the user can switch this row (false for 'speciesLevel' and 'duplicates'). */
+  /** Whether the user can switch this row (false for 'speciesLevel', 'duplicates' and 'crossSource'). */
   toggleable: boolean;
   /** Whether the rule restricts the current query (fixed rules are always active). */
   active: boolean;
@@ -85,8 +86,28 @@ export interface LedgerRow {
 export interface CountStory {
   matching: number | null;
   speciesLevel: number | null;
+  /** Every duplicate removed while loading: same-source duplicates plus `crossSource`. */
   duplicates: number | null;
+  /** The part of `duplicates` that was the same record in GBIF and OBIS. */
+  crossSource?: number | null;
   loaded: number | null;
+}
+
+/** What the insights column describes: the previewed query, or the query of the data loaded. */
+export interface InsightsScope {
+  /** 'query' while previewing; 'loaded' once the query on screen was loaded; 'partial' for a stopped load. */
+  kind: 'query' | 'loaded' | 'partial';
+  /** Records the scope covers (matching the query, or loaded). */
+  records: number;
+  /** e.g. "For the query · 24,341 matching records". */
+  label: string;
+}
+
+/** Share of dated records from `cutoffYear` on (the temporal-skew check and the year brush). */
+export interface RecentShare {
+  cutoffYear: number;
+  /** null without dated records. */
+  share: number | null;
 }
 
 export type BiasId =
@@ -145,6 +166,8 @@ export interface LoadJob {
   perSource: SourceProgress[];
   funnel: Funnel;
   truncated: { name: string; kept: number; total: number }[];
+  /** Live species completeness (0..1) from the sources' speciesDone/speciesTotal; null when unknown. */
+  speciesCoverage: number | null;
   error?: string;
 }
 
@@ -166,6 +189,11 @@ export interface PartialLoad {
   speciesPlanned: number | null;
   /** Planned records never fetched because the load stopped. */
   notReceived: number;
+  /**
+   * speciesLoaded / speciesPlanned (0..1); the record share when the planned species
+   * are unknown. Below 0.5 a stopped load skips Infomap (see `Provenance.bioregionsSkipped`).
+   */
+  coverage: number;
 }
 
 export interface Provenance {
@@ -183,6 +211,11 @@ export interface Provenance {
   previousKept?: boolean;
   /** Set when the load stopped early (cancelled) or a source failed. */
   partial: PartialLoad | null;
+  /**
+   * Infomap was not run because the load was stopped with too few species (coverage
+   * below 0.5); the map shows the records. `runBioregionsAnyway()` runs it and clears this.
+   */
+  bioregionsSkipped?: boolean;
   datasetCounts: Partial<Record<SourceId, FacetBucket[]>>;
   derivedDoi?: string;
   gbifDownloadKey?: string;
@@ -204,6 +237,26 @@ export interface ZipImport {
   fileName: string;
   funnel?: Funnel;
   error?: string;
+  /** From the zip entry or file name. */
+  downloadKey?: string;
+  /** Bare DOI from the zip or the download's metadata. */
+  doi?: string;
+  /**
+   * Whether the download was made for the query of the data on screen (taxa, area and
+   * years compared with the download's own request): 'unknown' without the download's
+   * metadata (offline, no key) and while parsing.
+   */
+  queryMatch: 'match' | 'mismatch' | 'unknown';
+  /** The download's own taxa, area and years in words, e.g. "Callitrichidae · Brazil · 2000–2020". */
+  downloadQueryText?: string;
+  /** GBIF records of the dataset on screen (the part the download can be compared with). */
+  streamGbifRecords: number;
+  /** Replacing the data with the zip makes sense: same query and at least one record accepted. */
+  canReplace: boolean;
+  /** The download's DOI may cite the data on screen (same query). */
+  canCiteDoi: boolean;
+  /** One sentence explaining the comparison, for the dialog. */
+  note?: string;
 }
 
 export interface SavedQuery {

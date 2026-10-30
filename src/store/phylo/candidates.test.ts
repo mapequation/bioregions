@@ -5,7 +5,9 @@ import {
   arrangeRows,
   bestDatedCandidate,
   branchLengthKind,
+  capByStudy,
   cleanTreeLabel,
+  groupByStudy,
   humanizeTreeLabel,
   initialOrder,
   lengthUnits,
@@ -149,7 +151,7 @@ describe('tree labels', () => {
     );
     expect(humanizeTreeLabel('some_file_name')).toBe('some file name');
     expect(humanizeTreeLabel('Garli ML tree')).toBe('Garli ML tree');
-    expect(truncateWords('Time-calibrated, autocorrelated rates, soft-bounded constraints')).toBe(
+    expect(truncateWords('Time-calibrated, autocorrelated rates, soft-bounded constraints', 44)).toBe(
       'Time-calibrated, autocorrelated rates…',
     );
   });
@@ -165,5 +167,30 @@ describe('tree labels', () => {
     });
     expect(c.subtitle).toBe('Fully assembled phylogeny in Newick…');
     expect(c.subtitleDetail).toContain('File S3. Fully assembled phylogeny in Newick forma');
+  });
+
+  it('caps by study and groups a study\'s trees into one row led by the best coverage', () => {
+    const t = (id: string, studyId: string | undefined, matched: number | null, time = true): TreeCandidate => ({
+      id,
+      kind: studyId ? 'study' : 'synthetic',
+      title: id,
+      citation: '',
+      year: 2012,
+      studyId,
+      branchLengths: time ? 'time' : 'none',
+      coverage: matched == null ? null : { matched, total: 10 },
+      coverageState: matched == null ? 'pending' : 'ready',
+    });
+    const rows = [t('syn', undefined, 9), t('a1', 'a', 5), t('b1', 'b', 7), t('a2', 'a', 6), t('a3', 'a', 6, false)];
+    expect(capByStudy(rows.slice(1), 1, 2).map((c) => c.id)).toEqual(['a1', 'a2']);
+    const settled = groupByStudy(rows, null, true);
+    expect(settled.map((g) => [g.key, g.lead.id, g.others.map((c) => c.id)])).toEqual([
+      ['syn', 'syn', []],
+      ['a', 'a2', ['a3', 'a1']],
+      ['b', 'b1', []],
+    ]);
+    // While checks run the first tree leads; a selected tree always leads its group.
+    expect(groupByStudy(rows, null, false)[1].lead.id).toBe('a1');
+    expect(groupByStudy(rows, 'a3', true)[1].lead.id).toBe('a3');
   });
 });

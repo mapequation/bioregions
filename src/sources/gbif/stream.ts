@@ -121,14 +121,6 @@ export async function planGbif(
   }
 
   const expectedRecords = species.reduce((sum, s) => sum + s.count, 0);
-  const small = species.filter((s) => s.count <= GBIF_MAX_DOCUMENTS);
-  const large = species.filter((s) => s.count > GBIF_MAX_DOCUMENTS);
-  // Splits of large species: leaves are far from full and every split level costs a
-  // count request; ~4 requests per 6000 records matched live runs (Felidae, 2026-10).
-  const largeRequests = large.reduce(
-    (sum, s) => sum + 1 + Math.ceil((4 * s.count) / GBIF_MAX_DOCUMENTS),
-    0,
-  );
   const detail: GbifPlanDetail = {
     species,
     total,
@@ -139,13 +131,35 @@ export async function planGbif(
     query,
     expectedRecords,
     expectedSpecies: species.length,
-    requests: planRequests(small.map(toPart)).length + largeRequests,
+    requests: plannedGbifRequests(species),
     estimatedBytes: expectedRecords * BYTES_PER_RECORD,
     detail,
   };
 }
 
 const toPart = (species: GbifSpecies): Part => ({ species, count: species.count });
+
+/**
+ * Requests still to come for a part too large for one search, at the least: the
+ * fetches its records need (it is split before them, and the split request is
+ * counted when it is sent). Splits often leave cells far from full, so the stream's
+ * total grows past this while it runs (live runs: ~4 requests per 6000 records).
+ */
+export function splitFetchRequests(count: number): number {
+  return Math.ceil(count / GBIF_MAX_DOCUMENTS);
+}
+
+/**
+ * Requests the stream starts out with for these species: the exact packing of the
+ * species that fit one search (`planRequests`, as `streamGbif` packs them), plus a
+ * split and `splitFetchRequests` for each larger one. `streamGbif` reports the same
+ * number as its first `requestsTotal`, which then only grows.
+ */
+export function plannedGbifRequests(species: GbifSpecies[]): number {
+  const small = species.filter((s) => s.count <= GBIF_MAX_DOCUMENTS);
+  const large = species.filter((s) => s.count > GBIF_MAX_DOCUMENTS);
+  return planRequests(small.map(toPart)).length + large.reduce((sum, s) => sum + 1 + splitFetchRequests(s.count), 0);
+}
 
 /**
  * First-fit-decreasing packing of parts (each <= 6000 records) into requests of at
@@ -277,6 +291,13 @@ export async function* streamGbif(
   let truncatedRecords = 0;
   /** Outstanding searches and splits per species, to report `speciesDone`. */
   const openParts = new Map<number, number>();
+  /** Requests sent, and fetches still expected for parts waiting to be split. */
+  let spawned = 0;
+  let splitEstimate = 0;
+  /** `requestsTotal` starts at the plan's count and never shrinks. */
+  const updateTotal = () => {
+    progress.requestsTotal = Math.max(progress.requestsTotal, spawned + splitEstimate);
+  };
   const events: Event[] = [];
   let pending = 0;
   let wake: (() => void) | null = null;
@@ -308,7 +329,8 @@ export async function* streamGbif(
   /** Run one request through the limiter; errors surface through `events`. */
   const spawn = (task: () => Promise<void>) => {
     pending++;
-    progress.requestsTotal++;
+    spawned++;
+    updateTotal();
     limit(async () => {
       if (signal.aborted) {
         throw abortError();
@@ -375,8 +397,10 @@ export async function* streamGbif(
       if (part.count <= GBIF_MAX_DOCUMENTS) {
         fitting.push(part);
       } else if (!part.cell || bboxWidth(part.cell.bbox) >= MIN_CELL_DEGREES * 2) {
+        splitEstimate += splitFetchRequests(part.count);
         splitSpatially(part);
       } else if (part.years !== 'missing' && (!part.years || part.years[0] < part.years[1])) {
+        splitEstimate += splitFetchRequests(part.count);
         splitByYear(part);
       } else {
         const t = truncations.get(part.species.key) ?? {
@@ -416,7 +440,9 @@ export async function* streamGbif(
         child.count = data[`a${i}`]?.documents.total ?? 0;
       });
       progress.requestsDone++;
+      splitEstimate -= splitFetchRequests(part.count);
       schedule(children);
+      updateTotal();
       closePart(part);
     });
   };
@@ -459,7 +485,9 @@ export async function* streamGbif(
         }
       }
       progress.requestsDone++;
+      splitEstimate -= splitFetchRequests(part.count);
       schedule(children);
+      updateTotal();
       closePart(part);
     });
   };

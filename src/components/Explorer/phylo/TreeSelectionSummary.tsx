@@ -19,7 +19,7 @@ function lengthsNote(c: PhyloCandidate): string {
   const units = lengthUnits(c);
   if (c.branchLengths === 'other') {
     return units.short === 'unknown'
-      ? 'Branch lengths are not time (Open Tree records no unit) and are used as relative time.'
+      ? 'Branch-length units are not stated in the study; the lengths are used as relative time.'
       : `Branch lengths are in ${units.long} and are used as relative time.`;
   }
   return `Dated tree: branch lengths are in ${units.long} and are used as given.`;
@@ -29,7 +29,22 @@ function lengthsNote(c: PhyloCandidate): string {
 function tipsWithLengths(tips: number, c: PhyloCandidate): string {
   const units = lengthUnits(c);
   const n = `${fmtInt(tips)} ${tips === 1 ? 'tip' : 'tips'}`;
-  return c.branchLengths === 'none' ? `${n}, ${units.long}` : `${n} with branch lengths in ${units.long}`;
+  if (c.branchLengths === 'none') return `${n}, ${units.long}`;
+  return units.short === 'unknown' ? `${n}, branch-length units not stated` : `${n} with branch lengths in ${units.long}`;
+}
+
+/**
+ * What happens to the dataset species the tree lacks when the network is built
+ * (InfomapStore.createNetwork): at Tree weight 100 % they get no links at all, below
+ * it they keep their occurrence links (weighted 1 − tree weight) but no tree links.
+ */
+function absentEffect(absent: number, treeWeight: number, synthetic: boolean): string {
+  const who = `${fmtInt(absent)} species ${synthetic ? 'not placed in the synthesis' : 'not in this tree'}`;
+  const pct = (x: number) => `${Math.round(x * 100)} %`;
+  if (treeWeight >= 0.9999) {
+    return `At Tree weight ${pct(1)}, the ${who} ${absent === 1 ? 'is' : 'are'} left out of the bioregion network; lower Tree weight in the Infomap settings to keep ${absent === 1 ? 'it' : 'them'} as occurrence-only links.`;
+  }
+  return `At Tree weight ${pct(treeWeight)}, the ${who} ${absent === 1 ? 'keeps' : 'keep'} only ${absent === 1 ? 'its' : 'their'} occurrence links (weight ${pct(1 - treeWeight)}), without tree links.`;
 }
 
 /** Longest name list rendered; the rest is summarised. */
@@ -100,7 +115,7 @@ const Dot = () => (
 
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
-  const { explorerStore, phyloStore } = useStore();
+  const { explorerStore, phyloStore, infomapStore } = useStore();
   const { selectedId, selection, loadState, loadedTree, selectionReason, selectionNotInData } = phyloStore;
   // The open name list belongs to one tree: picking another closes it.
   const [open, setOpen] = useState<{ id: string | null; list: 'absent' | 'extra' } | null>(null);
@@ -115,6 +130,7 @@ export default observer(function TreeSelectionSummary() {
   const breakdown = phyloStore.absentBreakdown;
   const awaiting = phyloStore.awaitingBestTree;
   const coverage = phyloStore.coverageProgress;
+  const searching = phyloStore.searchingTrees;
 
   // Trade-off between a dated tree and the synthesis (more tips, relative ages only).
   const synthetic = phyloStore.syntheticTree;
@@ -140,9 +156,16 @@ export default observer(function TreeSelectionSummary() {
       overflowY="auto"
     >
       {!candidate ? (
-        <Flex align="center" minH="72px" textStyle="sm" color="fg.muted">
-          Pick a tree above to see how many of your species it keeps.
-        </Flex>
+        phyloStore.checkingCoverage ? (
+          <Flex align="center" gap={2} minH="72px" textStyle="sm" color="fg.muted" aria-live="polite">
+            <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" flexShrink={0} />
+            Placing your species on the Open Tree synthesis…
+          </Flex>
+        ) : (
+          <Flex align="center" minH="72px" textStyle="sm" color="fg.muted">
+            Pick a tree above to see how many of your species it keeps.
+          </Flex>
+        )
       ) : (
         <Stack gap={2.5}>
           <Flex align="baseline" gap={2} minW={0}>
@@ -228,6 +251,11 @@ export default observer(function TreeSelectionSummary() {
                   )}
                 </HStack>
               </HStack>
+              {selection.absentFromTree.length > 0 && (
+                <Text textStyle="xs" color="fg.muted" mt={1} fontVariantNumeric="tabular-nums" data-testid="absent-effect">
+                  {absentEffect(selection.absentFromTree.length, infomapStore.treeWeightBalance, candidate.kind === 'synthetic')}
+                </Text>
+              )}
               {openList === 'absent' && (
                 <Box
                   id="phylo-absent-list"
@@ -364,7 +392,10 @@ export default observer(function TreeSelectionSummary() {
               <HStack gap={1.5} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" me="auto" minW={0}>
                 <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" flexShrink={0} />
                 <Text>
-                  Checking coverage {fmtInt(coverage.done)}/{fmtInt(coverage.total)} · a dated tree may fit better
+                  {searching
+                    ? 'Searching Open Tree for published trees'
+                    : `Checking coverage ${fmtInt(coverage.done)}/${fmtInt(coverage.total)}`}{' '}
+                  · a dated tree may fit better
                 </Text>
               </HStack>
               <Button

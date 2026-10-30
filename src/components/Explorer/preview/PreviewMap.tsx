@@ -23,14 +23,21 @@ import { explorerUi } from '../explorerUi';
 import { fmtInt } from '../format';
 import {
   alphaExtent,
-  decadeSteps,
+  bboxRings,
   chooseZoom,
+  decadeSteps,
   dragBbox,
+  fitPolarView,
   fitView,
   legendLabel,
   type MapView,
   mapNote,
-  pxToLonLat,
+  mapProjection,
+  type PolarSrs,
+  polarDragBbox,
+  polarSrsFor,
+  polarTilesForView,
+  ringsPath,
   tilesForView,
   unionBbox,
   unwrapBbox,
@@ -51,6 +58,24 @@ const GBIF_HEX_RAMP = {
 const OBIS_FILL = 'var(--chakra-colors-teal-solid)';
 const OBIS_MIN_OPACITY = 0.18;
 const OBIS_MAX_OPACITY = 0.8;
+/** Opacity steps of the OBIS grid (one SVG path each). */
+const OBIS_STEPS = 12;
+/** Px kept free at the top of an area view for the map controls. */
+const CONTROLS_INSET = 36;
+const POLAR_BASEMAP = { 'EPSG:3575': '3575', 'EPSG:3031': '3031' } as const;
+
+/** GBIF basemap tile in a polar projection (same grid as the polar density tiles). */
+function polarBasemapUrl(srs: PolarSrs, t: { z: number; x: number; y: number }, scale: 1 | 2, dark: boolean): string {
+  return `https://tile.gbif.org/${POLAR_BASEMAP[srs]}/omt/${t.z}/${t.x}/${t.y}@${scale}x.png?style=${dark ? 'gbif-dark' : 'gbif-light'}`;
+}
+
+/** A plate-carrée density tile URL re-targeted to a polar projection (GBIF's `srs` parameter). */
+function polarUrl(url: string, srs: PolarSrs | null): string {
+  if (!srs) return url;
+  const u = new URL(url);
+  u.searchParams.set('srs', srs);
+  return u.toString();
+}
 const NO_CELLS: ObisCell[] = [];
 const MAX_HEIGHT = 'calc((100dvh - 132px) * 0.42)';
 /** Hexagon size on screen (CSS px) for the density layer of an area view. */
@@ -146,23 +171,26 @@ function wktRings(wkt: string): [number, number][][] {
   return rings;
 }
 
-function areaPath(area: AreaFilter): string | null {
-  const ring = (pts: [number, number][]) => `M${pts.map(([x, y]) => `${x},${-y}`).join('L')}Z`;
+/**
+ * Lon/lat rings of the area outline (null when it has none, e.g. countries). A bbox across
+ * the antimeridian stays unwrapped; in a polar view a full-longitude band is its parallels.
+ */
+function areaRings(area: AreaFilter, polar: boolean): [number, number][][] | null {
   if (area.kind === 'bbox') {
-    // Unwrapped across the antimeridian, plus a copy one world west for the world view.
+    if (polar) return bboxRings(area.bbox);
     const [w, s, e, n] = unwrapBbox(area.bbox);
-    const rect = (dx: number) =>
-      ring([
-        [w + dx, s],
-        [e + dx, s],
-        [e + dx, n],
-        [w + dx, n],
-      ]);
-    return e > 180 ? rect(0) + rect(-360) : rect(0);
+    return [
+      [
+        [w, s],
+        [e, s],
+        [e, n],
+        [w, n],
+      ],
+    ];
   }
   if (area.kind === 'wkt') {
     const rings = wktRings(area.wkt);
-    return rings.length ? rings.map(ring).join('') : null;
+    return rings.length ? rings : null;
   }
   return null;
 }
@@ -176,7 +204,8 @@ function useSize<T extends HTMLElement>(): [React.RefObject<T | null>, { width: 
     const el = ref.current;
     if (!el) return;
     const update = () => {
-      const r = el.getBoundingClientRect();
+      // Inside the border: the tiles and overlays are laid out in the padding box.
+      const r = { width: el.clientWidth, height: el.clientHeight };
       setSize((s) =>
         Math.abs(s.width - r.width) < 0.5 && Math.abs(s.height - r.height) < 0.5
           ? s
@@ -309,16 +338,26 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
   const bbox = useAreaBbox(query.area, query);
   const hasArea = query.area.kind !== 'world';
-  const view: MapView = useMemo(
-    () => fitView(fit === 'world' || !hasArea ? null : bbox, size.width, size.height),
-    [fit, hasArea, bbox, size.width, size.height],
-  );
-  const ready = size.width > 0 && size.height > 0;
-  const tiles = ready ? tilesForView(view) : [];
   // Fitted to an area, density tiles come one zoom finer and only where the area is,
   // so records read as fine pixels rather than a sparse dot grid, at no extra requests.
   const zoomedToArea = fit === 'area' && hasArea && bbox != null;
-  const densityTiles = !ready ? [] : zoomedToArea ? tilesForView(view, chooseZoom(view.scale), bbox) : tiles;
+  // Circumpolar areas switch to GBIF's polar tiles; plate carrée would show a thin strip.
+  const srs = zoomedToArea ? polarSrsFor(bbox) : null;
+  const areaKeyRings = JSON.stringify(areaRings(query.area, srs != null));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `areaKeyRings` stands for the rings
+  const rings = useMemo(() => areaRings(query.area, srs != null), [areaKeyRings]);
+  const inset = zoomedToArea && !faint ? CONTROLS_INSET : 0;
+  const view: MapView = useMemo(
+    () =>
+      srs && bbox
+        ? fitPolarView(srs, rings ?? bboxRings(bbox), size.width, size.height, inset)
+        : fitView(fit === 'world' || !hasArea ? null : bbox, size.width, size.height, inset),
+    [srs, rings, fit, hasArea, bbox, size.width, size.height, inset],
+  );
+  const proj = useMemo(() => mapProjection(view, srs), [view, srs]);
+  const ready = size.width > 0 && size.height > 0;
+  const tiles = !ready ? [] : srs ? polarTilesForView(srs, view) : tilesForView(view);
+  const densityTiles = !ready ? [] : zoomedToArea && !srs ? tilesForView(view, chooseZoom(view.scale), bbox) : tiles;
   const tileScale: 1 | 2 = typeof window !== 'undefined' && window.devicePixelRatio > 1.25 ? 2 : 1;
 
   // GBIF density layer: only when GBIF is on, supports the query and knows a taxon.
@@ -327,14 +366,17 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   const coverage = gbifTileFilterCoverage(query);
   const densityUrls = showGbif
     ? densityTiles.map((t) =>
-        gbifDensityTileUrl(query, {
-          z: t.z,
-          x: t.x,
-          y: t.y,
-          scale: tileScale,
-          dark,
-          ...(zoomedToArea && { bin: 'hex' as const, hexPerTile: hexPerTile(t.size) }),
-        }),
+        polarUrl(
+          gbifDensityTileUrl(query, {
+            z: t.z,
+            x: t.x,
+            y: t.y,
+            scale: tileScale,
+            dark,
+            ...(zoomedToArea && { bin: 'hex' as const, hexPerTile: hexPerTile(t.size) }),
+          }),
+          srs,
+        ),
       )
     : [];
 
@@ -350,6 +392,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
   // Rectangle draw (Esc cancels the drag, a second Esc leaves draw mode).
   const drawing = explorerUi.drawing;
+  // Drag corners in CSS px of the map frame.
   const [drag, setDrag] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
   const dragRef = useRef(drag);
   dragRef.current = drag;
@@ -373,7 +416,15 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
   const localPx = (e: React.PointerEvent): [number, number] => {
     const r = e.currentTarget.getBoundingClientRect();
-    return pxToLonLat(view, e.clientX - r.left, e.clientY - r.top);
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+  /** The lon/lat box between two px corners (wrapped into [-180, 180]). */
+  const dragArea = (a: [number, number], b: [number, number]): BBox | null => {
+    const la = proj.fromPx(a[0], a[1]);
+    const lb = proj.fromPx(b[0], b[1]);
+    if (srs) return polarDragBbox(la, lb);
+    const box = dragBbox(la, lb);
+    return box ? wrapBbox(box) : null;
   };
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!drawing || e.button !== 0) return;
@@ -386,35 +437,80 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   };
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!drag) return;
-    const box = dragBbox(drag.a, localPx(e));
+    const box = dragArea(drag.a, localPx(e));
     setDrag(null);
     if (box) {
-      explorerStore.setArea({ kind: 'bbox', bbox: wrapBbox(box) });
+      explorerStore.setArea({ kind: 'bbox', bbox: box });
       explorerUi.setDrawing(false);
     }
   };
 
-  const outline = areaPath(query.area);
-  const vb = `${view.west} ${-view.north} ${view.east - view.west} ${view.north - view.south}`;
-  const outer = `M${view.west - 1},${-view.north - 1}H${view.east + 1}V${-view.south + 1}H${view.west - 1}Z`;
+  // Overlays are drawn in CSS px through the view's projection (plate carrée or polar).
+  const outline = useMemo(() => {
+    if (!rings) return null;
+    const d = ringsPath(proj, rings);
+    // Plate carrée across the antimeridian: repeat the outline one world west for the world view.
+    if (!srs && rings.some((r) => r.some(([lon]) => lon > 180))) {
+      return d + ringsPath(proj, rings.map((r) => r.map(([lon, lat]): [number, number] => [lon - 360, lat])));
+    }
+    return d;
+  }, [rings, proj, srs]);
+  const outer = `M-2,-2H${size.width + 2}V${size.height + 2}H-2Z`;
   const logMax = Math.log10(Math.max(10, obis.max));
   const obisOpacity = (n: number) =>
     OBIS_MIN_OPACITY + (OBIS_MAX_OPACITY - OBIS_MIN_OPACITY) * Math.min(1, Math.log10(Math.max(1, n)) / logMax);
-  // Thousands of cells: build them once per grid, not on every tile load.
+  // Thousands of cells: one path per opacity step, rebuilt only when the grid or view changes.
   const obisLayer = useMemo(() => {
     const lm = Math.log10(Math.max(10, obis.max));
-    return obisCells.map((c) => (
-      <rect
-        key={`${c.w},${c.n}`}
-        x={c.w}
-        y={-c.n}
-        width={c.e - c.w}
-        height={c.n - c.s}
-        fill={OBIS_FILL}
-        fillOpacity={OBIS_MIN_OPACITY + (OBIS_MAX_OPACITY - OBIS_MIN_OPACITY) * Math.min(1, Math.log10(Math.max(1, c.count)) / lm)}
-      />
-    ));
-  }, [obisCells, obis.max]);
+    const paths: string[][] = Array.from({ length: OBIS_STEPS }, () => []);
+    const shifts = !srs && view.east > 180 ? [0, 360] : [0];
+    for (const c of obisCells) {
+      const level = Math.min(OBIS_STEPS - 1, Math.round((Math.min(1, Math.log10(Math.max(1, c.count)) / lm) * (OBIS_STEPS - 1))));
+      for (const dx of shifts) {
+        const corners: [number, number][] = [
+          [c.w + dx, c.s],
+          [c.e + dx, c.s],
+          [c.e + dx, c.n],
+          [c.w + dx, c.n],
+        ];
+        paths[level].push(`M${corners.map(([lon, lat]) => proj.toPx(lon, lat).map((v) => v.toFixed(1)).join(',')).join('L')}Z`);
+      }
+    }
+    return paths.map((d, i) =>
+      d.length ? (
+        <path
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed opacity steps
+          key={i}
+          d={d.join('')}
+          fill={OBIS_FILL}
+          fillOpacity={OBIS_MIN_OPACITY + ((OBIS_MAX_OPACITY - OBIS_MIN_OPACITY) * i) / (OBIS_STEPS - 1)}
+        />
+      ) : null,
+    );
+  }, [obisCells, obis.max, proj, srs, view.east]);
+  // The density layer is clipped to the area outline; the basemap outside it is dimmed.
+  const densityClip = outline && fit === 'area' ? `path(evenodd, '${outline}')` : undefined;
+  const dragPath = useMemo(() => {
+    if (!drag) return null;
+    if (!srs) {
+      const [x0, x1] = [Math.min(drag.a[0], drag.b[0]), Math.max(drag.a[0], drag.b[0])];
+      const [y0, y1] = [Math.min(drag.a[1], drag.b[1]), Math.max(drag.a[1], drag.b[1])];
+      return `M${x0},${y0}H${x1}V${y1}H${x0}Z`;
+    }
+    const a = proj.fromPx(drag.a[0], drag.a[1]);
+    const b = proj.fromPx(drag.b[0], drag.b[1]);
+    let lon = b[0];
+    while (lon - a[0] > 180) lon -= 360;
+    while (a[0] - lon > 180) lon += 360;
+    return ringsPath(proj, [
+      [
+        [a[0], a[1]],
+        [lon, a[1]],
+        [lon, b[1]],
+        [a[0], b[1]],
+      ],
+    ]);
+  }, [drag, proj, srs]);
 
   const updating = (densityPending || (showObis && obis.loading)) && !faint;
   const summary = [
@@ -465,7 +561,11 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           {tiles.map((t) => (
             <img
               key={`b-${t.z}-${t.col}-${t.y}`}
-              src={gbifBasemapUrl({ z: t.z, x: t.x, y: t.y, scale: tileScale, dark })}
+              src={
+                srs
+                  ? polarBasemapUrl(srs, t, tileScale, dark)
+                  : gbifBasemapUrl({ z: t.z, x: t.x, y: t.y, scale: tileScale, dark })
+              }
               alt=""
               draggable={false}
               style={{
@@ -479,6 +579,7 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
               }}
             />
           ))}
+          <Box position="absolute" inset={0} style={{ clipPath: densityClip }}>
           {densityTiles.map((t, i) => {
             const blob = tileBlobs.get(densityUrls[i] ?? '');
             if (!blob) return null;
@@ -500,11 +601,11 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
               />
             );
           })}
+          </Box>
           {ready && (
             <Box asChild position="absolute" inset={0} w="full" h="full" color="fg">
               <svg
-                viewBox={vb}
-                preserveAspectRatio="none"
+                viewBox={`0 0 ${size.width} ${size.height}`}
                 aria-hidden="true"
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
@@ -512,37 +613,21 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                 onPointerCancel={() => setDrag(null)}
                 style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: drawing ? 'none' : 'auto' }}
               >
-                {obisLayer}
-                {/* Across the antimeridian the view passes 180°: repeat the grid one world east. */}
-                {view.east > 180 && obisLayer.length > 0 && <g transform="translate(360 0)">{obisLayer}</g>}
                 {outline && fit === 'area' && (
-                  <>
-                    <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.4} fillRule="evenodd" />
-                    <path
-                      d={outline}
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.5}
-                      vectorEffect="non-scaling-stroke"
-                      strokeLinejoin="round"
-                    />
-                  </>
+                  <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.45} fillRule="evenodd" />
                 )}
-                {outline && fit === 'world' && (
-                  <path d={outline} fill="none" stroke="currentColor" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+                {obisLayer}
+                {outline && (
+                  <path d={outline} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
                 )}
-                {drag && (
-                  <rect
-                    x={Math.min(drag.a[0], drag.b[0])}
-                    y={-Math.max(drag.a[1], drag.b[1])}
-                    width={Math.abs(drag.b[0] - drag.a[0])}
-                    height={Math.abs(drag.b[1] - drag.a[1])}
+                {dragPath && (
+                  <path
+                    d={dragPath}
                     fill="var(--chakra-colors-brand-solid)"
                     fillOpacity={0.15}
                     stroke="currentColor"
                     strokeWidth={1.5}
                     strokeDasharray="4 3"
-                    vectorEffect="non-scaling-stroke"
                   />
                 )}
               </svg>

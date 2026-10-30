@@ -72,9 +72,29 @@ describe('RecordCleaner', () => {
     expect(c.funnel).toEqual({
       received: 8,
       accepted: 2,
-      dropped: { noSpecies: 1, invalidCoordinates: 2, zeroCoordinates: 1, outsideArea: 1, duplicate: 1, lowCount: 0 },
+      dropped: {
+        noSpecies: 1,
+        invalidCoordinates: 2,
+        zeroCoordinates: 1,
+        outsideArea: 1,
+        duplicate: 0,
+        crossSource: 1,
+        lowCount: 0,
+      },
       bySource: { gbif: { received: 6, accepted: 1 }, obis: { received: 2, accepted: 1 } },
     });
+  });
+
+  it('tells GBIF∩OBIS overlap apart from same-source duplicates', () => {
+    const c = new RecordCleaner({ dedupe: 'exact' });
+    c.accept([rec('Abra alba', 1, 1), rec('Abra alba', 1, 1), rec('Abra alba', 2, 2, 'obis')]);
+    c.accept([rec('Abra alba', 1, 1, 'obis'), rec('Abra alba', 2, 2, 'obis'), rec('Abra alba', 2, 2)]);
+    // gbif(1,1) dup within GBIF; obis(1,1) and gbif(2,2) first seen from the other source.
+    expect(c.funnel.dropped).toMatchObject({ duplicate: 2, crossSource: 2 });
+    expect(c.funnel.accepted).toBe(2);
+    const cell = new RecordCleaner({ dedupe: 'cell' });
+    cell.accept([rec('Abra alba', 10.001, 5.001), rec('Abra alba', 10.009, 5.009, 'obis')]);
+    expect(cell.funnel.dropped).toMatchObject({ duplicate: 0, crossSource: 1 });
   });
 
   it('dedupes per cell, never with none, and honours antimeridian boxes', () => {

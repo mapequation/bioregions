@@ -452,6 +452,10 @@ export default class SpeciesStore {
    * With `clear`, the previous data is cleared lazily, on the first batch that holds a
    * record. When no record arrives at all, the previous dataset is left untouched and
    * neither `postLoad` nor Infomap runs; the result reports `received: 0`.
+   *
+   * `skipBioregions` is asked once the stream has ended (records arrived, not discarded):
+   * when it returns true the records are binned and kept on the map's record layer, but
+   * Infomap does not run (stale bioregions are cleared); `runBioregions()` runs it later.
    */
   async loadRecords(
     batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
@@ -459,7 +463,13 @@ export default class SpeciesStore {
       name,
       clear = true,
       controller = new AbortController(),
-    }: { name: string; clear?: boolean; controller?: AbortController },
+      skipBioregions,
+    }: {
+      name: string;
+      clear?: boolean;
+      controller?: AbortController;
+      skipBioregions?: () => boolean;
+    },
   ): Promise<LoadRecordsResult> {
     // Restored when nothing arrives, so a dataset that is kept stays marked as loaded.
     const wasLoaded = this.loaded;
@@ -525,12 +535,40 @@ export default class SpeciesStore {
       }
       return { received };
     }
-    await this.postLoad();
+    if (skipBioregions?.()) {
+      this.finishWithoutBioregions();
+    } else {
+      await this.postLoad();
+    }
     if (failure) {
       throw failure;
     }
     return { received };
   }
+
+  /** Like `postLoad` without Infomap: bin the records and keep the record layer on the map. */
+  finishWithoutBioregions = action(() => {
+    this.loadController = null;
+    this.loadEnd();
+    this.updateCollection();
+    this.setIsLoaded();
+    const { mapStore, infomapStore } = this.rootStore;
+    // Bioregions of an earlier dataset no longer describe these records.
+    infomapStore.clearData();
+    mapStore.setRenderType('records');
+    mapStore.render();
+  });
+
+  /** Run Infomap on the loaded records (after `skipBioregions`) and show the bioregions. */
+  runBioregions = action(async () => {
+    const { mapStore, infomapStore } = this.rootStore;
+    if (!this.loaded) return;
+    mapStore.setRenderType('heatmap');
+    mapStore.render();
+    await infomapStore.run();
+    mapStore.setRenderType('bioregions');
+    mapStore.render();
+  });
 
   /** Stop the running load; it finishes with the records received so far. */
   cancelLoad = action(() => {

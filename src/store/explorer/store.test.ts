@@ -113,7 +113,13 @@ function setup() {
     collection: { features: [] as unknown[] },
     loaded: false,
     numRecords: 0,
-    loadRecords: vi.fn(async (iter: AsyncIterable<{ name: string }[]>, opts: { name: string; controller: AbortController }) => {
+    skipped: null as boolean | null,
+    runBioregions: vi.fn(async () => {}),
+    loadRecords: vi.fn(
+      async (
+        iter: AsyncIterable<{ name: string }[]>,
+        opts: { name: string; controller: AbortController; skipBioregions?: () => boolean },
+      ) => {
       loadedName = opts.name;
       let received = 0;
       for await (const b of iter) {
@@ -122,14 +128,16 @@ function setup() {
         received += b.length;
       }
       if (received > 0) speciesStore.loaded = true;
+      if (received > 0 && opts.controller.signal.reason !== 'discard') speciesStore.skipped = opts.skipBioregions?.() ?? false;
       return { received };
-    }),
+      },
+    ),
   };
   const rootStore = { clearData: vi.fn(), speciesStore } as unknown as RootStore;
   const store = new ExplorerStore(rootStore);
   store.query = structuredClone(QUERY);
   vi.mocked(planSource).mockImplementation(async (id, q) => (id === 'gbif' ? gbifPlan(q) : obisPlan(q)));
-  return { store, rootStore, consumed, name: () => loadedName };
+  return { store, rootStore, speciesStore, consumed, name: () => loadedName };
 }
 
 describe('ExplorerStore.load', () => {
@@ -149,7 +157,8 @@ describe('ExplorerStore.load', () => {
     expect(consumed.flat()).toHaveLength(3);
     expect(store.job?.state).toBe('done');
     expect(store.job?.funnel).toMatchObject({ received: 5, accepted: 3 });
-    expect(store.job?.funnel.dropped.duplicate).toBe(2);
+    // One GBIF record twice (same source), one also in OBIS (cross-source).
+    expect(store.job?.funnel.dropped).toMatchObject({ duplicate: 1, crossSource: 1 });
     expect(store.job?.perSource.map((p) => p.state)).toEqual(['done', 'done']);
     const last = store.lastLoad;
     expect(last?.partial).toBeNull();
@@ -161,12 +170,24 @@ describe('ExplorerStore.load', () => {
     expect(store.datasetCsv).toBe('datasetKey,count\nd1,1\nd2,1');
     // One derivation chain: plans -> duplicates removed while loading -> loaded.
     expect(store.loadedMatchesQuery).toBe(true);
-    expect(store.countStory).toMatchObject({ speciesLevel: store.estimate?.records, duplicates: 2, loaded: 3 });
-    expect(store.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(2);
-    expect(last?.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(2);
+    expect(store.countStory).toMatchObject({ speciesLevel: store.estimate?.records, duplicates: 2, crossSource: 1, loaded: 3 });
+    expect(store.ledger.find((r) => r.id === 'duplicates')).toMatchObject({ impact: 1, label: 'Duplicates (same species within ~11 m)' });
+    expect(store.ledger.find((r) => r.id === 'crossSource')).toMatchObject({
+      impact: 1,
+      toggleable: false,
+      label: 'Same record in GBIF and OBIS',
+    });
+    expect(last?.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(1);
+    expect(last?.ledger.find((r) => r.id === 'crossSource')?.impact).toBe(1);
+    expect(store.dedupeLabel).toBe('same species within ~11 m');
+    expect(store.methodsText).toContain('1 duplicates of the same species within about 11 m in one source, 1 records already received');
+    expect(store.insightsScope).toEqual({ kind: 'loaded', records: 3, label: 'For the query you loaded · 3 records loaded' });
     store.setYears([1980, 2025]);
     expect(store.loadedMatchesQuery).toBe(false);
     expect(store.countStory).toMatchObject({ duplicates: null, loaded: null });
+    expect(store.insightsScope.kind).toBe('query');
+    store.setQuality({ dedupe: 'cell' });
+    expect(store.dedupeLabel).toBe('same species in one ~1 km cell');
   });
 
   it('names only sources that contributed records', async () => {
@@ -195,7 +216,7 @@ describe('ExplorerStore.load', () => {
     });
     vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
     vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], gate));
-    const { store, rootStore } = setup();
+    const { store, rootStore, speciesStore } = setup();
     const running = store.load();
     await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
     store.cancel('keep');
@@ -203,13 +224,112 @@ describe('ExplorerStore.load', () => {
     await running;
     expect(store.job?.state).toBe('cancelled');
     // GBIF fetched 1 of 3, OBIS 0 of 2; the plans name 2 species, 1 arrived.
-    expect(store.lastLoad?.partial).toEqual({ planned: 5, accepted: 1, speciesLoaded: 1, speciesPlanned: 2, notReceived: 4 });
+    expect(store.lastLoad?.partial).toEqual({
+      planned: 5,
+      accepted: 1,
+      speciesLoaded: 1,
+      speciesPlanned: 2,
+      notReceived: 4,
+      coverage: 0.5,
+    });
+    // Half the species arrived: bioregions run as usual.
+    expect(store.lastLoad?.bioregionsSkipped).toBeUndefined();
+    expect(speciesStore.skipped).toBe(false);
+    expect(store.insightsScope).toMatchObject({ kind: 'partial', records: 1 });
+    expect(store.insightsScope.label).toBe('For the partial load · 1 of ~5 records loaded (1 of 2 species)');
     expect(store.lastLoad?.accepted).toBe(1);
     expect(store.lastLoad?.emptyReason).toBeUndefined();
     expect(store.methodsText).toContain(
       'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; because records stream species by species',
     );
     expect(rootStore.clearData).not.toHaveBeenCalled();
+  });
+
+  it('keeps a load stopped with few species but skips bioregions until asked', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((r) => {
+      open = r;
+    });
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], gate));
+    const { store, speciesStore } = setup();
+    vi.mocked(planSource).mockImplementation(async (id, q) => {
+      if (id === 'gbif') return gbifPlan(q);
+      const plan = obisPlan(q);
+      return {
+        ...plan,
+        speciesCounts: [...(plan.speciesCounts ?? []), { key: '12', label: 'Saguinus midas', count: 1 }],
+      };
+    });
+    const running = store.load();
+    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
+    store.cancel('keep');
+    open();
+    await running;
+    // 1 of 3 planned species: below half, so Infomap does not run.
+    expect(store.lastLoad?.partial?.coverage).toBeCloseTo(1 / 3);
+    expect(store.lastLoad?.bioregionsSkipped).toBe(true);
+    expect(speciesStore.skipped).toBe(true);
+    expect(store.methodsText).toContain('Species coverage is 33 %; bioregions were not computed for this incomplete dataset.');
+    await store.runBioregionsAnyway();
+    expect(speciesStore.runBioregions).toHaveBeenCalledTimes(1);
+    expect(store.lastLoad?.bioregionsSkipped).toBeUndefined();
+    expect(store.methodsText).toContain('Species coverage is 33 %.');
+  });
+
+  it('reports live species coverage and never shrinks the request total', async () => {
+    vi.mocked(streamObis).mockImplementation(batches('obis', []));
+    vi.mocked(streamGbif).mockImplementation(async function* () {
+      const progress = { fetched: 1, expected: 3, requestsDone: 1, requestsTotal: 3, bytes: 1, speciesDone: 0, speciesTotal: 2 };
+      yield { source: 'gbif' as const, records: [record('Callithrix jacchus', -40, -10, 'gbif', 'd1')], progress };
+      yield {
+        source: 'gbif' as const,
+        records: [record('Callithrix jacchus', -41, -10, 'gbif', 'd1')],
+        progress: { ...progress, fetched: 2, requestsDone: 2, requestsTotal: 2, speciesDone: 1 },
+      };
+      return { fetched: 2, truncated: 0, requests: 2, reachedCap: false };
+    });
+    const { store } = setup();
+    await store.load();
+    const gbif = store.job?.perSource.find((p) => p.source === 'gbif');
+    expect(gbif?.requestsTotal).toBe(3);
+    expect(store.job?.speciesCoverage).toBe(0.5);
+  });
+
+  it('cites the data on screen after an empty load kept it', async () => {
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', -40, -10, 'gbif', 'd1')]]));
+    vi.mocked(streamObis).mockImplementation(batches('obis', []));
+    const { store } = setup();
+    await store.load();
+    const methods = store.methodsText;
+    const csv = store.datasetCsv;
+    const ledgerCsv = store.ledgerCsv;
+    vi.mocked(streamGbif).mockImplementation(batches('gbif', []));
+    store.setYears([1980, 2025]);
+    await store.load();
+    expect(store.lastLoad).toMatchObject({ accepted: 0, previousKept: true });
+    expect(store.methodsText).toBe(methods);
+    expect(store.methodsText).toContain('recorded 1970–2025');
+    expect(store.datasetCsv).toBe(csv);
+    expect(store.ledgerCsv).toBe(ledgerCsv);
+    expect(store.obisCitation).toBe(store.obisCitation);
+  });
+
+  it('lists the plan species once and counts entries without a usable name', async () => {
+    const { store } = setup();
+    vi.mocked(planSource).mockImplementation(async (id, q) => {
+      if (id === 'obis') return obisPlan(q);
+      // Two GBIF species keys with one name (Callithrix geoffroyi has two), and a hybrid.
+      const species = [
+        { key: 1, name: 'Callithrix jacchus', count: 3 },
+        { key: 2, name: 'Callithrix jacchus', count: 1 },
+        { key: 3, name: 'Callithrix jacchus × penicillata', count: 1 },
+      ];
+      return { ...gbifPlan(q), detail: { species, total: 5 } };
+    });
+    const names = await store.querySpecies();
+    expect(names).toEqual(['Callithrix jacchus', 'Saguinus oedipus']);
+    expect(store.speciesWithoutName).toBe(1);
   });
 
   it('clears the data on discard and keeps no provenance', async () => {

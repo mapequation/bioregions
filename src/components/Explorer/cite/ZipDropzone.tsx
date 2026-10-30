@@ -1,9 +1,22 @@
-import { Alert, Box, Button, Flex, Grid, HStack, Progress, Text } from '@chakra-ui/react';
+import { Alert, Box, Button, Flex, Grid, HStack, Link, Progress, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { LuFileArchive } from 'react-icons/lu';
+import { LuExternalLink, LuFileArchive } from 'react-icons/lu';
 import { useStore } from '../../../store';
 import { FileUploadDropzone, FileUploadRoot } from '../../ui/file-upload';
+import type { ZipImport } from '../../../store/explorer/types';
 import { fmtInt, fmtPct } from '../format';
+
+/** Fields the store adds to a ready zip import (optional until every store path sets them). */
+type ZipDetails = ZipImport & {
+  downloadKey?: string;
+  doi?: string;
+  queryMatch?: 'match' | 'mismatch' | 'unknown';
+  downloadQueryText?: string;
+  streamGbifRecords?: number | null;
+  canReplace?: boolean;
+  canCiteDoi?: boolean;
+  note?: string;
+};
 
 function Figure({ label, value, emphasis }: { label: string; value: number | null; emphasis?: boolean }) {
   return (
@@ -27,7 +40,8 @@ function Figure({ label, value, emphasis }: { label: string; value: number | nul
 export default observer(function ZipDropzone() {
   const { explorerStore } = useStore();
   const zip = explorerStore.zipImport;
-  const streamed = explorerStore.lastLoad?.funnel.accepted ?? null;
+  const lastLoad = explorerStore.lastLoad;
+  const streamed = lastLoad?.funnel.accepted ?? null;
 
   if (zip?.state === 'parsing') {
     return (
@@ -59,39 +73,109 @@ export default observer(function ZipDropzone() {
   }
 
   if (zip?.state === 'ready' && zip.funnel) {
+    const z = zip as ZipDetails;
     const received = zip.funnel.received;
     const accepted = zip.funnel.accepted;
-    const diff = streamed != null ? accepted - streamed : null;
+    const mismatch = z.queryMatch === 'mismatch';
+    // Compare with the GBIF part of the stream only: OBIS records are not in a GBIF download.
+    const gbifStreamed = z.streamGbifRecords ?? lastLoad?.funnel.bySource.gbif?.accepted ?? null;
+    const obisStreamed = lastLoad?.funnel.bySource.obis?.accepted ?? 0;
+    const hasStream = lastLoad != null;
+    const diff = gbifStreamed != null ? accepted - gbifStreamed : null;
+    const canReplace = !mismatch && accepted > 0 && (z.canReplace ?? true);
+    const canCite = !mismatch && hasStream && (z.canCiteDoi ?? true);
+    const obisNote = obisStreamed > 0 ? '; OBIS records are kept' : '';
+    let comparison: string | null = null;
+    if (!mismatch && diff != null && gbifStreamed != null && gbifStreamed > 0) {
+      const vs = `${fmtInt(gbifStreamed)} GBIF records streamed${obisNote}`;
+      if (diff === 0) comparison = `Same count as the ${vs}.`;
+      else {
+        const cause =
+          z.queryMatch === 'match'
+            ? ' GBIF changed between the two snapshots.'
+            : ' The download may use another snapshot or query.';
+        comparison = `The zip has ${fmtInt(Math.abs(diff))} ${diff > 0 ? 'more' : 'fewer'} records (${fmtPct(
+          Math.abs(diff) / gbifStreamed,
+        )}) than the ${vs}.${cause}`;
+      }
+    }
     return (
       <Box data-testid="zip-dropzone" borderWidth="1px" borderColor="border" rounded="md" px={4} py={3.5}>
         <HStack gap={2} fontSize="sm" mb={3} minW={0}>
           <LuFileArchive aria-hidden />
-          <Text truncate fontWeight="medium" title={zip.fileName}>
+          <Text truncate fontWeight="medium" title={zip.fileName} minW={0}>
             {zip.fileName}
           </Text>
+          {z.downloadKey && (
+            <Text as="span" fontSize="xs" color="fg.muted" flexShrink={0} fontVariantNumeric="tabular-nums">
+              key {z.downloadKey}
+            </Text>
+          )}
         </HStack>
+        {mismatch && (
+          <Alert.Root status="error" size="sm" variant="subtle" mb={3} role="alert" data-testid="zip-mismatch">
+            <Alert.Indicator />
+            <Alert.Content minW={0}>
+              <Alert.Title>This download is for a different query</Alert.Title>
+              <Alert.Description wordBreak="break-word">
+                {z.downloadQueryText ?? 'Its query does not match the one loaded here.'}
+              </Alert.Description>
+            </Alert.Content>
+          </Alert.Root>
+        )}
         <Text srOnly>
           Zip: {fmtInt(received)} received, {fmtInt(accepted)} accepted
-          {streamed != null ? ` (stream: ${fmtInt(streamed)})` : ''}
+          {gbifStreamed != null ? ` (GBIF records streamed: ${fmtInt(gbifStreamed)})` : ''}
         </Text>
         <Grid templateColumns="repeat(3, minmax(0, 1fr))" gap={4} aria-hidden>
           <Figure label="Zip received" value={received} />
           <Figure label="Zip accepted" value={accepted} emphasis />
-          <Figure label="Streamed (loaded)" value={streamed} />
+          <Figure label="GBIF streamed" value={hasStream ? gbifStreamed : null} />
         </Grid>
-        {diff != null && streamed != null && streamed > 0 && (
-          <Text fontSize="xs" color="fg.muted" mt={2} fontVariantNumeric="tabular-nums">
-            {diff === 0
-              ? 'Identical record counts.'
-              : `The zip has ${fmtInt(Math.abs(diff))} ${diff > 0 ? 'more' : 'fewer'} records (${fmtPct(Math.abs(diff) / streamed)}) than the stream: GBIF changed between the two snapshots.`}
+        {comparison && (
+          <Text fontSize="xs" color="fg.muted" mt={2} fontVariantNumeric="tabular-nums" data-testid="zip-comparison">
+            {comparison}
+          </Text>
+        )}
+        {!mismatch && accepted === 0 && (
+          <Text fontSize="xs" color="fg.warning" mt={2}>
+            No records in the zip passed cleaning, so it cannot replace the data.
+          </Text>
+        )}
+        {z.doi && (
+          <HStack gap={1.5} fontSize="xs" mt={2} minW={0}>
+            <Text color="fg.muted" flexShrink={0}>
+              DOI
+            </Text>
+            <Link
+              href={`https://doi.org/${z.doi}`}
+              target="_blank"
+              rel="noreferrer"
+              color="colorPalette.fg"
+              truncate
+              title={z.doi}
+            >
+              {z.doi}
+              <LuExternalLink aria-hidden />
+            </Link>
+          </HStack>
+        )}
+        {z.note && (
+          <Text fontSize="xs" color="fg.muted" mt={2}>
+            {z.note}
           </Text>
         )}
         <Flex gap={2} mt={3.5} wrap="wrap">
-          <Button size="sm" onClick={() => explorerStore.applyZip('replace')}>
-            {streamed != null ? 'Replace with official download' : 'Load official download'}
+          <Button size="sm" disabled={!canReplace} onClick={() => explorerStore.applyZip('replace')}>
+            {hasStream ? 'Replace with official download' : 'Load official download'}
           </Button>
-          {streamed != null && (
-            <Button size="sm" variant="outline" onClick={() => explorerStore.applyZip('keepStreamCiteDoi')}>
+          {hasStream && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!canCite}
+              onClick={() => explorerStore.applyZip('keepStreamCiteDoi')}
+            >
               Keep streamed, cite DOI
             </Button>
           )}

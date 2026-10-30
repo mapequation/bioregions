@@ -61,7 +61,15 @@ describe('methodsParagraph', () => {
       funnel: {
         received: 1250,
         accepted: 1040,
-        dropped: { noSpecies: 100, invalidCoordinates: 0, zeroCoordinates: 10, outsideArea: 0, duplicate: 100, lowCount: 0 },
+        dropped: {
+          noSpecies: 100,
+          invalidCoordinates: 0,
+          zeroCoordinates: 10,
+          outsideArea: 0,
+          duplicate: 40,
+          crossSource: 60,
+          lowCount: 0,
+        },
         bySource: {},
       },
       speciesCount: 40,
@@ -74,7 +82,8 @@ describe('methodsParagraph', () => {
       'coordinate uncertainty of at most 10 km',
       'not recorded as introduced',
       'rounded to four decimal places',
-      'The final dataset has 1,040 records of 40 species (of 1,250 records received; removed: 100 without a species-level name, 10 at (0, 0), 100 duplicates).',
+      'Duplicates were removed in two steps: within each source, records of the same species at the same coordinates (rounded to four decimal places, about 11 m) were kept once; and a record matching one already received from the other source',
+      'The final dataset has 1,040 records of 40 species (of 1,250 records received; removed: 100 without a species-level name, 10 at (0, 0), 40 duplicates of the same species within about 11 m in one source, 60 records already received from the other source (GBIF and OBIS overlap)).',
       "Grafen's (1989)",
       '36 of its 38 tips matched species in the occurrence data (90% of the species)',
       'Data citations: GBIF.org (30 October 2026) GBIF Occurrence Data via API, derived dataset to be registered; OBIS (2026)',
@@ -99,7 +108,15 @@ describe('methodsParagraph', () => {
     const exact = methodsParagraph({ entries: [gbif], funnel: null, speciesCount: 3, query });
     expect(exact).toContain('Only records identified to species were used');
     expect(exact).toContain('identified only to genus or a higher rank');
-    expect(exact).toContain('Duplicate records of the same species at the same coordinates');
+    expect(exact).toContain('Within each source, records of the same species at the same coordinates');
+    expect(exact).not.toContain('other source');
+    const cell = methodsParagraph({
+      entries: [gbif],
+      funnel: null,
+      speciesCount: 3,
+      query: { ...query, quality: { ...query.quality, dedupe: 'cell' } },
+    });
+    expect(cell).toContain('thinned to one per species and 0.01° grid cell (about 1 km)');
     const kept = methodsParagraph({
       entries: [gbif],
       funnel: null,

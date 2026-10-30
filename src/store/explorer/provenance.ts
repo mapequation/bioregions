@@ -96,15 +96,26 @@ function partialPct(accepted: number, planned: number): string {
  * were loaded; because records stream species by species, the missing species are absent
  * rather than thinned."
  */
-export function partialSentence(partial: PartialLoad): string {
+export function partialSentence(partial: PartialLoad, bioregionsSkipped = false): string {
   const { planned, accepted, speciesLoaded, speciesPlanned } = partial;
   const records = `${fmt(accepted)} of ~${fmt(planned)} planned records (${partialPct(accepted, planned)})`;
   const head = 'Loading was stopped early:';
   if (speciesPlanned != null && speciesPlanned > 0 && speciesLoaded >= speciesPlanned) {
     return `${head} ${records} from all ${fmt(speciesPlanned)} species were loaded.`;
   }
-  const species = speciesPlanned != null && speciesPlanned > 0 ? `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}` : fmt(speciesLoaded);
-  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned.`;
+  const known = speciesPlanned != null && speciesPlanned > 0;
+  const species = known ? `${fmt(speciesLoaded)} of ${fmt(speciesPlanned)}` : fmt(speciesLoaded);
+  const coverage = known
+    ? ` Species coverage is ${partialPct(speciesLoaded, speciesPlanned)}`
+    : ` Record coverage is ${partialPct(accepted, planned)}`;
+  const regions = bioregionsSkipped ? '; bioregions were not computed for this incomplete dataset.' : '.';
+  return `${head} ${records} from ${species} species were loaded; because records stream species by species, the missing species are absent rather than thinned.${coverage}${regions}`;
+}
+
+/** Share of the planned species that arrived (records when the species are unknown), 0..1. */
+export function partialCoverage(p: Pick<PartialLoad, 'planned' | 'accepted' | 'speciesLoaded' | 'speciesPlanned'>): number {
+  if (p.speciesPlanned != null && p.speciesPlanned > 0) return Math.min(1, p.speciesLoaded / p.speciesPlanned);
+  return p.planned > 0 ? Math.min(1, p.accepted / p.planned) : 0;
 }
 
 export interface MethodsTextInput {
@@ -154,7 +165,7 @@ export function buildMethodsText(input: MethodsTextInput): string {
   if (min > 1 && !text.includes(`fewer than ${min} records`)) {
     text = insertBeforeCitations(text, `Species with fewer than ${min} records were left out.`);
   }
-  if (load.partial) text = insertBeforeCitations(text, partialSentence(load.partial));
+  if (load.partial) text = insertBeforeCitations(text, partialSentence(load.partial, load.bioregionsSkipped));
   if (input.treeCitation && !input.phylogeny) {
     text = insertBeforeCitations(text, `Phylogeny: ${input.treeCitation.replace(/\.$/, '')}.`);
   }
@@ -193,7 +204,8 @@ const DROP_LABELS: Record<DropReason, string> = {
   invalidCoordinates: 'Invalid coordinates',
   zeroCoordinates: 'Coordinates (0, 0)',
   outsideArea: 'Outside area',
-  duplicate: 'Duplicates',
+  duplicate: 'Duplicates within a source',
+  crossSource: 'Same record in GBIF and OBIS',
   lowCount: 'Species below minimum records',
 };
 
@@ -210,7 +222,7 @@ export function buildLedgerCsv(ledger: LedgerRow[], funnel: Funnel | null): stri
   ];
   for (const r of ledger) {
     // Duplicates are removed while loading; the cleaning rows below report them.
-    if (r.id === 'duplicates') continue;
+    if (r.id === 'duplicates' || r.id === 'crossSource') continue;
     rows.push([
       'filter impact',
       r.label,

@@ -5,7 +5,7 @@ import { fmtInt, fmtPct } from '../format';
 const SOURCE_LABEL: Record<string, string> = { gbif: 'GBIF', obis: 'OBIS', file: 'File' };
 
 export interface CleaningStep {
-  id: 'received' | 'invalid' | 'outside' | 'duplicate' | 'lowCount' | 'accepted';
+  id: 'received' | 'invalid' | 'outside' | 'crossSource' | 'duplicate' | 'lowCount' | 'accepted';
   label: string;
   value: number;
   kind: 'start' | 'drop' | 'end';
@@ -17,11 +17,11 @@ export interface CleaningStep {
 /** The cleaning funnel as ordered waterfall steps. */
 export function cleaningSteps(funnel: Funnel, showLowCount: boolean): CleaningStep[] {
   const d = funnel.dropped as Partial<Record<string, number>>;
-  const extra = funnel as Funnel & { crossSourceDuplicates?: number };
   const split = Object.entries(funnel.bySource)
     .filter(([, v]) => v && v.received > 0)
     .map(([k, v]) => `${SOURCE_LABEL[k] ?? k} ${fmtInt(v?.received ?? 0)}`)
     .join(' · ');
+  const bothSources = (funnel.bySource.gbif?.received ?? 0) > 0 && (funnel.bySource.obis?.received ?? 0) > 0;
   const drops: Omit<CleaningStep, 'start' | 'kind'>[] = [
     {
       id: 'invalid',
@@ -29,16 +29,12 @@ export function cleaningSteps(funnel: Funnel, showLowCount: boolean): CleaningSt
       value: (d.noSpecies ?? 0) + (d.invalidCoordinates ?? 0) + (d.zeroCoordinates ?? 0),
     },
     { id: 'outside', label: 'Outside area', value: d.outsideArea ?? 0 },
-    {
-      id: 'duplicate',
-      label: 'Duplicates',
-      value: d.duplicate ?? 0,
-      note:
-        extra.crossSourceDuplicates != null && extra.crossSourceDuplicates > 0
-          ? `of which GBIF∩OBIS ${fmtInt(extra.crossSourceDuplicates)}`
-          : undefined,
-    },
   ];
+  // Shown once the store counts it, for loads that combine both sources.
+  if (d.crossSource != null && (bothSources || d.crossSource > 0)) {
+    drops.push({ id: 'crossSource', label: CROSS_SOURCE_LABEL, value: d.crossSource ?? 0 });
+  }
+  drops.push({ id: 'duplicate', label: 'Duplicates', value: d.duplicate ?? 0 });
   if (showLowCount || (d.lowCount ?? 0) > 0) {
     drops.push({ id: 'lowCount', label: 'Low-count species', value: d.lowCount ?? 0 });
   }
@@ -127,4 +123,109 @@ export function partialSummary(p: PartialLoad): string {
       ? ` from ${fmtInt(p.speciesLoaded)} of ${fmtInt(p.speciesPlanned)} species`
       : '';
   return `${fmtInt(p.accepted)} of ~${fmtInt(p.planned)} records (${share})${species}.`;
+}
+
+// --- Path from the planned records to the loaded dataset, shared by the ledger and the panel. ---
+
+/** Records found in both GBIF and OBIS (kept once). */
+export const CROSS_SOURCE_LABEL = 'Same record in GBIF and OBIS';
+
+/** What counts as a duplicate, from the query's dedupe setting. */
+export function dedupeText(dedupe: string | undefined): string {
+  if (dedupe === 'cell') return 'same species in one ~1 km cell';
+  if (dedupe === 'none') return 'kept';
+  return 'same species at one site';
+}
+
+export interface LoadDrop {
+  id: 'notReceived' | 'crossSource' | 'duplicates' | 'cleaning';
+  /** Ledger label (sentence case). */
+  label: string;
+  /** Lower-case form for the loaded panel's sentence. */
+  short: string;
+  /** Records; negative when more arrived than planned. */
+  value: number;
+  /** Not received (never fetched) rather than removed by cleaning. */
+  missing?: boolean;
+  tip?: string;
+}
+
+/**
+ * The drops between the planned species-level records and the loaded dataset, in order:
+ * not received, same record in both sources, duplicates, other cleaning.
+ */
+export function loadDrops(p: {
+  funnel: Funnel;
+  /** Planned species-level records, or null when unknown. */
+  toLoad: number | null;
+  /** Planned records never received because the load was cancelled. */
+  cancelled: number;
+  dedupeLabel: string;
+}): LoadDrop[] {
+  const d = p.funnel.dropped as Partial<Record<string, number>>;
+  const cross = d.crossSource ?? 0;
+  const dup = d.duplicate ?? 0;
+  const cleaned = Math.max(0, p.funnel.received - p.funnel.accepted - dup - cross);
+  const out: LoadDrop[] = [];
+  const notReceived = p.cancelled > 0 ? p.cancelled : p.toLoad != null ? p.toLoad - p.funnel.received : 0;
+  if (p.cancelled > 0) {
+    out.push({
+      id: 'notReceived',
+      label: 'Not loaded (cancelled)',
+      short: 'not loaded (cancelled)',
+      value: p.cancelled,
+      missing: true,
+      tip: `Planned records that never arrived because the load was stopped. ${PARTIAL_BIAS}`,
+    });
+  } else if (notReceived !== 0) {
+    out.push({
+      id: 'notReceived',
+      label: notReceived > 0 ? 'Not received (cap or source changes)' : 'Received beyond the preview count',
+      short: notReceived > 0 ? 'not received' : 'received beyond the preview count',
+      value: notReceived,
+      missing: true,
+      tip: 'Difference between the preview count and the records the sources returned while loading.',
+    });
+  }
+  if (cross > 0) {
+    out.push({
+      id: 'crossSource',
+      label: CROSS_SOURCE_LABEL,
+      short: 'in both GBIF and OBIS',
+      value: cross,
+      tip: 'The same occurrence published to both GBIF and OBIS is kept once.',
+    });
+  }
+  out.push({ id: 'duplicates', label: `Duplicates: ${p.dedupeLabel}`, short: 'duplicates', value: dup });
+  if (cleaned > 0) {
+    out.push({
+      id: 'cleaning',
+      label: 'Invalid, outside the area or low-count',
+      short: 'invalid or outside the area',
+      value: cleaned,
+      tip: 'Records dropped by the other cleaning steps; the cleaning detail below breaks them down.',
+    });
+  }
+  return out;
+}
+
+const joinAnd = (parts: string[]) =>
+  parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : (parts[0] ?? '');
+
+/**
+ * "From 2,031 records matching all filters: 12 not identified to species and 120 duplicates
+ * removed; 46 not received." Uses the decision ledger's vocabulary.
+ */
+export function loadStory(p: { matching: number; notSpecies: number | null; lowCount: number; drops: LoadDrop[] }): string {
+  const removed = [
+    p.notSpecies ? `${fmtInt(p.notSpecies)} not identified to species` : null,
+    p.lowCount > 0 ? `${fmtInt(p.lowCount)} in species under the minimum records` : null,
+    ...p.drops.filter((x) => !x.missing && x.value > 0).map((x) => `${fmtInt(x.value)} ${x.short}`),
+  ].filter((x): x is string => x != null);
+  const missing = p.drops.filter((x) => x.missing && x.value > 0).map((x) => `${fmtInt(x.value)} ${x.short}`);
+  const head = `From ${fmtInt(p.matching)} records matching all filters`;
+  const tail = [removed.length > 0 ? `${joinAnd(removed)} removed` : null, missing.length > 0 ? joinAnd(missing) : null]
+    .filter(Boolean)
+    .join('; ');
+  return tail ? `${head}: ${tail}.` : `${head}: all loaded.`;
 }

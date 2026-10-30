@@ -65,11 +65,12 @@ export function wrapBbox(bbox: BBox): BBox {
 }
 
 /**
- * Fit `bbox` (null = world) into a `width` x `height` px frame with some padding.
+ * Fit `bbox` (null = world) into a `width` x `height` px frame with some padding,
+ * keeping the area below the top `insetTop` px (the map controls).
  * The view never gets wider than the world, and stays inside it when it is smaller;
  * a box across the antimeridian is fitted unwrapped (the view then reaches past 180°).
  */
-export function fitView(bbox: BBox | null, width: number, height: number): MapView {
+export function fitView(bbox: BBox | null, width: number, height: number, insetTop = 0): MapView {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   const [bw, bs, be, bn] = bbox ? unwrapBbox(bbox) : [-180, -90, 180, 90];
@@ -77,13 +78,17 @@ export function fitView(bbox: BBox | null, width: number, height: number): MapVi
   const pad = world ? 0 : Math.max(2, 0.08 * Math.max(be - bw, bn - bs));
   const tw = Math.max(MIN_VIEW_DEGREES, be - bw + 2 * pad);
   const th = Math.max(MIN_VIEW_DEGREES / 2, bn - bs + 2 * pad);
-  const scale = Math.max(Math.min(w / tw, h / th), w / 360);
+  // An area keeps clear of the top `insetTop` px, where the map controls sit.
+  const inset = world ? 0 : Math.min(Math.max(0, insetTop), h / 3);
+  const scale = Math.max(Math.min(w / tw, (h - inset) / th), w / 360);
   const vw = w / scale;
   const vh = h / scale;
   // A box across the antimeridian is centred as is (tiles wrap); others stay inside the world.
   const crosses = be > 180;
   const cx = crosses ? (bw + be) / 2 : vw >= 360 ? 0 : clamp((bw + be) / 2, -180 + vw / 2, 180 - vw / 2);
-  const cy = vh >= 180 ? 0 : world ? clamp(8, -90 + vh / 2, 90 - vh / 2) : clamp((bs + bn) / 2, -90 + vh / 2, 90 - vh / 2);
+  const shift = inset / 2 / scale;
+  const cy =
+    vh >= 180 ? 0 : world ? clamp(8, -90 + vh / 2, 90 - vh / 2) : clamp((bs + bn) / 2 + shift, -90 + vh / 2, 90 - vh / 2);
   return { west: cx - vw / 2, east: cx + vw / 2, south: cy - vh / 2, north: cy + vh / 2, scale };
 }
 
@@ -252,4 +257,217 @@ export function decadeSteps(max: number): number[] {
   const steps = [1];
   while (steps[steps.length - 1] < max || steps.length < 2) steps.push(steps[steps.length - 1] * 10);
   return steps;
+}
+
+// --- Polar views ---------------------------------------------------------------------
+// GBIF serves basemap and density tiles in two polar projections as well. A circumpolar
+// area (a full-longitude band, or one entirely poleward of 45°) is a thin strip in plate
+// carrée, so it is shown in the polar projection instead. The forward/inverse formulas
+// below are those of the EPSG definitions, so overlays line up with the tiles exactly.
+
+export type PolarSrs = 'EPSG:3575' | 'EPSG:3031';
+
+/** Sphere radius GBIF uses for its EPSG:3575 grid. */
+const R_3575 = 6371007.2;
+/** Half the width of the zoom-0 tile, in projected metres (GBIF's tile grids). */
+export const POLAR_EXTENT: Record<PolarSrs, number> = {
+  'EPSG:3575': R_3575 * Math.SQRT2,
+  'EPSG:3031': 12367396.2185,
+};
+const POLAR_MAX_ZOOM = 6;
+const RAD = Math.PI / 180;
+// WGS84 polar stereographic with true scale at 71° S (EPSG:3031).
+const WGS84_A = 6378137;
+const WGS84_E = Math.sqrt(2 / 298.257223563 - (1 / 298.257223563) ** 2);
+const stT = (phi: number) =>
+  Math.tan(Math.PI / 4 - phi / 2) / ((1 - WGS84_E * Math.sin(phi)) / (1 + WGS84_E * Math.sin(phi))) ** (WGS84_E / 2);
+const ST_PHI_C = 71 * RAD;
+const ST_MC = Math.cos(ST_PHI_C) / Math.sqrt(1 - WGS84_E ** 2 * Math.sin(ST_PHI_C) ** 2);
+const ST_TC = stT(ST_PHI_C);
+
+/** Polar projection for an area (null = keep plate carrée). */
+export function polarSrsFor(bbox: BBox | null): PolarSrs | null {
+  if (!bbox) return null;
+  const [w, s, e, n] = unwrapBbox(bbox);
+  const band = e - w >= 359;
+  if (s >= 45 || (band && s >= 20)) return 'EPSG:3575';
+  if (n <= -45 || (band && n <= -20)) return 'EPSG:3031';
+  return null;
+}
+
+/** lon/lat -> projected metres (y up). */
+export function polarForward(srs: PolarSrs, lon: number, lat: number): [number, number] {
+  if (srs === 'EPSG:3575') {
+    // Lambert azimuthal equal-area, lat_0 = 90, lon_0 = 10, on GBIF's sphere.
+    const l = (lon - 10) * RAD;
+    const rho = 2 * R_3575 * Math.sin(((90 - lat) * RAD) / 2);
+    return [rho * Math.sin(l), -rho * Math.cos(l)];
+  }
+  // Polar stereographic, lat_0 = -90, lat_ts = -71, lon_0 = 0, WGS84.
+  const rho = (WGS84_A * ST_MC * stT(-lat * RAD)) / ST_TC;
+  const l = lon * RAD;
+  return [rho * Math.sin(l), rho * Math.cos(l)];
+}
+
+/** Projected metres -> lon/lat. */
+export function polarInverse(srs: PolarSrs, x: number, y: number): [number, number] {
+  const rho = Math.hypot(x, y);
+  if (srs === 'EPSG:3575') {
+    const c = 2 * Math.asin(Math.min(1, rho / (2 * R_3575)));
+    return [rho === 0 ? 10 : 10 + Math.atan2(x, -y) / RAD, 90 - c / RAD];
+  }
+  const t = (rho * ST_TC) / (WGS84_A * ST_MC);
+  let phi = Math.PI / 2 - 2 * Math.atan(t);
+  for (let i = 0; i < 8; i++) {
+    const es = WGS84_E * Math.sin(phi);
+    phi = Math.PI / 2 - 2 * Math.atan(t * ((1 - es) / (1 + es)) ** (WGS84_E / 2));
+  }
+  return [rho === 0 ? 0 : Math.atan2(x, y) / RAD, -phi / RAD];
+}
+
+/** Points along a lon/lat ring, at most `step` degrees apart (edges follow parallels and meridians). */
+export function densifyRing(ring: [number, number][], step = 1): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[(i + 1) % ring.length];
+    // A jump of a whole turn along a parallel (180° back to -180°) is the same point: no edge.
+    const seam = Math.abs(x1 - x0) >= 359.999 && y1 === y0;
+    const n = seam ? 1 : Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / step));
+    for (let k = 0; k < n; k++) out.push([x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n]);
+  }
+  return out;
+}
+
+/**
+ * Lon/lat rings that outline a bbox. A full-longitude band is drawn as its bounding
+ * parallels only (two circles around the pole, or one when it reaches the pole).
+ */
+export function bboxRings(bbox: BBox): [number, number][][] {
+  const [w, s, e, n] = unwrapBbox(bbox);
+  if (e - w >= 359) {
+    const circle = (lat: number): [number, number][] => [
+      [-180, lat],
+      [0, lat],
+      [180, lat],
+    ];
+    return [s, n].filter((lat) => Math.abs(lat) < 89.999).map(circle);
+  }
+  return [
+    [
+      [w, s],
+      [e, s],
+      [e, n],
+      [w, n],
+    ],
+  ];
+}
+
+/**
+ * Fit a polar view (projected metres; `scale` = CSS px per metre) around the rings,
+ * leaving `insetTop` px free at the top for the map controls.
+ */
+export function fitPolarView(srs: PolarSrs, rings: [number, number][][], width: number, height: number, insetTop = 0): MapView {
+  const w = Math.max(1, width);
+  const h = Math.max(1, height - insetTop);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const ring of rings) {
+    for (const [lon, lat] of densifyRing(ring, 2)) {
+      const [x, y] = polarForward(srs, lon, lat);
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+    }
+  }
+  if (!Number.isFinite(x0)) [x0, y0, x1, y1] = [-1e6, -1e6, 1e6, 1e6];
+  const pad = Math.max(1e5, 0.06 * Math.max(x1 - x0, y1 - y0));
+  const scale = Math.min(w / (x1 - x0 + 2 * pad), h / (y1 - y0 + 2 * pad));
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const north = cy + h / 2 / scale + insetTop / scale;
+  return { west: cx - w / 2 / scale, east: cx + w / 2 / scale, north, south: north - height / scale, scale };
+}
+
+/** GBIF polar tiles (same 512 px grid for basemap and density) covering a polar view. */
+export function polarTilesForView(srs: PolarSrs, view: MapView): PlacedTile[] {
+  const extent = POLAR_EXTENT[srs];
+  let z = 0;
+  while (z < POLAR_MAX_ZOOM && (GBIF_TILE_SIZE * 2 ** z) / (2 * extent) < view.scale) z++;
+  const n = 2 ** z;
+  const span = (2 * extent) / n;
+  const eps = 1e-9;
+  const x0 = clamp(Math.floor((view.west + extent) / span + eps), 0, n - 1);
+  const x1 = clamp(Math.ceil((view.east + extent) / span - eps) - 1, 0, n - 1);
+  const y0 = clamp(Math.floor((extent - view.north) / span + eps), 0, n - 1);
+  const y1 = clamp(Math.ceil((extent - view.south) / span - eps) - 1, 0, n - 1);
+  const out: PlacedTile[] = [];
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      out.push({
+        z,
+        x,
+        y,
+        col: x,
+        left: (-extent + x * span - view.west) * view.scale,
+        top: (view.north - (extent - y * span)) * view.scale,
+        size: span * view.scale,
+      });
+    }
+  }
+  return out;
+}
+
+/** A view's lon/lat <-> CSS px mapping: plate carrée (`srs` null) or polar. */
+export interface MapProjection {
+  srs: PolarSrs | null;
+  toPx(lon: number, lat: number): [number, number];
+  /** Unwrapped lon (plate carrée) or lon in [-180, 180] (polar), clamped lat. */
+  fromPx(px: number, py: number): [number, number];
+}
+
+export function mapProjection(view: MapView, srs: PolarSrs | null): MapProjection {
+  if (!srs) {
+    return {
+      srs,
+      toPx: (lon, lat) => [(lon - view.west) * view.scale, (view.north - lat) * view.scale],
+      fromPx: (px, py) => pxToLonLat(view, px, py),
+    };
+  }
+  return {
+    srs,
+    toPx: (lon, lat) => {
+      const [x, y] = polarForward(srs, lon, lat);
+      return [(x - view.west) * view.scale, (view.north - y) * view.scale];
+    },
+    fromPx: (px, py) => {
+      const [lon, lat] = polarInverse(srs, view.west + px / view.scale, view.north - py / view.scale);
+      return [lon, srs === 'EPSG:3575' ? Math.max(0, lat) : Math.min(0, lat)];
+    },
+  };
+}
+
+/** SVG path (CSS px) of closed lon/lat rings, densified so parallels curve in polar views. */
+export function ringsPath(proj: MapProjection, rings: [number, number][][], step = 1): string {
+  return rings
+    .map((ring) => {
+      const pts = proj.srs ? densifyRing(ring, step) : ring;
+      return `M${pts.map((p) => proj.toPx(p[0], p[1]).map((v) => v.toFixed(1)).join(',')).join('L')}Z`;
+    })
+    .join('');
+}
+
+/**
+ * Bbox from two dragged lon/lat corners in a polar view: the second longitude is taken
+ * the short way round from the first, so a drag across 180° gives a box across it.
+ */
+export function polarDragBbox(a: [number, number], b: [number, number], minDegrees = 1): BBox | null {
+  let lon = b[0];
+  while (lon - a[0] > 180) lon -= 360;
+  while (a[0] - lon > 180) lon += 360;
+  const box = dragBbox(a, [lon, b[1]], minDegrees);
+  return box ? wrapBbox(box) : null;
 }

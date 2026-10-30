@@ -134,16 +134,21 @@ export function buildDatasetTree(
 }
 
 /** Distinct dataset species among the tips of a source tree (exact coverage). */
-export function coverageOf(newick: string, join: TipJoin): { matched: number; hasBranchLengths: boolean } {
+export function coverageOf(
+  newick: string,
+  join: TipJoin,
+): { matched: number; hasBranchLengths: boolean; tips: number } {
   const tree = parseNewick(newick);
   const seen = new Set<string>();
+  let tips = 0;
   for (const n of preOrder(tree)) {
     if (n.children.length === 0) {
+      tips++;
       const name = tipToDataset(n.name, join);
       if (name) seen.add(name);
     }
   }
-  return { matched: seen.size, hasBranchLengths: treeStats(tree).hasBranchLengths };
+  return { matched: seen.size, hasBranchLengths: treeStats(tree).hasBranchLengths, tips };
 }
 
 /**

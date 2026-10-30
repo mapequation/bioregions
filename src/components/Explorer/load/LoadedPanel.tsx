@@ -1,15 +1,18 @@
-import { Alert, Box, Button, Flex, Grid, HStack, Icon, Spinner, Text } from '@chakra-ui/react';
+import { Box, Button, Flex, Grid, HStack, Icon, Spinner, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import type { ReactNode } from 'react';
-import { LuCircleAlert, LuCircleCheck, LuMap, LuQuote, LuRotateCw } from 'react-icons/lu';
+import { LuCircleAlert, LuCircleCheck, LuMap, LuPlay, LuQuote, LuRotateCw, LuTriangleAlert } from 'react-icons/lu';
 import { useStore } from '@/store';
 import { fmtInt } from '../format';
 import {
   acceptedOf,
   EMPTY_REASON_TEXT,
   EMPTY_TITLE,
+  dedupeText,
   type EmptyReason,
   emptyReasonOf,
+  loadDrops,
+  loadStory,
   notReceivedOf,
   PARTIAL_BIAS,
   PREVIOUS_KEPT,
@@ -54,7 +57,7 @@ const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reas
         </Text>
         <Box>
           {retry && (
-            <Button size="sm" variant="outline" bg="bg" onClick={() => ex.load()}>
+            <Button size="sm" variant="outline" bg="bg" colorPalette="gray" onClick={() => ex.load()}>
               <LuRotateCw /> Load again
             </Button>
           )}
@@ -91,40 +94,32 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const regions = infomapStore.numBioregions;
   const time = timeOf(last.retrievedAt);
   const partial = last.partial;
-  // How the matching records became the dataset (same chain as the decision ledger).
+  const skipped = (last as { bioregionsSkipped?: boolean }).bioregionsSkipped === true;
+  const runAnyway = (ex as { runBioregionsAnyway?: () => void }).runBioregionsAnyway;
+  const coverage =
+    partial?.speciesLoaded != null && partial.speciesPlanned != null && partial.speciesPlanned > 0
+      ? ` (${fmtInt(partial.speciesLoaded)} of ${fmtInt(partial.speciesPlanned)} species)`
+      : '';
+  // How the matching records became the dataset, in the decision ledger's words.
   const matching = ex.countStory.matching;
   const notSpecies = ex.ledger.find((r) => r.id === 'speciesLevel')?.impact ?? null;
-  const dup = ex.countStory.duplicates ?? last.funnel.dropped.duplicate ?? 0;
-  // A cancelled load stops part-way: the rest was never received, not removed.
-  const notLoaded = notReceivedOf(last);
-  const other = matching != null ? Math.max(0, matching - (notSpecies ?? 0) - dup - records - notLoaded) : 0;
-  const removed = [
-    notSpecies ? `${fmtInt(notSpecies)} not identified to species` : null,
-    `${fmtInt(dup)} duplicates`,
-    other > 0 ? `${fmtInt(other)} other` : null,
-  ].filter(Boolean);
-  const removedText =
-    removed.length > 1 ? `${removed.slice(0, -1).join(', ')} and ${removed[removed.length - 1]}` : removed[0];
+  const speciesLevel = matching != null && notSpecies != null ? Math.max(0, matching - notSpecies) : null;
+  const planned = ex.countStory.speciesLevel;
+  const lowCount = speciesLevel != null && planned != null && planned < speciesLevel ? speciesLevel - planned : 0;
+  const dedupeLabel = (ex as { dedupeLabel?: string }).dedupeLabel ?? dedupeText(last.query.quality.dedupe);
+  const drops = loadDrops({
+    funnel: last.funnel,
+    toLoad: planned ?? speciesLevel,
+    // A cancelled load stops part-way: the rest was never received, not removed.
+    cancelled: notReceivedOf(last),
+    dedupeLabel,
+  });
   const story =
-    matching != null && matching > 0 && last.mode !== 'add'
-      ? `From ${fmtInt(matching)} records matching all filters: ${removedText} removed${
-          notLoaded > 0 ? `; ${fmtInt(notLoaded)} not loaded (cancelled)` : ''
-        }.`
-      : null;
+    matching != null && matching > 0 && last.mode !== 'add' ? loadStory({ matching, notSpecies, lowCount, drops }) : null;
+  const palette = partial ? 'orange' : 'green';
 
   return (
-    <Flex direction="column" gap={2} data-testid="loaded-panel">
-      {partial && (
-        <Alert.Root status="warning" size="sm" variant="subtle" borderRadius="md" py={2} data-testid="loaded-partial">
-          <Alert.Indicator />
-          <Alert.Description fontSize="sm" fontVariantNumeric="tabular-nums">
-            <Box as="span" fontWeight="semibold">
-              Partial dataset:
-            </Box>{' '}
-            {partialSummary(partial)} {PARTIAL_BIAS}
-          </Alert.Description>
-        </Alert.Root>
-      )}
+    <Flex direction="column" gap={2} data-testid="loaded-panel" data-state={partial ? 'partial' : 'complete'}>
       <Grid
         templateColumns="auto minmax(0, 1fr) auto"
         columnGap={3}
@@ -134,17 +129,18 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
         py={2.5}
         borderRadius="md"
         borderWidth="1px"
-        borderColor="green.muted"
-        bg="green.subtle"
+        colorPalette={palette}
+        borderColor="colorPalette.muted"
+        bg="colorPalette.subtle"
         role="status"
         aria-live="polite"
         fontVariantNumeric="tabular-nums"
       >
         <Icon
-          as={LuCircleCheck}
+          as={partial ? LuTriangleAlert : LuCircleCheck}
           boxSize={6}
-          color="green.fg"
-          gridRow="1 / span 3"
+          color="colorPalette.fg"
+          gridRow="1 / span 5"
           alignSelf="start"
           mt="4px"
           aria-hidden
@@ -159,16 +155,35 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
             </Text>
           )}
         </HStack>
-        <HStack gap={2} flexShrink={0}>
+        {/* Actions stay neutral, not in the panel's status colour (brand has no border token). */}
+        <HStack gap={2} flexShrink={0} colorPalette="gray">
           {extra}
           <Button size="sm" variant="outline" bg="bg" onClick={() => ex.setTab('cite')}>
             <LuQuote /> Cite this data
           </Button>
-          <Button size="sm" variant="solid" onClick={() => ex.close()} data-testid="view-bioregions">
+          <Button
+            size="sm"
+            variant={partial ? 'outline' : 'solid'}
+            colorPalette={partial ? 'gray' : 'brand'}
+            bg={partial ? 'bg' : undefined}
+            onClick={() => ex.close()}
+            data-testid="view-bioregions"
+          >
             <LuMap /> View bioregions
           </Button>
         </HStack>
-        <Flex gridColumn="2 / -1" fontSize="xs" color="fg.muted" wrap="wrap" align="center" minW={0}>
+        {partial && (
+          <Text gridColumn="2 / -1" fontSize="sm" color="fg" data-testid="loaded-partial">
+            <Box as="span" fontWeight="semibold">
+              Partial dataset:
+            </Box>{' '}
+            {partialSummary(partial)}{' '}
+            <Box as="span" color="fg.muted">
+              {PARTIAL_BIAS}
+            </Box>
+          </Text>
+        )}
+        <Flex gridColumn="2 / -1" fontSize="xs" color="fg.muted" wrap="wrap" align="center" minW={0} rowGap={1}>
           <Text>
             {[
               species != null ? `${fmtInt(species)} species` : null,
@@ -178,18 +193,30 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
               .filter(Boolean)
               .join(' · ')}
           </Text>
-          {(computing || regions > 0) && <Sep />}
+          {(computing || (!skipped && regions > 0)) && <Sep />}
           {computing ? (
             <HStack gap={1.5}>
               <Spinner size="xs" />
               <Text>Bioregions computing…</Text>
             </HStack>
-          ) : regions > 0 ? (
+          ) : !skipped && regions > 0 ? (
             <Text color="fg" fontWeight="medium">
               {regions} {regions === 1 ? 'bioregion' : 'bioregions'} ready
             </Text>
           ) : null}
         </Flex>
+        {skipped && !computing && (
+          <HStack gridColumn="2 / -1" gap={3} minW={0} mt={1} wrap="wrap" data-testid="loaded-bioregions-skipped">
+            <Text fontSize="sm" color="fg">
+              Bioregions not computed for a partial dataset{coverage}.
+            </Text>
+            {runAnyway && (
+              <Button size="sm" variant="outline" bg="bg" colorPalette="gray" onClick={() => runAnyway.call(ex)}>
+                <LuPlay /> Run anyway
+              </Button>
+            )}
+          </HStack>
+        )}
         {story && (
           <Text gridColumn="2 / -1" fontSize="xs" color="fg.muted" data-testid="loaded-story">
             {story}

@@ -39,6 +39,11 @@ const KEY_PATTERN = /\d{7}-\d{15}/;
 const DOI_PATTERN = /10\.15468\/dl\.[a-z0-9]+/i;
 const CITATION_PATTERN = /GBIF\.org \([^)]+\) GBIF Occurrence Download \S+/;
 
+/** The GBIF download key in a file or zip entry name, e.g. "0012345-241007104925546.zip". */
+export function downloadKeyFromName(name: string): string | undefined {
+  return name.match(KEY_PATTERN)?.[0];
+}
+
 const COLUMNS = [
   'species',
   'decimalLatitude',

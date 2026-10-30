@@ -4,10 +4,16 @@ import { DEFAULT_BASIS } from '../sources/query';
 import type { PreviewSummary, SourceId, TaxonRef } from '../sources/types';
 import ExplorerStore, {
   buildLedger,
+  checkDownload,
   computeBiasFlags,
   dirtySections,
   explorerDefaultQuery,
   mergeKpis,
+  mergeProgress,
+  recentShareOf,
+  shownLoad,
+  speciesCoverage,
+  zipVerdict,
   PREVIEW_DEBOUNCE_MS,
   type BiasActions,
   type ToggleMemory,
@@ -121,13 +127,16 @@ describe('buildLedger', () => {
     expect(byId.datasets).toMatchObject({ label: 'Excluded datasets (0)', active: false });
     expect(byId.minRecords).toMatchObject({ label: 'Min. 5 records per species', active: false });
     expect(byId.depth.label).toBe('Depth 0–200 m');
-    expect(rows.map((r) => r.id)).toHaveLength(11);
+    expect(rows.map((r) => r.id)).toHaveLength(12);
     expect(byId.speciesLevel).toMatchObject({ label: 'Not identified to species', toggleable: false, impact: null, share: null });
     expect(byId.duplicates).toMatchObject({
-      label: 'Duplicates (same species at one site)',
+      label: 'Duplicates (same species within ~11 m)',
       toggleable: false,
       impact: null,
     });
+    // GBIF∩OBIS overlap has its own fixed row next to the duplicates.
+    expect(rows.map((r) => r.id).slice(-2)).toEqual(['duplicates', 'crossSource']);
+    expect(byId.crossSource).toMatchObject({ label: 'Same record in GBIF and OBIS', toggleable: false, active: true, impact: null });
   });
 
   it('fills the fixed rows and leaves shares null without a base', () => {
@@ -226,6 +235,104 @@ describe('toggleFilter', () => {
     s.setQuality({ maxUncertaintyMeters: 2000 });
     expect(s.preset).toBe('custom');
     s.dispose();
+  });
+});
+
+describe('recentShareOf', () => {
+  it('is the temporal-skew value: one histogram, one cutoff', () => {
+    const years = [
+      { year: 2000, count: 280 },
+      { year: 2011, count: 720 },
+    ];
+    expect(recentShareOf(years, 2025)).toEqual({ cutoffYear: 2011, share: 0.72 });
+    expect(recentShareOf([], 2025)).toEqual({ cutoffYear: 2011, share: null });
+    const flags = computeBiasFlags(
+      { query: explorerDefaultQuery(), previews: [preview('gbif', { total: 1000, years })], speciesCounts: null, currentYear: 2025 },
+      { excludeDataset: vi.fn(), specimensOnly: vi.fn(), narrowYears: vi.fn(), showCountries: vi.fn(), setMinRecords: vi.fn() },
+    );
+    expect(flags.find((f) => f.id === 'temporalSkew')?.value).toBe(recentShareOf(years, 2025).share);
+  });
+});
+
+describe('load progress helpers', () => {
+  it('never lets the request total shrink', () => {
+    const p = { requestsTotal: 184, requestsDone: 0, fetched: 0 };
+    mergeProgress(p, { requestsTotal: 25, requestsDone: 8, fetched: 100 });
+    expect(p).toEqual({ requestsTotal: 184, requestsDone: 8, fetched: 100 });
+    mergeProgress(p, { requestsTotal: 190 });
+    expect(p.requestsTotal).toBe(190);
+  });
+
+  it('measures live species coverage over the sources that report species', () => {
+    expect(speciesCoverage([{ speciesDone: 1, speciesTotal: 46 }, {}])).toBeCloseTo(1 / 46);
+    expect(speciesCoverage([{ speciesDone: 3, speciesTotal: 4 }, { speciesDone: 1, speciesTotal: 4 }])).toBe(0.5);
+    expect(speciesCoverage([{}])).toBeNull();
+  });
+
+  it('finds the provenance of the data on screen after an empty load', () => {
+    const first = { accepted: 5 } as Parameters<typeof shownLoad>[0];
+    const empty = { accepted: 0, previousKept: true, previous: first } as Parameters<typeof shownLoad>[0];
+    expect(shownLoad(empty)).toBe(first);
+    expect(shownLoad({ accepted: 0, previousKept: true } as Parameters<typeof shownLoad>[0])).toBeNull();
+    expect(shownLoad(first)).toBe(first);
+  });
+});
+
+describe('GBIF download zip checks', () => {
+  const query = () => {
+    const q = explorerDefaultQuery();
+    q.taxa = [{ name: 'Callitrichidae', rank: 'FAMILY', gbifKey: 9620 }];
+    q.area = { kind: 'bbox', bbox: [-118, -56, -34, 33] };
+    q.years = [1970, 2025];
+    return q;
+  };
+  // The same taxa, area and years as gbif.org writes them: other order, YEAR as "a,b", ring reversed.
+  const sameAsGbif = {
+    type: 'and',
+    predicates: [
+      { type: 'equals', key: 'YEAR', value: '1970,2025' },
+      { type: 'within', geometry: 'POLYGON((-118 -56,-118 33,-34 33,-34 -56,-118 -56))' },
+      { type: 'equals', key: 'HAS_COORDINATE', value: 'true' },
+      { type: 'equals', key: 'TAXON_KEY', value: '9620' },
+    ],
+  };
+
+  it('matches a download made for the same taxa, area and years', async () => {
+    const r = await checkDownload('0012345-261030123456789', query(), undefined, async (key) => ({
+      key,
+      status: 'SUCCEEDED',
+      doi: '10.15468/dl.abc',
+      request: { predicate: sameAsGbif },
+    }));
+    expect(r).toMatchObject({ match: 'match', differences: [], doi: '10.15468/dl.abc' });
+    expect(r.text).toBe('Callitrichidae · lon -118 to -34, lat -56 to 33 · 1970–2025');
+  });
+
+  it('names what differs, and is unknown without metadata', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'));
+    const other = { ...sameAsGbif, predicates: [...sameAsGbif.predicates.slice(0, 3), { type: 'equals', key: 'TAXON_KEY', value: '2436436' }] };
+    const r = await checkDownload('k', query(), undefined, async (key) => ({ key, status: 'SUCCEEDED', request: { predicate: other } }));
+    expect(r).toMatchObject({ match: 'mismatch', differences: ['taxa'], text: 'GBIF taxon 2436436 · lon -118 to -34, lat -56 to 33 · 1970–2025' });
+    const failed = await checkDownload('k', query(), undefined, async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    expect(failed.match).toBe('unknown');
+    fetchSpy.mockRestore();
+  });
+
+  it('only replaces or cites with a matching download', () => {
+    const base = { key: 'k', doi: '10.15468/dl.abc', accepted: 0, received: 7, streamGbifRecords: 12_094, hasData: true };
+    const mismatch = zipVerdict({ ...base, check: { match: 'mismatch', differences: ['taxa', 'area'], text: 'Felidae · worldwide · all years' } });
+    expect(mismatch).toMatchObject({ queryMatch: 'mismatch', canReplace: false, canCiteDoi: false, downloadQueryText: 'Felidae · worldwide · all years' });
+    expect(mismatch.note).toContain('different query (its taxa and area differ)');
+    expect(mismatch.note).not.toContain('GBIF changed');
+    const match = zipVerdict({ ...base, accepted: 12_000, check: { match: 'match', differences: [] } });
+    expect(match).toMatchObject({ queryMatch: 'match', canReplace: true, canCiteDoi: true });
+    expect(match.note).toContain('GBIF changed between the two snapshots: 12,000 records after cleaning here, 12,094 GBIF records on screen');
+    expect(zipVerdict({ ...base, check: { match: 'match', differences: [] } })).toMatchObject({ canReplace: false, canCiteDoi: true });
+    const unknown = zipVerdict({ ...base, accepted: 10, check: { match: 'unknown', differences: [], failure: 'offline' } });
+    expect(unknown).toMatchObject({ queryMatch: 'unknown', canReplace: false, canCiteDoi: false });
+    expect(zipVerdict({ ...base, key: undefined, check: null }).note).toContain('No GBIF download key');
   });
 });
 
@@ -471,7 +578,8 @@ describe('preview pipeline', () => {
     expect(s.ledgerBase).toBe(1800);
     expect(s.ledger.find((r) => r.id === 'uncertainty')?.share).toBeCloseTo(0.25);
     expect(s.ledger.find((r) => r.id === 'speciesLevel')).toMatchObject({ toggleable: false, impact: null });
-    expect(s.countStory).toEqual({ matching: 900, speciesLevel: null, duplicates: null, loaded: null });
+    expect(s.countStory).toEqual({ matching: 900, speciesLevel: null, duplicates: null, crossSource: null, loaded: null });
+    expect(s.insightsScope).toEqual({ kind: 'query', records: 900, label: 'For the query · 900 matching records' });
     expect(s.loadedMatchesQuery).toBe(false);
     expect(s.methodsSources).toEqual(['gbif']);
     expect(s.methodsText).toContain('Global Biodiversity Information Facility');

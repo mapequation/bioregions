@@ -9,6 +9,7 @@ import {
   buildMethodsText,
   buildObisCitation,
   citingDownload,
+  partialCoverage,
   partialSentence,
 } from './provenance';
 
@@ -60,11 +61,14 @@ describe('buildMethodsText', () => {
   });
 
   it('says when the load was partial, before the citations', () => {
-    const partial = { planned: 272_546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210, notReceived: 271_000 };
-    const text = buildMethodsText({ load: load({ partial }), query: query() });
+    const partial = { planned: 272_546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210, notReceived: 271_000, coverage: 1 / 210 };
+    const text = buildMethodsText({ load: load({ partial, bioregionsSkipped: true }), query: query() });
     expect(text).toContain(
-      'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; because records stream species by species, the missing species are absent rather than thinned.',
+      'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; because records stream species by species, the missing species are absent rather than thinned. Species coverage is <1 %; bioregions were not computed for this incomplete dataset.',
     );
+    const ran = buildMethodsText({ load: load({ partial: { ...partial, speciesLoaded: 150, coverage: 150 / 210 } }), query: query() });
+    expect(ran).toContain('from 150 of 210 species were loaded;');
+    expect(ran).toContain('Species coverage is 71 %.');
     expect(text.indexOf('Loading was stopped')).toBeLessThan(text.indexOf('Data citations:'));
   });
 
@@ -78,6 +82,14 @@ describe('buildMethodsText', () => {
     expect(buildMethodsText({ load: load(), query: query(), treeCitation: 'Upham et al. 2019' })).toContain(
       'Phylogeny: Upham et al. 2019.',
     );
+  });
+});
+
+describe('partialCoverage', () => {
+  it('uses species when planned, else records', () => {
+    expect(partialCoverage({ planned: 100, accepted: 10, speciesLoaded: 1, speciesPlanned: 46 })).toBeCloseTo(1 / 46);
+    expect(partialCoverage({ planned: 100, accepted: 10, speciesLoaded: 1, speciesPlanned: null })).toBeCloseTo(0.1);
+    expect(partialCoverage({ planned: 0, accepted: 0, speciesLoaded: 0, speciesPlanned: null })).toBe(0);
   });
 });
 
@@ -96,7 +108,7 @@ describe('citations and CSVs', () => {
     expect(csv[0]).toBe('section,step,active,records,share');
     expect(csv[1]).toBe('filter impact,Years 1970–2025,true,-120,0.1');
     expect(csv).toContain('cleaning,Received,true,3,');
-    expect(csv).toContain('cleaning,Duplicates,true,-1,0.3333');
+    expect(csv).toContain('cleaning,Duplicates within a source,true,-1,0.3333');
     expect(csv[csv.length - 1]).toBe('cleaning,Accepted,true,2,');
   });
 
@@ -111,11 +123,12 @@ describe('citations and CSVs', () => {
   });
 
   it('formats the partial sentence', () => {
-    const p = { planned: 10, accepted: 5, speciesLoaded: 2, speciesPlanned: 4, notReceived: 5 };
+    const p = { planned: 10, accepted: 5, speciesLoaded: 2, speciesPlanned: 4, notReceived: 5, coverage: 0.5 };
     expect(partialSentence(p)).toContain('5 of ~10 planned records (50 %) from 2 of 4 species');
     expect(partialSentence({ ...p, accepted: 999, planned: 1000 })).toContain('(>99 %)');
     // Unknown species total: no "of".
     expect(partialSentence({ ...p, speciesPlanned: null })).toContain('from 2 species were loaded; because');
+    expect(partialSentence({ ...p, speciesPlanned: null })).toContain('Record coverage is 50 %.');
     // Every species present: nothing is absent.
     expect(partialSentence({ ...p, speciesLoaded: 4 })).toBe(
       'Loading was stopped early: 5 of ~10 planned records (50 %) from all 4 species were loaded.',

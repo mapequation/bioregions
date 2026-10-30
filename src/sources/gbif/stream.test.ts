@@ -277,6 +277,12 @@ describe('streamGbif', () => {
     expect(records.every((x) => x.name === 'Felis catus')).toBe(true);
     expect(summary.truncated).toBe(0);
     expect(last(batches)?.progress.speciesDone).toBe(1);
+    // The plan's request count is where the stream's total starts; it only grows.
+    expect(p.requests).toBe(1 + Math.ceil(15_000 / 6000));
+    const totals = batches.map((b) => b.progress.requestsTotal);
+    expect(totals[0]).toBeGreaterThanOrEqual(p.requests);
+    expect(totals.every((t, i) => i === 0 || t >= totals[i - 1])).toBe(true);
+    expect(last(batches)?.progress.requestsDone).toBe(last(totals));
   });
 
   it('splits a dense point by year and truncates an indivisible leaf', async () => {

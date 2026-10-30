@@ -2,7 +2,7 @@
 // the minimum-records-per-species filter, and the load size estimate.
 import { toSpeciesName } from '../../sources/clean';
 import { GBIF_MAX_DOCUMENTS } from '../../sources/gbif/graphql';
-import { type GbifPlanDetail, BYTES_PER_RECORD, planGbif, planRequests } from '../../sources/gbif/stream';
+import { type GbifPlanDetail, BYTES_PER_RECORD, planGbif, plannedGbifRequests } from '../../sources/gbif/stream';
 import { fetchJson } from '../../sources/http';
 import { supportsObis } from '../../sources/obis/params';
 import { obisUrl } from '../../sources/obis/preview';
@@ -39,12 +39,23 @@ export function gbifSpeciesCounts(detail: GbifPlanDetail): FacetBucket[] {
     .sort((a, b) => b.count - a.count);
 }
 
-/** Request count for a GBIF species list (mirrors `planGbif`). */
-export function gbifRequests(species: { count: number }[]): number {
-  const small = species.filter((s) => s.count <= GBIF_MAX_DOCUMENTS);
-  const large = species.filter((s) => s.count > GBIF_MAX_DOCUMENTS);
-  const largeRequests = large.reduce((sum, s) => sum + 1 + Math.ceil((4 * s.count) / GBIF_MAX_DOCUMENTS), 0);
-  return planRequests(small).length + largeRequests;
+/** Request count for a GBIF species list: the count `streamGbif` starts from (see `plannedGbifRequests`). */
+export function gbifRequests(species: GbifPlanDetail['species']): number {
+  return plannedGbifRequests(species);
+}
+
+/**
+ * Requests to budget time for: species above one search cost about four requests per
+ * 6000 records once split (live runs, Felidae 2026-10), more than the starting count.
+ */
+export function timedRequests(plan: StreamPlan): number {
+  if (plan.source !== 'gbif') return plan.requests;
+  const species = (plan.detail as GbifPlanDetail | undefined)?.species ?? [];
+  let extra = 0;
+  for (const s of species) {
+    if (s.count > GBIF_MAX_DOCUMENTS) extra += Math.ceil((4 * s.count) / GBIF_MAX_DOCUMENTS) - Math.ceil(s.count / GBIF_MAX_DOCUMENTS);
+  }
+  return plan.requests + extra;
 }
 
 /**
@@ -187,9 +198,8 @@ export function computeEstimate({ cap, plans, previews }: EstimateInput): Estima
       const share = p.expectedRecords > 0 ? n / p.expectedRecords : 0;
       records += plannedRecords(p, previews.find((v) => v.source === p.source));
       bytes += Math.round(p.estimatedBytes * share);
-      const req = Math.ceil(p.requests * share);
-      requests += req;
-      seconds = Math.max(seconds, streamSeconds(p.source, req));
+      requests += Math.ceil(p.requests * share);
+      seconds = Math.max(seconds, streamSeconds(p.source, Math.ceil(timedRequests(p) * share)));
     }
     const known = plans.every((p) => p.speciesCounts);
     const species = known ? planSpeciesNames(plans).length : maxSpecies(plans.map((p) => p.expectedSpecies));

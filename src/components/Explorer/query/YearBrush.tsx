@@ -112,8 +112,11 @@ export default observer(function YearBrush() {
 
   const total = [...counts.values()].reduce((s, c) => s + c, 0);
   const inRange = rangeShare(bins, qFrom, qTo);
-  const cutoff = currentYear - RECENT_YEARS;
-  const recent = explorerStore.yearShareAfter(cutoff);
+  // Same cutoff and share as the temporal-skew check (store contract `recentShare`).
+  const storeRecent = (explorerStore as unknown as { recentShare?: { cutoffYear: number; share: number } | null })
+    .recentShare;
+  const cutoffYear = storeRecent?.cutoffYear ?? currentYear - (RECENT_YEARS - 1);
+  const recent = storeRecent?.share ?? explorerStore.yearShareAfter(cutoffYear);
   const hasData = total > 0;
   const busy = state === 'stale' || state === 'first';
 
@@ -297,7 +300,9 @@ export default observer(function YearBrush() {
         {hasData ? (
           <>
             {qFrom != null || qTo != null ? `${fmtPct(inRange)} of dated records in range · ` : ''}
-            {fmtPct(recent)} after {cutoff - 1}
+            <Box as="span" title={`Share of dated records from ${cutoffYear} on, as in the temporal-skew check`}>
+              since {cutoffYear}: {fmtPct(recent)}
+            </Box>
           </>
         ) : (
           ' '

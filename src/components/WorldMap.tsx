@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
+import { reaction, when } from 'mobx';
 import { useStore } from '../store/';
 import { Box, Button, HStack, Stack, Text } from '@chakra-ui/react';
 import { LuSearch } from 'react-icons/lu';
@@ -113,7 +114,7 @@ const EmptyMapCta = observer(function EmptyMapCta() {
 
 export default observer(function WorldMap() {
   const hostRef = useRef<HTMLDivElement>(null);
-  const { mapStore } = useStore();
+  const { mapStore, explorerStore, speciesStore } = useStore();
 
   useEffect(() => {
     if (hostRef.current === null) {
@@ -124,8 +125,30 @@ export default observer(function WorldMap() {
     return () => mapStore.disposeEngine();
   }, [mapStore]);
 
+  // After each explorer load that brought records, frame them on the map (once binning is done).
+  useEffect(() => {
+    let pending: (() => void) | null = null;
+    const dispose = reaction(
+      () => explorerStore.lastLoad?.retrievedAt,
+      (retrievedAt) => {
+        const load = explorerStore.lastLoad;
+        if (!retrievedAt || !load || load.accepted === 0 || load.emptyReason) return;
+        pending?.();
+        pending = when(
+          () => !speciesStore.isLoading,
+          () => mapStore.fitToData(),
+        );
+      },
+    );
+    return () => {
+      dispose();
+      pending?.();
+    };
+  }, [mapStore, explorerStore, speciesStore]);
+
   return (
-    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
+    // Width leaves room for the left margin, so the map never runs 16px past the viewport.
+    <Box ml={4} width="calc(100% - var(--chakra-spacing-4))" maxW={`${MAX_WIDTH}px`}>
       <MapStatusBar />
       {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a
           2:1 box via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the

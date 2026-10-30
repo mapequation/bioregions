@@ -83,7 +83,7 @@ const PhyloTree = observer(function _PhyloTree() {
   }
 
   return (
-    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
+    <Box ml={4} width="calc(100% - var(--chakra-spacing-4))" maxW={`${MAX_WIDTH}px`}>
       <TreeStatusBar />
       {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a 2:1 box
           via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the hover

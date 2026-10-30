@@ -19,10 +19,12 @@ import type { Clade, MatchStatus, NameMatchRow, ReqState, TreeSelection } from '
 import {
   arrangeRows,
   bestDatedCandidate,
+  type CandidateGroup,
+  capByStudy,
   COVERAGE_CONCURRENCY,
   FEW_STUDY_TREES,
+  groupByStudy,
   initialOrder,
-  MAX_COVERAGE_CHECKS,
   mapLimit,
   type PhyloCandidate,
   SYNTHETIC_ID,
@@ -40,6 +42,7 @@ import {
   toMatchRows,
   uniqueNames,
 } from './phylo/matching';
+import { cladeNameNote } from './phylo/cladeNote';
 import { dropUnknownIds } from './phylo/dropUnknown';
 import {
   buildDatasetTree,
@@ -206,6 +209,17 @@ export default class PhyloStore {
     return this.hasLoadedSpecies ? speciesStore.speciesMap : `query:${queryKey(explorerStore.query)}`;
   }
 
+  /**
+   * Why the clade has another name than the queried taxon ('Open Tree treats
+   * Callitrichidae as the subfamily Callitrichinae; …'), or null.
+   */
+  get cladeNote(): string | null {
+    const { explorerStore } = this.rootStore;
+    if (!this.clade) return null;
+    const taxa = this.speciesSource === 'query' ? explorerStore.query.taxa : explorerStore.lastLoad?.query.taxa;
+    return taxa ? cladeNameNote(taxa, this.clade) : null;
+  }
+
   /** Matched, synonym and unmatched (incl. ambiguous) name counts. */
   get counts(): { matched: number; synonym: number; unmatched: number } {
     return matchCounts(this.matches);
@@ -243,10 +257,23 @@ export default class PhyloStore {
     return { done: studies.filter((c) => c.coverageState !== 'pending').length, total: studies.length };
   }
 
-  /** Coverage checks are still running. */
+  /** The clade is known and Open Tree is still being searched for published trees. */
+  get searchingTrees(): boolean {
+    return this.clade != null && this.candidatesState === 'loading';
+  }
+
+  /** Published trees are still being searched for, or their coverage checked. */
   get checkingCoverage(): boolean {
     const { done, total } = this.coverageProgress;
-    return done < total;
+    return this.searchingTrees || done < total;
+  }
+
+  /**
+   * Table rows: one per study (its trees grouped, see groupByStudy) in display order,
+   * after the Dated only filter. The lead is the best-coverage tree once checks finish.
+   */
+  get rowGroups(): CandidateGroup[] {
+    return groupByStudy(this.visibleCandidates, this.selectedId, !this.checkingCoverage);
   }
 
   /**
@@ -387,6 +414,13 @@ export default class PhyloStore {
       this.candidatesState = 'loading';
     });
 
+    const soft = <T>(promise: Promise<T>, fallback: T): Promise<T> =>
+      promise.catch((error) => {
+        if (isAbortError(error) || signal.aborted) throw error;
+        return fallback;
+      });
+    // The synthesis version does not depend on the clade: ask for it right away.
+    const info = soft(synthesisInfo(signal), null);
     // mrca rejects the whole request when an id is not in the synthetic tree.
     const { result: ancestor } = await dropUnknownIds(ids, (keep) => mrca(keep, signal));
     const clade: Clade = {
@@ -395,23 +429,50 @@ export default class PhyloStore {
       ottId: ancestor.ottId ?? 0,
       numTips: ancestor.numTips ?? 0,
     };
+    // The synthesis row shows (provisionally) as soon as the clade is known, while
+    // its induced subtree and the published study trees are fetched.
     runInAction(() => {
       this.clade = clade;
+      this.candidates = [syntheticCandidate(null)];
+      this.rowOrder = [SYNTHETIC_ID];
     });
+    void info.then(
+      (synth) => {
+        if (!synth || signal.aborted) return;
+        runInAction(() => {
+          const row = this.syntheticTree;
+          if (row) Object.assign(row, { ...syntheticCandidate(synth), coverage: row.coverage, coverageState: row.coverageState });
+        });
+      },
+      () => undefined,
+    );
+    const synthesis = inducedSubtree(ids, signal).then(
+      (induced) => {
+        if (signal.aborted) return;
+        this.newicks.set(SYNTHETIC_ID, Promise.resolve(induced.newick));
+        this.inducedBroken = induced.broken;
+        runInAction(() => {
+          const row = this.syntheticTree;
+          if (!row) return;
+          const built = this.buildTree(row, induced.newick);
+          row.coverage = { matched: built.kept, total: rows.length };
+          row.coverageState = 'ready';
+          this.brokenTaxa = built.broken;
+          if (this.selectedId === null) this.select(SYNTHETIC_ID, 'default');
+        });
+      },
+      (error: unknown) => {
+        if (isAbortError(error) || signal.aborted) return;
+        runInAction(() => {
+          const row = this.syntheticTree;
+          if (row) row.coverageState = 'error';
+          const first = this.rowOrder.find((id) => id !== SYNTHETIC_ID);
+          if (this.selectedId === null && this.candidatesState === 'ready' && first) this.select(first, 'default');
+        });
+      },
+    );
 
-    const soft = <T>(promise: Promise<T>, fallback: T): Promise<T> =>
-      promise.catch((error) => {
-        if (isAbortError(error) || signal.aborted) throw error;
-        return fallback;
-      });
-    const [info, induced, cladeTrees] = await Promise.all([
-      soft(synthesisInfo(signal), null),
-      inducedSubtree(ids, signal).catch((error: unknown) => {
-        if (isAbortError(error) || signal.aborted) throw error;
-        return error instanceof Error ? error : new Error(String(error));
-      }),
-      soft(findStudyTrees({ ottId: ancestor.ottId, taxonName: ancestor.name }, signal), [] as StudyTree[]),
-    ]);
+    const cladeTrees = await soft(findStudyTrees({ ottId: ancestor.ottId, taxonName: ancestor.name }, signal), [] as StudyTree[]);
     const lists: StudyTree[][] = [cladeTrees];
     if (cladeTrees.length < FEW_STUDY_TREES) {
       const genera = largestGenera(rows).filter((genus) => genus !== clade.name);
@@ -419,31 +480,24 @@ export default class PhyloStore {
         ...(await Promise.all(genera.map((genus) => soft(findStudyTrees({ taxonName: genus }, signal), [])))),
       );
     }
+    if (signal.aborted) return;
 
-    const synthetic = syntheticCandidate(info);
-    if (induced instanceof Error) {
-      synthetic.coverageState = 'error';
-    } else {
-      this.newicks.set(SYNTHETIC_ID, Promise.resolve(induced.newick));
-      this.inducedBroken = induced.broken;
-      const built = this.buildTree(synthetic, induced.newick);
-      synthetic.coverage = { matched: built.kept, total: rows.length };
-      synthetic.coverageState = 'ready';
-    }
     const allStudies = studyCandidates(lists);
-    const studies = allStudies.slice(0, MAX_COVERAGE_CHECKS);
-    const order = initialOrder([synthetic, ...studies]);
+    const studies = capByStudy(allStudies);
     runInAction(() => {
-      this.brokenTaxa = this.built.get(SYNTHETIC_ID)?.broken ?? [];
+      const synthetic = this.syntheticTree ?? syntheticCandidate(null);
       this.studyTreesFound = allStudies.length;
       this.candidates = [synthetic, ...studies];
-      this.rowOrder = order;
+      this.rowOrder = initialOrder(this.candidates);
       this.noOverlapIds = [];
       this.candidatesState = 'ready';
+      if (this.selectedId === null && synthetic.coverageState === 'error' && studies[0]) {
+        this.select(studies[0].id, 'default');
+      }
     });
-    if (this.selectedId === null) {
-      this.select(synthetic.coverageState === 'ready' ? SYNTHETIC_ID : (studies[0]?.id ?? SYNTHETIC_ID), 'default');
-    }
+    // A run without study trees still waits for the synthesis before it is 'ready'.
+    if (studies.length === 0) await synthesis;
+    const order = this.rowOrder;
 
     // Exact coverage runs in the background, in table order (dated trees first);
     // rows show "checking…" until it is done.
@@ -493,13 +547,12 @@ export default class PhyloStore {
         const { kept, hasBranchLengths } = coverageOfTips(treeTips, join);
         const matched = kept.size;
         this.tips.set(candidate.id, treeTips);
-        this.updateCandidate(candidate.id, { matched, hasBranchLengths });
+        this.updateCandidate(candidate.id, { matched, hasBranchLengths, tips: treeTips.labels.length });
         continue;
       }
       try {
         const newick = await withDeadline(COVERAGE_TIMEOUT_MS, signal, (s) => this.newick(candidate, s));
-        const { matched, hasBranchLengths } = coverageOf(newick, join);
-        this.updateCandidate(candidate.id, { matched, hasBranchLengths });
+        this.updateCandidate(candidate.id, coverageOf(newick, join));
       } catch (error) {
         if (isAbortError(error) || signal.aborted) return;
         this.updateCandidate(candidate.id, error instanceof TimeoutError ? 'timeout' : 'failed');
@@ -548,7 +601,7 @@ export default class PhyloStore {
   /** Record exact coverage (or why it failed) and the actual branch lengths of a study tree. */
   private updateCandidate(
     id: string,
-    result: { matched: number; hasBranchLengths: boolean } | 'timeout' | 'failed',
+    result: { matched: number; hasBranchLengths: boolean; tips?: number } | 'timeout' | 'failed',
   ) {
     // Row order is not touched here: rows keep their place until all checks finish.
     const candidate = this.candidates.find((c) => c.id === id);
@@ -561,6 +614,7 @@ export default class PhyloStore {
     candidate.coverageError = undefined;
     candidate.coverage = { matched: result.matched, total: this.datasetNames.length };
     candidate.coverageState = 'ready';
+    if (result.tips != null) candidate.tipCount = result.tips;
     if (!result.hasBranchLengths) candidate.branchLengths = 'none';
     else if (candidate.branchLengths === 'none') candidate.branchLengths = 'other';
   }

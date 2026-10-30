@@ -10,6 +10,7 @@ import { PopoverArrow, PopoverBody, PopoverContent, PopoverRoot, PopoverTrigger 
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
 import { sectionHeading } from './BiasPanel';
+import { insightsScope, ScopeLine } from './ScopeLine';
 
 const COLLAPSED = 5;
 
@@ -325,6 +326,7 @@ export default observer(function CompositionPanel() {
   if (previews.length === 0 || total === 0) return null;
 
   const stale = state === 'stale';
+  const scope = insightsScope(ex);
   return (
     <Box as="section" aria-labelledby="composition-heading">
       <HStack justify="space-between" mb={1} minH={6}>
@@ -332,6 +334,7 @@ export default observer(function CompositionPanel() {
           Composition
         </Text>
       </HStack>
+      <ScopeLine scope={scope} partialNote={false} />
       <Stack gap={3} aria-busy={stale || undefined} opacity={stale ? 0.5 : 1} transition="opacity 0.15s">
         <ShareList
           id="basis"

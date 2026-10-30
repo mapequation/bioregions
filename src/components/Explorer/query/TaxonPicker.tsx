@@ -96,8 +96,11 @@ function SuggestionRow({ t }: { t: TaxonSuggestion }) {
 const TaxonChips = observer(function TaxonChips() {
   const { explorerStore } = useStore();
   const q = explorerStore.query;
-  const both = q.sources.gbif && q.sources.obis;
-  const notInObis = new Set(explorerStore.sources.obis.gbifOnlyTaxa);
+  // Coverage comes from the sources, not from how a taxon was added (typed or restored): once the
+  // OBIS preview has resolved the names, its list of unresolved taxa decides; before, the AphiaID.
+  const obis = explorerStore.sources.obis;
+  const obisResolved = q.sources.obis && obis.state === 'ready';
+  const notInObis = new Set(obis.gbifOnlyTaxa);
   if (q.taxa.length === 0) {
     return (
       <Text fontSize="xs" color="fg.muted" mt={2}>
@@ -109,8 +112,8 @@ const TaxonChips = observer(function TaxonChips() {
     <Wrap gap={1.5} mt={2.5} as="ul" aria-label="Selected taxa" listStyleType="none">
       {q.taxa.map((t) => {
         let note: string | null = null;
-        if (both && (t.obisId == null || notInObis.has(t.name))) note = 'GBIF only';
-        else if (both && t.gbifKey == null) note = 'OBIS only';
+        if (t.gbifKey == null) note = 'OBIS only';
+        else if (obisResolved ? notInObis.has(t.name) : t.obisId == null) note = 'GBIF only';
         return (
           <Box as="li" key={t.name} maxW="full">
             <Tag.Root
@@ -129,7 +132,14 @@ const TaxonChips = observer(function TaxonChips() {
                   {rankLabel(t.rank)}
                 </Text>
                 {note && (
-                  <Text as="span" fontSize="2xs" color="orange.fg" fontWeight="medium" whiteSpace="nowrap">
+                  <Text
+                    as="span"
+                    fontSize="2xs"
+                    color="orange.fg"
+                    fontWeight="medium"
+                    whiteSpace="nowrap"
+                    title={note === 'GBIF only' ? 'Not in OBIS (no WoRMS AphiaID)' : 'Not in the GBIF backbone'}
+                  >
                     {note}
                   </Text>
                 )}

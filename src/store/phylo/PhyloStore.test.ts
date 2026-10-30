@@ -266,4 +266,31 @@ describe('PhyloStore', () => {
     expect(store.selectionReason).toBe('user');
     store.dispose();
   });
+
+  it('shows the synthesis row and offers it as soon as the clade is known, while trees are searched', async () => {
+    mockOtol();
+    let release: (trees: otol.StudyTree[]) => void = () => undefined;
+    vi.mocked(otol.findStudyTrees).mockImplementation(({ taxonName }) =>
+      taxonName === 'Callitrichidae'
+        ? new Promise<otol.StudyTree[]>((resolve) => (release = resolve))
+        : Promise.resolve([]),
+    );
+    const root = fakeRoot();
+    const store = new PhyloStore(root as unknown as RootStore);
+    root.explorerStore.isOpen = true;
+    root.explorerStore.tab = 'phylogeny';
+    await when(() => store.selection != null);
+
+    expect(store.candidatesState).toBe('loading');
+    expect(store.searchingTrees).toBe(true);
+    expect(store.awaitingBestTree).toBe(true);
+    expect(store.rowGroups.map((g) => g.lead.id)).toEqual(['synthetic']);
+    expect(store.selectedId).toBe('synthetic');
+    expect(store.syntheticTree?.synthVersion).toBe('v15.1');
+
+    release([]);
+    await when(() => store.matchState === 'ready');
+    expect(store.searchingTrees).toBe(false);
+    expect(store.checkingCoverage).toBe(false);
+  });
 });

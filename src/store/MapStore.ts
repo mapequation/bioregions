@@ -469,6 +469,69 @@ export default class MapStore {
     this.setProjection(this.projectionName);
   }
 
+  /**
+   * Frame the binned data: a flat projection zooms/pans so the grid cells' extent fills the view
+   * (with `padding` as a share of each side, zoom capped at `maxZoom`, and the pan kept on the
+   * world where it covers the view); the globe rotates to face the data. A no-op without cells.
+   */
+  fitToData(padding = 0.1, maxZoom = 8) {
+    const engine = this.engine;
+    const cells = this.rootStore.speciesStore.binner.cells;
+    if (engine === null || cells.length === 0) return;
+
+    if ((this.projection.clipAngle() ?? 0) > 0) {
+      const [lon, lat] = d3.geoCentroid({
+        type: 'MultiPoint',
+        coordinates: cells.map((c) => [(c.x1 + c.x2) / 2, (c.y1 + c.y2) / 2]),
+      });
+      this.projection = fitProjection(
+        PROJECTION_FACTORIES[this.projectionName]().precision(0.1).rotate([-lon, -lat]),
+        sphere as GeoJSON.GeoJSON,
+        this.width,
+        this.height,
+      );
+      engine.setProjection(this.projection);
+      return;
+    }
+
+    // Data bounds in projected (untransformed) pixels, from the cell corners.
+    const projection = this.projection;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const c of cells) {
+      for (const corner of [[c.x1, c.y1], [c.x1, c.y2], [c.x2, c.y1], [c.x2, c.y2]] as const) {
+        const p = projection([corner[0], Math.max(-85, Math.min(85, corner[1]))]);
+        if (p === null || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) continue;
+        x0 = Math.min(x0, p[0]);
+        y0 = Math.min(y0, p[1]);
+        x1 = Math.max(x1, p[0]);
+        y1 = Math.max(y1, p[1]);
+      }
+    }
+    if (!Number.isFinite(x0) || !Number.isFinite(y0)) return;
+
+    const { width: W, height: H } = this;
+    const fit = 1 - 2 * padding;
+    const k = Math.max(1, Math.min(maxZoom, (W * fit) / Math.max(x1 - x0, 1), (H * fit) / Math.max(y1 - y0, 1)));
+    // Centre the data, then keep the zoomed world covering the view where it can (no empty
+    // band beyond the world's edge); where the world is narrower than the view, centre it.
+    const [[sx0, sy0], [sx1, sy1]] = d3.geoPath(projection).bounds(sphere);
+    const place = (centre: number, size: number, lo: number, hi: number) => {
+      const min = size - k * hi;
+      const max = -k * lo;
+      return min > max ? size / 2 - (k * (lo + hi)) / 2 : Math.max(min, Math.min(max, size / 2 - k * centre));
+    };
+    engine.setTransform({
+      k,
+      x: place((x0 + x1) / 2, W, sx0, sx1),
+      y: place((y0 + y1) / 2, H, sy0, sy1),
+    });
+    // Re-seed d3-zoom from the engine's transform so the next wheel/drag continues from here.
+    engine.enableZoom([1, 18]);
+  }
+
   // --- Hover tooltip + cross-highlight (native d3gl interaction) ---
 
   /** Track the hovered grid cell + pointer position for the React tooltip. Fires from d3gl's

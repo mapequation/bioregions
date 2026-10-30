@@ -99,7 +99,7 @@ const byStatus = (rows: NameMatchRow[], statuses: MatchStatus[]) => rows.filter(
 
 /** NAMES: progress of the Open Tree name matching, then matched/synonym/unmatched counts and lists. */
 export default observer(function NameMatchSummary() {
-  const { phyloStore, speciesStore } = useStore();
+  const { phyloStore, speciesStore, explorerStore } = useStore();
   const { matches, matchProgress, counts, speciesSource } = phyloStore;
   const total = matchProgress?.total ?? (matches.length || (speciesSource === 'loaded' ? speciesStore.numSpecies : 0));
   const synonyms = byStatus(matches, ['synonym']);
@@ -108,6 +108,11 @@ export default observer(function NameMatchSummary() {
   const share = (n: number) => (sum > 0 ? `${(n / sum) * 100}%` : '0%');
   const noMatches = matchProgress == null && sum > 0 && counts.matched + counts.synonym === 0;
   const sourceLabel = speciesSource === 'query' ? 'species in the query' : 'loaded species';
+  // Query species GBIF counts but cannot name (no accepted species name): never matched.
+  const withoutName =
+    speciesSource === 'query' && 'speciesWithoutName' in explorerStore
+      ? Number(explorerStore.speciesWithoutName) || 0
+      : 0;
 
   const copyUnmatched = [
     ...new Set(
@@ -193,6 +198,13 @@ export default observer(function NameMatchSummary() {
             </HStack>
           </HStack>
         </Stack>
+      )}
+
+      {withoutName > 0 && matchProgress == null && (
+        <Text textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" data-testid="phylo-without-name">
+          Plus {fmtInt(withoutName)} species without an accepted name, which can't be
+          matched.
+        </Text>
       )}
 
       {noMatches && (

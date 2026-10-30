@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OccurrenceQuery } from '../types';
+import { gbifDownloadPredicate } from './predicate';
 import {
   base64Utf8,
+  describeDownloadScope,
+  downloadScope,
+  scopeDifferences,
   GbifDownloadError,
   gbifDownloadBody,
   gbifDownloadCitation,
@@ -133,5 +137,27 @@ describe('gbifDownloadCitation', () => {
     expect(gbifDownloadCitation(succeeded)).toBe(
       'GBIF.org (30 October 2026) GBIF Occurrence Download https://doi.org/10.15468/dl.gpysnc',
     );
+  });
+});
+
+describe('downloadScope', () => {
+  it('reads taxa, area and years from our predicate and from gbif.org-style ones alike', () => {
+    const ours = downloadScope(gbifDownloadPredicate({ ...query, area: { kind: 'countries', codes: ['BR', 'AR'] }, years: [1970, 2025] }));
+    expect(ours).toEqual({ taxonKeys: ['9703'], geometries: [], countries: ['AR', 'BR'], years: [1970, 2025] });
+    const site = downloadScope({
+      type: 'and',
+      predicates: [
+        { type: 'or', predicates: [{ type: 'equals', key: 'COUNTRY', value: 'br' }] },
+        { type: 'in', key: 'COUNTRY', values: ['BR', 'AR'] },
+        { type: 'greaterThan', key: 'YEAR', value: '1969' },
+        { type: 'lessThanOrEquals', key: 'YEAR', value: '2025' },
+        { type: 'or', predicates: [{ type: 'equals', key: 'TAXON_KEY', value: '9703' }] },
+      ],
+    });
+    expect(scopeDifferences(site, ours)).toEqual([]);
+    expect(scopeDifferences({ ...site, years: [1970, null] }, ours)).toEqual(['years']);
+    expect(downloadScope({ type: 'equals', key: 'YEAR', value: '2000,*' }).years).toEqual([2000, null]);
+    expect(describeDownloadScope(ours, new Map([['9703', 'Felidae']]))).toBe('Felidae · countries AR, BR · 1970–2025');
+    expect(describeDownloadScope(downloadScope({ type: 'and', predicates: [] }))).toBe('All taxa · worldwide · all years');
   });
 });

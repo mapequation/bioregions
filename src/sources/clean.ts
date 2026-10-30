@@ -90,6 +90,7 @@ const DROP_REASONS: DropReason[] = [
   'zeroCoordinates',
   'outsideArea',
   'duplicate',
+  'crossSource',
   'lowCount',
 ];
 
@@ -121,7 +122,8 @@ export class RecordCleaner {
   private readonly dedupe: DedupeMode;
   private readonly bbox: BBox | null;
   private readonly lowCount: Partial<Record<RecordSource, ReadonlySet<string>>>;
-  private readonly seen = new Set<string>();
+  /** Dedupe key -> the source it was first seen from (to tell cross-source overlap from thinning). */
+  private readonly seen = new Map<string, RecordSource>();
   private readonly names = new Map<string, string | null>();
   private state: Funnel = emptyFunnel();
 
@@ -188,11 +190,13 @@ export class RecordCleaner {
           dedupe === 'exact'
             ? `${name}|${Math.round(lon * 1e4)}|${Math.round(lat * 1e4)}`
             : `${name}|${Math.floor(lon * 100)}|${Math.floor(lat * 100)}`;
-        if (seen.has(key)) {
-          dropped.duplicate++;
+        const first = seen.get(key);
+        if (first !== undefined) {
+          if (first === r.source) dropped.duplicate++;
+          else dropped.crossSource++;
           continue;
         }
-        seen.add(key);
+        seen.set(key, r.source);
       }
       f.accepted++;
       counts.accepted++;

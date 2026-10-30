@@ -13,7 +13,7 @@ function setup() {
     renderShape: vi.fn(),
     render: vi.fn(),
   };
-  const infomapStore = { run: vi.fn(async () => {}) };
+  const infomapStore = { run: vi.fn(async () => {}), clearData: vi.fn() };
   const rootStore = { mapStore, infomapStore } as unknown as RootStore;
   const store = new SpeciesStore(rootStore);
   rootStore.speciesStore = store;
@@ -110,6 +110,27 @@ describe('SpeciesStore.loadRecords', () => {
     expect(result).toEqual({ received: 1 });
     expect(store.collection.features).toHaveLength(1);
     expect(infomapStore.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a stopped load on the record layer without Infomap when asked, and runs it later', async () => {
+    const { store, infomapStore, mapStore } = setup();
+    const controller = new AbortController();
+    await store.loadRecords(
+      stream([[rec('A')], [rec('B')]], {
+        before: (i) => {
+          if (i === 1) controller.abort('keep');
+        },
+      }),
+      { name: 'partial', controller, skipBioregions: () => controller.signal.aborted },
+    );
+    expect(store.collection.features).toHaveLength(1);
+    expect(store.loaded).toBe(true);
+    expect(infomapStore.run).not.toHaveBeenCalled();
+    expect(infomapStore.clearData).toHaveBeenCalled();
+    expect(mapStore.setRenderType).toHaveBeenLastCalledWith('records');
+    await store.runBioregions();
+    expect(infomapStore.run).toHaveBeenCalledTimes(1);
+    expect(mapStore.setRenderType).toHaveBeenLastCalledWith('bioregions');
   });
 
   it('drops what arrived on discard, even into an add', async () => {

@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '../../../store';
 import type { TreeCandidate } from '../../../store/explorer/types';
-import { lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
+import { groupByStudy, lengthUnits, type PhyloCandidate } from '../../../store/phylo/candidates';
 import ShareBar from '../charts/ShareBar';
 import { fmtInt, fmtPct } from '../format';
 
@@ -116,6 +116,12 @@ function CoverageCell({ c, onRetry }: { c: PhyloCandidate; onRetry: (id: string)
   );
 }
 
+/** Short branch-length unit for the table, '–' when the study does not state one. */
+function unitLabel(c: PhyloCandidate): string {
+  const units = lengthUnits(c);
+  return units.short === 'unknown' ? '–' : units.short;
+}
+
 function LengthsCell({ c }: { c: PhyloCandidate }) {
   const units = lengthUnits(c);
   const unsure = unverified(c);
@@ -127,7 +133,7 @@ function LengthsCell({ c }: { c: PhyloCandidate }) {
           ? `Time-calibrated; branch lengths in ${units.long}.`
           : 'Time-calibrated; Open Tree records no unit, so millions of years is assumed.'
         : units.short === 'unknown'
-          ? 'Branch lengths are not time and Open Tree records no unit; they are used as relative time.'
+          ? 'Branch-length units not stated in the study; they are used as relative time.'
           : `Branch lengths in ${units.long}, used as relative time.`;
   const tip = unsure ? `${known} ${UNVERIFIED_TIP}` : known;
   return (
@@ -138,16 +144,89 @@ function LengthsCell({ c }: { c: PhyloCandidate }) {
         truncate
         tabIndex={0}
         color={unsure ? 'fg.muted' : c.branchLengths === 'time' ? 'fg' : 'fg.muted'}
+        aria-label={units.short === 'unknown' ? 'units not stated' : undefined}
       >
-        {units.short}
+        {unitLabel(c)}
         {unsure && <Unsure />}
       </Text>
     </Tooltip>
   );
 }
 
-/** Source cell: 'Springer et al. 2012' and a short muted tree label below it. */
-function SourceCell({ c, selected }: { c: PhyloCandidate; selected: boolean }) {
+/** A tree's label (up to two lines), with the full curator label and tree id in a tooltip. */
+function Subtitle({ c, text }: { c: PhyloCandidate; text: string }) {
+  return (
+    <Tooltip content={c.subtitleDetail ?? text} showArrow openDelay={400} contentProps={{ maxW: '360px' }}>
+      <Text lineClamp={2} textStyle="xs" lineHeight="1rem" color="fg.muted" wordBreak="break-word">
+        {text}
+      </Text>
+    </Tooltip>
+  );
+}
+
+/**
+ * Source cell: 'Springer et al. 2012', the shown tree's label below it and, for a
+ * study with several trees, a '7 trees' disclosure that lists the others.
+ */
+function SourceCell({
+  c,
+  selected,
+  trees = 1,
+  expanded,
+  onToggle,
+  controls,
+}: {
+  c: PhyloCandidate;
+  selected: boolean;
+  trees?: number;
+  expanded?: boolean;
+  onToggle?: () => void;
+  controls?: string;
+}) {
+  const toggle =
+    trees > 1 &&
+    (onToggle ? (
+      <chakra.button
+        type="button"
+        data-testid="tree-group-toggle"
+        display="inline-flex"
+        alignItems="center"
+        gap={0.5}
+        flexShrink={0}
+        ps={0.5}
+        pe={1.5}
+        h={4}
+        borderRadius="sm"
+        textStyle="xs"
+        lineHeight="1rem"
+        fontWeight="medium"
+        color="fg"
+        fontVariantNumeric="tabular-nums"
+        whiteSpace="nowrap"
+        cursor="pointer"
+        _hover={{ bg: 'bg.muted' }}
+        focusVisibleRing="outside"
+        aria-expanded={expanded}
+        aria-controls={controls}
+        aria-label={`${fmtInt(trees)} trees of ${c.title}: ${expanded ? 'hide' : 'show'} the other ${fmtInt(trees - 1)}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        <Icon
+          as={LuChevronRight}
+          boxSize={3.5}
+          transition="transform 0.15s"
+          transform={expanded ? 'rotate(90deg)' : undefined}
+        />
+        {fmtInt(trees)} trees
+      </chakra.button>
+    ) : (
+      <Text as="span" textStyle="xs" lineHeight="1rem" color="fg.muted" flexShrink={0} fontVariantNumeric="tabular-nums">
+        {fmtInt(trees)} trees
+      </Text>
+    ));
   return (
     <Stack gap={0} minW={0}>
       <Tooltip content={c.citation || c.title} showArrow openDelay={400} contentProps={{ maxW: '360px' }}>
@@ -155,21 +234,54 @@ function SourceCell({ c, selected }: { c: PhyloCandidate; selected: boolean }) {
           {c.title}
         </Text>
       </Tooltip>
-      {c.subtitle ? (
-        <Tooltip
-          content={c.subtitleDetail ?? c.subtitle}
-          showArrow
-          openDelay={400}
-          disabled={!c.subtitleDetail}
-          contentProps={{ maxW: '360px' }}
-        >
-          <Text truncate textStyle="xs" lineHeight="1rem" color="fg.muted">
-            {c.subtitle}
-          </Text>
-        </Tooltip>
+      {toggle ? (
+        <Flex align="flex-start" gap={2} minW={0}>
+          {toggle}
+          {c.subtitle && (
+            <Box minW={0} flex="1">
+              <Subtitle c={c} text={c.subtitle} />
+            </Box>
+          )}
+        </Flex>
+      ) : c.subtitle ? (
+        <Subtitle c={c} text={c.subtitle} />
       ) : (
         <Box h="1rem" aria-hidden />
       )}
+    </Stack>
+  );
+}
+
+/** '412 tips · Myr' for a study's other trees, so trees with similar labels can be told apart. */
+function treeFacts(c: PhyloCandidate): string {
+  const parts: string[] = [];
+  if (c.tipCount != null) parts.push(`${fmtInt(c.tipCount)} ${c.tipCount === 1 ? 'tip' : 'tips'}`);
+  const unit = lengthUnits(c).short;
+  parts.push(unit === 'unknown' ? 'units not stated' : unit === 'Grafen' ? 'no branch lengths' : unit);
+  return parts.join(' · ');
+}
+
+/** One of a study's other trees, in the expanded group: its label and how it differs. */
+function AlternativeCell({ c, selected }: { c: PhyloCandidate; selected: boolean }) {
+  // The cleaned label ('tree 2 of 7' when the curator gave none); the full one is in the tooltip.
+  const label = c.subtitle ?? c.treeId ?? c.id;
+  return (
+    <Stack gap={0} minW={0} ps={3} borderLeftWidth="2px" borderColor="border.emphasized">
+      <Tooltip content={c.subtitleDetail ?? label} showArrow openDelay={400} contentProps={{ maxW: '360px' }}>
+        <Text
+          lineClamp={2}
+          textStyle="xs"
+          lineHeight="1rem"
+          fontWeight={selected ? 'semibold' : 'medium'}
+          color="fg"
+          wordBreak="break-word"
+        >
+          {label}
+        </Text>
+      </Tooltip>
+      <Text textStyle="xs" lineHeight="1rem" color="fg.muted" fontVariantNumeric="tabular-nums" truncate>
+        {treeFacts(c)}
+      </Text>
     </Stack>
   );
 }
@@ -216,6 +328,7 @@ function DoiCell({ c }: { c: TreeCandidate }) {
 }
 
 const ROW_H = '52px';
+const ALT_ROW_H = '44px';
 const COLS = 6;
 
 const SKELETON_ROWS = [0, 1, 2, 3];
@@ -225,9 +338,21 @@ export default observer(function TreeSourceTable() {
   const { phyloStore } = useStore();
   const { clade, candidates, candidatesState, sort, datedOnly, selectedId, matchProgress } = phyloStore;
   const rows = phyloStore.visibleCandidates;
+  const groups = phyloStore.rowGroups;
   const noOverlap = phyloStore.noOverlapCandidates;
+  const noOverlapGroups = groupByStudy(noOverlap, null, true);
   const [showNoOverlap, setShowNoOverlap] = useState(false);
+  // Expanded study groups, by study id.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleGroup = (key: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const checking = phyloStore.checkingCoverage;
+  const searching = phyloStore.searchingTrees;
+  const sources = new Set(candidates.map((c) => c.studyId ?? c.id)).size;
   const progress = phyloStore.coverageProgress;
   const waiting = matchProgress != null || (candidatesState === 'loading' && candidates.length === 0);
   const retry = (id: string) => void phyloStore.retryCoverage(id);
@@ -336,11 +461,13 @@ export default observer(function TreeSourceTable() {
                       <Table.Cell />
                     </Table.Row>
                   ))
-                : rows.map((c) => {
+                : groups.flatMap(({ key, lead: c, others }) => {
                     const selected = c.id === selectedId;
-                    return (
+                    const open = others.length > 0 && expanded.has(key);
+                    const altId = (i: number) => `phylo-alt-${key}-${i}`;
+                    const leadRow = (
                       <Table.Row
-                        key={c.id}
+                        key={key}
                         data-testid="tree-row"
                         data-selected={selected || undefined}
                         aria-selected={selected}
@@ -357,7 +484,14 @@ export default observer(function TreeSourceTable() {
                           </RadioGroup.Item>
                         </Table.Cell>
                         <Table.Cell>
-                          <SourceCell c={c} selected={selected} />
+                          <SourceCell
+                            c={c}
+                            selected={selected}
+                            trees={others.length + 1}
+                            expanded={open}
+                            onToggle={() => toggleGroup(key)}
+                            controls={others.map((_, i) => altId(i)).join(' ')}
+                          />
                         </Table.Cell>
                         <Table.Cell>
                           <CoverageCell c={c} onRetry={retry} />
@@ -373,7 +507,75 @@ export default observer(function TreeSourceTable() {
                         </Table.Cell>
                       </Table.Row>
                     );
+                    if (!open) return [leadRow];
+                    return [
+                      leadRow,
+                      ...others.map((alt, i) => {
+                        const altSelected = alt.id === selectedId;
+                        return (
+                          <Table.Row
+                            key={alt.id}
+                            id={altId(i)}
+                            data-testid="tree-row-alt"
+                            data-selected={altSelected || undefined}
+                            aria-selected={altSelected}
+                            h={ALT_ROW_H}
+                            cursor="pointer"
+                            bg="bg.subtle"
+                            _hover={{ bg: 'bg.muted' }}
+                            onClick={() => select(alt.id)}
+                          >
+                            <Table.Cell>
+                              <RadioGroup.Item value={alt.id} display="flex">
+                                <RadioGroup.ItemHiddenInput
+                                  aria-label={`${alt.title}, ${alt.fullLabel ?? alt.subtitle ?? alt.id}`}
+                                />
+                                <RadioGroup.ItemIndicator />
+                              </RadioGroup.Item>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <AlternativeCell c={alt} selected={altSelected} />
+                            </Table.Cell>
+                            <Table.Cell>
+                              <CoverageCell c={alt} onRetry={retry} />
+                            </Table.Cell>
+                            <Table.Cell textAlign="center">
+                              <DatedCell c={alt} />
+                            </Table.Cell>
+                            <Table.Cell>
+                              <LengthsCell c={alt} />
+                            </Table.Cell>
+                            <Table.Cell />
+                          </Table.Row>
+                        );
+                      }),
+                    ];
                   })}
+              {!waiting &&
+                searching &&
+                SKELETON_ROWS.slice(0, 3).map((i) => (
+                  <Table.Row key={`searching-${i}`} h={ROW_H} aria-hidden>
+                    <Table.Cell>
+                      <Skeleton boxSize="14px" borderRadius="full" />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Stack gap={1.5}>
+                        <Skeleton h="3" w={`${70 - i * 12}%`} />
+                        <Skeleton h="2.5" w={`${45 - i * 8}%`} />
+                      </Stack>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton h="3" w="70%" />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton h="3" w="50%" mx="auto" />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Skeleton h="3" w="60%" />
+                    </Table.Cell>
+                    <Table.Cell />
+                  </Table.Row>
+                ))}
               {!waiting && noOverlap.length > 0 && (
                 <Table.Row bg="bg.subtle" _hover={{ bg: 'bg.muted' }}>
                   <Table.Cell colSpan={COLS} p={0}>
@@ -403,7 +605,7 @@ export default observer(function TreeSourceTable() {
                         No overlap with your species
                       </Text>
                       <Text as="span" fontVariantNumeric="tabular-nums">
-                        ({fmtInt(noOverlap.length)})
+                        ({fmtInt(noOverlapGroups.length)})
                       </Text>
                       <Text as="span" ms="auto" truncate>
                         These trees contain none of your species and can't be loaded.
@@ -414,9 +616,9 @@ export default observer(function TreeSourceTable() {
               )}
               {!waiting &&
                 showNoOverlap &&
-                noOverlap.map((c) => (
+                noOverlapGroups.map(({ key, lead: c, others }) => (
                   <Table.Row
-                    key={c.id}
+                    key={key}
                     data-testid="tree-row-no-overlap"
                     h={ROW_H}
                     color="fg.muted"
@@ -424,7 +626,7 @@ export default observer(function TreeSourceTable() {
                   >
                     <Table.Cell />
                     <Table.Cell>
-                      <SourceCell c={c} selected={false} />
+                      <SourceCell c={c} selected={false} trees={others.length + 1} />
                     </Table.Cell>
                     <Table.Cell>
                       <CoverageCell c={c} onRetry={retry} />
@@ -471,10 +673,11 @@ export default observer(function TreeSourceTable() {
               {waiting ? 'your clade, once names are matched' : 'your clade'}
             </Text>
           )}
-          {candidates.length > 0 && (
+          {candidates.length > 0 && !checking && (
             <Text as="span" textTransform="none" letterSpacing="normal" fontWeight="normal" fontVariantNumeric="tabular-nums">
               {' '}
               · {fmtInt(candidates.length)} {candidates.length === 1 ? 'tree' : 'trees'}
+              {sources < candidates.length && ` from ${fmtInt(sources)} sources`}
             </Text>
           )}
         </Text>
@@ -488,9 +691,19 @@ export default observer(function TreeSourceTable() {
             data-testid="phylo-coverage-progress"
           >
             <Icon as={LuLoaderCircle} animation="spin" animationDuration="1.2s" />
-            <Text as="span" minW="17ch">
-              Checking coverage {fmtInt(progress.done)}/{fmtInt(progress.total)}
-            </Text>
+            {searching ? (
+              <Text as="span">Searching for trees…</Text>
+            ) : (
+              <>
+                <Text as="span" hideBelow="xl">
+                  Checking coverage of {fmtInt(progress.total)} {progress.total === 1 ? 'tree' : 'trees'}…{' '}
+                  {fmtInt(progress.done)}/{fmtInt(progress.total)}
+                </Text>
+                <Text as="span" hideFrom="xl">
+                  Checking coverage {fmtInt(progress.done)}/{fmtInt(progress.total)}
+                </Text>
+              </>
+            )}
           </HStack>
         )}
         <HStack gap={2}>
@@ -523,9 +736,13 @@ export default observer(function TreeSourceTable() {
       {body}
       {!waiting && rows.length > 0 && (
         <Text textStyle="xs" color="fg.muted">
-          {checking
+          {searching
+            ? 'The synthesis can be loaded now; published trees are listed as Open Tree finds them.'
+            : checking
             ? 'Rows keep their order while coverage is checked, then sort once.'
-            : "Coverage counts dataset species found among each tree's tips. Hover a source for its citation."}
+            : groups.some((g) => g.others.length > 0)
+              ? "Coverage counts your species among each tree's tips. A study with several trees shows its best-covered one; expand it to pick another."
+              : "Coverage counts your species among each tree's tips. Hover a source for its citation."}
         </Text>
       )}
     </Stack>

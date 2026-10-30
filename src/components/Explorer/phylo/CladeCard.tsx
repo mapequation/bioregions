@@ -51,6 +51,11 @@ export default observer(function CladeCard() {
               Open Tree <LuExternalLink />
             </Link>
           </Flex>
+          {phyloStore.cladeNote && (
+            <Text textStyle="xs" color="fg.muted" data-testid="clade-name-note">
+              {phyloStore.cladeNote}
+            </Text>
+          )}
           <Stack gap={0} textStyle="xs" color="fg.muted" fontVariantNumeric="tabular-nums" data-testid="clade-counts">
             <Text>
               <Text as="span" color="fg" fontWeight="medium">

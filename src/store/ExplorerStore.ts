@@ -3,12 +3,22 @@
 // citation and the query library. Contract: spec section 4 of
 // docs/superpowers/specs/2026-10-30-data-explorer-ui.md.
 import { makeAutoObservable, observable, reaction, runInAction, toJS } from 'mobx';
-import { RecordCleaner } from '../sources/clean';
+import { RecordCleaner, toSpeciesName } from '../sources/clean';
+import { DEDUPE_RULE } from '../sources/methods';
 import { supportsGbif } from '../sources/gbif';
-import { GbifDownloadError, getGbifDownload, requestGbifDownload } from '../sources/gbif/download';
+import {
+  type GbifDownloadStatus,
+  GbifDownloadError,
+  describeDownloadScope,
+  downloadScope,
+  gbifTaxonNames,
+  getGbifDownload,
+  requestGbifDownload,
+  scopeDifferences,
+} from '../sources/gbif/download';
 import { gbifDownloadPredicate } from '../sources/gbif/predicate';
 import { streamGbif } from '../sources/gbif/stream';
-import { type GbifZipSummary, importGbifZip } from '../sources/gbif/zip';
+import { type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../sources/gbif/zip';
 import { streamObis } from '../sources/obis/stream';
 import type { Funnel, RecordBatch, StreamPlan } from '../sources/types';
 import { exampleStudies } from './explorer/examples';
@@ -32,6 +42,7 @@ import {
   buildMethodsText,
   buildObisCitation,
   citingDownload,
+  partialCoverage,
 } from './explorer/provenance';
 import type { SourceProgress } from './explorer/types';
 import { previewGbifImpact, previewGbifSummary } from '../sources/gbif/preview';
@@ -72,6 +83,7 @@ import type {
   EmptyReason,
   Estimate,
   GbifDownload,
+  InsightsScope,
   Kpis,
   LedgerRow,
   LedgerRowId,
@@ -81,6 +93,7 @@ import type {
   Preset,
   Provenance,
   QuerySection,
+  RecentShare,
   SavedQuery,
   SourceState,
   Tab,
@@ -240,13 +253,42 @@ export function partialLoad(p: {
   speciesPlanned: number | null;
   fetched: number;
 }): PartialLoad {
-  return {
+  const out = {
     planned: p.planned,
     accepted: p.accepted,
     speciesLoaded: p.speciesLoaded,
     speciesPlanned: p.speciesPlanned,
     notReceived: Math.max(0, p.planned - p.fetched),
   };
+  return { ...out, coverage: partialCoverage(out) };
+}
+
+/** A stopped load below this coverage keeps its records but does not run Infomap. */
+export const MIN_BIOREGION_COVERAGE = 0.5;
+
+/** Live species completeness of a load from the sources that report species, or null. */
+export function speciesCoverage(perSource: { speciesDone?: number; speciesTotal?: number }[]): number | null {
+  let done = 0;
+  let total = 0;
+  for (const p of perSource) {
+    if (p.speciesTotal == null || p.speciesTotal <= 0) continue;
+    done += Math.min(p.speciesDone ?? 0, p.speciesTotal);
+    total += p.speciesTotal;
+  }
+  return total > 0 ? done / total : null;
+}
+
+/** Merge a stream's progress into the job's, never letting the request total shrink. */
+export function mergeProgress<T extends { requestsTotal: number }>(into: T, update: Partial<T>): T {
+  const requestsTotal = Math.max(into.requestsTotal, update.requestsTotal ?? 0);
+  return Object.assign(into, update, { requestsTotal });
+}
+
+/** The provenance of the data on screen: after an empty load that kept it, the previous load's. */
+export function shownLoad(load: LoadProvenance | null): LoadProvenance | null {
+  if (!load) return null;
+  if (load.accepted > 0 || !load.previousKept) return load;
+  return load.previous ? shownLoad(load.previous) : null;
 }
 
 /** The provenance of the dataset still on screen after an empty load. */
@@ -331,6 +373,8 @@ export function metersLabel(m: number): string {
   return m >= 1000 ? `${Math.round(m / 100) / 10} km` : `${m} m`;
 }
 
+const fmtCount = (n: number) => n.toLocaleString('en-US');
+
 /** "31 %", "<1 %". */
 export function pctLabel(fraction: number): string {
   if (fraction > 0 && fraction < 0.005) return '<1 %';
@@ -366,6 +410,7 @@ export function isFilterActive(query: OccurrenceQuery, id: LedgerRowId): boolean
     case 'speciesLevel':
       return true;
     case 'duplicates':
+    case 'crossSource':
       return q.dedupe !== 'none';
   }
 }
@@ -405,10 +450,14 @@ export function ledgerLabel(query: OccurrenceQuery, id: LedgerRowId, memory: Tog
     case 'speciesLevel':
       return 'Not identified to species';
     case 'duplicates':
-      if (q.dedupe === 'cell') return 'Duplicates (same species in one ~1 km cell)';
-      return q.dedupe === 'none' ? 'Duplicates (kept)' : 'Duplicates (same species at one site)';
+      return q.dedupe === 'none' ? 'Duplicates (kept)' : `Duplicates (${DEDUPE_RULE[q.dedupe]})`;
+    case 'crossSource':
+      return CROSS_SOURCE_LABEL;
   }
 }
+
+/** Label of the fixed ledger row for records received from both GBIF and OBIS. */
+export const CROSS_SOURCE_LABEL = 'Same record in GBIF and OBIS';
 
 /** Records the minimum-records filter drops, from per-species counts. */
 export function minRecordsImpact(speciesCounts: FacetBucket[] | null, min: number): number | null {
@@ -428,8 +477,10 @@ export interface LedgerInput {
   base: number | null;
   /** Records not identified to species (preview totals minus plan totals); null before plans. */
   speciesLevel?: number | null;
-  /** Duplicates removed by the last load of this query; null before a load. */
+  /** Same-source duplicates removed by the last load of this query; null before a load. */
   duplicates?: number | null;
+  /** Records the last load of this query dropped as already received from the other source. */
+  crossSource?: number | null;
 }
 
 /** Share of the ledger base, or null when either is unknown. */
@@ -451,6 +502,7 @@ export function buildLedger({
   base,
   speciesLevel = null,
   duplicates = null,
+  crossSource = null,
 }: LedgerInput): LedgerRow[] {
   const filterRows = LEDGER_IDS.map((id): LedgerRow => {
     const active = isFilterActive(query, id);
@@ -470,6 +522,7 @@ export function buildLedger({
     [
       ['speciesLevel', speciesLevel],
       ['duplicates', dedupe ? duplicates : 0],
+      ['crossSource', dedupe ? crossSource : 0],
     ] as const
   ).map(([id, impact]) => ({
     id,
@@ -564,12 +617,11 @@ export function computeBiasFlags(
         },
   );
 
-  // Temporal skew: share of dated records from the last 15 years.
+  // Temporal skew: share of dated records from the last 15 years (one source with the year brush).
   const years = mergeYears(previews.map((p) => p.years));
-  const cutoff = currentYear - (RECENT_YEARS - 1);
-  const dated = years.reduce((sum, y) => sum + y.count, 0);
+  const { cutoffYear: cutoff, share } = recentShareOf(years, currentYear);
+  const recentShare = share ?? 0;
   const recent = years.reduce((sum, y) => sum + (y.year >= cutoff ? y.count : 0), 0);
-  const recentShare = dated > 0 ? recent / dated : 0;
   const [fromYear, toYear] = query.years;
   const lastYear = toYear ?? (years.length > 0 ? years[years.length - 1].year : currentYear);
   const canNarrow = (fromYear == null || fromYear < cutoff) && lastYear >= cutoff;
@@ -625,6 +677,21 @@ export function computeBiasFlags(
   }
 
   return [datasetFlag, humanFlag, temporalFlag, countryFlag, lowFlag];
+}
+
+/**
+ * Share of dated records from the last `RECENT_YEARS` years (inclusive) in a merged,
+ * filtered year histogram: the temporal-skew check and the year brush both read it.
+ */
+export function recentShareOf(years: { year: number; count: number }[], currentYear: number): RecentShare {
+  const cutoffYear = currentYear - (RECENT_YEARS - 1);
+  let dated = 0;
+  let recent = 0;
+  for (const y of years) {
+    dated += y.count;
+    if (y.year >= cutoffYear) recent += y.count;
+  }
+  return { cutoffYear, share: dated > 0 ? recent / dated : null };
 }
 
 const SECTION_KEYS: Record<QuerySection, (q: OccurrenceQuery) => string> = {
@@ -708,6 +775,118 @@ function shortError(error: unknown): string {
   if (error instanceof HttpError) return `HTTP ${error.status}`;
   const message = error instanceof Error ? error.message : String(error);
   return message.length > 80 ? `${message.slice(0, 79)}…` : message;
+}
+
+/** What a GBIF download was made for, compared with a query. */
+export interface DownloadCheck {
+  match: 'match' | 'mismatch' | 'unknown';
+  /** Parts that differ ('taxa', 'area', 'years'); empty on a match. */
+  differences: ('taxa' | 'area' | 'years')[];
+  /** The download's own taxa, area and years in words. */
+  text?: string;
+  doi?: string;
+  /** Why the check could not be made (offline, request failed, no predicate). */
+  failure?: string;
+}
+
+/** Most taxon names looked up for a download's description. */
+const MAX_NAME_LOOKUPS = 5;
+/** Give up on the download's metadata after this long. */
+const DOWNLOAD_CHECK_MS = 15_000;
+
+/**
+ * Fetch a download's metadata from GBIF and compare its taxa, area and years with the
+ * query's own download predicate (order-independent). Never throws: without the
+ * metadata the result is 'unknown'.
+ */
+export async function checkDownload(
+  key: string,
+  query: OccurrenceQuery,
+  signal?: AbortSignal,
+  fetchStatus: (key: string, signal?: AbortSignal) => Promise<GbifDownloadStatus> = getGbifDownload,
+): Promise<DownloadCheck> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { match: 'unknown', differences: [], failure: 'offline' };
+  }
+  const signals = [signal, AbortSignal.timeout(DOWNLOAD_CHECK_MS)].filter((s): s is AbortSignal => s != null);
+  const timed = AbortSignal.any(signals);
+  let status: GbifDownloadStatus;
+  try {
+    status = await fetchStatus(key, timed);
+  } catch (error) {
+    return { match: 'unknown', differences: [], failure: shortError(error) };
+  }
+  const doi = status.doi?.replace(/^https?:\/\/(dx\.)?doi\.org\//i, '') || undefined;
+  const predicate = status.request?.predicate;
+  if (!predicate) return { match: 'unknown', differences: [], doi, failure: 'no request in the metadata' };
+  const theirs = downloadScope(predicate);
+  const differences = scopeDifferences(theirs, downloadScope(gbifDownloadPredicate(query)));
+  const names = new Map<string, string>();
+  for (const t of query.taxa) if (t.gbifKey != null) names.set(String(t.gbifKey), t.name);
+  const unknown = theirs.taxonKeys.filter((k) => !names.has(k)).slice(0, MAX_NAME_LOOKUPS);
+  if (unknown.length > 0) {
+    try {
+      for (const [k, v] of await gbifTaxonNames(unknown, timed)) names.set(k, v);
+    } catch {
+      // Names are cosmetic: keys stay as "GBIF taxon <key>".
+    }
+  }
+  return {
+    match: differences.length === 0 ? 'match' : 'mismatch',
+    differences,
+    text: describeDownloadScope(theirs, names),
+    doi,
+  };
+}
+
+/**
+ * The verdict on a parsed download zip: whether it may replace the data on screen or
+ * cite it, and a sentence saying why. Counts are compared with the GBIF records on screen.
+ */
+export function zipVerdict(p: {
+  key: string | undefined;
+  doi: string | undefined;
+  check: DownloadCheck | null;
+  accepted: number;
+  received: number;
+  streamGbifRecords: number;
+  hasData: boolean;
+}): Pick<ZipImport, 'downloadKey' | 'doi' | 'queryMatch' | 'downloadQueryText' | 'canReplace' | 'canCiteDoi' | 'note'> {
+  const queryMatch = p.check?.match ?? 'unknown';
+  const out = {
+    ...(p.key && { downloadKey: p.key }),
+    ...(p.doi && { doi: p.doi }),
+    queryMatch,
+    ...(p.check?.text && { downloadQueryText: p.check.text }),
+    canReplace: queryMatch === 'match' && p.accepted > 0,
+    canCiteDoi: queryMatch === 'match' && p.hasData && !!p.doi,
+  };
+  const n = fmtCount;
+  let note: string;
+  if (queryMatch === 'unknown') {
+    note = !p.key
+      ? 'No GBIF download key in the file name or the zip, so what it was made for cannot be checked. It is not used to replace or cite your data.'
+      : `Could not read download ${p.key} from GBIF (${p.check?.failure ?? 'no response'}), so what it was made for cannot be checked. Try again online before replacing or citing.`;
+  } else if (queryMatch === 'mismatch') {
+    const what = p.check?.differences.length ? listWords(p.check.differences) : 'query';
+    const none = p.accepted === 0 && p.received > 0 ? ` None of its ${n(p.received)} records pass your query's area and cleaning.` : '';
+    note = `This download was made for a different query (its ${what} differ${p.check?.differences.length === 1 ? 's' : ''}), so its DOI cannot cite the data on screen and it cannot replace it.${none}`;
+  } else if (p.accepted === 0) {
+    note = `Made for this query, but none of its ${n(p.received)} records pass the area and cleaning, so there is nothing to load.`;
+  } else if (!p.hasData || p.streamGbifRecords === 0) {
+    note = `Made for this query: ${n(p.accepted)} of its ${n(p.received)} records pass cleaning.`;
+  } else if (p.accepted === p.streamGbifRecords) {
+    note = `Made for this query: its ${n(p.accepted)} records after cleaning equal the ${n(p.streamGbifRecords)} GBIF records on screen.`;
+  } else {
+    note = `Made for this query; GBIF changed between the two snapshots: ${n(p.accepted)} records after cleaning here, ${n(p.streamGbifRecords)} GBIF records on screen.`;
+  }
+  if (queryMatch === 'match' && p.hasData && !p.doi) note += ' The zip carries no DOI to cite.';
+  return { ...out, note };
+}
+
+/** "taxa", "taxa and area", "taxa, area and years". */
+function listWords(items: string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 // --- Store -------------------------------------------------------------------------
@@ -1268,9 +1447,39 @@ export default class ExplorerStore {
     return contributingPreviews(this.sources);
   }
 
-  /** Merged headline numbers, or null before the first preview. */
+  /**
+   * Merged headline numbers, or null before the first preview. Once the plans are in,
+   * `species` counts the distinct species names a load would bring (what the phylogeny
+   * tab lists): GBIF can hold two species keys with one name (e.g. Callithrix geoffroyi).
+   */
   get kpis(): Kpis | null {
-    return mergeKpis(this.previews);
+    const kpis = mergeKpis(this.previews);
+    const names = this.planNames;
+    return kpis && names ? { ...kpis, species: names.length } : kpis;
+  }
+
+  /** Distinct species names of the current plans (minimum records applied), or null before plans. */
+  private get planNames(): string[] | null {
+    if (this.plans.state !== 'ready' || !this.currentRawPlans) return null;
+    const ids = SOURCE_IDS.filter((id) => this.query.sources[id] && this.sources[id].supports.ok);
+    const plans = ids.map((id) => this.plans.plans[id]);
+    if (plans.length === 0 || plans.some((p) => !p?.speciesCounts)) return null;
+    return planSpeciesNames(plans);
+  }
+
+  /**
+   * Plan species entries (minimum records applied) whose name is not a usable species
+   * binomial: their records are dropped as "not identified to species", and the
+   * phylogeny tab cannot list them. 0 before plans.
+   */
+  get speciesWithoutName(): number {
+    if (this.plans.state !== 'ready' || !this.currentRawPlans) return 0;
+    let n = 0;
+    for (const id of SOURCE_IDS) {
+      if (!this.query.sources[id]) continue;
+      for (const b of this.plans.plans[id]?.speciesCounts ?? []) if (!toSpeciesName(b.label)) n++;
+    }
+    return n;
   }
 
   /** Overall preview status for skeletons and the "updating" veil. */
@@ -1342,7 +1551,13 @@ export default class ExplorerStore {
       base: this.ledgerBase,
       speciesLevel: this.speciesLevelImpact,
       duplicates: this.loadedForQuery?.funnel.dropped.duplicate ?? null,
+      crossSource: this.loadedForQuery?.funnel.dropped.crossSource ?? null,
     });
+  }
+
+  /** The dedupe rule in words for the current mode, e.g. "same species within ~11 m". */
+  get dedupeLabel(): string {
+    return DEDUPE_RULE[this.query.quality.dedupe];
   }
 
   /** Records matching the taxa and area with no ledger filter, summed over contributing sources. */
@@ -1387,12 +1602,42 @@ export default class ExplorerStore {
   get countStory(): CountStory {
     const est = this.estimate;
     const load = this.loadedForQuery;
+    const dropped = load?.funnel.dropped;
     return {
       matching: this.kpis ? this.ledgerTotal : null,
       speciesLevel: est?.exact ? est.records : null,
-      duplicates: load ? load.funnel.dropped.duplicate ?? 0 : null,
+      duplicates: dropped ? (dropped.duplicate ?? 0) + (dropped.crossSource ?? 0) : null,
+      crossSource: dropped ? (dropped.crossSource ?? 0) : null,
       loaded: load ? load.funnel.accepted : null,
     };
+  }
+
+  /**
+   * What the insights describe: the previewed query; once that query is loaded, the
+   * query you loaded; after a stopped load, the partial dataset.
+   */
+  get insightsScope(): InsightsScope {
+    const load = this.loadedMatchesQuery ? (this.lastLoad as LoadProvenance) : null;
+    if (load && load.accepted > 0 && load.partial) {
+      const p = load.partial;
+      const species =
+        p.speciesPlanned != null && p.speciesPlanned > 0 ? ` (${fmtCount(p.speciesLoaded)} of ${fmtCount(p.speciesPlanned)} species)` : '';
+      return {
+        kind: 'partial',
+        records: load.accepted,
+        label: `For the partial load · ${fmtCount(load.accepted)} of ~${fmtCount(p.planned)} records loaded${species}`,
+      };
+    }
+    if (load && load.accepted > 0) {
+      return { kind: 'loaded', records: load.accepted, label: `For the query you loaded · ${fmtCount(load.accepted)} records loaded` };
+    }
+    const records = this.ledgerTotal;
+    return { kind: 'query', records, label: `For the query · ${fmtCount(records)} matching records` };
+  }
+
+  /** Share of dated records in the last 15 years of the merged, filtered year histogram. */
+  get recentShare(): RecentShare {
+    return recentShareOf(mergeYears(this.previews.map((p) => p.years)), new Date().getFullYear());
   }
 
   /** Records matching all filters, summed over sources. */
@@ -1446,7 +1691,7 @@ export default class ExplorerStore {
     }
     if (!row) return null;
     const id = row.id;
-    if (id === 'speciesLevel' || id === 'duplicates') return null;
+    if (id === 'speciesLevel' || id === 'duplicates' || id === 'crossSource') return null;
     if (id === 'uncertainty') {
       const m = this.query.quality.maxUncertaintyMeters ?? 0;
       return m < 10000
@@ -1520,15 +1765,23 @@ export default class ExplorerStore {
     return last ? dirtySections(toJS(this.query), last) : new Set();
   }
 
+  /**
+   * Provenance of the dataset on screen: the last load, or after an empty load that kept
+   * the previous data, that data's load. The citation getters describe this one.
+   */
+  get shownLoad(): LoadProvenance | null {
+    return shownLoad(this.lastLoad as LoadProvenance | null);
+  }
+
   /** The download whose DOI cites the loaded (or, before a load, the current) query. */
   get citingDownload(): GbifDownload | null {
-    const load = this.lastLoad;
+    const load = this.shownLoad;
     return citingDownload(load, this.downloads, queryKey(load?.query ?? this.query));
   }
 
   /** Methods paragraph for the loaded dataset, or a draft for the current query before a load. */
   get methodsText(): string {
-    const load = this.lastLoad as LoadProvenance | null;
+    const load = this.shownLoad;
     return buildMethodsText({
       load,
       query: this.query,
@@ -1550,17 +1803,17 @@ export default class ExplorerStore {
 
   /** OBIS citation with dataset ids. */
   get obisCitation(): string {
-    return buildObisCitation(this.lastLoad);
+    return buildObisCitation(this.shownLoad);
   }
 
   /** GBIF derived-dataset CSV (datasetKey,count). */
   get datasetCsv(): string {
-    return buildDatasetCsv(this.lastLoad);
+    return buildDatasetCsv(this.shownLoad);
   }
 
   /** Decision ledger as CSV: filter impact (frozen at load), then the cleaning funnel. */
   get ledgerCsv(): string {
-    const load = this.lastLoad;
+    const load = this.shownLoad;
     return buildLedgerCsv(load?.ledger ?? this.ledger, load?.funnel ?? null);
   }
 
@@ -1674,6 +1927,7 @@ export default class ExplorerStore {
       perSource: [],
       funnel: emptyFunnel(),
       truncated: [],
+      speciesCoverage: null,
     };
     const job = this.job;
 
@@ -1741,6 +1995,7 @@ export default class ExplorerStore {
         job.perSource = perSource;
         job.funnel = seeded.adjust(cleaner.funnel);
         job.truncated = perSource.flatMap((p) => p.truncated ?? []);
+        job.speciesCoverage = speciesCoverage(perSource);
         const fetched = perSource.reduce((s, p) => s + p.fetched, 0);
         job.etaSeconds = etaSeconds(fetched, planned, now - startedAt);
       });
@@ -1756,11 +2011,13 @@ export default class ExplorerStore {
     };
 
     let finished = false;
+    /** Set by `finishLoad`: a stopped load too incomplete for bioregions. */
+    let skipBioregions = false;
     const finish = () => {
       if (finished) return;
       finished = true;
       flush(true);
-      this.finishLoad({
+      skipBioregions = this.finishLoad({
         job,
         query,
         mode,
@@ -1785,7 +2042,7 @@ export default class ExplorerStore {
           if (controller.signal.aborted) break;
           const p = progress.get(batch.source);
           if (p) {
-            Object.assign(p, batch.progress);
+            mergeProgress(p, batch.progress);
             p.state = batch.progress.retryAt && batch.progress.retryAt > Date.now() ? 'rateLimited' : 'streaming';
           }
           const records = seeded.filter(cleaner.accept(batch.records));
@@ -1808,6 +2065,7 @@ export default class ExplorerStore {
         name: queryTitle(query),
         clear: mode === 'replace',
         controller,
+        skipBioregions: () => skipBioregions,
       });
     } catch (error) {
       runInAction(() => {
@@ -1828,7 +2086,10 @@ export default class ExplorerStore {
     }
   }
 
-  /** Record the outcome of a load: job state, provenance and the recent list. */
+  /**
+   * Record the outcome of a load: job state, provenance and the recent list. Returns
+   * true when the load was stopped with too few species for bioregions (Infomap is skipped).
+   */
   private finishLoad(ctx: {
     job: LoadJob;
     query: OccurrenceQuery;
@@ -1847,7 +2108,7 @@ export default class ExplorerStore {
     hadData: boolean;
     errors: string[];
     plans: StreamPlan[];
-  }) {
+  }): boolean {
     const { job, query, controller, tally, errors, plans } = ctx;
     const funnel = ctx.seeded.adjust(ctx.cleaner.funnel);
     const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
@@ -1863,7 +2124,7 @@ export default class ExplorerStore {
       job.state = 'error';
       job.error = [EMPTY_MESSAGES[empty], ...errors].join('; ');
     } else job.state = 'done';
-    if (cancelled === 'discard' || failed) return;
+    if (cancelled === 'discard' || failed) return false;
 
     const requests: Partial<Record<SourceId, unknown>> = {};
     for (const p of plans) {
@@ -1877,45 +2138,62 @@ export default class ExplorerStore {
       yearRange: tally.yearRange,
       bySource: { ...tally.bySource },
     };
+    const partial =
+      cancelled || errors.length > 0
+        ? partialLoad({
+            planned: ctx.planned,
+            accepted: funnel.accepted,
+            speciesLoaded: tally.species.size,
+            speciesPlanned: plannedSpecies(plans),
+            fetched: ctx.fetched,
+          })
+        : null;
+    // Stopped with too few species: keep the records, leave bioregions to the user.
+    const skip = cancelled === 'keep' && funnel.accepted > 0 && partial != null && partial.coverage < MIN_BIOREGION_COVERAGE;
     const load: LoadProvenance = {
       query,
       retrievedAt: new Date().toISOString(),
       mode: ctx.mode,
       funnel,
       // The frozen ledger learns the duplicates the load removed.
-      ledger: ctx.ledger.map((r) =>
-        r.id === 'duplicates' && r.active
-          ? { ...r, impact: funnel.dropped.duplicate ?? 0, share: ledgerShare(funnel.dropped.duplicate ?? 0, ctx.ledgerBase) }
-          : r,
-      ),
+      ledger: ctx.ledger.map((r) => {
+        if (!r.active || (r.id !== 'duplicates' && r.id !== 'crossSource')) return r;
+        const n = (r.id === 'duplicates' ? funnel.dropped.duplicate : funnel.dropped.crossSource) ?? 0;
+        return { ...r, impact: n, share: ledgerShare(n, ctx.ledgerBase) };
+      }),
       kpis,
       accepted: funnel.accepted,
       ...(empty && { emptyReason: empty, previousKept: ctx.hadData }),
-      partial:
-        cancelled || errors.length > 0
-          ? partialLoad({
-              planned: ctx.planned,
-              accepted: funnel.accepted,
-              speciesLoaded: tally.species.size,
-              speciesPlanned: plannedSpecies(plans),
-              fetched: ctx.fetched,
-            })
-          : null,
+      partial,
+      ...(skip && { bioregionsSkipped: true }),
       datasetCounts: tally.datasetCounts(ctx.titles),
       requests,
       ...(empty && ctx.hadData && { previous: keptLoad(this.lastLoad as LoadProvenance | null) }),
     };
     this.lastLoad = load;
-    if (empty) return;
+    if (empty) return false;
     this.recent = pushRecent(
       this.recent,
       { id: libraryId('recent'), name: queryTitle(query), query, savedAt: load.retrievedAt, kpis },
       queryKey,
     );
     writeStorage(STORAGE_KEYS.recent, this.recent);
+    return skip;
   }
 
-  /** Stop a running load: keep what arrived (Infomap runs on it) or discard it. */
+  /** Run Infomap on a stopped load that skipped it (`lastLoad.bioregionsSkipped`). */
+  async runBioregionsAnyway(): Promise<void> {
+    const load = this.lastLoad;
+    if (!load?.bioregionsSkipped || this.isLoading) return;
+    const { bioregionsSkipped: _, ...rest } = load;
+    this.lastLoad = rest;
+    await this.rootStore.speciesStore.runBioregions();
+  }
+
+  /**
+   * Stop a running load: keep what arrived or discard it. Kept records run Infomap only
+   * when at least half the planned species arrived (else `lastLoad.bioregionsSkipped`).
+   */
   cancel(mode: 'keep' | 'discard') {
     const controller = this.loadController;
     if (!controller || !this.isLoading) return;
@@ -2014,16 +2292,33 @@ export default class ExplorerStore {
     this.pollTimer = setTimeout(tick, DOWNLOAD_POLL_MS);
   }
 
-  /** Parse a dropped GBIF download zip into a staging cleaner (the loaded data is not touched). */
+  /**
+   * Parse a dropped GBIF download zip into a staging cleaner (the loaded data is not
+   * touched) and check, from the download's own request at GBIF, whether it was made
+   * for the query of the data on screen.
+   */
   async importZip(file: File): Promise<void> {
     this.zipController?.abort();
     const controller = new AbortController();
     this.zipController = controller;
     this.zipFile = null;
     this.zipSummary = null;
-    this.zipImport = { state: 'parsing', fileName: file.name };
-    const query = toJS(this.lastLoad?.query ?? this.query);
+    const shown = this.shownLoad;
+    const query = toJS(shown?.query ?? this.query);
+    const nameKey = downloadKeyFromName(file.name);
+    const base = {
+      fileName: file.name,
+      ...(nameKey && { downloadKey: nameKey }),
+      queryMatch: 'unknown' as const,
+      // Only the GBIF part of the data on screen can be compared with a GBIF download.
+      streamGbifRecords: shown?.funnel.bySource.gbif?.accepted ?? 0,
+      canReplace: false,
+      canCiteDoi: false,
+    };
+    this.zipImport = { state: 'parsing', ...base };
     const cleaner = new RecordCleaner({ dedupe: query.quality.dedupe, area: query.area });
+    // Start the metadata request while the zip is read (the key is usually in the file name).
+    let check = nameKey ? checkDownload(nameKey, query, controller.signal) : null;
     let last = 0;
     try {
       const gen = importGbifZip(file, { signal: controller.signal, excludeIntroduced: query.quality.excludeIntroduced });
@@ -2035,24 +2330,42 @@ export default class ExplorerStore {
           last = now;
           const funnel = cleaner.funnel;
           runInAction(() => {
-            if (this.zipController === controller) this.zipImport = { state: 'parsing', fileName: file.name, funnel };
+            if (this.zipController === controller) this.zipImport = { state: 'parsing', ...base, funnel };
           });
         }
         step = await gen.next();
       }
       const summary = step.value;
+      const key = summary.downloadKey ?? nameKey;
+      if (key && key !== nameKey) check = checkDownload(key, query, controller.signal);
+      const result = check ? await check : null;
+      if (controller.signal.aborted) return;
       runInAction(() => {
         if (this.zipController !== controller) return;
         this.zipFile = file;
         this.zipSummary = summary;
-        this.zipImport = { state: 'ready', fileName: file.name, funnel: cleaner.funnel };
+        const funnel = cleaner.funnel;
+        this.zipImport = {
+          state: 'ready',
+          ...base,
+          funnel,
+          ...zipVerdict({
+            key,
+            doi: summary.doi ?? result?.doi,
+            check: result,
+            accepted: funnel.accepted,
+            received: funnel.received,
+            streamGbifRecords: base.streamGbifRecords,
+            hasData: shown != null && shown.accepted > 0,
+          }),
+        };
       });
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return;
       runInAction(() => {
         this.zipImport = {
           state: 'error',
-          fileName: file.name,
+          ...base,
           error: error instanceof Error ? error.message : String(error),
         };
       });
@@ -2061,27 +2374,32 @@ export default class ExplorerStore {
     }
   }
 
-  /** Load the parsed zip in place of the data, or keep the streamed data and cite the zip's DOI. */
+  /**
+   * Load the parsed zip in place of the data, or keep the streamed data and cite the
+   * zip's DOI; each only when the download matches the query (`canReplace`, `canCiteDoi`).
+   */
   applyZip(choice: 'replace' | 'keepStreamCiteDoi') {
     const summary = this.zipSummary;
-    if (this.zipImport?.state !== 'ready' || !summary) return;
+    const zip = this.zipImport;
+    if (zip?.state !== 'ready' || !summary) return;
     if (choice === 'keepStreamCiteDoi') {
-      if (!this.lastLoad) return;
+      const shown = this.shownLoad;
+      if (!zip.canCiteDoi || !shown) return;
       const load: LoadProvenance = {
-        ...(this.lastLoad as LoadProvenance),
-        gbifDownloadKey: summary.downloadKey,
-        gbifDownloadDoi: summary.doi,
+        ...shown,
+        gbifDownloadKey: zip.downloadKey ?? summary.downloadKey,
+        gbifDownloadDoi: zip.doi ?? summary.doi,
       };
       this.lastLoad = load;
       return;
     }
     const file = this.zipFile;
-    if (!file || this.isLoading) return;
-    void this.loadZip(file, summary);
+    if (!zip.canReplace || !file || this.isLoading) return;
+    void this.loadZip(file, { ...summary, downloadKey: zip.downloadKey ?? summary.downloadKey, doi: zip.doi ?? summary.doi });
   }
 
   private async loadZip(file: Blob, summary: GbifZipSummary) {
-    const previous = this.lastLoad as LoadProvenance | null;
+    const previous = this.shownLoad;
     const query = toJS(previous?.query ?? this.query);
     const controller = new AbortController();
     this.loadController = controller;
@@ -2095,6 +2413,7 @@ export default class ExplorerStore {
       perSource: [],
       funnel: emptyFunnel(),
       truncated: [],
+      speciesCoverage: null,
     };
     this.job = job;
     const hadData = hasLoadedData(this.rootStore);

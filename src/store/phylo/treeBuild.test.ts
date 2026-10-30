@@ -75,7 +75,7 @@ it('placeBrokenTaxa adds tips under the standing-in node', () => {
 });
 
 it('coverageOf counts distinct dataset species', () => {
-  expect(coverageOf('((1:1,1:1):1,(3:1,9:1):1);', join)).toEqual({ matched: 2, hasBranchLengths: true });
+  expect(coverageOf('((1:1,1:1):1,(3:1,9:1):1);', join)).toEqual({ matched: 2, hasBranchLengths: true, tips: 4 });
 });
 
 describe('tips not in the data', () => {

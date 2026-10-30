@@ -99,6 +99,8 @@ export default observer(function OccurrencesTab() {
       <Box
         as="section"
         aria-label="Explorer query"
+        tabIndex={0}
+        focusRing="inside"
         overflowY="auto"
         overscrollBehavior="contain"
         borderRightWidth="1px"

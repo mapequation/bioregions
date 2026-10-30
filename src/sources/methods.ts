@@ -2,6 +2,7 @@
 import { BASIS_LABELS, basisLabel } from './query';
 import { areaLabel } from './regions';
 import type {
+  DedupeMode,
   DropReason,
   Funnel,
   OccurrenceQuery,
@@ -153,12 +154,22 @@ function qualitySentence(q: QualityFilters): string | null {
   return parts.length === 0 ? null : `We kept only records ${listing(parts)}.`;
 }
 
-const DEDUPE_TEXT = {
-  none: ' Duplicate records were kept.',
-  exact:
-    ' Duplicate records of the same species at the same coordinates (rounded to four decimal places, about 11 m) were removed across sources.',
-  cell: ' Records were thinned across sources to one per species and 0.01° grid cell (about 1 km).',
+/** The dedupe rule in words, per mode (the methods text and the explorer's ledger share it). */
+export const DEDUPE_RULE: Record<DedupeMode, string> = {
+  none: 'duplicates kept',
+  exact: 'same species within ~11 m',
+  cell: 'same species in one ~1 km cell',
 };
+
+function dedupeText(mode: DedupeMode, crossSource: boolean): string {
+  if (mode === 'none') return ' Duplicate records were kept.';
+  const rule =
+    mode === 'exact'
+      ? 'records of the same species at the same coordinates (rounded to four decimal places, about 11 m) were kept once'
+      : 'records were thinned to one per species and 0.01° grid cell (about 1 km)';
+  if (!crossSource) return ` Within each source, ${rule}.`;
+  return ` Duplicates were removed in two steps: within each source, ${rule}; and a record matching one already received from the other source (the same occurrence published to both GBIF and OBIS, by the same rule) was kept once.`;
+}
 
 const DROP_TEXT: Record<DropReason, string> = {
   noSpecies: 'without a species-level name',
@@ -166,8 +177,16 @@ const DROP_TEXT: Record<DropReason, string> = {
   zeroCoordinates: 'at (0, 0)',
   outsideArea: 'outside the study area',
   duplicate: 'duplicates',
+  crossSource: 'records already received from the other source (GBIF and OBIS overlap)',
   lowCount: 'of species below the minimum record count',
 };
+
+/** The removal count text for one drop reason; duplicates name the dedupe rule. */
+function dropText(reason: DropReason, mode: DedupeMode | undefined): string {
+  if (reason === 'duplicate' && mode === 'exact') return 'duplicates of the same species within about 11 m in one source';
+  if (reason === 'duplicate' && mode === 'cell') return 'records thinned to one per species and ~1 km cell in one source';
+  return DROP_TEXT[reason];
+}
 
 function cleaningSentence(
   funnel: Funnel | null,
@@ -177,7 +196,10 @@ function cleaningSentence(
 ): string {
   const base =
     'Only records identified to species were used: names were reduced to species binomials (infraspecific names merged into their species; records identified only to genus or a higher rank, and open-nomenclature and hybrid-formula names, were excluded), and records with missing, invalid or (0, 0) coordinates were removed.';
-  const dedupe = query ? DEDUPE_TEXT[query.quality.dedupe] : '';
+  const sources = new Set(entries.map((e) => e.source));
+  const crossSource =
+    (funnel?.dropped.crossSource ?? 0) > 0 || (sources.has('gbif') && sources.has('obis')) || (!!query?.sources.gbif && !!query?.sources.obis && entries.length === 0);
+  const dedupe = query ? dedupeText(query.quality.dedupe, crossSource) : '';
   const received = funnel?.received ?? entries.reduce((s, e) => s + e.fetched, 0);
   const accepted = funnel?.accepted ?? entries.reduce((s, e) => s + e.accepted, 0);
   let counts = `The final dataset has ${fmt(accepted)} records of ${fmt(speciesCount)} species`;
@@ -185,8 +207,8 @@ function cleaningSentence(
     counts += ` (of ${fmt(received)} records received`;
     if (funnel) {
       const drops = (Object.keys(DROP_TEXT) as DropReason[])
-        .filter((r) => funnel.dropped[r] > 0)
-        .map((r) => `${fmt(funnel.dropped[r])} ${DROP_TEXT[r]}`);
+        .filter((r) => (funnel.dropped[r] ?? 0) > 0)
+        .map((r) => `${fmt(funnel.dropped[r])} ${dropText(r, query?.quality.dedupe)}`);
       if (drops.length > 0) counts += `; removed: ${drops.join(', ')}`;
     }
     counts += ')';

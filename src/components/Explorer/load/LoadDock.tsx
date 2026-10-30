@@ -3,6 +3,7 @@ import { observer } from 'mobx-react';
 import { useEffect, useId, useState } from 'react';
 import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
+import { InfoTip } from '@/components/ui/toggle-tip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
 import { NO_MATCHES_REASON } from '@/store/ExplorerStore';
@@ -18,6 +19,8 @@ const MODE_ITEMS = [
 
 const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
 const DUPLICATES_HINT = 'duplicates removed while loading';
+/** Container query for a dock too narrow for the full estimate line on one row. */
+const NARROW = '@container loadEstimate (max-width: 44rem)';
 const MIN_CAP = 1000;
 const SHORTCUT = modEnterLabel(typeof navigator === 'undefined' ? '' : navigator.platform);
 
@@ -94,47 +97,46 @@ const EstimateLine = observer(function EstimateLine() {
       : ['size and time follow once the load is planned']),
   ].join(' · ');
   return (
-    <Text
-      fontSize="sm"
-      color="fg.muted"
-      lineClamp={2}
-      fontVariantNumeric="tabular-nums"
+    <HStack
+      gap={1}
+      minW={0}
       opacity={busy ? 0.55 : 1}
       transition="opacity 0.2s"
       aria-busy={busy}
-      title={full}
       data-testid="load-estimate"
     >
-      <Box as="span" color="fg" fontWeight="semibold" whiteSpace="nowrap">
-        {exact ? '' : '≈'}
-        {fmtInt(records)} {what}
-      </Box>
-      <Sep />
-      <Box as="span" whiteSpace="nowrap" data-testid="load-duplicates-hint">
-        {DUPLICATES_HINT}
-      </Box>
-      {estimate ? (
-        <>
+      <Text fontSize="sm" color="fg.muted" truncate minW={0} fontVariantNumeric="tabular-nums" title={full}>
+        <Box as="span" color="fg" fontWeight="semibold">
+          {exact ? '' : '≈'}
+          {fmtInt(records)} {what}
+        </Box>
+        {/* In a narrow dock the hint moves into the info tip so the line stays on one row. */}
+        <Box as="span" css={{ [NARROW]: { display: 'none' } }}>
           <Sep />
-          <Box as="span" whiteSpace="nowrap">
+          <span data-testid="load-duplicates-hint">{DUPLICATES_HINT}</span>
+        </Box>
+        {estimate ? (
+          <>
+            <Sep />
             {fmtBytes(estimate.bytes)}
-          </Box>
-          <Sep />
-          <Box as="span" whiteSpace="nowrap">
+            <Sep />
             {fmtApproxMinutes(estimate.seconds)}
-          </Box>
-          <Sep />
-          <Box as="span" whiteSpace="nowrap">
+            <Sep />
             {fmtInt(estimate.requests)} {estimate.requests === 1 ? 'request' : 'requests'}
-          </Box>
-        </>
-      ) : (
-        <>
-          <Sep />
-          size and time follow once the load is planned
-        </>
-      )}
-    </Text>
+          </>
+        ) : (
+          <>
+            <Sep />
+            size and time follow once the load is planned
+          </>
+        )}
+      </Text>
+      <Box flexShrink={0} display="none" css={{ [NARROW]: { display: 'inline-flex' } }}>
+        <InfoTip>
+          <Box maxW="240px">Duplicates are removed while loading, so the loaded count can be a little lower.</Box>
+        </InfoTip>
+      </Box>
+    </HStack>
   );
 });
 
@@ -347,7 +349,7 @@ export default observer(function LoadDock() {
       )}
       <OverCapRow />
       <Flex align="center" gap={{ base: 2, xl: 4 }} rowGap={2} wrap="wrap" minH={10}>
-        <Box flex="1 1 16rem" minW={0}>
+        <Box flex="1 1 16rem" minW={0} css={{ containerType: 'inline-size', containerName: 'loadEstimate' }}>
           <EstimateLine />
         </Box>
         <HStack gap={4} flexShrink={0}>

@@ -60,6 +60,41 @@ const PIE_MIN = 3;
 const PIE_MAX = 11;
 const LABEL_GAP = 6;
 const LABEL_H = 14;
+const LABEL_FONT_SIZE = 11; // px, matches the label overlay (setHost)
+// Rectangular layout: treeLayout's edge padding (time 0 sits at x = RECT_PAD), and the gap kept
+// between the longest tip label and the plot's right edge.
+const RECT_PAD = 40;
+const RECT_PAD_RIGHT = 8;
+// Never squeeze the time axis below this share of the plot width, however long the names are.
+const RECT_MIN_SPAN = 0.4;
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+/** Rendered width of `text` in `font`, via a shared offscreen canvas (estimate without one). */
+function textWidth(text: string, font: string): number {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  if (measureCtx === null) return text.length * 6.2;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+
+/**
+ * Rectangular layout: re-scale the time axis so every tip label ends inside the plot. treeLayout
+ * reserves a fixed right margin, which clips long names; here each leaf must satisfy
+ * `RECT_PAD + time·span + LABEL_GAP + labelWidth ≤ width − RECT_PAD_RIGHT`, so the margin equals
+ * the longest label (for an ultrametric tree) measured in the label font.
+ */
+function fitTipLabels(root: LayoutNode, width: number, labelWidth: (name: string) => number) {
+  const full = width - RECT_PAD - RECT_PAD_RIGHT;
+  let span = full;
+  for (const leaf of root.leaves()) {
+    const t = leaf.data.time;
+    if (t > 0) span = Math.min(span, (full - LABEL_GAP - labelWidth(leaf.data.name)) / t);
+  }
+  span = Math.max(span, full * RECT_MIN_SPAN);
+  root.each((n) => {
+    n.y = RECT_PAD + n.data.time * span;
+  });
+}
 const NEUTRAL_STROKE = '#999999';
 
 interface Wedge {
@@ -392,7 +427,7 @@ export default class TreeStore {
     labelEl.style.inset = '0';
     labelEl.style.pointerEvents = 'none';
     labelEl.style.overflow = 'hidden';
-    labelEl.style.fontSize = '11px';
+    labelEl.style.fontSize = `${LABEL_FONT_SIZE}px`;
     labelEl.style.lineHeight = '14px';
     host.appendChild(labelEl);
     this.labelEl = labelEl;
@@ -480,6 +515,18 @@ export default class TreeStore {
     const { layout: mode, curve, coords: sizeMode } = this;
 
     const { root, center } = layoutTree(tree, mode, this.width, this.height);
+    // Label widths in the overlay's font (measured, so the margin and collision boxes fit).
+    const font = `${LABEL_FONT_SIZE}px ${this.labelEl ? getComputedStyle(this.labelEl).fontFamily : 'sans-serif'}`;
+    const labelWidths = new Map<string, number>();
+    const labelWidth = (name: string) => {
+      let w = labelWidths.get(name);
+      if (w === undefined) {
+        w = Math.ceil(textWidth(name, font));
+        labelWidths.set(name, w);
+      }
+      return w;
+    };
+    if (mode === 'rectangular') fitTipLabels(root, this.width, labelWidth);
     const links = root.links();
     const leaves = root.leaves();
     const xy = (n: LayoutNode): [number, number] => nodeXY(n, mode, center);
@@ -590,7 +637,7 @@ export default class TreeStore {
         refX: px,
         refY: py,
         text: name,
-        width: name.length * 6.2 + 6,
+        width: labelWidth(name) + 6,
         height: LABEL_H,
         priority: dataOf(n)?.speciesCount ?? 1,
         offset: labelOffset(mode, a, LABEL_GAP, LABEL_H),

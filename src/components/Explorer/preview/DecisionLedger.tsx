@@ -12,8 +12,8 @@ import {
   VisuallyHidden,
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { type ReactNode, useRef, useState } from 'react';
-import { LuCheck, LuDownload, LuMinus } from 'react-icons/lu';
+import { type ReactNode, useId, useRef, useState } from 'react';
+import { LuCheck, LuChevronDown, LuChevronRight, LuDownload, LuMinus, LuPlus } from 'react-icons/lu';
 import type { Funnel } from '../../../sources/types';
 import { useStore } from '../../../store';
 import type { LedgerRow } from '../../../store/explorer/types';
@@ -24,7 +24,16 @@ import { chartPalettes } from '../charts/colors';
 import ShareBar from '../charts/ShareBar';
 import ViewAsTable from '../charts/ViewAsTable';
 import { fmtInt, fmtPct, fmtSigned } from '../format';
-import { type CleaningStep, cleaningSteps, notReceivedOf, PARTIAL_BIAS, partialSummary } from './cleaningSteps';
+import {
+  CROSS_SOURCE_LABEL,
+  type CleaningStep,
+  cleaningSteps,
+  dedupeText,
+  loadDrops,
+  notReceivedOf,
+  PARTIAL_BIAS,
+  partialSummary,
+} from './cleaningSteps';
 
 export interface DecisionLedgerProps {
   /** preview: filter impact only; live: plus the streaming cleaning funnel; frozen: after a load. */
@@ -203,6 +212,97 @@ function FilterRows({ rows, scale, interactive, compare, blocked, onToggle }: Fi
           </Grid>
         );
       })}
+    </Box>
+  );
+}
+
+/** A filter that is off, phrased as a suggestion; null when it reads fine as its label. */
+function suggestion(row: LedgerRow, blocked: string | null): string {
+  if (row.id === 'depth') return 'Depth: add a range to see its impact';
+  if (blocked && row.id === 'years') return 'Years: set a range in the query to see its impact';
+  if (blocked && row.id === 'datasets') return 'Datasets: exclude one under Composition to see its impact';
+  return row.label;
+}
+
+/** Filters that are off, collapsed under "+ N optional filters". */
+function OptionalFilters({
+  rows,
+  interactive,
+  blocked,
+  onToggle,
+}: {
+  rows: LedgerRow[];
+  interactive: FilterRowsProps['interactive'];
+  blocked: FilterRowsProps['blocked'];
+  onToggle: (row: LedgerRow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  if (rows.length === 0) return null;
+  const n = rows.length;
+  return (
+    <Box mt={1}>
+      <Button
+        size="sm"
+        variant="ghost"
+        px={1}
+        mx={-1}
+        color="fg.muted"
+        fontWeight="normal"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((v) => !v)}
+        data-testid="ledger-optional-toggle"
+      >
+        <Icon as={open ? LuChevronDown : LuChevronRight} boxSize={3.5} aria-hidden />
+        {open ? 'Hide' : '+'} {n} optional {n === 1 ? 'filter' : 'filters'}
+        {!open && (
+          <Text as="span" color="fg.muted" textStyle="xs" ms={1}>
+            not applied
+          </Text>
+        )}
+      </Button>
+      {open && (
+        <Box id={id} role="list" aria-label="Optional filters, not applied" pl={1}>
+          {rows.map((row) => {
+            const reason = blocked(row);
+            const text = suggestion(row, reason);
+            const canTick = interactive === 'toggle' && reason == null;
+            return (
+              <HStack
+                key={row.id}
+                role="listitem"
+                data-testid="ledger-row"
+                data-optional=""
+                gap={2}
+                minH={7}
+                minW={0}
+              >
+                {canTick ? (
+                  <Checkbox
+                    size="sm"
+                    checked={false}
+                    onCheckedChange={() => onToggle(row)}
+                    maxW="full"
+                    css={{ '& [data-part=label]': { minWidth: 0 } }}
+                  >
+                    <Text as="span" display="block" truncate color="fg.muted" title={text}>
+                      {text}
+                    </Text>
+                  </Checkbox>
+                ) : (
+                  <>
+                    <Icon as={LuPlus} boxSize={3.5} color="fg.subtle" aria-hidden flexShrink={0} />
+                    <Text textStyle="sm" color="fg.muted" truncate title={reason ?? text}>
+                      {interactive === 'toggle' ? text : row.label}
+                    </Text>
+                  </>
+                )}
+              </HStack>
+            );
+          })}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -571,6 +671,8 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const { explorerStore: ex } = useStore();
   const [asTable, setAsTable] = useState(false);
   const everExcluded = useRef(false);
+  // Rows switched in this ledger stay in place (no jump into the optional list).
+  const pinned = useRef(new Set<string>());
 
   const snapshot = ex.lastLoad;
   const frozen = mode === 'frozen' && snapshot != null;
@@ -678,40 +780,14 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     pending: 'known once the load is planned',
     tip: 'The records a load requests. Duplicates are removed while they arrive.',
   });
-  const dupLabel = 'Duplicates (same species, same site)';
+  const dedupeLabel =
+    (ex as { dedupeLabel?: string }).dedupeLabel ?? dedupeText(query.quality.dedupe);
   if (frozen) {
     const f = snapshot.funnel;
-    const dup = (f.dropped as Partial<Record<string, number>>).duplicate ?? dupRow?.impact ?? 0;
-    const cleaned = Math.max(0, f.received - f.accepted - dup);
     // A cancelled load: the planned records never received are "not loaded", not removed.
     const cancelled = snapshot.partial != null ? notReceivedOf(snapshot) : 0;
-    const notReceived = cancelled > 0 ? cancelled : toLoad != null ? toLoad - f.received : 0;
-    if (cancelled > 0) {
-      path.push({
-        id: 'notReceived',
-        kind: 'drop',
-        label: 'Not loaded (cancelled)',
-        value: cancelled,
-        tip: `Planned records that never arrived because the load was stopped. ${PARTIAL_BIAS}`,
-      });
-    } else if (notReceived !== 0) {
-      path.push({
-        id: 'notReceived',
-        kind: 'drop',
-        label: notReceived > 0 ? 'Not received (cap or source changes)' : 'Received beyond the preview count',
-        value: notReceived,
-        tip: 'Difference between the preview count and the records the sources returned while loading.',
-      });
-    }
-    path.push({ id: 'duplicates', kind: 'drop', label: dupLabel, value: dup });
-    if (cleaned > 0) {
-      path.push({
-        id: 'cleaning',
-        kind: 'drop',
-        label: 'Invalid, outside the area or low-count',
-        value: cleaned,
-        tip: 'Records dropped by the other cleaning steps; the cleaning detail below breaks them down.',
-      });
+    for (const drop of loadDrops({ funnel: f, toLoad, cancelled, dedupeLabel })) {
+      path.push({ id: drop.id, kind: 'drop', label: drop.label, value: drop.value, tip: drop.tip });
     }
     path.push({
       id: 'loaded',
@@ -721,13 +797,27 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
       tip: snapshot.partial ? `Partial dataset: ${partialSummary(snapshot.partial)} ${PARTIAL_BIAS}` : undefined,
     });
   } else {
+    const pending = mode === 'live' ? 'counting while loading…' : 'counted while loading';
+    // Records published to both GBIF and OBIS are kept once: only when both sources contribute.
+    const crossRow = pathRow('crossSource');
+    const contributes = (id: string) => ex.previews.some((p) => p.source === id && p.total > 0);
+    if ((crossRow?.impact ?? 0) > 0 || (contributes('gbif') && contributes('obis'))) {
+      path.push({
+        id: 'crossSource',
+        kind: 'drop',
+        label: CROSS_SOURCE_LABEL,
+        value: crossRow?.impact ?? null,
+        pending,
+        tip: 'The same occurrence published to both GBIF and OBIS is kept once.',
+      });
+    }
     path.push(
       {
         id: 'duplicates',
         kind: 'drop',
-        label: dupLabel,
+        label: `Duplicates: ${dedupeLabel}`,
         value: dupRow?.impact ?? null,
-        pending: mode === 'live' ? 'counting while loading…' : 'counted while loading',
+        pending,
       },
       {
         id: 'loaded',
@@ -751,6 +841,22 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     (mode === 'live' || truncated.length > 0 || path.some((p) => p.id === 'cleaning' || p.id === 'notReceived'));
   // Dim while the preview refreshes or while ledger counts lag behind the KPIs.
   const stale = state === 'stale' || (mode === 'preview' && ex.impactPending);
+
+  const blocked = (r: LedgerRow): string | null => {
+    if (r.id === 'datasets' && !everExcluded.current) return 'Exclude a GBIF dataset under Composition first.';
+    // "Years (all)" means there is no earlier year range to restore.
+    if (r.id === 'years' && r.label === 'Years (all)') return 'Set a year range in the query column first.';
+    return null;
+  };
+  const toggle = (r: LedgerRow) => {
+    pinned.current.add(r.id);
+    ex.toggleFilter(r.id);
+  };
+  // Only filters that apply are rows; the rest are optional suggestions. A row the user just
+  // switched off, or one that was on at the last load (its tick is compared), stays in place.
+  const keep = (r: LedgerRow) => r.active || pinned.current.has(r.id) || (compare != null && (r.loadedImpact ?? 0) > 0);
+  const shownRows = rows.filter(keep);
+  const optionalRows = rows.filter((r) => !keep(r));
 
   const csv = () => {
     downloadText(ex.ledgerCsv, 'decision-ledger.csv');
@@ -853,19 +959,20 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
           Filter impact · each alone (overlapping)
         </SectionTitle>
         <ShareHeader base={base} compare={compare != null} />
+        {shownRows.length === 0 && (
+          <Text textStyle="sm" color="fg.muted" minH={7} display="flex" alignItems="center">
+            No quality or scope filter is applied.
+          </Text>
+        )}
         <FilterRows
-          rows={rows}
+          rows={shownRows}
           scale={scale}
           interactive={interactive}
           compare={compare}
-          blocked={(r) => {
-            if (r.id === 'datasets' && !everExcluded.current) return 'Exclude a GBIF dataset under Composition first.';
-            // "Years (all)" means there is no earlier year range to restore.
-            if (r.id === 'years' && r.label === 'Years (all)') return 'Set a year range in the query column first.';
-            return null;
-          }}
-          onToggle={(r) => ex.toggleFilter(r.id)}
+          blocked={blocked}
+          onToggle={toggle}
         />
+        <OptionalFilters rows={optionalRows} interactive={interactive} blocked={blocked} onToggle={toggle} />
         <HStack gap={1} mt={1} align="center">
           <Text textStyle="xs" color="fg.muted">
             {FOOTNOTE}

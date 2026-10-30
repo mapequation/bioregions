@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   alphaExtent,
+  bboxRings,
   chooseZoom,
+  densifyRing,
+  fitPolarView,
+  mapProjection,
+  POLAR_EXTENT,
+  polarDragBbox,
+  polarForward,
+  polarInverse,
+  polarSrsFor,
+  polarTilesForView,
   decadeSteps,
   MAX_TILE_ZOOM,
   dragBbox,
@@ -148,5 +158,71 @@ describe('texts', () => {
   it('builds decade legend steps', () => {
     expect(decadeSteps(0)).toEqual([1, 10]);
     expect(decadeSteps(1500)).toEqual([1, 10, 100, 1000, 10000]);
+  });
+});
+
+describe('fitView insetTop', () => {
+  it('keeps an area below the controls', () => {
+    const v = fitView([-120, -60, -30, 30], 800, 400, 40);
+    const top = (v.north - 30) * v.scale;
+    expect(top).toBeGreaterThanOrEqual(40);
+  });
+});
+
+describe('polar views', () => {
+  it('picks a polar projection for circumpolar areas only', () => {
+    expect(polarSrsFor([-180, 66, 180, 90])).toBe('EPSG:3575');
+    expect(polarSrsFor([10, 70, 40, 80])).toBe('EPSG:3575');
+    expect(polarSrsFor([-180, -80, 180, -50])).toBe('EPSG:3031');
+    expect(polarSrsFor([-180, -90, 180, -60])).toBe('EPSG:3031');
+    expect(polarSrsFor([-120, -60, -30, 30])).toBeNull();
+    expect(polarSrsFor([-180, -30, 180, 30])).toBeNull();
+    expect(polarSrsFor(null)).toBeNull();
+  });
+
+  it('projects to the GBIF tile grids and back', () => {
+    // EPSG:3575: the equator lies on the tile edge circle; lon 10 points down.
+    const [x, y] = polarForward('EPSG:3575', 10, 0);
+    expect(x).toBeCloseTo(0, 3);
+    expect(y).toBeCloseTo(-POLAR_EXTENT['EPSG:3575'], 0);
+    for (const srs of ['EPSG:3575', 'EPSG:3031'] as const) {
+      for (const [lon, lat] of srs === 'EPSG:3575' ? [[-150, 61], [25, 71], [140, 35]] : [[166, -78], [-67, -56], [18, -34]]) {
+        const [px, py] = polarForward(srs, lon, lat);
+        const [lon2, lat2] = polarInverse(srs, px, py);
+        expect(lon2).toBeCloseTo(lon, 6);
+        expect(lat2).toBeCloseTo(lat, 6);
+      }
+    }
+    // EPSG:3031 true scale at 71 S: McMurdo ~1.3e6 m from the pole.
+    expect(Math.hypot(...polarForward('EPSG:3031', 166.67, -77.85))).toBeGreaterThan(1.2e6);
+  });
+
+  it('densifies without crossing the 180/-180 seam of a parallel', () => {
+    const ring = bboxRings([-180, 66, 180, 90]);
+    expect(ring).toHaveLength(1);
+    const pts = densifyRing(ring[0], 1);
+    expect(pts).toHaveLength(361); // 180 + 180 one-degree steps, the seam adds no points
+    expect(bboxRings([-180, -80, 180, -50])).toHaveLength(2);
+  });
+
+  it('fits the area circle into the frame and covers it with tiles', () => {
+    const v = fitPolarView('EPSG:3575', bboxRings([-180, 66, 180, 90]), 800, 400, 36);
+    const proj = mapProjection(v, 'EPSG:3575');
+    const [, top] = proj.toPx(190, 66);
+    const [, bottom] = proj.toPx(10, 66);
+    expect(top).toBeGreaterThanOrEqual(36);
+    expect(bottom).toBeLessThanOrEqual(400);
+    const [lon, lat] = proj.fromPx(...proj.toPx(-100, 75));
+    expect(lon).toBeCloseTo(-100, 6);
+    expect(lat).toBeCloseTo(75, 6);
+    const tiles = polarTilesForView('EPSG:3575', v);
+    expect(tiles.length).toBeGreaterThan(0);
+    const z = tiles[0].z;
+    expect(tiles.every((t) => t.x >= 0 && t.y >= 0 && t.x < 2 ** z && t.y < 2 ** z)).toBe(true);
+  });
+
+  it('drags a box the short way across 180 degrees', () => {
+    expect(polarDragBbox([170, 70], [-170, 80])).toEqual([170, 70, -170, 80]);
+    expect(polarDragBbox([10, 70], [10.2, 70.3])).toBeNull();
   });
 });

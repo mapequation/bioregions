@@ -2,7 +2,7 @@ import { Alert, Box, Button, Flex, Grid, Heading, Icon, Stack, Text } from '@cha
 import { observer } from 'mobx-react';
 import { useCallback } from 'react';
 import { LuArrowLeft, LuGitFork, LuNetwork, LuRotateCw } from 'react-icons/lu';
-import { isQueryRunnable } from '@/sources';
+import { isQueryRunnable, toSpeciesName } from '@/sources';
 import { useStore } from '../../../store';
 import { fmtInt } from '../format';
 import CladeCard from './CladeCard';
@@ -10,10 +10,15 @@ import NameMatchSummary from './NameMatchSummary';
 import TreeSelectionSummary from './TreeSelectionSummary';
 import TreeSourceTable from './TreeSourceTable';
 
-/** Species count of the current query, from the load plans or the preview KPIs. */
+/**
+ * Species count of the current query: the named species in the load plans (the list
+ * the Names panel matches), else the preview KPIs.
+ */
 function useQuerySpeciesCount(): number | null {
   const { explorerStore } = useStore();
-  return explorerStore.speciesCounts?.length ?? explorerStore.kpis?.species ?? null;
+  const buckets = explorerStore.speciesCounts;
+  if (buckets) return new Set(buckets.map((b) => toSpeciesName(b.label)).filter(Boolean)).size;
+  return explorerStore.kpis?.species ?? null;
 }
 
 /** Centred card for the states before any names are matched. */

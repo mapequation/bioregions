@@ -29,10 +29,24 @@ function useNow(active: boolean): number {
 /** Whether a source has anything to fetch; 0 / 0 sources count as done. */
 const hasWork = (p: SourceProgress) => p.requestsTotal > 0 || p.expected > 0 || p.fetched > 0;
 
+/**
+ * Whether the request total is final: species-by-species streams plan each species' requests
+ * as they go, so the total moves (and can shrink) until every species is planned.
+ */
+export function requestsFinal(p: SourceProgress): boolean {
+  if (p.state === 'done') return true;
+  if (p.speciesTotal) return (p.speciesDone ?? 0) >= p.speciesTotal;
+  // Before the first request the stream may still switch to species-by-species planning.
+  return p.requestsDone > 0;
+}
+
 function statsText(p: SourceProgress): string {
   const parts = [`${fmtInt(p.fetched)} / ${fmtInt(p.expected)}`];
   if (p.speciesTotal) parts.push(`species ${fmtInt(p.speciesDone ?? 0)}/${fmtInt(p.speciesTotal)}`);
-  parts.push(`req ${fmtInt(p.requestsDone)}/${fmtInt(p.requestsTotal)}`);
+  // Never show a denominator that may still shrink.
+  parts.push(
+    requestsFinal(p) ? `req ${fmtInt(p.requestsDone)}/${fmtInt(p.requestsTotal)}` : `req ${fmtInt(p.requestsDone)}`,
+  );
   if (p.bytes != null) parts.push(fmtBytes(p.bytes));
   return parts.join(' · ');
 }
@@ -45,8 +59,8 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
         <Badge size="sm" variant="surface" justifyContent="center">
           {name}
         </Badge>
-        <Progress.Root size="sm" value={null} aria-label={`${name}: planning`} aria-valuetext="Planning">
-          <Progress.Track>
+        <Progress.Root size="sm" value={null}>
+          <Progress.Track aria-label={`${name}: planning`} aria-valuetext="Planning">
             <Progress.Range />
           </Progress.Track>
         </Progress.Root>
@@ -69,10 +83,11 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
         size="sm"
         colorPalette={palette}
         value={p.state === 'done' ? 100 : pct}
-        aria-label={`${name} records received`}
-        aria-valuetext={`${fmtInt(p.fetched)} of ${fmtInt(p.expected)} records`}
       >
-        <Progress.Track>
+        <Progress.Track
+          aria-label={`${name} records received`}
+          aria-valuetext={`${fmtInt(p.fetched)} of ${fmtInt(p.expected)} records`}
+        >
           <Progress.Range transition="width 0.4s" />
         </Progress.Track>
       </Progress.Root>
@@ -108,8 +123,23 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
 const CancelMenu = observer(function CancelMenu() {
   const { explorerStore: ex } = useStore();
   const [open, setOpen] = useState(false);
+  const job = ex.job;
+  const accepted = job?.funnel.accepted ?? 0;
+  const speciesDone = job?.perSource.reduce((sum, p) => sum + (p.speciesDone ?? 0), 0) ?? 0;
+  const speciesTotal = job?.perSource.reduce((sum, p) => sum + (p.speciesTotal ?? 0), 0) ?? 0;
+  const storeCoverage = (job as { speciesCoverage?: number | null } | null)?.speciesCoverage;
+  const coverage = storeCoverage ?? (speciesTotal > 0 ? speciesDone / speciesTotal : null);
+  // With under half the species loaded, the partial dataset is mostly missing: discard first.
+  const discardFirst = coverage != null && coverage < 0.5;
+  const preferred = discardFirst || accepted === 0 ? 'discard' : 'keep';
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const preferredRef = useRef(preferred);
+  preferredRef.current = preferred;
   useEffect(() => {
-    const onEvent = () => setOpen(true);
+    const onEvent = () => {
+      setOpen(true);
+      setHighlighted(preferredRef.current);
+    };
     window.addEventListener(CANCEL_MENU_EVENT, onEvent);
     // Esc while streaming: the dialog bumps explorerUi.cancelMenuRequest.
     const stop = reaction(() => explorerUi.cancelMenuRequest, onEvent);
@@ -118,14 +148,45 @@ const CancelMenu = observer(function CancelMenu() {
       stop();
     };
   }, []);
-  const accepted = ex.job?.funnel.accepted ?? 0;
+  const keepItem = (
+    <Menu.Item key="keep" value="keep" disabled={accepted === 0}>
+      <Icon as={LuCheck} />
+      <Box flex="1" fontVariantNumeric="tabular-nums">
+        Keep {fmtInt(accepted)} records
+        {speciesTotal > 0 ? ` (${fmtInt(speciesDone)} of ${fmtInt(speciesTotal)} species)` : ''}
+        {discardFirst && (
+          <Text as="span" display="block" textStyle="xs" color="fg.muted">
+            Too few species for representative bioregions
+          </Text>
+        )}
+      </Box>
+    </Menu.Item>
+  );
+  const discardItem = (
+    <Menu.Item
+      key="discard"
+      value="discard"
+      colorPalette="red"
+      color="colorPalette.fg"
+      _highlighted={{ bg: 'colorPalette.subtle', color: 'colorPalette.fg' }}
+    >
+      <Icon as={LuTrash2} />
+      <Box flex="1">Discard and restore previous data</Box>
+    </Menu.Item>
+  );
   return (
     <Menu.Root
       // Mount the portalled content on open: the explorer dialog aria-hides body children present when it opens.
       lazyMount
       unmountOnExit
       open={open}
-      onOpenChange={(e) => setOpen(e.open)}
+      onOpenChange={(e) => {
+        setOpen(e.open);
+        // The default item is highlighted on open, so Enter picks it.
+        if (e.open) setHighlighted(preferred);
+      }}
+      highlightedValue={highlighted}
+      onHighlightChange={(e) => setHighlighted(e.highlightedValue)}
       positioning={{ placement: 'top-end' }}
       onSelect={(e) => {
         if (e.value === 'keep' || e.value === 'discard') ex.cancel(e.value);
@@ -138,16 +199,7 @@ const CancelMenu = observer(function CancelMenu() {
       </Menu.Trigger>
       <Menu.Positioner>
         <Menu.Content minW="18rem">
-          <Menu.Item value="keep" disabled={accepted === 0}>
-            <Icon as={LuCheck} />
-            <Box flex="1" fontVariantNumeric="tabular-nums">
-              Keep {fmtInt(accepted)} records and run Infomap
-            </Box>
-          </Menu.Item>
-          <Menu.Item value="discard" color="fg.error" _highlighted={{ bg: 'bg.error', color: 'fg.error' }}>
-            <Icon as={LuTrash2} />
-            <Box flex="1">Discard and restore previous data</Box>
-          </Menu.Item>
+          {discardFirst ? [discardItem, keepItem] : [keepItem, discardItem]}
         </Menu.Content>
       </Menu.Positioner>
     </Menu.Root>
