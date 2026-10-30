@@ -244,3 +244,29 @@ describe('uniform tree links in state networks (B11)', () => {
     );
   });
 });
+
+describe('whole-tree state network coefficients', () => {
+  it('drop tree contributions with negative weight instead of subtracting them', () => {
+    // Without uniform tree links, X's strength counts every (species, cell) pair
+    // and exceeds the number of cells, so its information weight is negative.
+    const newick = '((A: 1, B: 1, C: 1, D: 1, E: 1, F: 1)X: 1, G: 2)R;';
+    const params = {
+      treeWeightBalance: 1,
+      useWholeTree: true,
+      uniformTreeLinks: false,
+      linkWeightThresholdExponent: -100,
+    };
+    const root = createRoot({ segregationTime: 0.5, ...params }, newick);
+    const { nameToCellIds } = root.speciesStore.binner;
+    const strength = ['A', 'B', 'C', 'D', 'E', 'F'].reduce(
+      (sum, name) => sum + nameToCellIds[name].size,
+      0,
+    );
+    const network = root.infomapStore.createNetwork();
+    expect(strength).toBeGreaterThan(network.numGridCellNodes);
+
+    const sumLinkWeight = network.links.reduce((sum, { weight = 1 }) => sum + weight, 0);
+    expect(network.sumTreeLinkWeight).toBeCloseTo(sumLinkWeight, 10);
+    expect(Math.min(...network.links.map(({ weight = 1 }) => weight))).toBeGreaterThan(0);
+  });
+});
