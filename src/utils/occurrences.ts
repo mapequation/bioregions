@@ -1,3 +1,4 @@
+import Papa from 'papaparse';
 import { normalizeSpeciesName } from './names';
 
 export interface OccurrenceColumns {
@@ -55,4 +56,31 @@ export function parseOccurrence(
   if (!isValidCoordinate(longitude, latitude)) return null;
 
   return { name, coordinates: [longitude, latitude] };
+}
+
+/**
+ * Parse a whole occurrence table with the options the app's streaming loader
+ * (`utils/loader.ts`) uses: header row, dynamic typing, empty lines skipped and
+ * the delimiter detected, so quoted fields with delimiters inside them work.
+ */
+export function parseOccurrenceTable(
+  text: string,
+  columns: OccurrenceColumns,
+): { occurrences: Occurrence[]; numSkipped: number; fields: string[] } {
+  const { data, meta } = Papa.parse<{ [key: string]: unknown }>(text, {
+    header: true,
+    dynamicTyping: true,
+    skipEmptyLines: true,
+  });
+  const occurrences: Occurrence[] = [];
+  let numSkipped = 0;
+  for (const row of data) {
+    const occurrence = parseOccurrence(row, columns);
+    if (occurrence) {
+      occurrences.push(occurrence);
+    } else {
+      ++numSkipped;
+    }
+  }
+  return { occurrences, numSkipped, fields: meta.fields ?? [] };
 }
