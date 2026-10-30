@@ -302,6 +302,7 @@ export default class Cell
       feature.bbox = turf.bbox(feature.geometry);
     }
 
+    this.isLeaf = false;
     const { x1, y1, x2, y2 } = this;
     const xm = (x1 + x2) * 0.5;
     const ym = (y1 + y2) * 0.5;

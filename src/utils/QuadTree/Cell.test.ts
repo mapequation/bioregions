@@ -64,4 +64,25 @@ describe('Cell polygon binning', () => {
       [0, 4, 4, 8],
     ]);
   });
+
+  it('turns a cell into an internal node when polygons split it', () => {
+    // One range in each 2-degree sub-cell of the south-west quadrant.
+    const ranges = [
+      rectangle(0.5, 0.5, 1.5, 1.5, 'Range 0'),
+      rectangle(2.5, 0.5, 3.5, 1.5, 'Range 1'),
+      rectangle(2.5, 2.5, 3.5, 3.5, 'Range 2'),
+      rectangle(0.5, 2.5, 1.5, 3.5, 'Range 3'),
+    ];
+    const root = build(ranges, { capacity: 2 });
+
+    expect(root.isLeaf).toBe(false);
+    const [southWest] = root._children;
+    expect(southWest?.isLeaf).toBe(false);
+    root.visit((cell) => {
+      if (!cell.isLeaf) expect(cell.features).toEqual([]);
+    });
+    // The split drops the record that triggers it, as it does for points, but
+    // every later range goes into the children instead of refilling the parent.
+    expect(cellsWith(root, ranges[3]).map((cell) => cell.sizeLog2)).toEqual([1]);
+  });
 });
