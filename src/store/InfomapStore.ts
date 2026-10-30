@@ -1379,6 +1379,10 @@ export default class InfomapStore {
     const linkWeightThreshold = 10 ** this.linkWeightThresholdExponent;
     let numLinksBelowThreshold = 0;
 
+    // Cell and memory of each cell state, so that the taxon and state nodes are
+    // created only for links that survive the threshold (in addLinksToNetwork).
+    const cellStateKeys = new Map<StateCellName, [CellId, TaxonName]>();
+
     const addStateLink = (
       taxonName: string,
       cellId: string,
@@ -1386,19 +1390,14 @@ export default class InfomapStore {
       weight: number,
       linkMap: StateLinkMap,
     ) => {
-      const cellStateNode = addCellStateNode(cellId, memTaxonName);
-      const taxonNode = addTaxonNode(taxonName);
-      const taxonNodeName = taxonNode.name;
-      const cellStateNodeName = cellStateNode.name;
-      if (taxonNodeName == null || cellStateNodeName == null) {
-        throw new Error('InfomapStore: state node missing name');
-      }
+      const cellStateNodeName = getCellStateName(cellId, memTaxonName);
+      cellStateKeys.set(cellStateNodeName, [cellId, memTaxonName]);
 
       const outLinks =
-        linkMap.get(taxonNodeName) ??
+        linkMap.get(taxonName) ??
         (() => {
           const m: StateCellOutLinks = new Map();
-          linkMap.set(taxonNodeName, m);
+          linkMap.set(taxonName, m);
           return m;
         })();
       outLinks.set(
@@ -1416,11 +1415,12 @@ export default class InfomapStore {
           // `createStandardNetwork`, which sits inside the `addLink` helper.
           if (weight < linkWeightThreshold) { ++numLinksBelowThreshold; continue; }
 
-          const taxonNode = phyloStateNodes.get(taxonName);
-          const cellStateNode = cellStateNodes.get(stateCellName);
-          if (taxonNode == null || cellStateNode == null) {
+          const cellState = cellStateKeys.get(stateCellName);
+          if (cellState == null) {
             throw new Error('InfomapStore: missing state node for link');
           }
+          const taxonNode = addTaxonNode(taxonName);
+          const cellStateNode = addCellStateNode(...cellState);
 
           network.links.push({
             source: taxonNode.stateId,
