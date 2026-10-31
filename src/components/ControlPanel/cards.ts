@@ -66,6 +66,8 @@ export interface SourceCardsInput {
   includeTree: boolean;
   /** `dataStore.continueCap`: null when the loaded data is not resumable. */
   continueCap: number | null;
+  /** `dataStore.isLoading`: true also while a load guard is held (an example's tree phase). */
+  loading: boolean;
 }
 
 /** Keeps year ranges such as 1970–2025 on one line (word joiners around the dash). */
@@ -286,6 +288,7 @@ export function sourceCards(input: SourceCardsInput): SourceCardModel[] {
   const occurrence = (sources.find((s) => s.role === 'occurrences') as OccurrenceSource | undefined) ?? null;
   const tree = (sources.find((s) => s.role === 'tree') as TreeSource | undefined) ?? null;
   const running = isRunning(job) ? job : null;
+  const busy = running != null || input.loading;
   const cards: SourceCardModel[] = [];
 
   // After the commit the new source carries the progress (status 'loading'); before it, and
@@ -326,7 +329,7 @@ export function sourceCards(input: SourceCardsInput): SourceCardModel[] {
         ...(openTab ? { openTab } : {}),
       });
     } else {
-      cards.push(occurrenceCard(occurrence, input, running != null));
+      cards.push(occurrenceCard(occurrence, input, busy));
     }
   }
 
@@ -357,6 +360,6 @@ export function sourceCards(input: SourceCardsInput): SourceCardModel[] {
       menu: [],
     });
   }
-  if (tree) cards.push(treeCard(tree, input, running != null));
+  if (tree) cards.push(treeCard(tree, input, busy));
   return cards;
 }

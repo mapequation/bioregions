@@ -6,7 +6,7 @@ import type { DataLoadJob, LoadedSource, OccurrenceSource, TreeSource } from '..
 const counts = { records: 1200, species: 40, polygons: 0 };
 
 function input(over: Partial<SourceCardsInput> = {}): SourceCardsInput {
-  return { sources: [], job: null, treeJob: null, overlap: null, counts, includeTree: true, continueCap: null, ...over };
+  return { sources: [], job: null, treeJob: null, overlap: null, counts, includeTree: true, continueCap: null, loading: false, ...over };
 }
 
 const base = { label: 'Data', status: 'done' as const, retrievedAt: '2026-10-31', completedAt: '2026-10-31', exportName: 'x' };
@@ -88,6 +88,14 @@ describe('sourceCards', () => {
     expect(card.primary[2].label).toBe('Continue up to 1,000,000');
     expect(card.status?.tone).toBe('warning');
     expect(ids(card.menu)).toEqual(['loadAgain', 'remove']);
+  });
+
+  it('disables card actions while a load guard is held without a running job', () => {
+    const [occ, tree] = cardsOf([fileSource, openTree], { loading: true });
+    expect(occ.menu[0].disabled).toBe('Not available while data is loading');
+    expect(tree.menu.every((a) => a.disabled)).toBe(true);
+    const [idle] = cardsOf([fileSource]);
+    expect(idle.menu[0].disabled).toBeFalsy();
   });
 
   it('labels the Stop menu before and after the commit', () => {
