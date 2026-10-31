@@ -14,7 +14,7 @@ function setup() {
     renderShape: vi.fn(),
     render: vi.fn(),
   };
-  const infomapStore = { run: vi.fn(async () => {}), clearData: vi.fn() };
+  const infomapStore = { run: vi.fn(async () => true), clearData: vi.fn() };
   // The data owner: its occurrence source names the data (SpeciesStore.name).
   const dataStore = observable({ occurrence: null as { exportName: string } | null }, { occurrence: observable.ref });
   const rootStore = { mapStore, infomapStore, dataStore } as unknown as RootStore;

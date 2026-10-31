@@ -640,7 +640,7 @@ export default class SpeciesStore {
     if (!this.loaded) return;
     mapStore.setRenderType('heatmap');
     mapStore.render();
-    await infomapStore.run();
+    if (!(await infomapStore.run())) return;
     mapStore.setRenderType('bioregions');
     mapStore.render();
   });
@@ -665,7 +665,7 @@ export default class SpeciesStore {
     const { mapStore, infomapStore } = this.rootStore;
     mapStore.setRenderType('heatmap');
     mapStore.render();
-    await infomapStore.run();
+    if (!(await infomapStore.run())) return;
     mapStore.setRenderType('bioregions');
     mapStore.render();
   });

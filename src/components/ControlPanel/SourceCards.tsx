@@ -286,6 +286,7 @@ export default observer(function SourceCards() {
     includeTree: infomapStore.includeTreeInNetwork,
     continueCap: dataStore.continueCap,
     loading: dataStore.isLoading,
+    noCellsCapacity: infomapStore.noCellsCapacity,
   });
   if (cards.length === 0) return null;
   return (

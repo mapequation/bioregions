@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { sourceCards, type SourceCardsInput } from './cards';
+import { sourceCards, type SourceCardsInput, tooFewRecordsHint } from './cards';
 import { defaultQuery } from '../../sources/query';
 import type { DataLoadJob, LoadedSource, OccurrenceSource, TreeSource } from '../../store/data/types';
 
 const counts = { records: 1200, species: 40, polygons: 0 };
 
 function input(over: Partial<SourceCardsInput> = {}): SourceCardsInput {
-  return { sources: [], job: null, treeJob: null, overlap: null, counts, includeTree: true, continueCap: null, loading: false, ...over };
+  return { sources: [], job: null, treeJob: null, overlap: null, counts, includeTree: true, continueCap: null, loading: false, noCellsCapacity: null, ...over };
 }
 
 const base = { label: 'Data', status: 'done' as const, retrievedAt: '2026-10-31', completedAt: '2026-10-31', exportName: 'x' };
@@ -96,6 +96,14 @@ describe('sourceCards', () => {
     expect(tree.menu.every((a) => a.disabled)).toBe(true);
     const [idle] = cardsOf([fileSource]);
     expect(idle.menu[0].disabled).toBeFalsy();
+  });
+
+  it('notes on the occurrence card when the records fill no grid cell', () => {
+    const [card] = cardsOf([fileSource], { noCellsCapacity: 10 });
+    expect(card.notes).toContain(
+      'Too few records to fill a grid cell (cell capacity 10). Lower the cell capacity under Resolution.',
+    );
+    expect(cardsOf([fileSource])[0].notes).not.toContain(tooFewRecordsHint(10));
   });
 
   it('labels the Stop menu before and after the commit', () => {

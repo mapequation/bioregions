@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, computed, runInAction } from 'mobx';
 import Infomap from '@mapequation/infomap';
 import type { Tree, StateTree, Result } from '@mapequation/infomap';
 import type {
@@ -255,12 +255,14 @@ export default class InfomapStore {
   includeTreeInNetwork: boolean = true;
   alwaysUseStateNetwork: boolean = false;
   isRunning: boolean = false;
+  /** The minimum cell capacity when the last run found no grid cells to cluster, else null. */
+  noCellsCapacity: number | null = null;
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
   infomapId: number | null = null;
   /** The running `run()`'s token and resolver: `abort()` settles a superseded run. */
   private runToken: object | null = null;
-  private settleRun: (() => void) | null = null;
+  private settleRun: ((ok: boolean) => void) | null = null;
   infomapOutput: string = '';
   // Worker output lines arrive one message at a time (tens per second during a
   // run). Buffer them and commit in one action per flush so observers re-render
@@ -361,6 +363,7 @@ export default class InfomapStore {
       args: observable,
       currentTrial: observable,
       isRunning: observable,
+      noCellsCapacity: observable,
       bioregions: observable.ref,
       useWeightedSpeciesLinks: observable,
       useWeightedTreeNodeLinksIfTimeSlice: observable,
@@ -540,6 +543,16 @@ export default class InfomapStore {
     this.bioregions = bioregions;
   });
 
+  /** True when the binner has cells; else records the cell capacity for the hint. */
+  private checkCells(): boolean {
+    const ok = this.cells.length > 0;
+    const capacity = ok ? null : this.rootStore.speciesStore.binner.minCellCapacity;
+    runInAction(() => {
+      this.noCellsCapacity = capacity;
+    });
+    return ok;
+  }
+
   setIsRunning = action((isRunning: boolean = true) => {
     this.isRunning = isRunning;
   });
@@ -681,16 +694,12 @@ export default class InfomapStore {
     }
   });
 
-  async run() {
+  /** Run Infomap; resolves true when it finished, false when skipped or aborted. */
+  async run(): Promise<boolean> {
     if (this.infomapId !== null) {
       await this.abort();
     }
-    const { cells } = this;
-
-    if (cells.length === 0) {
-      console.error('No cells in binner!');
-      return;
-    }
+    if (!this.checkCells()) return false;
 
     this.setIsRunning();
     this.setCurrentTrial(0);
@@ -709,7 +718,7 @@ export default class InfomapStore {
 
     console.time('infomap');
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<boolean>((resolve, reject) => {
       // The library keeps one handler per event: a later run replaces these, and an
       // aborted run's late events are ignored.
       const token = {};
@@ -720,7 +729,7 @@ export default class InfomapStore {
           if (this.runToken !== token) return;
           this.runToken = this.settleRun = null;
           this.onInfomapFinished(result, id);
-          resolve();
+          resolve(true);
         })
         .on('error', (err, id) => {
           if (this.runToken !== token) return;
@@ -735,16 +744,11 @@ export default class InfomapStore {
     });
   }
 
-  async runMultilayer() {
+  async runMultilayer(): Promise<boolean> {
     if (this.infomapId !== null) {
       await this.abort();
     }
-    const { cells } = this;
-
-    if (cells.length === 0) {
-      console.error('No cells in binner!');
-      return;
-    }
+    if (!this.checkCells()) return false;
 
     this.setIsRunning();
     this.setCurrentTrial(0);
@@ -763,7 +767,7 @@ export default class InfomapStore {
 
     console.time('infomap');
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<boolean>((resolve, reject) => {
       // The library keeps one handler per event: a later run replaces these, and an
       // aborted run's late events are ignored.
       const token = {};
@@ -774,7 +778,7 @@ export default class InfomapStore {
           if (this.runToken !== token) return;
           this.runToken = this.settleRun = null;
           this.onInfomapFinished(result, id);
-          resolve();
+          resolve(true);
         })
         .on('error', (err, id) => {
           if (this.runToken !== token) return;
@@ -812,7 +816,7 @@ export default class InfomapStore {
     } catch (e: unknown) {
       console.error('Worker error', e);
     }
-    settle?.();
+    settle?.(false);
 
     return true;
   }

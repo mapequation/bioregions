@@ -100,6 +100,7 @@ function setup(scripts: Record<string, Script> = {}) {
   );
   const run = vi.fn(async () => {
     calls.push('infomap.run');
+    return true;
   });
   Object.assign(infomapStore, { run });
   const mapStore = { setRenderType: vi.fn(), render: vi.fn() };
@@ -108,7 +109,7 @@ function setup(scripts: Record<string, Script> = {}) {
   root.treeStore = treeStore;
   const store = new DataStore(root);
   root.dataStore = store;
-  return { store, speciesStore, infomapStore, treeStore, run, speciesLoad, fakeLoad, calls };
+  return { store, speciesStore, infomapStore, treeStore, mapStore, run, speciesLoad, fakeLoad, calls };
 }
 
 const csv = (name: string) => ({
@@ -325,6 +326,17 @@ describe('DataStore trees', () => {
     expect(run).not.toHaveBeenCalled();
     expect(store.tree?.kind).toBe('opentree');
   });
+
+  it('shows bioregions after a rerun only when Infomap ran', async () => {
+    const { store, mapStore, run } = setup();
+    await store.loadOccurrenceFile(csv('birds.csv'));
+    await store.loadTree(openTree(), { rerun: false, includeTree: true });
+    mapStore.setRenderType.mockClear();
+    run.mockResolvedValueOnce(false);
+    await store.removeTree();
+    expect(run).toHaveBeenCalled();
+    expect(mapStore.setRenderType).not.toHaveBeenCalledWith('bioregions');
+  });
 });
 
 describe('DataStore single-load guard', () => {
@@ -397,6 +409,7 @@ describe('DataStore single-load guard', () => {
       infomapStore.isRunning = true;
       await new Promise<void>((resolve) => (finish = resolve));
       infomapStore.isRunning = false;
+      return true;
     });
     const running = store.loadOccurrenceFile(csv('slow.csv'));
     await ticks();
@@ -416,7 +429,7 @@ describe('DataStore Infomap reruns', () => {
     const root = (store as unknown as { rootStore: RootStore }).rootStore;
     await store.loadOccurrenceFile(csv('birds.csv'));
     let finish = () => {};
-    run.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    run.mockImplementationOnce(() => new Promise<boolean>((resolve) => (finish = () => resolve(true))));
     const loading = store.loadTree(openTree());
     calls.length = 0;
     expect(store.removeOccurrences()).toBe(true);

@@ -553,8 +553,8 @@ export default class DataStore {
   private async rerunInfomap() {
     const { infomapStore, mapStore, speciesStore } = this.rootStore;
     const gen = ++this.rerunGen;
-    await infomapStore.run();
-    if (gen !== this.rerunGen || !speciesStore.loaded) return;
+    const ok = await infomapStore.run();
+    if (!ok || gen !== this.rerunGen || !speciesStore.loaded) return;
     mapStore.setRenderType('bioregions');
     mapStore.render();
   }

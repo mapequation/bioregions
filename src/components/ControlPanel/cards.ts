@@ -68,7 +68,13 @@ export interface SourceCardsInput {
   continueCap: number | null;
   /** `dataStore.isLoading`: true also while a load guard is held (an example's tree phase). */
   loading: boolean;
+  /** `infomapStore.noCellsCapacity`: set when Infomap found no grid cells to cluster. */
+  noCellsCapacity: number | null;
 }
+
+/** The hint shown when the records cannot fill a single grid cell. */
+export const tooFewRecordsHint = (capacity: number) =>
+  `Too few records to fill a grid cell (cell capacity ${capacity}). Lower the cell capacity under Resolution.`;
 
 /** Keeps year ranges such as 1970–2025 on one line (word joiners around the dash). */
 export const keepRangesTogether = (s: string) => s.replace(/(\d)–(\d)/g, '$1⁠–⁠$2');
@@ -329,7 +335,9 @@ export function sourceCards(input: SourceCardsInput): SourceCardModel[] {
         ...(openTab ? { openTab } : {}),
       });
     } else {
-      cards.push(occurrenceCard(occurrence, input, busy));
+      const card = occurrenceCard(occurrence, input, busy);
+      if (input.noCellsCapacity != null) card.notes = [...card.notes, tooFewRecordsHint(input.noCellsCapacity)];
+      cards.push(card);
     }
   }
 
