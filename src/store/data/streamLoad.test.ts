@@ -975,6 +975,41 @@ describe('Continue loading, Load again, retry and stop reasons (S4)', () => {
     }
   });
 
+  it('applyZip cites the zip DOI on the loaded data, or replaces it as the loaded query (S2b)', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts()));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    const loaded = occurrence(t);
+    // The workspace query moves on after the load: "Replace" must use the loaded one.
+    t.store.query = { ...structuredClone(QUERY), marker: 1 } as never;
+    const file = new Blob(['zip']);
+    const doi = '10.15468/dl.zzz';
+    Object.assign(t.store, {
+      zipImport: { state: 'ready', fileName: '0009-1.zip', queryMatch: 'match', streamGbifRecords: 3, canReplace: true, canCiteDoi: true, downloadKey: '0009-1', doi },
+      zipSummary: { downloadKey: '0009-1', rows: 4, absent: 0, introduced: 0, format: 'SIMPLE_CSV', citation: 'GBIF.org', doi },
+      zipFile: file,
+    });
+    t.store.applyZip('keepStreamCiteDoi');
+    expect(occurrence(t).id).toBe(loaded.id);
+    expect(occurrence(t).provenance).toMatchObject({ gbifDownloadKey: '0009-1', gbifDownloadDoi: doi });
+
+    const zipLoad = vi.spyOn(t.dataStore, 'loadGbifZip').mockResolvedValue({ started: true, committed: true });
+    t.store.applyZip('replace');
+    expect(zipLoad).toHaveBeenCalledTimes(1);
+    const [arg, opts] = zipLoad.mock.calls[0];
+    expect(arg).toBe(file);
+    expect(opts?.query).toEqual(loaded.provenance?.query);
+    expect(opts?.ledger).toEqual(loaded.provenance?.ledger);
+    expect(opts).toMatchObject({ origin: 'search', download: { downloadKey: '0009-1', doi } });
+
+    // Nothing loaded: "keep" patches nothing.
+    t.dataStore.removeOccurrences();
+    const patch = vi.spyOn(t.dataStore, 'patchOccurrence');
+    t.store.applyZip('keepStreamCiteDoi');
+    expect(patch).not.toHaveBeenCalled();
+  });
+
   it('stops at the cap when the estimate was low, and Continue raises the cap', async () => {
     vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A], [B], [C]]));
     const t = setup();
