@@ -200,6 +200,12 @@ Data, Resolution, Infomap, Tree, Map, Colors, Export). `src/components/ui/` are
 shadcn-style Chakra UI v3 snippet components — prefer these over raw Chakra wiring.
 Theming lives in `src/theme.ts`.
 
+Never put a `Tooltip` directly on a `Popover.Trigger` or `Menu.Trigger` (`asChild` on
+the same element): the tooltip overwrites the `data-scope`/`data-part`/`data-ownedby`
+attributes zag uses to find the overlay's anchor, and the overlay opens in the page
+corner. Wrap the trigger in a `chakra.span` and put the tooltip on that (see
+`ControlPanel/SourceCards.tsx`).
+
 ## Conventions
 
 - Path alias `@/` → `src/` (configured in both `tsconfig` and `vite.config.ts`). Existing code mixes `@/...` and relative imports.
