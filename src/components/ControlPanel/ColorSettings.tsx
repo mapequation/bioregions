@@ -6,7 +6,12 @@ import ColorPicker from './ColorPicker';
 import { Switch } from '../ui/switch';
 import Select from './Select';
 import { Slider } from '../ui/slider';
-import { COLOR_SCHEMES, type SchemeName } from '@/store/ColorStore';
+import {
+  COLOR_SCHEMES,
+  TONES,
+  type SchemeName,
+  type ToneChoice,
+} from '@/store/ColorStore';
 
 export default observer(function ColorSettings() {
   const { mapStore, colorStore, infomapStore } = useStore();
@@ -103,39 +108,31 @@ export default observer(function ColorSettings() {
               items={COLOR_SCHEMES}
             />
           </Flex>
-          <Flex w="100%" mt={4} alignItems="flex-end">
-            <Tag.Root height={5}>
-              <Tag.Label width={10}>{colorStore.saturation}</Tag.Label>
-            </Tag.Root>
-            <Slider
-              w="100%"
-              size="sm"
-              label="Saturation"
-              mx={2}
-              value={[colorStore.saturation, colorStore.saturationEnd]}
-              min={0}
-              max={1}
-              step={0.01}
-              onValueChange={withRenderTypeRange(
-                colorStore.setSaturationRange,
-                'bioregions',
-              )}
+          <Flex mt={4}>
+            <Select
+              id="colorTone"
+              label="Tone"
+              value={[colorStore.tone]}
+              onValueChange={(e) => {
+                colorStore.setTone(e.value[0] as ToneChoice);
+                if (mapStore.renderType === 'bioregions') {
+                  mapStore.render();
+                }
+              }}
+              items={TONES}
             />
-            <Tag.Root height={5}>
-              <Tag.Label width={10}>{colorStore.saturationEnd}</Tag.Label>
-            </Tag.Root>
           </Flex>
 
           <Flex w="100%" mt={4} alignItems="flex-end">
             <Tag.Root height={5}>
-              <Tag.Label width={10}>{colorStore.lightness}</Tag.Label>
+              <Tag.Label width={10}>{colorStore.lightness[0]}</Tag.Label>
             </Tag.Root>
             <Slider
               w="100%"
               size="sm"
               label="Lightness"
               mx={2}
-              value={[colorStore.lightness, colorStore.lightnessEnd]}
+              value={colorStore.lightness}
               min={0}
               max={1}
               step={0.01}
@@ -145,7 +142,7 @@ export default observer(function ColorSettings() {
               )}
             />
             <Tag.Root height={5}>
-              <Tag.Label width={10}>{colorStore.lightnessEnd}</Tag.Label>
+              <Tag.Label width={10}>{colorStore.lightness[1]}</Tag.Label>
             </Tag.Root>
           </Flex>
 
