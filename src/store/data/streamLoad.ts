@@ -466,9 +466,16 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
         ledger: spec.ledger,
         ledgerBase: spec.ledgerBase,
       };
+      // A Continue keeps the citations patched while it ran (a DOI set in the Cite tab, I7).
+      const current = store.occurrence;
+      const live = current?.id === sourceId && current.kind === 'explorer-query' ? current.provenance : null;
+      const cited: Partial<LoadProvenance> = {};
+      if (target && live) {
+        for (const k of ['derivedDoi', 'gbifDownloadKey', 'gbifDownloadDoi'] as const) if (k in live) cited[k] = live[k];
+      }
       if (target && funnel.received === 0 && stop) {
         // A Continue that got nothing new: only the stop (its error and failed parts) changes.
-        store.replaceSource(sourceId, { provenance: { ...target.provenance, stop }, resumable: true });
+        store.replaceSource(sourceId, { provenance: { ...target.provenance, ...cited, stop }, resumable: true });
         store.runs.set(sourceId, resume);
         return;
       }
@@ -507,6 +514,7 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
       const provenance: LoadProvenance = {
         // A Continue keeps the first run's query, retrieval time, requests and citations.
         ...kept,
+        ...cited,
         query,
         retrievedAt: target?.provenance.retrievedAt ?? committedAt,
         funnel: total,

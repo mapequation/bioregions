@@ -956,6 +956,25 @@ describe('Continue loading, Load again, retry and stop reasons (S4)', () => {
     expect(outcome(t)).toEqual(whole);
   });
 
+  it('keeps a DOI patched while a Continue runs, whether or not it gets new records (I7)', async () => {
+    for (const fail of [[1], [1, 1]]) {
+      vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { fail }));
+      vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+      const t = setup();
+      await t.store.load();
+      const id = occurrence(t).id;
+      const running = t.dataStore.continueLoad();
+      expect(t.dataStore.patchOccurrence(id, { derivedDoi: '10.15468/dd.abc' })).toBe(true);
+      expect(t.dataStore.patchOccurrence(id, { gbifDownloadKey: '0001-1', gbifDownloadDoi: '10.15468/dl.xyz' })).toBe(true);
+      await running;
+      expect(occurrence(t).provenance).toMatchObject({
+        derivedDoi: '10.15468/dd.abc',
+        gbifDownloadKey: '0001-1',
+        gbifDownloadDoi: '10.15468/dl.xyz',
+      });
+    }
+  });
+
   it('stops at the cap when the estimate was low, and Continue raises the cap', async () => {
     vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A], [B], [C]]));
     const t = setup();
