@@ -12,6 +12,7 @@ import type {
   Supports,
   TaxonRef,
 } from '../../sources/types';
+import type { StopState } from '../data/types';
 
 // --- ExplorerStore -----------------------------------------------------------------
 
@@ -270,19 +271,25 @@ export interface PartialLoad {
   missingSpecies?: { name: string; expected: number }[];
 }
 
+/**
+ * The finished payload of a loaded query (or zip) source, built at the finish. Why a load
+ * came back empty lives on `dataStore.job.outcome`, not here.
+ */
 export interface Provenance {
   query: OccurrenceQuery;
+  /** The source's commit time. */
   retrievedAt: string;
-  mode: 'replace' | 'add';
+  /** ISO time of the finish (S4: and of the last Continue). Optional until the zip path sets it (S2b). */
+  completedAt?: string;
+  /** The record cap the load ran with. */
+  cap?: number;
+  /** Why the load stopped early, null when complete. TODO(S4): set by the stop reasons. */
+  stop?: StopState | null;
   funnel: Funnel;
   ledger: LedgerRow[];
   kpis: Kpis;
   /** Records loaded (the funnel's accepted count). */
   accepted: number;
-  /** Why nothing was loaded; set only when `accepted` is 0. */
-  emptyReason?: EmptyReason;
-  /** A replace-mode load received nothing and the previous dataset was left untouched. */
-  previousKept?: boolean;
   /** Set when the load stopped early (cancelled) or a source failed. */
   partial: PartialLoad | null;
   /**

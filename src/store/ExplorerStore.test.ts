@@ -9,16 +9,16 @@ import ExplorerStore, {
   dirtySections,
   explorerDefaultQuery,
   mergeKpis,
-  mergeProgress,
   recentShareOf,
-  shownLoad,
-  speciesCoverage,
   zipVerdict,
   PREVIEW_DEBOUNCE_MS,
   type BiasActions,
   type ToggleMemory,
 } from './ExplorerStore';
 import type RootStore from './RootStore';
+import { mergeProgress, speciesCoverage } from './data/streamLoad';
+import type { DataLoadJob, QueryOccurrences } from './data/types';
+import type { LoadProvenance } from './explorer/provenance';
 
 // The store asks each source for a fast summary plus ledger counts; the tests stub one
 // full preview per source and serve it as the summary (its baseTotal/filterImpact win).
@@ -277,12 +277,21 @@ describe('load progress helpers', () => {
     expect(speciesCoverage([{}])).toBeNull();
   });
 
-  it('finds the provenance of the data on screen after an empty load', () => {
-    const first = { accepted: 5 } as Parameters<typeof shownLoad>[0];
-    const empty = { accepted: 0, previousKept: true, previous: first } as Parameters<typeof shownLoad>[0];
-    expect(shownLoad(empty)).toBe(first);
-    expect(shownLoad({ accepted: 0, previousKept: true } as Parameters<typeof shownLoad>[0])).toBeNull();
-    expect(shownLoad(first)).toBe(first);
+  it('keeps the loaded provenance after an empty load and reads the outcome from the job', () => {
+    const first = { accepted: 5, query: explorerDefaultQuery() } as LoadProvenance;
+    const source = { id: 'src-1', kind: 'explorer-query', status: 'done', provenance: first } as QueryOccurrences;
+    const job = { kind: 'query', state: 'error', outcome: { emptyReason: 'noMatches', previousKept: true } } as DataLoadJob;
+    const s = new ExplorerStore({ dataStore: { occurrence: source, job, isLoading: false } } as unknown as RootStore);
+    expect(s.loaded).toBe(first);
+    expect(s.lastLoad).toMatchObject({ accepted: 5, mode: 'replace', emptyReason: 'noMatches', previousKept: true });
+    // While the source streams, nothing counts as loaded.
+    const streaming = new ExplorerStore({
+      dataStore: { occurrence: { ...source, status: 'loading', provenance: null }, job: null, isLoading: true },
+    } as unknown as RootStore);
+    expect(streaming.loaded).toBeNull();
+    expect(streaming.lastLoad).toBeNull();
+    s.dispose();
+    streaming.dispose();
   });
 });
 
@@ -700,7 +709,7 @@ describe('preview pipeline', () => {
     s.dispose();
   });
 
-  it('shares one ledger base and names only sources with records in the methods draft', async () => {
+  it('shares one ledger base and drafts no methods text before a load', async () => {
     vi.mocked(previewGbif).mockResolvedValue(
       preview('gbif', { total: 900, baseTotal: 1800, filterImpact: { uncertainty: 450 } }),
     );
@@ -714,10 +723,8 @@ describe('preview pipeline', () => {
     expect(s.countStory).toEqual({ matching: 900, speciesLevel: null, duplicates: null, crossSource: null, loaded: null });
     expect(s.insightsScope).toEqual({ kind: 'query', records: 900, label: 'For the query · 900 matching records' });
     expect(s.loadedMatchesQuery).toBe(false);
-    expect(s.methodsSources).toEqual(['gbif']);
-    expect(s.methodsText).toContain('Global Biodiversity Information Facility');
-    expect(s.methodsText).not.toContain('OBIS');
-    expect(s.methodsText).toContain('Only records identified to species were used');
+    // The methods text describes loaded data only (I4).
+    expect(s.methodsText).toBe('');
     s.toggleFilter('speciesLevel');
     expect(s.query.quality.maxUncertaintyMeters).toBe(10000);
     s.dispose();

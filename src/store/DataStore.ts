@@ -8,6 +8,8 @@ import { RecordCleaner } from '../sources/clean';
 import { extension, getName } from '../utils/filename';
 import { loadText } from '../utils/loader';
 import { citations, methodsText, type CitationItem } from './data/methods';
+import type { ExampleEntry } from './data/catalog';
+import { type ActiveLoad, runQueryLoad } from './data/streamLoad';
 import type {
   DataLoadJob,
   ExampleOccurrences,
@@ -19,6 +21,8 @@ import type {
   OccurrenceFileInput,
   OccurrenceSource,
   OpenTreeSource,
+  QueryLoadRequest,
+  ResumeState,
   StartResult,
   TreeJob,
   TreeLoadInput,
@@ -78,6 +82,10 @@ export default class DataStore {
   job: DataLoadJob | null = null;
   /** The current tree load, or the last tree error. */
   treeJob: TreeJob | null = null;
+  /** The running stream load's controls (not observable; data/streamLoad.ts sets it). */
+  active: ActiveLoad | null = null;
+  /** Resume state per finished query source (§4.1); deleted when its source leaves the slot. */
+  readonly runs = new Map<string, ResumeState>();
   private nextSourceId = 1;
   private nextJobId = 1;
 
@@ -113,15 +121,19 @@ export default class DataStore {
 
   get methodsText(): string {
     const { speciesStore } = this.rootStore;
-    return methodsText(this.sources, {
-      records: speciesStore.numRecords,
-      species: speciesStore.numSpecies,
-      polygons: speciesStore.numPolygonsDebounced,
-    });
+    return methodsText(
+      this.sources,
+      {
+        records: speciesStore.numRecords,
+        species: speciesStore.numSpecies,
+        polygons: speciesStore.numPolygonsDebounced,
+      },
+      { downloads: this.rootStore.explorerStore?.downloads },
+    );
   }
 
   get citations(): CitationItem[] {
-    return citations(this.sources);
+    return citations(this.sources, { downloads: this.rootStore.explorerStore?.downloads });
   }
 
   /** Loaded species that are also tips of the loaded tree. */
@@ -138,18 +150,21 @@ export default class DataStore {
 
   // --- slots ------------------------------------------------------------------------
 
-  private mintSourceId() {
+  /** Internal to `src/store/data/**`. */
+  mintSourceId() {
     return `src-${this.nextSourceId++}`;
   }
 
   /** Put `source` in its role's slot (or empty `role`'s slot), keeping occurrences first. */
   private setSlot(role: LoadedSource['role'], source: LoadedSource | null) {
+    for (const s of this.sources) if (s.role === role && s.id !== source?.id) this.runs.delete(s.id);
     const others = this.sources.filter((s) => s.role !== role);
     const next = source ? [...others, source] : others;
     this.sources = next.sort((a, b) => (a.role === b.role ? 0 : a.role === 'occurrences' ? -1 : 1));
   }
 
-  private replaceSource(id: string, patch: Partial<LoadedSource>) {
+  /** Replace a source with a patched copy (sources are immutable). Internal to `src/store/data/**`. */
+  replaceSource(id: string, patch: Partial<LoadedSource>) {
     runInAction(() => {
       this.sources = this.sources.map((s) => (s.id === id ? ({ ...s, ...patch } as LoadedSource) : s));
     });
@@ -163,10 +178,8 @@ export default class DataStore {
     const { speciesStore, infomapStore } = this.rootStore;
     speciesStore.clearData();
     infomapStore.clearData();
-    // TODO(S2a): SpeciesStore.name becomes a computed over `occurrence.exportName`.
-    speciesStore.name = source.exportName;
     this.setSlot('occurrences', source);
-    if (this.job) this.job.committed = true;
+    if (this.job && this.isLoading) this.job.committed = true;
   });
 
   /**
@@ -190,7 +203,8 @@ export default class DataStore {
 
   // --- occurrence loads -----------------------------------------------------------------
 
-  private startJob(kind: DataLoadJob['kind'], origin: JobOrigin, label: string): DataLoadJob {
+  /** Start an occurrence load job (`extra` overrides the defaults). Internal to `src/store/data/**`. */
+  startJob(kind: DataLoadJob['kind'], origin: JobOrigin, label: string, extra: Partial<DataLoadJob> = {}): DataLoadJob {
     const job: DataLoadJob = {
       id: `job-${this.nextJobId++}`,
       kind,
@@ -206,6 +220,7 @@ export default class DataStore {
       truncated: [],
       speciesCoverage: null,
       paused: false,
+      ...extra,
     };
     runInAction(() => {
       this.job = job;
@@ -286,6 +301,81 @@ export default class DataStore {
     });
   }
 
+  // --- stream loads ------------------------------------------------------------------
+
+  /** Plan and stream an explorer query into the occurrence slot; commits on the first accepted record. */
+  async loadQuery(req: QueryLoadRequest): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    return runQueryLoad(this, req);
+  }
+
+  /**
+   * Stop the running load: keep what arrived or discard it. `discard` before the commit
+   * only aborts (I6); after it, the committed source is removed once the load has ended.
+   * Kept records run Infomap only when at least half the planned species arrived (else
+   * `provenance.bioregionsSkipped`). A `continue` job keeps; a file load stops reading.
+   */
+  cancel(mode: 'keep' | 'discard'): void {
+    const job = this.job;
+    if (!job || (job.state !== 'planning' && job.state !== 'streaming')) return;
+    if (job.kind === 'file' || job.kind === 'example') {
+      this.rootStore.speciesStore.cancelLoad();
+      return;
+    }
+    const active = this.active;
+    if (!active || active.job !== job) return;
+    active.cancelMode = job.kind === 'continue' ? 'keep' : mode;
+    // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
+    active.controller.abort(active.cancelMode);
+    runInAction(() => {
+      job.paused = false;
+      if (job.state === 'planning') {
+        job.state = 'cancelled';
+        job.outcome = { emptyReason: 'cancelledEarly', previousKept: job.targetId != null };
+      }
+    });
+    // Release a paused load after the abort, so the held batch is dropped, not counted.
+    active.gate.open();
+  }
+
+  /**
+   * Hold the running stream load (e.g. while the cancel menu is open): no further batch is
+   * counted or reaches SpeciesStore, so `job.funnel` and `job.speciesLoaded` are exactly
+   * what `cancel('keep')` keeps. `resume()` continues.
+   */
+  pause(): void {
+    const active = this.active;
+    const job = this.job;
+    if (!active || !job || active.job !== job || job.state !== 'streaming' || active.gate.paused) return;
+    active.gate.close();
+    active.flush();
+    runInAction(() => {
+      job.paused = true;
+      job.etaSeconds = null;
+    });
+  }
+
+  /** Continue a load held by `pause()`. */
+  resume(): void {
+    const active = this.active;
+    if (!active?.gate.paused) return;
+    runInAction(() => {
+      active.job.paused = false;
+    });
+    active.gate.open();
+  }
+
+  /** Run Infomap on a stopped load that skipped it (`provenance.bioregionsSkipped`). */
+  async runBioregionsAnyway(): Promise<void> {
+    const source = this.occurrence;
+    if (this.isLoading || !source || (source.kind !== 'explorer-query' && source.kind !== 'gbif-zip')) return;
+    const provenance = source.provenance;
+    if (!provenance?.bioregionsSkipped) return;
+    const { bioregionsSkipped: _, ...rest } = provenance;
+    this.replaceSource(source.id, { provenance: rest });
+    await this.rootStore.speciesStore.runBioregions();
+  }
+
   // --- tree loads -------------------------------------------------------------------
 
   /**
@@ -344,11 +434,16 @@ export default class DataStore {
 
   /**
    * Load a bundled example: its binner settings, its tree (if any) without a rerun, then
-   * its occurrences, whose `postLoad` runs Infomap once.
-   * TODO(S6): the catalog entry, the `query` kind and `includeTree` handling.
+   * its occurrences, whose `postLoad` runs Infomap once. A `query` catalog entry delegates
+   * to `explorerStore.loadExampleQuery` (restore, Search tab, the Load gate, then load).
+   * TODO(S6): the catalog's `files` entries and `includeTree` handling.
    */
-  async loadExample(example: ExampleFiles, origin: JobOrigin = 'examples'): Promise<StartResult> {
+  async loadExample(
+    example: ExampleFiles | (ExampleEntry & { kind: 'query' }),
+    origin: JobOrigin = 'examples',
+  ): Promise<StartResult> {
     if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    if ('kind' in example) return this.rootStore.explorerStore.loadExampleQuery(example);
     const { speciesStore, infomapStore } = this.rootStore;
     const { settings } = example;
     if (settings.minCellSize != null) speciesStore.binner.setMinCellSizeLog2(settings.minCellSize);
@@ -468,6 +563,7 @@ export default class DataStore {
       speciesStore.clearData();
       treeStore.reset();
       this.sources = [];
+      this.runs.clear();
       this.treeJob = null;
     });
     return true;

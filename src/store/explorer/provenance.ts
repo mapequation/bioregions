@@ -1,7 +1,7 @@
 // Provenance of a load turned into citation text: methods paragraph, OBIS citation,
 // GBIF derived-dataset CSV and the decision ledger as CSV.
 import { type PhylogenyInfo, derivedDatasetCsv, methodsParagraph, obisCitation } from '../../sources/methods';
-import type { DropReason, Funnel, OccurrenceQuery, ProvenanceEntry, SourceId } from '../../sources/types';
+import type { DropReason, Funnel, ProvenanceEntry, SourceId } from '../../sources/types';
 import type { LoadStats } from './job';
 import type { GbifDownload, LedgerRow, PartialLoad, Provenance } from './types';
 
@@ -13,11 +13,6 @@ export interface LoadProvenance extends Provenance {
   gbifDownloadDoi?: string;
   /** The GBIF records came from the download zip rather than the API. */
   fromZip?: boolean;
-  /**
-   * After an empty load that left the previous dataset on screen (`previousKept`): the
-   * provenance of that dataset, for citing what is still shown.
-   */
-  previous?: LoadProvenance;
   /** Statistics of the accepted records (basis, datasets, years, species, countries). */
   stats?: LoadStats;
 }
@@ -66,23 +61,6 @@ export function provenanceEntries(load: LoadProvenance, gbifDoi?: string): Prove
     });
   }
   return out;
-}
-
-/** Draft entries for a query that has not been loaded yet. */
-function draftEntries(query: OccurrenceQuery, now: string, gbifDoi?: string, sources?: SourceId[]): ProvenanceEntry[] {
-  return (['gbif', 'obis'] as SourceId[])
-    .filter((id) => query.sources[id] && (!sources || sources.includes(id)))
-    .map((id) => ({
-      id,
-      source: id,
-      label: SOURCE_LABELS[id],
-      retrievedAt: now,
-      query,
-      doi: id === 'gbif' ? gbifDoi : undefined,
-      fetched: 0,
-      accepted: 0,
-      datasets: [],
-    }));
 }
 
 /** Share of planned records as text: "56 %", "<1 %" or ">99 %" (never a misleading 0 % or 100 %). */
@@ -142,35 +120,21 @@ export function partialCoverage(p: Pick<PartialLoad, 'planned' | 'accepted' | 's
 }
 
 export interface MethodsTextInput {
-  load: LoadProvenance | null;
-  /** The query being edited, used for a draft before the first load. */
-  query: OccurrenceQuery;
-  /** Sources a draft names (enabled, supported, with matching records); default: all enabled. */
-  sources?: SourceId[];
+  load: LoadProvenance;
   /** Download DOI (bare) that cites the GBIF part. */
   downloadDoi?: string;
   /** Tree citation from PhyloStore (empty when no tree was loaded). */
   treeCitation?: string;
   phylogeny?: PhylogenyInfo;
   speciesCount?: number;
-  now?: string;
 }
 
-/** Methods paragraph for the last load, or a draft for the current query. */
+/**
+ * Methods paragraph for a load. There is no draft for an unloaded query: the methods text
+ * describes only loaded data (I4).
+ */
 export function buildMethodsText(input: MethodsTextInput): string {
-  const { load, query } = input;
-  if (!load) {
-    const text = methodsParagraph({
-      entries: draftEntries(query, input.now ?? new Date().toISOString(), input.downloadDoi, input.sources),
-      funnel: null,
-      speciesCount: 0,
-      query,
-    });
-    // A draft has no counts yet: drop the "final dataset" sentence.
-    const draft = text.replace(/ The final dataset has 0 records of 0 species\./, '');
-    const min = query.quality.minRecordsPerSpecies ?? 1;
-    return min > 1 ? insertBeforeCitations(draft, `Species with fewer than ${min} records were left out.`) : draft;
-  }
+  const { load } = input;
   const derivedDoi = input.downloadDoi ? undefined : load.derivedDoi;
   const entries = provenanceEntries(load, input.downloadDoi ?? derivedDoi);
   let text = methodsParagraph({

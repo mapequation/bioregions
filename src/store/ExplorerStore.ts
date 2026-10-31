@@ -2,7 +2,7 @@
 // previews, the decision ledger and bias checks, loading (plans, streams, cleaning), provenance,
 // citation and the query library. Contract: spec section 4 of
 // docs/superpowers/specs/2026-10-30-data-explorer-ui.md.
-import { makeAutoObservable, observable, reaction, runInAction, toJS } from 'mobx';
+import { makeAutoObservable, observable, reaction, runInAction, toJS, when } from 'mobx';
 import { RecordCleaner, toSpeciesName } from '../sources/clean';
 import { DEDUPE_RULE } from '../sources/methods';
 import { supportsGbif } from '../sources/gbif';
@@ -16,20 +16,20 @@ import {
   scopeDifferences,
 } from '../sources/gbif/download';
 import { gbifDownloadPredicate } from '../sources/gbif/predicate';
-import { streamGbif } from '../sources/gbif/stream';
 import { type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../sources/gbif/zip';
-import { streamObis } from '../sources/obis/stream';
 import type { Funnel, RecordBatch, StreamPlan } from '../sources/types';
 import { exampleStudies } from './explorer/examples';
+import { LOAD_RUNNING } from './DataStore';
+import type { ExampleEntry } from './data/catalog';
+import { EMPTY_MESSAGES, emptyReasonOf, ledgerShare, partialLoad, shortError } from './data/streamLoad';
+import type { DataLoadJob, QueryLoadRequest, StartResult } from './data/types';
 import {
   JOB_UPDATE_MS,
   type LoadStats,
   LoadTally,
   PauseGate,
-  SeededDedupe,
   type TallyLabels,
   etaSeconds,
-  mergeBatches,
 } from './explorer/job';
 import {
   STORAGE_KEYS,
@@ -43,10 +43,8 @@ import {
   writeStorage,
 } from './explorer/library';
 import {
-  type ObisExplorerDetail,
   applyMinRecords,
   computeEstimate,
-  missingPlannedSpecies,
   planSource,
   planSpeciesNames,
 } from './explorer/plan';
@@ -58,8 +56,6 @@ import {
   buildMethodsText,
   buildObisCitation,
   citingDownload,
-  partialCoverage,
-  partialKind,
 } from './explorer/provenance';
 import { resolveTaxonNames, unknownTaxonLabel } from './explorer/taxonNames';
 import type { SourceProgress } from './explorer/types';
@@ -107,10 +103,8 @@ import type {
   LedgerRow,
   LedgerRowId,
   LoadJob,
-  PartialLoad,
   PlanState,
   Preset,
-  Provenance,
   MapScope,
   QuerySection,
   RecentShare,
@@ -248,86 +242,11 @@ export function previewKey(query: OccurrenceQuery): string {
 /** Load-button reason when every source's preview matched no record. */
 export const NO_MATCHES_REASON = 'No records match this query';
 
-/** Job error text for a load that ended with no record. */
-const EMPTY_MESSAGES: Record<EmptyReason, string> = {
-  noMatches: 'No records matched this query',
-  allDropped: 'Cleaning removed every record',
-  cancelledEarly: 'Stopped before any record arrived',
-};
-
-/** Why a load holds no record, from its funnel. */
-export function emptyReasonOf(funnel: Funnel, cancelled: boolean): EmptyReason {
-  if (cancelled) return 'cancelledEarly';
-  return funnel.received > 0 ? 'allDropped' : 'noMatches';
-}
-
-/** Whether the app holds a dataset (points or polygons) a load could replace. */
-function hasLoadedData(rootStore: RootStore): boolean {
-  const species = rootStore.speciesStore;
-  return !!species && (species.loaded || species.numRecords > 0);
-}
-
-/** Species the plans promise: the union of their species lists, else a lone plan's count. */
-export function plannedSpecies(plans: StreamPlan[]): number | null {
-  if (plans.length === 0) return null;
-  if (plans.every((p) => p.speciesCounts)) return planSpeciesNames(plans).length;
-  return plans.length === 1 ? plans[0].expectedSpecies : null;
-}
-
-/** Partial-load figures; `notReceived` counts planned records that were never fetched. */
-export function partialLoad(p: {
-  planned: number;
-  accepted: number;
-  speciesLoaded: number;
-  speciesPlanned: number | null;
-  fetched: number;
-  /** Planned species with no loaded record, largest first (`missingPlannedSpecies`). */
-  missingSpecies?: PartialLoad['missingSpecies'];
-}): PartialLoad {
-  const out = {
-    kind: partialKind(p.speciesLoaded, p.speciesPlanned),
-    planned: p.planned,
-    accepted: p.accepted,
-    speciesLoaded: p.speciesLoaded,
-    speciesPlanned: p.speciesPlanned,
-    notReceived: Math.max(0, p.planned - p.fetched),
-  };
-  return { ...out, coverage: partialCoverage(out), missingSpecies: p.speciesPlanned != null ? (p.missingSpecies ?? []) : [] };
-}
-
-/** A stopped load below this coverage keeps its records but does not run Infomap. */
-export const MIN_BIOREGION_COVERAGE = 0.5;
-
-/** Live species completeness of a load from the sources that report species, or null. */
-export function speciesCoverage(perSource: { speciesDone?: number; speciesTotal?: number }[]): number | null {
-  let done = 0;
-  let total = 0;
-  for (const p of perSource) {
-    if (p.speciesTotal == null || p.speciesTotal <= 0) continue;
-    done += Math.min(p.speciesDone ?? 0, p.speciesTotal);
-    total += p.speciesTotal;
-  }
-  return total > 0 ? done / total : null;
-}
-
-/** Merge a stream's progress into the job's, never letting the request total shrink. */
-export function mergeProgress<T extends { requestsTotal: number }>(into: T, update: Partial<T>): T {
-  const requestsTotal = Math.max(into.requestsTotal, update.requestsTotal ?? 0);
-  return Object.assign(into, update, { requestsTotal });
-}
-
-/** The provenance of the data on screen: after an empty load that kept it, the previous load's. */
-export function shownLoad(load: LoadProvenance | null): LoadProvenance | null {
-  if (!load) return null;
-  if (load.accepted > 0 || !load.previousKept) return load;
-  return load.previous ? shownLoad(load.previous) : null;
-}
-
-/** The provenance of the dataset still on screen after an empty load. */
-function keptLoad(load: LoadProvenance | null): LoadProvenance | undefined {
-  if (!load) return undefined;
-  return load.accepted > 0 || !load.previous ? load : load.previous;
-}
+/**
+ * @deprecated removed in U1: the shape `lastLoad` had (a load's provenance with its mode and
+ * empty-load outcome), kept for the UI until it reads `loaded` and `dataStore.job.outcome`.
+ */
+export type LegacyLoad = LoadProvenance & { mode: 'replace' | 'add'; emptyReason?: EmptyReason; previousKept?: boolean };
 
 /**
  * Previews of enabled sources that have a (possibly stale) result, with the ledger counts
@@ -513,12 +432,6 @@ export interface LedgerInput {
   duplicates?: number | null;
   /** Records the last load of this query dropped as already received from the other source. */
   crossSource?: number | null;
-}
-
-/** Share of the ledger base, or null when either is unknown. */
-export function ledgerShare(impact: number | null, base: number | null): number | null {
-  if (impact == null || base == null) return null;
-  return base > 0 ? Math.min(1, impact / base) : 0;
 }
 
 /**
@@ -892,21 +805,6 @@ export function emptyFunnel(): Funnel {
   return new RecordCleaner({ dedupe: 'none' }).funnel;
 }
 
-/** Points already loaded, for deduplicating an "add" load against them. */
-function* loadedPoints(rootStore: RootStore): Generator<{ name: string; lon: number; lat: number }> {
-  for (const f of rootStore.speciesStore?.collection.features ?? []) {
-    if (f.geometry.type !== 'Point') continue;
-    const [lon, lat] = f.geometry.coordinates;
-    yield { name: f.properties.name, lon, lat };
-  }
-}
-
-function shortError(error: unknown): string {
-  if (error instanceof HttpError) return `HTTP ${error.status}`;
-  const message = error instanceof Error ? error.message : String(error);
-  return message.length > 80 ? `${message.slice(0, 79)}…` : message;
-}
-
 /** What a GBIF download was made for, compared with a query. */
 export interface DownloadCheck {
   match: 'match' | 'mismatch' | 'unknown';
@@ -1031,8 +929,6 @@ export default class ExplorerStore {
   isOpen = false;
   /** Active header tab. */
   tab: Tab = 'occurrences';
-  /** Dialog hidden while a load keeps running (progress shows in the Data section). */
-  minimized = false;
   /** Browser connectivity; previews pause and loading is disabled while offline. */
   online = typeof navigator === 'undefined' ? true : navigator.onLine !== false;
   /** The query being edited. */
@@ -1046,12 +942,8 @@ export default class ExplorerStore {
   baseline: Baseline | null = null;
   /** Maximum raw records a load may fetch. */
   cap = DEFAULT_CAP;
-  /** Replace the loaded data or add to it. */
-  loadMode: 'replace' | 'add' = 'replace';
-  /** Running or last finished load. */
-  job: LoadJob | null = null;
-  /** Provenance of the last completed load (a `LoadProvenance`, with the exact requests). */
-  lastLoad: Provenance | null = null;
+  /** The running or last zip load. TODO(S2b): zip loads become data-store jobs. */
+  private zipJob: LoadJob | null = null;
   /** The user's map scope while a load matches the query; null = the default (`mapScope`). */
   mapScopeChoice: MapScope | null = null;
   /** Stream plans for the current query, with `minRecordsPerSpecies` applied. */
@@ -1168,7 +1060,7 @@ export default class ExplorerStore {
       ),
       // The map scope returns to its default when the load stops matching or a new one lands.
       reaction(
-        () => [this.mapLoadedAvailable, this.lastLoad?.retrievedAt] as const,
+        () => [this.mapLoadedAvailable, this.loaded?.retrievedAt] as const,
         () => {
           this.mapScopeChoice = null;
         },
@@ -1206,7 +1098,6 @@ export default class ExplorerStore {
   /** Show the explorer, optionally on a tab. */
   open(tab?: Tab) {
     this.isOpen = true;
-    this.minimized = false;
     if (tab) this.tab = tab;
     const idle = SOURCE_IDS.every((id) => !this.query.sources[id] || this.sources[id].state === 'idle');
     if (idle && isQueryRunnable(this.query).ok) this.schedulePreview();
@@ -1215,17 +1106,11 @@ export default class ExplorerStore {
   /** Hide the explorer. */
   close() {
     this.isOpen = false;
-    this.minimized = false;
   }
 
   /** Switch header tab. */
   setTab(tab: Tab) {
     this.tab = tab;
-  }
-
-  /** Hide or show the dialog while keeping the workspace alive. */
-  setMinimized(minimized: boolean) {
-    this.minimized = minimized;
   }
 
   /** Ask the insights column to reveal a section (null clears). */
@@ -1693,7 +1578,7 @@ export default class ExplorerStore {
       previews: this.previews,
       memory: this.toggleMemory,
       speciesCounts: this.speciesCounts,
-      loaded: this.lastLoad?.ledger ?? null,
+      loaded: this.loaded?.ledger ?? null,
       base: this.ledgerBase,
       speciesLevel: this.speciesLevelImpact,
       duplicates: this.loadedForQuery?.funnel.dropped.duplicate ?? null,
@@ -1735,13 +1620,13 @@ export default class ExplorerStore {
 
   /** The last load when it was made with the current query, else null. */
   private get loadedForQuery(): LoadProvenance | null {
-    const load = this.lastLoad as LoadProvenance | null;
+    const load = this.loaded;
     return load && this.dirty.size === 0 ? load : null;
   }
 
   /** Whether the loaded dataset is exactly what the current query describes. */
   get loadedMatchesQuery(): boolean {
-    return this.lastLoad != null && this.dirty.size === 0 && !this.isLoading;
+    return this.loaded != null && this.dirty.size === 0 && !this.isLoading;
   }
 
   /** One derivation chain from matching records to the loaded dataset. */
@@ -1763,7 +1648,7 @@ export default class ExplorerStore {
    * query you loaded; after a stopped load, the partial dataset.
    */
   get insightsScope(): InsightsScope {
-    const load = this.loadedMatchesQuery ? (this.lastLoad as LoadProvenance) : null;
+    const load = this.loadedMatchesQuery ? this.loaded : null;
     if (load && load.accepted > 0 && load.partial) {
       const p = load.partial;
       const species =
@@ -1795,7 +1680,7 @@ export default class ExplorerStore {
 
   /** Whether the map can show loaded records that match the query on screen. */
   get mapLoadedAvailable(): boolean {
-    return this.loadedMatchesQuery && (this.lastLoad?.accepted ?? 0) > 0;
+    return this.loadedMatchesQuery && (this.loaded?.accepted ?? 0) > 0;
   }
 
   /**
@@ -1839,7 +1724,7 @@ export default class ExplorerStore {
    */
   get scopeStats(): LoadStats | null {
     if (this.insightsScope.kind === 'query') return null;
-    return (this.lastLoad as LoadProvenance | null)?.stats ?? null;
+    return this.loaded?.stats ?? null;
   }
 
   /** What the data is made of, in the insights scope (`insightsScope.kind`). */
@@ -1977,7 +1862,8 @@ export default class ExplorerStore {
       const first = support.find((s): s is { ok: false; reason: string } => !s.ok);
       return { ok: false, reason: first?.reason ?? 'No source can run this query' };
     }
-    if (this.job && (this.job.state === 'planning' || this.job.state === 'streaming')) {
+    // One occurrence load at a time (I9), whichever entry point started it.
+    if (this.rootStore.dataStore?.isLoading || this.isLoading) {
       return { ok: false, reason: 'A load is already running' };
     }
     if (this.previewsAllZero) return { ok: false, reason: NO_MATCHES_REASON };
@@ -2001,59 +1887,40 @@ export default class ExplorerStore {
 
   /** Query sections changed since the last load. */
   get dirty(): Set<QuerySection> {
-    const last = this.lastLoad?.query;
+    const last = this.loaded?.query;
     return last ? dirtySections(toJS(this.query), last) : new Set();
-  }
-
-  /**
-   * Provenance of the dataset on screen: the last load, or after an empty load that kept
-   * the previous data, that data's load. The citation getters describe this one.
-   */
-  get shownLoad(): LoadProvenance | null {
-    return shownLoad(this.lastLoad as LoadProvenance | null);
   }
 
   /** The download whose DOI cites the loaded (or, before a load, the current) query. */
   get citingDownload(): GbifDownload | null {
-    const load = this.shownLoad;
+    const load = this.loaded;
     return citingDownload(load, this.downloads, queryKey(load?.query ?? this.query));
   }
 
-  /** Methods paragraph for the loaded dataset, or a draft for the current query before a load. */
+  /** Methods paragraph for the loaded query; empty before a load (no draft, I4). */
   get methodsText(): string {
-    const load = this.shownLoad;
+    const load = this.loaded;
+    if (!load) return '';
     return buildMethodsText({
       load,
-      query: this.query,
-      sources: this.methodsSources,
-      downloadDoi: load?.gbifDownloadDoi ?? this.citingDownload?.doi,
+      downloadDoi: load.gbifDownloadDoi ?? this.citingDownload?.doi,
       treeCitation: this.rootStore.phyloStore?.citationText,
     });
   }
 
-  /**
-   * Sources the draft methods text names: enabled, able to run the query and with
-   * matching records (all enabled and supported ones until a preview arrives).
-   */
-  get methodsSources(): SourceId[] {
-    const runnable = SOURCE_IDS.filter((id) => this.query.sources[id] && this.sources[id].supports.ok);
-    if (runnable.every((id) => !this.sources[id].preview)) return runnable;
-    return runnable.filter((id) => (this.sources[id].preview?.total ?? 0) > 0);
-  }
-
   /** OBIS citation with dataset ids. */
   get obisCitation(): string {
-    return buildObisCitation(this.shownLoad);
+    return buildObisCitation(this.loaded);
   }
 
   /** GBIF derived-dataset CSV (datasetKey,count). */
   get datasetCsv(): string {
-    return buildDatasetCsv(this.shownLoad);
+    return buildDatasetCsv(this.loaded);
   }
 
   /** Decision ledger as CSV: filter impact (frozen at load), then the cleaning funnel. */
   get ledgerCsv(): string {
-    const load = this.shownLoad;
+    const load = this.loaded;
     return buildLedgerCsv(load?.ledger ?? this.ledger, load?.funnel ?? null);
   }
 
@@ -2134,11 +2001,6 @@ export default class ExplorerStore {
     this.cap = Math.max(1, Math.round(n));
   }
 
-  /** Replace or add on load. */
-  setLoadMode(m: 'replace' | 'add') {
-    this.loadMode = m;
-  }
-
   /** Names of dataset, basis and country keys from the preview facets, for load statistics. */
   private get facetLabels(): TallyLabels {
     const datasets = new Map<string, string>();
@@ -2152,337 +2014,217 @@ export default class ExplorerStore {
     return { datasets, basisOfRecord, countries };
   }
 
-  /** Whether a load is planning or streaming. */
+  /** Whether an explorer load (a query, or a zip until S2b) is planning or streaming. */
   get isLoading(): boolean {
-    return this.job?.state === 'planning' || this.job?.state === 'streaming';
+    const state = this.job?.state;
+    return state === 'planning' || state === 'streaming';
   }
 
-  /** Plan, stream every enabled source, clean and hand the records to SpeciesStore. */
-  async load(): Promise<void> {
-    if (!this.canLoad.ok) return;
-    const query = toJS(this.query);
-    const mode = this.loadMode;
-    const cap = this.cap;
+  /**
+   * Provenance of the loaded query source (or of a zip "Replace") once it has finished; null
+   * while it streams and whenever the occurrence slot holds anything else, so every reader
+   * sees "nothing loaded" then (I4).
+   */
+  get loaded(): LoadProvenance | null {
+    const source = this.rootStore.dataStore?.occurrence;
+    if (source?.status !== 'done') return null;
+    return source.kind === 'explorer-query' || source.kind === 'gbif-zip' ? source.provenance : null;
+  }
+
+  /**
+   * Plans for `query` with `cap`, without side effects: the workspace's own plans when they
+   * are for the same query and cap, else fresh ones, which are never written to `plans`,
+   * `rawPlans` or `planController`. Rejects when a source fails to plan.
+   */
+  async planQuery(query: OccurrenceQuery, cap: number, signal: AbortSignal): Promise<StreamPlan[]> {
+    const ids = SOURCE_IDS.filter((id) => query.sources[id]);
+    if (queryKey(query) === queryKey(this.query) && cap === this.cap && this.plans.state === 'ready' && this.currentRawPlans) {
+      return ids.map((id) => this.plans.plans[id]).filter((p): p is StreamPlan => p != null);
+    }
+    const runnable = ids.filter((id) => ADAPTERS[id].supports(query).ok);
     const controller = new AbortController();
-    this.loadController = controller;
-    this.cancelMode = null;
-    const startedAt = Date.now();
-    const ledger = this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row }));
-    const ledgerBase = this.ledgerBase;
-    const hadData = hasLoadedData(this.rootStore);
-    const labels = this.facetLabels;
-    const gate = new PauseGate();
-    this.pauseGate = gate;
-    this.job = {
-      state: 'planning',
-      label: queryTitle(query),
-      startedAt,
-      etaSeconds: null,
-      perSource: [],
-      funnel: emptyFunnel(),
-      truncated: [],
-      speciesCoverage: null,
-      paused: false,
-      speciesLoaded: 0,
-      speciesPlanned: null,
-    };
-    const job = this.job;
-
-    // Plan (reuse the plans fetched for this query).
-    let plans: StreamPlan[];
+    const onAbort = () => controller.abort();
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', onAbort, { once: true });
     try {
-      if (!(this.plans.state === 'ready' && this.currentRawPlans)) {
-        const ok = await this.fetchPlans(controller.signal);
-        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        if (!ok) throw new Error(this.plans.error ?? 'Planning failed');
-      }
-      const ids = SOURCE_IDS.filter((id) => query.sources[id]);
-      plans = ids.map((id) => this.plans.plans[id]).filter((p): p is StreamPlan => p != null);
-      if (plans.length === 0) throw new Error('No source can run this query');
-      const speciesPlanned = plannedSpecies(plans);
-      runInAction(() => {
-        job.speciesPlanned = speciesPlanned;
+      const results = await Promise.allSettled(runnable.map((id) => planSource(id, query, cap, controller.signal)));
+      if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      const plans: StreamPlan[] = [];
+      const errors: string[] = [];
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') errors.push(`${runnable[i].toUpperCase()}: ${shortError(r.reason)}`);
+        else if (r.value) plans.push(applyMinRecords(r.value, query.quality.minRecordsPerSpecies));
       });
-    } catch (error) {
-      this.releasePause(gate);
-      runInAction(() => {
-        job.paused = false;
-        const aborted = controller.signal.aborted || isAbortError(error);
-        job.state = aborted ? 'cancelled' : 'error';
-        if (!aborted) job.error = shortError(error);
-        if (this.loadController === controller) this.loadController = null;
-      });
-      return;
-    }
-
-    // Clean: one cleaner for every source; "add" also drops duplicates of loaded points.
-    const obisDetail = plans.find((p) => p.source === 'obis')?.detail as ObisExplorerDetail | undefined;
-    const cleaner = new RecordCleaner({
-      dedupe: query.quality.dedupe,
-      area: query.area,
-      lowCount: { obis: new Set(obisDetail?.lowCountNames ?? []) },
-    });
-    const seeded = new SeededDedupe(
-      mode === 'add' ? query.quality.dedupe : 'none',
-      mode === 'add' ? loadedPoints(this.rootStore) : [],
-    );
-    const tally = new LoadTally();
-    const progress = new Map<SourceId, SourceProgress>(
-      plans.map((p) => [
-        p.source,
-        {
-          source: p.source,
-          state: 'streaming',
-          fetched: 0,
-          expected: Math.min(p.expectedRecords, cap),
-          requestsDone: 0,
-          requestsTotal: p.requests,
-          bytes: 0,
-        },
-      ]),
-    );
-    const planned = [...progress.values()].reduce((s, p) => s + p.expected, 0);
-    const errors: string[] = [];
-    const streams = plans.map((p) => ({
-      source: p.source,
-      stream: (p.source === 'gbif' ? streamGbif : streamObis)(p, { maxRecords: cap, signal: controller.signal }),
-    }));
-
-    let lastFlush = 0;
-    const flush = (force: boolean) => {
-      const now = Date.now();
-      if (!force && now - lastFlush < JOB_UPDATE_MS) return;
-      lastFlush = now;
-      runInAction(() => {
-        const perSource = [...progress.values()].map((p) => ({ ...p, truncated: p.truncated && [...p.truncated] }));
-        job.perSource = perSource;
-        job.funnel = seeded.adjust(cleaner.funnel);
-        job.truncated = perSource.flatMap((p) => p.truncated ?? []);
-        job.speciesCoverage = speciesCoverage(perSource);
-        job.speciesLoaded = tally.species.size;
-        const fetched = perSource.reduce((s, p) => s + p.fetched, 0);
-        job.etaSeconds = gate.paused ? null : etaSeconds(fetched, planned, now - startedAt);
-      });
-    };
-    // Opening the cancel menu pauses: show exactly what is counted, then count nothing more.
-    this.pauseFlush = () => flush(true);
-    const onError = (source: SourceId, error: unknown) => {
-      const p = progress.get(source);
-      if (p) p.state = 'error';
-      errors.push(`${source.toUpperCase()}: ${shortError(error)}`);
-    };
-    const onDone = (source: SourceId) => {
-      const p = progress.get(source);
-      if (p) p.state = 'done';
-    };
-
-    let finished = false;
-    /** Set by `finishLoad`: a stopped load too incomplete for bioregions. */
-    let skipBioregions = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      this.releasePause(gate);
-      flush(true);
-      skipBioregions = this.finishLoad({
-        job,
-        query,
-        mode,
-        controller,
-        cleaner,
-        seeded,
-        tally,
-        labels,
-        ledger,
-        ledgerBase,
-        planned,
-        fetched: [...progress.values()].reduce((s, p) => s + p.fetched, 0),
-        hadData,
-        errors,
-        plans,
-      });
-    };
-
-    async function* accepted(): AsyncGenerator<RecordBatch['records']> {
-      try {
-        for await (const batch of mergeBatches(streams, onError, onDone)) {
-          // Paused: hold this batch uncounted until resumed; a cancel drops it.
-          await gate.wait();
-          if (controller.signal.aborted) break;
-          const p = progress.get(batch.source);
-          if (p) {
-            mergeProgress(p, batch.progress);
-            p.state = batch.progress.retryAt && batch.progress.retryAt > Date.now() ? 'rateLimited' : 'streaming';
-          }
-          const records = seeded.filter(cleaner.accept(batch.records));
-          tally.add(batch.source, records);
-          flush(false);
-          if (records.length > 0) yield records;
-        }
-      } finally {
-        finish();
-      }
-    }
-
-    runInAction(() => {
-      job.state = 'streaming';
-      job.perSource = [...progress.values()].map((p) => ({ ...p }));
-    });
-    const { speciesStore } = this.rootStore;
-    try {
-      await speciesStore.loadRecords(accepted(), {
-        name: queryTitle(query),
-        clear: mode === 'replace',
-        controller,
-        skipBioregions: () => skipBioregions,
-      });
-    } catch (error) {
-      runInAction(() => {
-        if (job.state === 'streaming' || job.state === 'done') {
-          job.state = 'error';
-          job.error = shortError(error);
-        }
-      });
+      if (errors.length > 0) throw new Error(errors.join('; '));
+      return plans;
     } finally {
-      finish();
-      runInAction(() => {
-        if (this.loadController === controller) this.loadController = null;
-      });
-      if (this.cancelMode === 'discard' && this.job === job) {
-        // loadRecords dropped what arrived without running Infomap; clear the rest of the app too.
-        this.rootStore.clearData();
-      }
+      signal.removeEventListener('abort', onAbort);
     }
   }
 
   /**
-   * Record the outcome of a load: job state, provenance and the recent list. Returns
-   * true when the load was stopped with too few species for bioregions (Infomap is skipped).
+   * Load the workspace query through `dataStore.loadQuery` (labels from the preview facets,
+   * the ledger frozen now), and add it to the recent list when it committed.
    */
-  private finishLoad(ctx: {
-    job: LoadJob;
-    query: OccurrenceQuery;
-    mode: 'replace' | 'add';
-    controller: AbortController;
-    cleaner: RecordCleaner;
-    seeded: SeededDedupe;
-    tally: LoadTally;
-    labels: TallyLabels;
-    ledger: LedgerRow[];
-    ledgerBase: number | null;
-    planned: number;
-    /** Raw records fetched over all sources. */
-    fetched: number;
-    /** The app held a dataset when the load started. */
-    hadData: boolean;
-    errors: string[];
-    plans: StreamPlan[];
-  }): boolean {
-    const { job, query, controller, tally, errors, plans } = ctx;
-    const funnel = ctx.seeded.adjust(ctx.cleaner.funnel);
-    const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
-    job.funnel = funnel;
-    job.speciesLoaded = tally.species.size;
-    job.paused = false;
-    job.etaSeconds = cancelled ? null : 0;
-    if (errors.length > 0) job.error = errors.join('; ');
-    const failed = !cancelled && errors.length >= plans.length && funnel.accepted === 0;
-    const empty = funnel.accepted === 0 && !failed ? emptyReasonOf(funnel, cancelled != null) : undefined;
-    if (cancelled) job.state = 'cancelled';
-    else if (failed) job.state = 'error';
-    else if (empty) {
-      // Nothing to show: SpeciesStore kept the previous dataset and skipped Infomap.
-      job.state = 'error';
-      job.error = [EMPTY_MESSAGES[empty], ...errors].join('; ');
-    } else job.state = 'done';
-    if (cancelled === 'discard' || failed) return false;
-
-    const requests: Partial<Record<SourceId, unknown>> = {};
-    for (const p of plans) {
-      requests[p.source] = p.source === 'gbif' ? gbifDownloadPredicate(query) : (p.detail as ObisExplorerDetail).params;
-    }
-    const kpis: Kpis = {
-      records: funnel.accepted,
-      recordsUpperBound: false,
-      species: tally.species.size,
-      datasets: tally.datasetTotal,
-      yearRange: tally.yearRange,
-      bySource: { ...tally.bySource },
-    };
-    const partial =
-      cancelled || errors.length > 0
-        ? partialLoad({
-            planned: ctx.planned,
-            accepted: funnel.accepted,
-            speciesLoaded: tally.species.size,
-            speciesPlanned: plannedSpecies(plans),
-            fetched: ctx.fetched,
-            missingSpecies: missingPlannedSpecies(plans, tally.species.keys()),
-          })
-        : null;
-    // Stopped with too few species: keep the records, leave bioregions to the user.
-    const skip = cancelled === 'keep' && funnel.accepted > 0 && partial != null && partial.coverage < MIN_BIOREGION_COVERAGE;
-    const load: LoadProvenance = {
+  async load(opts: { exampleId?: string } = {}): Promise<StartResult> {
+    const can = this.canLoad;
+    if (!can.ok) return { started: false, reason: can.reason };
+    const query = toJS(this.query);
+    const cap = this.cap;
+    // TODO(S2b): zip loads become data-store jobs.
+    this.zipJob = null;
+    const request: QueryLoadRequest = {
       query,
-      retrievedAt: new Date().toISOString(),
-      mode: ctx.mode,
-      funnel,
-      // The frozen ledger learns the duplicates the load removed.
-      ledger: ctx.ledger.map((r) => {
-        if (!r.active || (r.id !== 'duplicates' && r.id !== 'crossSource')) return r;
-        const n = (r.id === 'duplicates' ? funnel.dropped.duplicate : funnel.dropped.crossSource) ?? 0;
-        return { ...r, impact: n, share: ledgerShare(n, ctx.ledgerBase) };
-      }),
-      kpis,
-      accepted: funnel.accepted,
-      ...(empty && { emptyReason: empty, previousKept: ctx.hadData }),
-      partial,
-      ...(skip && { bioregionsSkipped: true }),
-      datasetCounts: tally.datasetCounts(ctx.labels.datasets),
-      stats: tally.stats(ctx.labels),
-      requests,
-      ...(empty && ctx.hadData && { previous: keptLoad(this.lastLoad as LoadProvenance | null) }),
+      cap,
+      ...(opts.exampleId ? { exampleId: opts.exampleId } : {}),
+      origin: opts.exampleId ? 'examples' : 'search',
+      plan: (signal) => this.planQuery(query, cap, signal),
+      labels: this.facetLabels,
+      ledger: this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row })),
+      ledgerBase: this.ledgerBase,
     };
-    this.lastLoad = load;
-    if (empty) return false;
-    this.recent = pushRecent(
-      this.recent,
-      { id: libraryId('recent'), name: queryTitle(query), query, savedAt: load.retrievedAt, kpis },
-      queryKey,
-    );
-    writeStorage(STORAGE_KEYS.recent, this.recent);
-    return skip;
-  }
-
-  /** Run Infomap on a stopped load that skipped it (`lastLoad.bioregionsSkipped`). */
-  async runBioregionsAnyway(): Promise<void> {
-    const load = this.lastLoad;
-    if (!load?.bioregionsSkipped || this.isLoading) return;
-    const { bioregionsSkipped: _, ...rest } = load;
-    this.lastLoad = rest;
-    await this.rootStore.speciesStore.runBioregions();
+    const result = await this.rootStore.dataStore.loadQuery(request);
+    const load = this.loaded;
+    if (result.started && result.committed && load) {
+      runInAction(() => {
+        this.recent = pushRecent(
+          this.recent,
+          { id: libraryId('recent'), name: queryTitle(query), query, savedAt: load.retrievedAt, kpis: load.kpis },
+          queryKey,
+        );
+      });
+      writeStorage(STORAGE_KEYS.recent, this.recent);
+    }
+    return result;
   }
 
   /**
-   * Hold a running load, e.g. while the cancel menu is open: no further batch is counted
-   * or reaches SpeciesStore, so `job.funnel` and `job.speciesLoaded` are exactly what
-   * `cancel('keep')` keeps. `resumeLoad()` continues.
+   * Load a query example: restore its query, show the search tab, await the plans, then
+   * load when the Load gate allows; otherwise the dock shows why (e.g. over the cap).
    */
+  async loadExampleQuery(entry: Pick<ExampleEntry, 'id' | 'query'>): Promise<StartResult> {
+    if (!entry.query) return { started: false, reason: 'This example has no query' };
+    if (this.rootStore.dataStore.isLoading) return { started: false, reason: LOAD_RUNNING };
+    this.restoreQuery(entry.query);
+    this.open('occurrences');
+    // The preview pipeline may replace this plan request with its own: then wait for that one.
+    const ok = await this.fetchPlans();
+    if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
+    const can = this.canLoad;
+    if (!can.ok) return { started: false, reason: can.reason };
+    return this.load({ exampleId: entry.id });
+  }
+
+  /** Replace the workspace query (e.g. an example's "Open in Search"); never loads. */
+  restoreQuery(query: OccurrenceQuery) {
+    this.setQuery(query);
+  }
+
+  /** Put the loaded query (or the query of the source still loading) back into the workspace. */
+  resetToLoaded() {
+    const source = this.rootStore.dataStore.occurrence;
+    const query = this.loaded?.query ?? (source?.kind === 'explorer-query' ? source.query : null);
+    if (query) this.setQuery(query);
+  }
+
+  // --- Compat for the UI until U1 ---------------------------------------------------------
+
+  /** @deprecated removed in U1: read `loaded` and `dataStore.job.outcome`. */
+  get lastLoad(): LegacyLoad | null {
+    const load = this.loaded;
+    if (!load) return null;
+    const job = this.job;
+    const outcome = job && 'outcome' in job ? job.outcome : undefined;
+    return {
+      ...load,
+      mode: 'replace',
+      ...(outcome && { emptyReason: outcome.emptyReason, previousKept: outcome.previousKept }),
+    };
+  }
+
+  /** @deprecated removed in U1: `dataStore.job` (here only query loads, and zip loads until S2b). */
+  get job(): DataLoadJob | LoadJob | null {
+    if (this.zipJob) return this.zipJob;
+    const job = this.rootStore.dataStore?.job;
+    return job && (job.kind === 'query' || job.kind === 'continue') ? job : null;
+  }
+
+  /** @deprecated removed in U1: "Add" is gone and every load replaces. */
+  get loadMode(): 'replace' | 'add' {
+    return 'replace';
+  }
+
+  /** @deprecated removed in U1: a no-op, since "Add" is gone. */
+  setLoadMode(_mode: 'replace' | 'add') {
+    // Every load replaces its slot (D1).
+  }
+
+  /** @deprecated removed in U1: the portal is open or closed (D4). */
+  get minimized(): boolean {
+    return false;
+  }
+
+  /** @deprecated removed in U1: minimizing closes the portal; a running load continues. */
+  setMinimized(minimized: boolean) {
+    if (minimized) this.close();
+  }
+
+  /** @deprecated removed in U1: `resetToLoaded()`, then the search tab. */
+  editAndReload() {
+    this.resetToLoaded();
+    this.setTab('occurrences');
+  }
+
+  /** @deprecated removed in U1: `dataStore.cancel`. */
+  cancel(mode: 'keep' | 'discard') {
+    if (this.zipJob?.state === 'streaming') this.cancelZip(mode);
+    else this.rootStore.dataStore.cancel(mode);
+  }
+
+  /** @deprecated removed in U1: `dataStore.pause`. */
   pauseLoad() {
     const gate = this.pauseGate;
-    if (!gate || !this.isLoading || !this.job || gate.paused) return;
-    gate.close();
-    this.pauseFlush?.();
-    this.job.paused = true;
-    this.job.etaSeconds = null;
+    const zip = this.zipJob;
+    if (gate && zip?.state === 'streaming') {
+      if (gate.paused) return;
+      gate.close();
+      this.pauseFlush?.();
+      zip.paused = true;
+      zip.etaSeconds = null;
+      return;
+    }
+    this.rootStore.dataStore.pause();
   }
 
-  /** Continue a load held by `pauseLoad()`. */
+  /** @deprecated removed in U1: `dataStore.resume`. */
   resumeLoad() {
     const gate = this.pauseGate;
-    if (!gate?.paused) return;
-    if (this.job) this.job.paused = false;
-    gate.open();
+    if (gate?.paused) {
+      if (this.zipJob) this.zipJob.paused = false;
+      gate.open();
+      return;
+    }
+    this.rootStore.dataStore.resume();
+  }
+
+  /** @deprecated removed in U1: `dataStore.runBioregionsAnyway`. */
+  runBioregionsAnyway(): Promise<void> {
+    return this.rootStore.dataStore.runBioregionsAnyway();
+  }
+
+  // --- Zip load controls. TODO(S2b): they move to data/zipLoad.ts with `loadZip`. ------------
+
+  /** Stop the running zip load: keep what arrived or discard it. */
+  private cancelZip(mode: 'keep' | 'discard') {
+    const controller = this.loadController;
+    if (!controller) return;
+    this.cancelMode = mode;
+    // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
+    controller.abort(mode);
+    // Release a paused load after the abort, so the held batch is dropped, not counted.
+    if (this.zipJob) this.zipJob.paused = false;
+    this.pauseGate?.open();
+    if (mode === 'discard') this.rootStore.clearData();
   }
 
   /** Open and forget a load's pause gate (the load ended or was cancelled). */
@@ -2494,30 +2236,21 @@ export default class ExplorerStore {
     }
   }
 
-  /**
-   * Stop a running load: keep what arrived or discard it. Kept records run Infomap only
-   * when at least half the planned species arrived (else `lastLoad.bioregionsSkipped`).
-   */
-  cancel(mode: 'keep' | 'discard') {
-    const controller = this.loadController;
-    if (!controller || !this.isLoading) return;
-    this.cancelMode = mode;
-    // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
-    controller.abort(mode);
-    // Release a paused load after the abort, so the held batch is dropped, not counted.
-    if (this.job) this.job.paused = false;
-    this.pauseGate?.open();
-    if (this.job?.state === 'planning') this.job.state = 'cancelled';
-    if (mode === 'discard') this.rootStore.clearData();
-  }
-
   // --- Citation ---------------------------------------------------------------------
 
   /** Store the DOI of a registered derived dataset (empty clears it). */
   setDerivedDoi(doi: string) {
-    if (!this.lastLoad) return;
+    if (!this.loaded) return;
     const bare = doi.trim();
-    this.lastLoad = { ...this.lastLoad, derivedDoi: bare || undefined };
+    this.patchLoaded({ derivedDoi: bare || undefined });
+  }
+
+  /** Patch the loaded query (or zip) source's provenance. TODO(S2b): `dataStore.patchOccurrence`. */
+  private patchLoaded(patch: Partial<LoadProvenance>) {
+    const { dataStore } = this.rootStore;
+    const source = dataStore.occurrence;
+    if (!source || (source.kind !== 'explorer-query' && source.kind !== 'gbif-zip') || !source.provenance) return;
+    dataStore.replaceSource(source.id, { provenance: { ...source.provenance, ...patch } });
   }
 
   /** Request a citable GBIF download for the loaded query; the password is used once and never stored. */
@@ -2525,7 +2258,7 @@ export default class ExplorerStore {
     this.downloadController?.abort();
     const controller = new AbortController();
     this.downloadController = controller;
-    const query = toJS(this.lastLoad?.query ?? this.query);
+    const query = toJS(this.loaded?.query ?? this.query);
     this.downloadRequest = { state: 'requesting' };
     try {
       const key = await requestGbifDownload(
@@ -2610,7 +2343,7 @@ export default class ExplorerStore {
     this.zipController = controller;
     this.zipFile = null;
     this.zipSummary = null;
-    const shown = this.shownLoad;
+    const shown = this.loaded;
     const query = toJS(shown?.query ?? this.query);
     const nameKey = downloadKeyFromName(file.name);
     const gbifLoaded = shown?.funnel.bySource.gbif?.accepted ?? 0;
@@ -2702,14 +2435,8 @@ export default class ExplorerStore {
     const zip = this.zipImport;
     if (zip?.state !== 'ready' || !summary) return;
     if (choice === 'keepStreamCiteDoi') {
-      const shown = this.shownLoad;
-      if (!zip.canCiteDoi || !shown) return;
-      const load: LoadProvenance = {
-        ...shown,
-        gbifDownloadKey: zip.downloadKey ?? summary.downloadKey,
-        gbifDownloadDoi: zip.doi ?? summary.doi,
-      };
-      this.lastLoad = load;
+      if (!zip.canCiteDoi || !this.loaded) return;
+      this.patchLoaded({ gbifDownloadKey: zip.downloadKey ?? summary.downloadKey, gbifDownloadDoi: zip.doi ?? summary.doi });
       return;
     }
     const file = this.zipFile;
@@ -2718,7 +2445,7 @@ export default class ExplorerStore {
   }
 
   private async loadZip(file: Blob, summary: GbifZipSummary) {
-    const previous = this.shownLoad;
+    const previous = this.loaded;
     const query = toJS(previous?.query ?? this.query);
     const controller = new AbortController();
     this.loadController = controller;
@@ -2727,7 +2454,7 @@ export default class ExplorerStore {
     const labels = this.facetLabels;
     const gate = new PauseGate();
     this.pauseGate = gate;
-    const job: LoadJob = {
+    this.zipJob = {
       state: 'streaming',
       label,
       startedAt: Date.now(),
@@ -2740,8 +2467,10 @@ export default class ExplorerStore {
       speciesLoaded: 0,
       speciesPlanned: null,
     };
-    this.job = job;
-    const hadData = hasLoadedData(this.rootStore);
+    // The observable copy, so the writes below reach the UI.
+    const job = this.zipJob;
+    const { dataStore } = this.rootStore;
+    let zipSourceId: string | null = null;
     const cleaner = new RecordCleaner({ dedupe: query.quality.dedupe, area: query.area });
     const tally = new LoadTally();
     const expected = this.zipImport?.funnel?.received ?? summary.rows;
@@ -2785,7 +2514,6 @@ export default class ExplorerStore {
         const load: LoadProvenance = {
           query,
           retrievedAt: new Date().toISOString(),
-          mode: 'replace',
           funnel,
           ledger: previous?.ledger ?? this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row })),
           kpis: {
@@ -2797,7 +2525,6 @@ export default class ExplorerStore {
             bySource: { ...tally.bySource },
           },
           accepted: funnel.accepted,
-          ...(empty && { emptyReason: empty, previousKept: hadData }),
           partial: cancelled
             ? partialLoad({
                 planned: expected,
@@ -2807,7 +2534,6 @@ export default class ExplorerStore {
                 fetched: progress.fetched,
               })
             : null,
-          ...(empty && hadData && { previous: keptLoad(previous) }),
           datasetCounts: tally.datasetCounts(labels.datasets),
           stats: tally.stats(labels),
           requests: { gbif: gbifDownloadPredicate(query) },
@@ -2815,7 +2541,8 @@ export default class ExplorerStore {
           gbifDownloadDoi: summary.doi,
           fromZip: true,
         };
-        this.lastLoad = load;
+        // Nothing committed (an empty zip): the previous source stays as it was (I6).
+        if (zipSourceId) dataStore.replaceSource(zipSourceId, { status: 'done', completedAt: load.retrievedAt, provenance: load });
       });
     };
     async function* records(): AsyncGenerator<RecordBatch['records']> {
@@ -2838,7 +2565,26 @@ export default class ExplorerStore {
       }
     }
     try {
-      await this.rootStore.speciesStore.loadRecords(records(), { name: label, clear: true, controller });
+      await this.rootStore.speciesStore.loadRecords(records(), {
+        controller,
+        // The commit (I2). TODO(S2b): `dataStore.loadGbifZip` with the download summary.
+        onFirstRecord: () => {
+          zipSourceId = dataStore.mintSourceId();
+          dataStore.commitOccurrence({
+            id: zipSourceId,
+            role: 'occurrences',
+            kind: 'gbif-zip',
+            label,
+            exportName: label,
+            status: 'loading',
+            retrievedAt: new Date().toISOString(),
+            completedAt: null,
+            file: { name: 'name' in file && typeof file.name === 'string' ? file.name : label, size: file.size },
+            download: null,
+            provenance: null,
+          });
+        },
+      });
     } catch (error) {
       runInAction(() => {
         job.state = 'error';
@@ -2849,7 +2595,7 @@ export default class ExplorerStore {
       runInAction(() => {
         if (this.loadController === controller) this.loadController = null;
       });
-      if (this.cancelMode === 'discard' && this.job === job) this.rootStore.clearData();
+      if (this.cancelMode === 'discard' && this.zipJob === job) this.rootStore.clearData();
     }
   }
 
@@ -2898,14 +2644,6 @@ export default class ExplorerStore {
   /** The current query as JSON text. */
   exportQueryJson(): string {
     return JSON.stringify(toJS(this.query), null, 2);
-  }
-
-  /** Go back to editing the loaded query on the Occurrences tab (Load replaces). */
-  editAndReload() {
-    if (this.lastLoad) this.setQuery(this.lastLoad.query);
-    this.loadMode = 'replace';
-    this.tab = 'occurrences';
-    this.minimized = false;
   }
 
   /** Replace the whole query (a deep copy); previews follow through the query reaction. */

@@ -1,5 +1,20 @@
 // Methods text and citations of the loaded sources (pure). Spec §2.4.
+import { gbifCitation } from '../../sources/methods';
+import { queryKey } from '../../sources/query';
+import { type LoadProvenance, buildMethodsText, buildObisCitation, citingDownload, provenanceEntries } from '../explorer/provenance';
+import type { GbifDownload } from '../explorer/types';
 import type { LoadedSource, OccurrenceSource, TreeSource } from './types';
+
+/** What the citations read beyond the sources. */
+export interface CitationContext {
+  /** Requested GBIF downloads (`ExplorerStore.downloads`): a matching one's DOI cites the GBIF part. */
+  downloads?: (GbifDownload & { queryKey?: string })[];
+}
+
+/** The DOI that cites a load's GBIF records: from a dropped zip, else a download made for its query. */
+function gbifDoi(load: LoadProvenance, ctx: CitationContext): string | undefined {
+  return load.gbifDownloadDoi ?? citingDownload(load, ctx.downloads ?? [], queryKey(load.query))?.doi;
+}
 
 /** Live counts of the occurrence slot, read from SpeciesStore. */
 export interface LiveCounts {
@@ -25,7 +40,7 @@ function countsText({ records, species }: LiveCounts): string {
   return `${fmt(records)} records of ${fmt(species)} species`;
 }
 
-function occurrenceSentence(source: OccurrenceSource, counts: LiveCounts): string {
+function occurrenceSentence(source: OccurrenceSource, counts: LiveCounts, ctx: CitationContext): string {
   switch (source.kind) {
     case 'file':
       return `Occurrence data were loaded from the file ${source.files.map((f) => f.name).join(', ')} (${countsText(counts)}).`;
@@ -33,9 +48,10 @@ function occurrenceSentence(source: OccurrenceSource, counts: LiveCounts): strin
       const sentence = `Occurrence data: the Infomap Bioregions example "${source.label}" (${countsText(counts)}).`;
       return source.citation ? sentence : `${sentence} Source: ${EXAMPLE_SOURCE_PLACEHOLDER}.`;
     }
-    // TODO(S2a, S2b): the stream and zip sentences (buildMethodsText, the GBIF download).
     case 'explorer-query':
     case 'gbif-zip':
+      // A zip "Replace" carries the loaded query's provenance; TODO(S2b): a zip without a query.
+      if (source.provenance) return buildMethodsText({ load: source.provenance, downloadDoi: gbifDoi(source.provenance, ctx) });
       return `Occurrence data: ${source.label} (${countsText(counts)}).`;
   }
 }
@@ -52,17 +68,17 @@ function treeSentence(source: TreeSource): string {
 }
 
 /** The methods paragraph: empty exactly when nothing is loaded. */
-export function methodsText(sources: LoadedSource[], counts: LiveCounts): string {
+export function methodsText(sources: LoadedSource[], counts: LiveCounts, ctx: CitationContext = {}): string {
   return sources
     .map((source) => {
       if (source.status === 'loading') return `Loading ${source.label}…`;
-      return source.role === 'occurrences' ? occurrenceSentence(source, counts) : treeSentence(source);
+      return source.role === 'occurrences' ? occurrenceSentence(source, counts, ctx) : treeSentence(source);
     })
     .join(' ');
 }
 
 /** The citations of the loaded sources, each text once. A 'loading' source cites nothing yet. */
-export function citations(sources: LoadedSource[]): CitationItem[] {
+export function citations(sources: LoadedSource[], ctx: CitationContext = {}): CitationItem[] {
   const items: CitationItem[] = [];
   const add = (source: LoadedSource, kind: CitationItem['kind'], text: string | undefined, doi?: string) => {
     if (!text || items.some((item) => item.text === text)) return;
@@ -77,8 +93,19 @@ export function citations(sources: LoadedSource[]): CitationItem[] {
       case 'opentree':
         add(source, 'opentree', source.citation, source.candidate.doi);
         break;
+      case 'explorer-query':
+      case 'gbif-zip': {
+        // TODO(S2b): the download citation of a zip without a query.
+        const load = source.provenance;
+        if (!load) break;
+        // Only the sources that contributed records are cited.
+        for (const entry of provenanceEntries(load, gbifDoi(load, ctx) ?? load.derivedDoi)) {
+          if (entry.source === 'gbif') add(source, entry.doi ? 'gbif-download' : 'gbif', gbifCitation(entry), entry.doi);
+          else add(source, 'obis', buildObisCitation(load));
+        }
+        break;
+      }
       // 'file' cites nothing (the card says to cite the file's own source).
-      // TODO(S2a, S2b): GBIF, OBIS and GBIF-download citations.
     }
   }
   return items;

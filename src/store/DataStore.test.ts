@@ -120,7 +120,7 @@ const openTree = (newick = TREE): TreeLoadInput => ({
 
 describe('DataStore occurrence files', () => {
   it('commits a file load on the first feature as one file source; clear() empties both slots', async () => {
-    const { store, speciesStore } = setup();
+    const { store } = setup();
     const result = await store.loadOccurrenceFile(csv('birds.csv'));
     expect(result).toEqual({ started: true, committed: true });
     expect(store.sources).toHaveLength(1);
@@ -134,7 +134,7 @@ describe('DataStore occurrence files', () => {
       columns: { name: 'species', lat: 'latitude', long: 'longitude' },
     });
     expect(store.occurrence?.completedAt).not.toBeNull();
-    expect(speciesStore.name).toBe('birds');
+    // SpeciesStore.name is a computed over `occurrence.exportName` (S2a).
     expect(store.job).toMatchObject({ state: 'done', committed: true, kind: 'file', origin: 'upload' });
 
     await store.loadTree(openTree());

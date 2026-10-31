@@ -31,7 +31,6 @@ function load(extra: Partial<LoadProvenance> = {}): LoadProvenance {
   return {
     query: query(),
     retrievedAt: '2026-10-30T14:03:00.000Z',
-    mode: 'replace',
     funnel: cleaner.funnel,
     ledger: [{ id: 'years', label: 'Years 1970–2025', toggleable: true, active: true, impact: 120, share: 0.1 }],
     kpis: { records: 2, recordsUpperBound: false, species: 2, datasets: 2, yearRange: null, bySource: {} },
@@ -44,7 +43,7 @@ function load(extra: Partial<LoadProvenance> = {}): LoadProvenance {
 
 describe('buildMethodsText', () => {
   it('describes the load with both citations', () => {
-    const text = buildMethodsText({ load: load(), query: query() });
+    const text = buildMethodsText({ load: load() });
     expect(text).toContain('Occurrence records of Callitrichidae');
     expect(text).toContain('GBIF occurrence API');
     expect(text).toContain('OBIS API');
@@ -53,41 +52,34 @@ describe('buildMethodsText', () => {
   });
 
   it('cites a download DOI, and a derived DOI as a filtered export', () => {
-    expect(buildMethodsText({ load: load(), query: query(), downloadDoi: '10.15468/dl.abc' })).toContain(
+    expect(buildMethodsText({ load: load(), downloadDoi: '10.15468/dl.abc' })).toContain(
       'GBIF Occurrence Download https://doi.org/10.15468/dl.abc',
     );
-    expect(buildMethodsText({ load: load({ derivedDoi: '10.15468/dd-xyz' }), query: query() })).toContain(
+    expect(buildMethodsText({ load: load({ derivedDoi: '10.15468/dd-xyz' }) })).toContain(
       'Filtered export of GBIF occurrence data https://doi.org/10.15468/dd-xyz',
     );
   });
 
   it('says when the load was partial, before the citations', () => {
     const partial = { kind: 'speciesMissing' as const, planned: 272_546, accepted: 819, speciesLoaded: 1, speciesPlanned: 210, notReceived: 271_000, coverage: 1 / 210 };
-    const text = buildMethodsText({ load: load({ partial, bioregionsSkipped: true }), query: query() });
+    const text = buildMethodsText({ load: load({ partial, bioregionsSkipped: true }) });
     expect(text).toContain(
       'Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species were loaded; requests alternate packed batches of small species with parts of large ones, so the missing species are absent rather than thinned, and species still being fetched have fewer records than they would. Species coverage is <1 %; bioregions were not computed for this incomplete dataset.',
     );
-    const ran = buildMethodsText({ load: load({ partial: { ...partial, speciesLoaded: 150, coverage: 150 / 210 } }), query: query() });
+    const ran = buildMethodsText({ load: load({ partial: { ...partial, speciesLoaded: 150, coverage: 150 / 210 } }) });
     expect(ran).toContain('from 150 of 210 species were loaded;');
     expect(ran).toContain('Species coverage is 71 %.');
     expect(text.indexOf('Loading was stopped')).toBeLessThan(text.indexOf('Data citations:'));
     // All species present, records cut: the methods text says so instead.
     const cut = buildMethodsText({
       load: load({ partial: { ...partial, kind: 'recordsTruncated', speciesLoaded: 210, coverage: 1 } }),
-      query: query(),
     });
     expect(cut).toContain('all 210 species are present, but later records were not received');
     expect(cut).not.toContain('absent rather than thinned');
   });
 
-  it('drafts from the query before a load', () => {
-    const text = buildMethodsText({ load: null, query: query(), now: '2026-10-30T00:00:00Z' });
-    expect(text).toContain('Callitrichidae');
-    expect(text).not.toContain('0 records of 0 species');
-  });
-
   it('adds the tree citation', () => {
-    expect(buildMethodsText({ load: load(), query: query(), treeCitation: 'Upham et al. 2019' })).toContain(
+    expect(buildMethodsText({ load: load(), treeCitation: 'Upham et al. 2019' })).toContain(
       'Phylogeny: Upham et al. 2019.',
     );
   });

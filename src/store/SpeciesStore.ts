@@ -102,7 +102,6 @@ export interface LoadRecordsResult {
 
 export default class SpeciesStore {
   rootStore: RootStore;
-  name: string = 'data';
   loaded: boolean = false;
   isLoading: boolean = false;
   numPoints: number = 0;
@@ -124,7 +123,7 @@ export default class SpeciesStore {
     this.rootStore = rootStore;
 
     makeObservable(this, {
-      name: observable,
+      name: computed,
       loaded: observable,
       isLoading: observable,
       numPointsDebounced: observable,
@@ -201,6 +200,11 @@ export default class SpeciesStore {
     200,
     { leading: true, trailing: true },
   );
+
+  /** Export and network name: the loaded occurrence source's (file stem or query title). */
+  get name(): string {
+    return this.rootStore.dataStore?.occurrence?.exportName ?? 'data';
+  }
 
   get havePolygons() {
     return this.numPolygons > 0;
@@ -520,9 +524,11 @@ export default class SpeciesStore {
    * Aborting `controller` with the reason `'discard'` drops the records instead and
    * skips binning and Infomap.
    *
-   * With `clear`, the previous data is cleared lazily, on the first batch that holds a
-   * record. When no record arrives at all, the previous dataset is left untouched and
-   * neither `postLoad` nor Infomap runs; the result reports `received: 0`.
+   * `onFirstRecord` runs in the same action as the first record, before it is added: the
+   * data owner's commit, which clears the previous data. When no record arrives at all
+   * (or the load is discarded before one does), the previous dataset is left untouched
+   * and neither `postLoad` nor Infomap runs; the result reports `received: 0`. A discard
+   * after the first record skips binning and Infomap and leaves the clearing to the owner.
    *
    * `skipBioregions` is asked once the stream has ended (records arrived, not discarded):
    * when it returns true the records are binned and kept on the map's record layer, but
@@ -531,16 +537,15 @@ export default class SpeciesStore {
   async loadRecords(
     batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
     {
-      name,
-      clear = true,
       controller = new AbortController(),
       skipBioregions,
+      onFirstRecord,
     }: {
-      name: string;
-      clear?: boolean;
       controller?: AbortController;
       skipBioregions?: () => boolean;
-    },
+      /** The data owner's commit, called once in the same action as the first record. */
+      onFirstRecord?: () => void;
+    } = {},
   ): Promise<LoadRecordsResult> {
     // Restored when nothing arrives, so a dataset that is kept stays marked as loaded.
     const wasLoaded = this.loaded;
@@ -557,27 +562,25 @@ export default class SpeciesStore {
         if (batch.length === 0) {
           continue;
         }
-        if (received === 0) {
-          // First record: only now replace the previous dataset.
-          if (clear) {
-            this.clearData();
+        const first = received === 0;
+        const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
+        runInAction(() => {
+          if (first) {
+            // First record: only now does the data owner replace the previous dataset.
+            onFirstRecord?.();
             this.setIsLoading();
           }
-          runInAction(() => {
-            this.name = name;
-          });
-          mapStore.setRenderType('records');
-        }
-        received += batch.length;
-        const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
-        for (const record of batch) {
-          const pointFeature = createPointFeature([record.lon, record.lat], {
-            name: record.name,
-          });
-          this.addFeature(pointFeature);
-          multiPoint.coordinates.push(pointFeature.geometry.coordinates);
-        }
-        this.multiPointCollection.geometries.push(multiPoint);
+          received += batch.length;
+          for (const record of batch) {
+            const pointFeature = createPointFeature([record.lon, record.lat], {
+              name: record.name,
+            });
+            this.addFeature(pointFeature);
+            multiPoint.coordinates.push(pointFeature.geometry.coordinates);
+          }
+          this.multiPointCollection.geometries.push(multiPoint);
+        });
+        if (first) mapStore.setRenderType('records');
         mapStore.renderMultiPoint(multiPoint);
       }
     } catch (error) {
@@ -587,12 +590,12 @@ export default class SpeciesStore {
     }
 
     this.loadEnd();
-    if (controller.signal.reason === 'discard') {
-      // Cancelled with "discard": drop what arrived and skip binning and Infomap.
+    if (controller.signal.reason === 'discard' && received > 0) {
+      // Discarded after the commit: skip binning and Infomap; the data owner removes the records.
       runInAction(() => {
         this.loadController = null;
+        this.setIsLoaded(false);
       });
-      this.clearData();
       return { received };
     }
     if (received === 0) {
@@ -601,7 +604,8 @@ export default class SpeciesStore {
         this.loadController = null;
         this.setIsLoaded(wasLoaded);
       });
-      if (failure) {
+      // A discard before the first record is not a failure.
+      if (failure && controller.signal.reason !== 'discard') {
         throw failure;
       }
       return { received };
