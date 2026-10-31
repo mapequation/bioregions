@@ -9,6 +9,7 @@
     "d3gl-0-7-oriented-labels",
     "migrate-pnpm-changesets",
     "responsive-map-tree",
+    "state-network-threshold",
     "tree-zoom-perf",
     "view-reset-and-label-spacing",
     "view-status-bars"

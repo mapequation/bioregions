@@ -1,5 +1,15 @@
 # bioregions
 
+## 2.0.0-alpha.21
+
+### Patch Changes
+
+- a682bb9: Fix the state network (segregated/overlapping bioregions) being silently
+  truncated at the first link below the weight threshold: the guard returned from
+  the whole builder instead of skipping the link. Networks now also report how many
+  links fell below the threshold, and at full tree weight how many occurrence
+  species have no tip in the tree and are left out of the network.
+
 ## 2.0.0-alpha.20
 
 ### Patch Changes
