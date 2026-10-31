@@ -926,6 +926,28 @@ describe('Continue loading, Load again, retry and stop reasons (S4)', () => {
     expect(after.resumable).toBe(true);
   });
 
+  it('keeps the source when a Continue is stopped with discard (keep only, §4.2)', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { fail: [1, 1] }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    const first = occurrence(t);
+    let open!: () => void;
+    const until = new Promise<void>((r) => {
+      open = r;
+    });
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { hold: { at: 1, until } }));
+    const running = t.dataStore.continueLoad();
+    await vi.waitFor(() => expect(t.dataStore.job).toMatchObject({ kind: 'continue', state: 'streaming' }));
+    t.speciesStore.clearData.mockClear();
+    t.dataStore.cancel('discard');
+    open();
+    await running;
+    expect(occurrence(t).id).toBe(first.id);
+    expect(t.speciesStore.clearData).not.toHaveBeenCalled();
+    expect(occurrence(t).provenance?.stop?.reason).toBe('cancelled');
+  });
+
   it('does not advance a cursor past a batch an abort dropped', async () => {
     const whole = await wholeLoad();
     let open!: () => void;
