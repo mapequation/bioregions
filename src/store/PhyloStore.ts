@@ -110,8 +110,6 @@ export default class PhyloStore {
   selection: TreeSelection | null = null;
   /** Status of loading the selected tree. */
   loadState: 'idle' | 'loading' | 'done' | 'error' = 'idle';
-  /** The tree that was loaded into TreeStore. */
-  loadedTree: { candidateId: string; tips: number; citation: string } | null = null;
 
   // --- Additive state (not in the spec table) -------------------------------------
 
@@ -125,8 +123,6 @@ export default class PhyloStore {
   brokenTaxa: string[] = [];
   /** Study trees Open Tree found for the clade, before capping to MAX_COVERAGE_CHECKS rows. */
   studyTreesFound = 0;
-  /** The loaded tree got Grafen branch lengths (it had none). */
-  loadedGrafen = false;
   /**
    * Table row order (candidate ids). Fixed while coverage checks run so rows never
    * move under the cursor; re-sorted once when the checks finish and on a sort change.
@@ -219,9 +215,16 @@ export default class PhyloStore {
    * Callitrichidae as the subfamily Callitrichinae; …'), or null.
    */
   get cladeNote(): string | null {
-    const { explorerStore } = this.rootStore;
+    const { explorerStore, dataStore } = this.rootStore;
     if (!this.clade) return null;
-    const taxa = this.speciesSource === 'query' ? explorerStore.query.taxa : explorerStore.lastLoad?.query.taxa;
+    const occurrence = dataStore.occurrence;
+    // Loaded species have queried taxa only when they came from an explorer query (I4).
+    const taxa =
+      this.speciesSource === 'query'
+        ? explorerStore.query.taxa
+        : occurrence?.kind === 'explorer-query'
+          ? occurrence.query.taxa
+          : undefined;
     return taxa ? cladeNameNote(taxa, this.clade) : null;
   }
 
@@ -312,12 +315,13 @@ export default class PhyloStore {
     return { unmatched, notInTree };
   }
 
-  /** Citation of the loaded tree, for the methods text. */
+  /**
+   * Citation of the loaded Open Tree tree, for the methods text.
+   * @deprecated Read `dataStore.tree` / `dataStore.citations` instead (removed in U6).
+   */
   get citationText(): string {
-    const loaded = this.loadedTree;
-    if (!loaded) return '';
-    const kind = loaded.candidateId === SYNTHETIC_ID ? 'synthetic' : 'study';
-    return treeCitationText({ kind, citation: loaded.citation }, loaded.tips, this.loadedGrafen);
+    const tree = this.rootStore.dataStore.tree;
+    return tree?.kind === 'opentree' ? tree.citation : '';
   }
 
   /** Tree tip -> dataset species lookups from the current matches. */
@@ -731,7 +735,10 @@ export default class PhyloStore {
     return namesWithStatus(this.matches, status);
   }
 
-  /** Relabel, prune and load the selected tree, then re-run Infomap. */
+  /**
+   * Relabel and prune the selected tree, then load it through `dataStore.loadTree`, which
+   * owns the tree slot, its provenance and the Infomap re-run.
+   */
   async loadSelected(): Promise<void> {
     const candidate = this.selectedCandidate;
     if (!candidate) return;
@@ -742,18 +749,25 @@ export default class PhyloStore {
     try {
       const built = await this.datasetTree(candidate);
       const { newick, grafen } = datasetNewick(built);
-      const { treeStore, infomapStore, speciesStore, mapStore } = this.rootStore;
-      treeStore.loadString(newick);
-      infomapStore.setIncludeTree(true);
-      runInAction(() => {
-        this.loadedTree = { candidateId: candidate.id, tips: built.kept, citation: candidate.citation };
-        this.loadedGrafen = grafen;
+      const { dataStore } = this.rootStore;
+      const { id, kind, title, citation, year, synthVersion, doi, studyId, treeId } = candidate;
+      const result = await dataStore.loadTree({
+        kind: 'opentree',
+        newick,
+        label: title,
+        candidate: { id, kind, title, citation, year, synthVersion, doi, studyId, treeId },
+        grafen,
+        selection: {
+          kept: built.kept,
+          absentFromTree: built.absentFromTree,
+          pruned: built.pruned,
+          broken: built.broken,
+        },
+        matchedFrom: this.speciesSource ?? (this.hasLoadedSpecies ? 'loaded' : 'query'),
+        citation: treeCitationText(candidate, built.kept, grafen),
       });
-      if (speciesStore.loaded) {
-        await infomapStore.run();
-        mapStore.setRenderType('bioregions');
-        mapStore.render();
-      }
+      if (!result.started) throw new Error(result.reason);
+      if (!result.committed) throw new Error(dataStore.treeJob?.error ?? 'The tree could not be loaded.');
       runInAction(() => {
         this.loadState = 'done';
       });

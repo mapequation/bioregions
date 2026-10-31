@@ -1,9 +1,12 @@
-import { observable, when } from 'mobx';
+import { action, observable, when } from 'mobx';
 import { describe, expect, it, vi } from 'vitest';
 import * as otol from '@/phylo/otol';
 import { defaultQuery } from '@/sources';
+import DataStore from '../DataStore';
+import type { OccurrenceSource } from '../data/types';
 import PhyloStore from '../PhyloStore';
 import type RootStore from '../RootStore';
+import TreeStore from '../TreeStore';
 
 vi.mock('@/phylo/otol', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/phylo/otol')>();
@@ -69,15 +72,41 @@ function fakeRoot() {
     { isOpen: false, tab: 'occurrences', query: defaultQuery(), querySpecies: vi.fn(async () => names) },
     { querySpecies: false },
   );
-  const speciesStore = observable({ loaded: false, speciesMap: new Map<string, unknown>() }, { speciesMap: observable.ref });
-  const root = {
+  const speciesStore = observable(
+    { loaded: false, name: 'data', speciesMap: new Map<string, unknown>(), clearData() {} },
+    { speciesMap: observable.ref, clearData: action },
+  );
+  const base = {
     explorerStore,
     speciesStore,
-    treeStore: { loadString: vi.fn() },
-    infomapStore: { setIncludeTree: vi.fn(), run: vi.fn(async () => {}) },
+    infomapStore: {
+      setIncludeTree: vi.fn(),
+      run: vi.fn(async () => {}),
+      clearData: vi.fn(),
+      updateNetwork: vi.fn(),
+      numBioregions: 0,
+    },
     mapStore: { setRenderType: vi.fn(), render: vi.fn() },
   };
+  const root = base as typeof base & { treeStore: TreeStore; dataStore: DataStore };
+  // The real TreeStore validates the tree; the real DataStore owns its provenance (I4).
+  root.treeStore = new TreeStore(root as unknown as RootStore);
+  root.dataStore = new DataStore(root as unknown as RootStore);
   return root;
+}
+
+/** Put an occurrence source in the data slot, as a finished load would. */
+function setOccurrence(root: ReturnType<typeof fakeRoot>, source: Partial<OccurrenceSource>) {
+  root.dataStore.commitOccurrence({
+    id: 'src-occ',
+    role: 'occurrences',
+    label: 'occurrences',
+    exportName: 'occurrences',
+    status: 'done',
+    retrievedAt: '2026-10-31T00:00:00Z',
+    completedAt: '2026-10-31T00:00:00Z',
+    ...source,
+  } as OccurrenceSource);
 }
 
 describe('PhyloStore', () => {
@@ -129,15 +158,37 @@ describe('PhyloStore', () => {
     // Loading makes the pick the user's, but it is still shown as the best dated match.
     expect(store.selectionReason).toBe('user');
     expect(store.preselectedDated).toBe(true);
-    const newick = root.treeStore.loadString.mock.calls[0][0] as string;
+    const newick = root.treeStore.treeString ?? '';
     expect(newick).toContain('Mico_argentatus:');
     expect(newick).not.toContain("'");
     expect(root.infomapStore.setIncludeTree).toHaveBeenCalledWith(true);
     expect(root.infomapStore.run).not.toHaveBeenCalled();
-    expect(store.loadedTree).toMatchObject({ candidateId: 'ot_1@tree1', tips: 3 });
+    // The tree slot holds the Open Tree provenance; PhyloStore keeps none.
+    const tree = root.dataStore.tree;
+    expect(tree).toMatchObject({
+      role: 'tree',
+      kind: 'opentree',
+      label: store.selectedCandidate?.title,
+      candidate: { id: 'ot_1@tree1', kind: 'study', studyId: 'ot_1', treeId: 'tree1', year: 2011 },
+      grafen: false,
+      tips: 3,
+      selection: { kept: 3, pruned: 1 },
+      matchedFrom: 'query',
+    });
+    expect(tree?.kind === 'opentree' && tree.citation).toMatch(/Perelman/);
+    expect(tree?.kind === 'opentree' && tree.citation).not.toMatch(/Grafen/);
     expect(store.citationText).toMatch(/Perelman/);
-    expect(store.citationText).not.toMatch(/Grafen/);
+    expect(root.dataStore.citations).toEqual([expect.objectContaining({ kind: 'opentree' })]);
+    expect(Object.keys(store)).not.toContain('loadedTree');
+    expect(Object.keys(store)).not.toContain('loadedGrafen');
     expect(vi.mocked(otol.fetchStudyTree)).toHaveBeenCalledTimes(1);
+
+    // A file tree replaces it: the slot is a file source and the Open Tree citation is gone.
+    await root.dataStore.loadTree({ kind: 'file', file: new File(['(Aa_a,Bb_b);'], 'mine.nwk') });
+    expect(root.dataStore.tree).toMatchObject({ kind: 'file', label: 'mine.nwk', tips: 2 });
+    expect(store.citationText).toBe('');
+    expect(root.dataStore.citations.some((c) => c.kind === 'opentree')).toBe(false);
+    expect(root.dataStore.methodsText).not.toMatch(/Perelman|Open Tree/);
   });
 
   it('re-matches loaded species and runs Infomap after loading the synthetic tree', async () => {
@@ -158,7 +209,33 @@ describe('PhyloStore', () => {
     await store.loadSelected();
     expect(root.infomapStore.run).toHaveBeenCalled();
     expect(root.mapStore.setRenderType).toHaveBeenCalledWith('bioregions');
+    expect(root.dataStore.tree).toMatchObject({ kind: 'opentree', grafen: true, matchedFrom: 'loaded' });
     expect(store.citationText).toMatch(/Grafen/);
+    store.dispose();
+  });
+
+  it('names the clade only against the taxa of a loaded explorer query', async () => {
+    mockOtol();
+    const root = fakeRoot();
+    root.explorerStore.isOpen = true;
+    root.explorerStore.tab = 'phylogeny';
+    root.speciesStore.speciesMap = new Map(names.map((n) => [n, {}]));
+    root.speciesStore.loaded = true;
+    const store = new PhyloStore(root as unknown as RootStore);
+    await when(() => store.speciesSource === 'loaded' && store.clade !== null);
+    expect(store.clade?.name).toBe('Callitrichidae');
+
+    setOccurrence(root, {
+      kind: 'explorer-query',
+      query: { ...defaultQuery(), taxa: [{ name: 'Callitrichinae', rank: 'SUBFAMILY', gbifKey: 1 }] },
+    } as Partial<OccurrenceSource>);
+    expect(store.cladeNote).toMatch(/Callitrichinae/);
+
+    setOccurrence(root, { kind: 'file', format: 'csv', file: { name: 'occ.csv', size: 1 } } as Partial<OccurrenceSource>);
+    expect(store.cladeNote).toBeNull();
+
+    setOccurrence(root, { kind: 'example', exampleId: 'birches' } as Partial<OccurrenceSource>);
+    expect(store.cladeNote).toBeNull();
     store.dispose();
   });
 

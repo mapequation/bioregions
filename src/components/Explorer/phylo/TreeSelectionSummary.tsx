@@ -118,8 +118,10 @@ function Stat({ value, label, tone }: { value: number; label: string; tone?: 'mu
 
 /** SELECTED: kept/absent/pruned counts, the branch-length note, the load button and the success panel. */
 export default observer(function TreeSelectionSummary() {
-  const { explorerStore, phyloStore, infomapStore } = useStore();
-  const { selectedId, selection, loadState, loadedTree, preselectedDated, selectionNotInData } = phyloStore;
+  const { explorerStore, phyloStore, infomapStore, dataStore } = useStore();
+  const { selectedId, selection, loadState, preselectedDated, selectionNotInData } = phyloStore;
+  // The tree slot is the only record of what is loaded (I4).
+  const loadedTree = dataStore.tree?.kind === 'opentree' ? dataStore.tree : null;
   // The open name list belongs to one tree: picking another closes it.
   const [open, setOpen] = useState<{ id: string | null; list: 'absent' | 'extra' } | null>(null);
   const openList = open && open.id === selectedId ? open.list : null;
@@ -128,7 +130,7 @@ export default observer(function TreeSelectionSummary() {
   if (phyloStore.candidates.length === 0) return null;
 
   const loading = loadState === 'loading';
-  const done = loadState === 'done' && loadedTree != null && loadedTree.candidateId === selectedId;
+  const done = loadState === 'done' && loadedTree != null && loadedTree.candidate.id === selectedId;
   const tooFew = selection != null && selection.kept < 2;
   const breakdown = phyloStore.absentBreakdown;
   const awaiting = phyloStore.awaitingBestTree;
@@ -419,7 +421,7 @@ export default observer(function TreeSelectionSummary() {
                     This tree keeps fewer than 2 of your species.
                   </Text>
                 )}
-                {!tooFew && loadedTree && (
+                {!tooFew && dataStore.tree && (
                   <Text textStyle="xs" color="fg.muted" truncate>
                     Replaces the tree loaded now.
                   </Text>

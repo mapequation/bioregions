@@ -15,8 +15,6 @@ const ALLOW: (string | RegExp)[] = [
   'src/store/TreeStore.ts',
   // TODO(S2b): ExplorerStore's stream and zip loads move to src/store/data/.
   'src/store/ExplorerStore.ts',
-  // TODO(S3): Open Tree loads go through dataStore.loadTree.
-  'src/store/PhyloStore.ts',
 ];
 
 const PATTERNS: RegExp[] = [
