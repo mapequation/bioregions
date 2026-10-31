@@ -21,8 +21,8 @@ importers:
         specifier: ^5.2.8
         version: 5.2.8
       '@mapequation/c3':
-        specifier: ^1.1.1
-        version: 1.1.1
+        specifier: ^2.0.2
+        version: 2.0.2
       '@mapequation/d3gl':
         specifier: ^0.7.0
         version: 0.7.0(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -618,8 +618,8 @@ packages:
   '@manypkg/get-packages@1.1.3':
     resolution: {integrity: sha512-fo+QhuU3qE/2TQMQmbVMqaQ6EWbMhi4ABWP+O4AM1NqPBuy0OrApV5LO6BrrgnhtAHS2NH6RrVk9OL181tTi8A==, tarball: https://registry.npmjs.org/@manypkg/get-packages/-/get-packages-1.1.3.tgz}
 
-  '@mapequation/c3@1.1.1':
-    resolution: {integrity: sha512-zIaPZyRZ31rQfCxpBdkbSGieg+37hrCeeMxYgENZe2BlHO+3adpNVFMVAv2eKWs38exA77+SIXEq0Teay4D4vQ==, tarball: https://registry.npmjs.org/@mapequation/c3/-/c3-1.1.1.tgz}
+  '@mapequation/c3@2.0.2':
+    resolution: {integrity: sha512-4XFmyWTYI/TvSjFhNU03hKI51JzHXG59Y+yhSRctXilATlav3LWRpyJmKbVUTdemWnq0yQqoCle2G9vXLPLS4g==, tarball: https://registry.npmjs.org/@mapequation/c3/-/c3-2.0.2.tgz}
 
   '@mapequation/d3gl@0.7.0':
     resolution: {integrity: sha512-/zX14urvLe8DeA8PZ4EAbfOdwO4hYMcy77eym76kSW1Jada5e0YtzSF1dEiflTDVN7oYLhT8A0C9YnG4qno7ug==, tarball: https://registry.npmjs.org/@mapequation/d3gl/-/d3gl-0.7.0.tgz}
@@ -3343,7 +3343,7 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
-  '@mapequation/c3@1.1.1':
+  '@mapequation/c3@2.0.2':
     dependencies:
       d3-color: 3.1.0
       d3-scale-chromatic: 3.1.0
