@@ -4,9 +4,9 @@
 
 Add a Data portal for occurrence data and phylogenies, opened from the sidebar's "Data…" button or the empty map. Its tabs are Search GBIF & OBIS, Phylogeny, Upload, Examples and Cite, and it keeps your work when you close and reopen it.
 
-- **Search GBIF & OBIS:** search taxa by scientific or common name and filter by area (countries, or a rectangle drawn on a world map, with a control to clear it), years, depth and data quality. A preview shows each filter's record impact, bias checks, a density map and the data's composition. Load streams a cleaned, deduplicated dataset into the app up to a record cap; a stopped load can be continued or loaded again.
+- **Search GBIF & OBIS:** search taxa by scientific or common name and filter by area (countries, or a box drawn on a world map that you can move and resize, with a control to clear it), years, depth and data quality. A preview shows each filter's record impact, bias checks, a density map and the data's composition. Load streams a cleaned, deduplicated dataset into the app up to a record cap; a stopped load can be continued or loaded again.
 - **Phylogeny:** find and load a matching synthetic or published tree from the Open Tree of Life, or upload a Newick file.
-- **Upload:** a format table lists what the app reads (point occurrences as CSV/TSV, range polygons as zipped shapefiles, Newick trees and GBIF download zips), with column mapping for point files.
+- **Upload:** a format table lists what the app reads (point occurrences as CSV/TSV, range polygons as zipped shapefiles or GeoJSON, Newick trees and GBIF download zips), with column mapping for point files.
 - **Examples:** example datasets show their record and species counts, source and whether a tree is included.
 - **Cite:** a methods paragraph and references for the loaded data, a GBIF derived-dataset CSV, and a citable GBIF download (DOI) that can be imported back as a zip.
 
