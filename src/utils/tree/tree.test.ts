@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
+import { getIntersectingBranches, parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
 import type { PhyloNode } from '.';
 
 function postOrder(tree: PhyloNode, f: (node: PhyloNode) => unknown = (node) => node.name) {
@@ -61,5 +61,19 @@ describe('tree utils', () => {
       ['A32', 2], ['a3', 1],
       ['root', 0],
     ]);
+  });
+});
+
+describe('getIntersectingBranches', () => {
+  it('gives a zero-length branch cut at its own time all the weight', () => {
+    const tree = prepareTree(parseTree('((A:0,B:0.5)P:0.5,C:1)R;'));
+    const parent = tree.children.find((child: PhyloNode) => child.name === 'P');
+    if (!parent) {
+      throw new Error('expected node P');
+    }
+    const branch = getIntersectingBranches(tree, parent.time).find(
+      ({ child }) => child.name === 'A',
+    );
+    expect(branch?.childWeight).toBe(1);
   });
 });

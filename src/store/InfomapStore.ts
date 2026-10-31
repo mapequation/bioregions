@@ -598,11 +598,15 @@ export default class InfomapStore {
   }
 
   getTaxonLinkWeight(numGridCells: number, numGridCellsTotal: number) {
-    if (!this.useWeightedSpeciesLinks) {
+    // With a single grid cell the weight is 1 - 0/0.
+    if (!this.useWeightedSpeciesLinks || numGridCellsTotal <= 1) {
       return 1;
     }
     const { spatialNormalizationOrder: q } = this;
-    return 1 - uniformTsallisEntropy(numGridCells, q) / uniformTsallisEntropy(numGridCellsTotal, q);
+    // State networks pass a strength that can be below 1 (memory weights sum to
+    // less than 1); count at least one cell so the weight stays at most 1.
+    const k = Math.max(numGridCells, 1);
+    return 1 - uniformTsallisEntropy(k, q) / uniformTsallisEntropy(numGridCellsTotal, q);
   }
 
   getTaxonLinkWeightOnTimeSlice(numGridCells: number, numGridCellsTotal: number) {
@@ -799,7 +803,7 @@ export default class InfomapStore {
     const includeTree =
       this.includeTreeInNetwork &&
       tree !== null &&
-      this.treeWeightBalance !== 0;
+      this.treeWeightBalance > 0;
 
     /*
     Starts with cells as nodes up until the bipartiteStartId.
@@ -825,13 +829,18 @@ export default class InfomapStore {
     const { cells, nameToCellIds } = this.rootStore.speciesStore.binner;
 
     let nodeId = 0;
+    // Cells and taxa have separate names: a taxon may be named like a cell id.
+    const cellNodeIds = new Map<string, number>();
+    const taxonNodeIds = new Map<string, number>();
 
     const addNode = (name: string, isGridCell: boolean) => {
-      let id = network.nodeIdMap[name];
+      const nodeIds = isGridCell ? cellNodeIds : taxonNodeIds;
+      let id = nodeIds.get(name);
       if (id != null) {
         return id;
       }
       id = nodeId++;
+      nodeIds.set(name, id);
       network.nodeIdMap[name] = id;
       network.nodes.push({ id, name });
       if (!isGridCell) {
@@ -888,7 +897,7 @@ export default class InfomapStore {
     let sumNonTreeLinkWeight = 0;
 
     const { treeWeightBalance } = this;
-    if (includeTree && isEqual(treeWeightBalance, 1)) {
+    if (includeTree && treeWeightBalance >= 1) {
       // At full tree weight the species loop below is skipped, so occurrence
       // species with no tip in the phylogeny contribute nothing at all. Count
       // them so callers can see how much of the data left the network, and so
@@ -967,25 +976,12 @@ export default class InfomapStore {
 
     let sumTreeLinkWeight = 0;
 
-    // Include internal tree nodes into network
+    // Include internal tree nodes into network. A node's species set is all of
+    // its descendant species, also below children that end before the cut.
     visitTreeDepthFirstPostOrder(tree, (node) => {
-      if (node.isLeaf) {
-        node.speciesSet = new Set([node.name]);
-      } else {
-        node.speciesSet = new Set();
-        if (
-          useWholeTree ||
-          node.children.some((child) => child.time > integrationTime)
-        ) {
-          node.children.forEach((child) => {
-            if (child.speciesSet) {
-              for (const each of child.speciesSet) {
-                node.speciesSet?.add(each);
-              }
-            }
-          });
-        }
-      }
+      node.speciesSet = node.isLeaf
+        ? new Set([node.name])
+        : new Set(node.children.flatMap((child) => [...(child.speciesSet ?? [])]));
     });
 
     const getLinksFromTreeNode = (node: PhyloNode) => {
@@ -1068,7 +1064,7 @@ export default class InfomapStore {
         if (isEqual(childWeight, 0)) {
           const links = getLinksFromTreeNode(parent);
           const nodeWeight = this.getTaxonLinkWeightOnTimeSlice(links.numLinks, network.numGridCellNodes);
-          addLinks(child, links.links, nodeWeight);
+          addLinks(parent, links.links, nodeWeight);
           return;
         }
         const parentLinks = getLinksFromTreeNode(parent);
@@ -1102,12 +1098,12 @@ export default class InfomapStore {
     // treeStrength / (treeStrength + speciesStrength) = treeWeightBalance
     // => treeStrength * (1 - treeWeightBalance) = speciesStrength * treeWeightBalance
     // => treeStrength / treeWeightBalance = speciesStrength / (1 - treeWeightBalance)
-    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+    const totalTreeStrength = treeWeightBalance >= 1
       ? sumTreeLinkWeight
       : (treeWeightBalance * sumNonTreeLinkWeight) / (1 - treeWeightBalance);
 
-    // sumTreeLinkWeight * scale = totalTreeStrength
-    const scale = totalTreeStrength / sumTreeLinkWeight;
+    // sumTreeLinkWeight * scale = totalTreeStrength, nothing to scale without tree links
+    const scale = sumTreeLinkWeight > 0 ? totalTreeStrength / sumTreeLinkWeight : 0;
     console.log(
       `Sum non-tree link weight: ${sumNonTreeLinkWeight
       }, tree link weight: ${sumTreeLinkWeight} -> ${sumTreeLinkWeight * scale
@@ -1166,11 +1162,9 @@ export default class InfomapStore {
         integrationTimes.push(t);
       });
     } else {
-      let t = 0;
-      const dt = 1 / numLayers;
-      layerIds.forEach(() => {
-        t += dt;
-        integrationTimes.push(t);
+      // k / L, not a cumulative sum, so the last layer is exactly at the tips.
+      layerIds.forEach((k) => {
+        integrationTimes.push((k + 1) / numLayers);
       });
     }
     const { timeFormatter } = this.rootStore.treeStore;
@@ -1200,6 +1194,16 @@ export default class InfomapStore {
     // const integrationTimes = [0.5, 0.7, 0.8, 0.9, 1];
     console.log('Multilayer integration times:', integrationTimes);
     let nodeIdCounter = 0;
+    // Cells and taxa have separate names: a taxon may be named like a cell id.
+    const cellNodeIds = new Map<string, number>();
+    const taxonNodeIds = new Map<string, number>();
+    const getNodeId = (nodeIds: Map<string, number>, name: string | undefined) => {
+      const id = name == null ? undefined : nodeIds.get(name);
+      if (id == null) {
+        throw new Error('InfomapStore: network link references unknown node');
+      }
+      return id;
+    };
 
     integrationTimes.forEach((t, layerId) => {
       console.log(`=== Creating layer ${layerId} at time ${t}`);
@@ -1209,22 +1213,19 @@ export default class InfomapStore {
         if (name == null) {
           throw new Error(`InfomapStore: network node ${node.id} has no name`);
         }
-        if (multilayerNetwork.nodeIdMap[name] === undefined) {
+        const nodeIds = node.id < network.bipartiteStartId ? cellNodeIds : taxonNodeIds;
+        if (!nodeIds.has(name)) {
           const id = nodeIdCounter++;
+          nodeIds.set(name, id);
           multilayerNetwork.nodeIdMap[name] = id;
           multilayerNetwork.nodes?.push({ id, name });
         }
       });
       network.links.forEach((link) => {
-        const sourceName = network.nodes[link.source].name;
-        const targetName = network.nodes[link.target].name;
-        if (sourceName == null || targetName == null) {
-          throw new Error('InfomapStore: network link references unnamed node');
-        }
         const intraLink = {
           layerId,
-          source: multilayerNetwork.nodeIdMap[sourceName],
-          target: multilayerNetwork.nodeIdMap[targetName],
+          source: getNodeId(taxonNodeIds, network.nodes[link.source].name),
+          target: getNodeId(cellNodeIds, network.nodes[link.target].name),
           weight: link.weight,
         }
         multilayerNetwork.intra.push(intraLink);
@@ -1355,12 +1356,14 @@ export default class InfomapStore {
       return treeNode && !treeNode.data.isLeaf;
     };
 
+    // Taxa have their own names, apart from cells: a taxon may be named like a cell id.
+    const taxonToPhysicalId = new Map<string, number>();
     const addTaxonNode = (taxonName: string) => {
       // Add physical node
-      let taxonId = nameToPhysicalId.get(taxonName);
+      let taxonId = taxonToPhysicalId.get(taxonName);
       if (taxonId == null) {
         taxonId = physicalId++;
-        nameToPhysicalId.set(taxonName, taxonId);
+        taxonToPhysicalId.set(taxonName, taxonId);
         network.nodes.push({ id: taxonId, name: taxonName });
         if (isInternalTaxonNode(taxonName)) {
           ++network.numInternalTaxonNodes;
@@ -1391,6 +1394,10 @@ export default class InfomapStore {
     const linkWeightThreshold = 10 ** this.linkWeightThresholdExponent;
     let numLinksBelowThreshold = 0;
 
+    // Cell and memory of each cell state, so that the taxon and state nodes are
+    // created only for links that survive the threshold (in addLinksToNetwork).
+    const cellStateKeys = new Map<StateCellName, [CellId, TaxonName]>();
+
     const addStateLink = (
       taxonName: string,
       cellId: string,
@@ -1398,19 +1405,14 @@ export default class InfomapStore {
       weight: number,
       linkMap: StateLinkMap,
     ) => {
-      const cellStateNode = addCellStateNode(cellId, memTaxonName);
-      const taxonNode = addTaxonNode(taxonName);
-      const taxonNodeName = taxonNode.name;
-      const cellStateNodeName = cellStateNode.name;
-      if (taxonNodeName == null || cellStateNodeName == null) {
-        throw new Error('InfomapStore: state node missing name');
-      }
+      const cellStateNodeName = getCellStateName(cellId, memTaxonName);
+      cellStateKeys.set(cellStateNodeName, [cellId, memTaxonName]);
 
       const outLinks =
-        linkMap.get(taxonNodeName) ??
+        linkMap.get(taxonName) ??
         (() => {
           const m: StateCellOutLinks = new Map();
-          linkMap.set(taxonNodeName, m);
+          linkMap.set(taxonName, m);
           return m;
         })();
       outLinks.set(
@@ -1428,11 +1430,12 @@ export default class InfomapStore {
           // `createStandardNetwork`, which sits inside the `addLink` helper.
           if (weight < linkWeightThreshold) { ++numLinksBelowThreshold; continue; }
 
-          const taxonNode = phyloStateNodes.get(taxonName);
-          const cellStateNode = cellStateNodes.get(stateCellName);
-          if (taxonNode == null || cellStateNode == null) {
+          const cellState = cellStateKeys.get(stateCellName);
+          if (cellState == null) {
             throw new Error('InfomapStore: missing state node for link');
           }
+          const taxonNode = addTaxonNode(taxonName);
+          const cellStateNode = addCellStateNode(...cellState);
 
           network.links.push({
             source: taxonNode.stateId,
@@ -1461,6 +1464,19 @@ export default class InfomapStore {
       }
     };
 
+    if (treeWeightBalance >= 1) {
+      // As in createStandardNetwork: at full tree weight there are no species
+      // links, so occurrence species with no tip in the tree are left out.
+      const names = Object.keys(nameToCellIds);
+      const numSpeciesNotInTree = names.filter((name) => !treeNodeMap.has(name)).length;
+      network.numSpeciesExcluded = numSpeciesNotInTree;
+      if (numSpeciesNotInTree > 0) {
+        console.warn(
+          `treeWeightBalance = 1: ${numSpeciesNotInTree} of ${names.length} species have no tip in the tree and are excluded from the network.`,
+        );
+      }
+    }
+
     let unscaledNonTreeStrength = 0;
 
     if (treeWeightBalance < 1) {
@@ -1470,7 +1486,7 @@ export default class InfomapStore {
         const treeNode = treeNodeMap.get(name);
         if (!treeNode) {
           // Use root node as memory if species not part of tree
-          const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+          const unscaledWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
           const weight = (1 - treeWeightBalance) * unscaledWeight;
           unscaledNonTreeStrength += unscaledWeight * cells.size;
 
@@ -1484,7 +1500,8 @@ export default class InfomapStore {
           throw new Error(`InfomapStore: tree node '${name}' has no memory branch`);
         }
 
-        const unscaledWeight = this.getTaxonLinkWeightOnTimeSlice(cells.size, network.numGridCellNodes);
+        // Species links get the information weight, as in bipartite networks.
+        const unscaledWeight = this.getTaxonLinkWeight(cells.size, network.numGridCellNodes);
         const weight = (1 - treeWeightBalance) * unscaledWeight;
         // TODO: Don't aggregate weight if below threshold or weight aggregated?
         unscaledNonTreeStrength += unscaledWeight * cells.size;
@@ -1512,7 +1529,7 @@ export default class InfomapStore {
       }
     }
 
-    if (treeWeightBalance === 0) {
+    if (treeWeightBalance <= 0) {
       addLinksToNetwork();
       network.numLinksBelowThreshold = numLinksBelowThreshold;
       if (numLinksBelowThreshold > 0) {
@@ -1532,25 +1549,12 @@ export default class InfomapStore {
 
     let sumTreeLinkWeight = 0;
 
-    // Include internal tree nodes into network
+    // Include internal tree nodes into network. A node's species set is all of
+    // its descendant species, also below children that end before the cut.
     visitTreeDepthFirstPostOrder(tree, (node) => {
-      if (node.isLeaf) {
-        node.speciesSet = new Set([node.name]);
-      } else {
-        node.speciesSet = new Set();
-        if (
-          this.useWholeTree ||
-          node.children.some((child) => child.time > integrationTime)
-        ) {
-          node.children.forEach((child) => {
-            if (child.speciesSet) {
-              for (const each of child.speciesSet) {
-                node.speciesSet?.add(each);
-              }
-            }
-          });
-        }
-      }
+      node.speciesSet = node.isLeaf
+        ? new Set([node.name])
+        : new Set(node.children.flatMap((child) => [...(child.speciesSet ?? [])]));
     });
 
     const getMemLinksFromTreeNode = (node: PhyloNode) => {
@@ -1586,11 +1590,13 @@ export default class InfomapStore {
 
           for (const cellId of nameToCellIds[speciesName]) {
             const currentWeight = memLinks.get(cellId) ?? 0;
-
-            if (currentWeight === 0 || !this.uniformTreeLinks) {
-              memLinks.set(cellId, currentWeight + memWeight);
-              sumWeight += memWeight;
-            }
+            // Uniform tree links keep the largest memory weight per (cell, memory),
+            // so the weights do not depend on the order of the species.
+            const newWeight = this.uniformTreeLinks
+              ? Math.max(currentWeight, memWeight)
+              : currentWeight + memWeight;
+            memLinks.set(cellId, newWeight);
+            sumWeight += newWeight - currentWeight;
           }
         }
       }
@@ -1605,6 +1611,11 @@ export default class InfomapStore {
     ) => {
       // TODO: Make sure internal tree nodes don't have same name as leaf nodes
       const taxonName = treeNode.name;
+      // The information weight is negative when the node's strength exceeds the
+      // number of cells; drop the contribution rather than subtract it.
+      if (interpolationWeight <= 0) {
+        return;
+      }
 
       for (const [memTaxonName, memLinks] of links.entries()) {
         for (const [cellId, memWeight] of memLinks.entries()) {
@@ -1677,11 +1688,12 @@ export default class InfomapStore {
     // const totalTreeStrength = isEqual(treeWeightBalance, 1)
     //   ? sumTreeLinkWeight
     //   : (treeWeightBalance * sumNonTreeStrength) / (1 - treeWeightBalance);
-    const totalTreeStrength = isEqual(treeWeightBalance, 1)
+    const totalTreeStrength = treeWeightBalance >= 1
       ? sumTreeLinkWeight
       : treeWeightBalance * unscaledNonTreeStrength;
 
-    const scale = totalTreeStrength / sumTreeLinkWeight;
+    // Nothing to scale without tree links
+    const scale = sumTreeLinkWeight > 0 ? totalTreeStrength / sumTreeLinkWeight : 0;
 
     console.log(
       `Sum non-tree link weight: ${unscaledNonTreeStrength * (1 - treeWeightBalance)
