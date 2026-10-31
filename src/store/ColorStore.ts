@@ -18,6 +18,9 @@ const requireColor = (specifier: string): D3Color => {
   return color;
 };
 
+/** Colour of cells without a bioregion, such as cells left out of the network. */
+const UNASSIGNED_COLOR = '#ffcccc';
+
 export type SchemeName = c3SchemeName | 'Mural';
 
 export const COLOR_SCHEMES = [
@@ -199,8 +202,10 @@ export default class ColorStore {
     return colors;
   }
 
+  /** A bioregion's colour, or `UNASSIGNED_COLOR` for id 0 (no bioregion). */
   get colorBioregion() {
-    return (bioregionId: number) => this.bioregionColors[bioregionId - 1];
+    return (bioregionId: number) =>
+      this.bioregionColors[bioregionId - 1] ?? UNASSIGNED_COLOR;
   }
 
   getCellColorData = (cell: Cell) => {
