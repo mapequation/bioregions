@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { OccurrenceQuery, RecordBatch } from '../types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BULK_RETRIES, MAX_CONSECUTIVE_FAILURES, retryTiming } from '../http';
+import type { GbifStreamCursor, OccurrenceQuery, RecordBatch, StreamCursor } from '../types';
+import { GbifGraphqlError, gbifGraphql } from './graphql';
 import { BYTES_PER_RECORD, MAX_ALIASES, planGbif, planRequests, streamGbif, type GbifPlanDetail } from './stream';
 
 // --- A fake graphql.gbif.org over an in-memory record set ------------------------
@@ -377,6 +379,273 @@ describe('streamGbif', () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(server.inFlight).toBe(0);
     expect(server.requests.length).toBeLessThan(31);
+  });
+});
+
+describe('gbifGraphql retries', () => {
+  const timing = { ...retryTiming };
+  beforeEach(() => Object.assign(retryTiming, { baseMs: 1, maxMs: 2 }));
+  afterEach(() => Object.assign(retryTiming, timing));
+
+  it('retries a 200 response with GraphQL errors, then succeeds', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls++;
+      return calls < 3
+        ? new Response(JSON.stringify({ errors: [{ message: 'Elasticsearch timeout' }] }), { status: 200 })
+        : new Response(JSON.stringify({ data: { ok: 1 } }), { status: 200 });
+    });
+    await expect(gbifGraphql('query { ok }')).resolves.toEqual({ ok: 1 });
+    expect(calls).toBe(3);
+  });
+
+  it('throws a GbifGraphqlError once the retries are used up', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls++;
+      return new Response(JSON.stringify({ errors: [{ message: 'boom' }] }), { status: 200 });
+    });
+    await expect(gbifGraphql('query { ok }', {}, { retries: 2 })).rejects.toBeInstanceOf(GbifGraphqlError);
+    expect(calls).toBe(3);
+  });
+
+  it('does not retry an abort', async () => {
+    let calls = 0;
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', async () => {
+      calls++;
+      controller.abort();
+      return new Response(JSON.stringify({ errors: [{ message: 'boom' }] }), { status: 200 });
+    });
+    await expect(gbifGraphql('query { ok }', {}, { signal: controller.signal })).rejects.toMatchObject({
+      name: 'AbortError',
+    });
+    expect(calls).toBe(1);
+  });
+});
+
+describe('streamGbif resume and failures', () => {
+  const timing = { ...retryTiming };
+  beforeEach(() => Object.assign(retryTiming, { baseMs: 1, maxMs: 2 }));
+  afterEach(() => Object.assign(retryTiming, timing));
+
+  /** Species keys a request's predicates select. */
+  const speciesIn = (body: { variables: Record<string, Pred> }): string[] => {
+    const keys: string[] = [];
+    const walk = (p: Pred) => {
+      if (p.type === 'equals' && p.key === 'speciesKey') keys.push(p.value as string);
+      for (const q of (p.predicates as Pred[] | undefined) ?? []) walk(q);
+      if (p.predicate) walk(p.predicate as Pred);
+    };
+    for (const v of Object.values(body.variables)) walk(v);
+    return keys;
+  };
+
+  /** Make record fetches (not counts) for which `fail` holds return HTTP 503. */
+  const failFetches = (fail: (species: string[]) => boolean) => {
+    const inner = globalThis.fetch;
+    const state = { enabled: true, failures: 0 };
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string);
+      if (state.enabled && /results \{/.test(body.query) && fail(speciesIn(body))) {
+        state.failures++;
+        return new Response('down', { status: 503, statusText: 'Service Unavailable' });
+      }
+      return inner(url, init);
+    });
+    return state;
+  };
+
+  /** Each species alone in a request (4000 + 4000 > 6000). */
+  const separateSpecies = (n: number) => {
+    const r = rng(11);
+    const names = new Map<number, string>();
+    const db: FakeRecord[] = [];
+    for (let k = 1; k <= n; k++) {
+      names.set(k, `Species ${k}`);
+      db.push(...species(k, 4000, () => ({ decimalLongitude: r() * 10, decimalLatitude: r() * 10, year: 2001 })));
+    }
+    return { db, names };
+  };
+
+  /** A mix of small species and two large ones that need spatial and year splits. */
+  const mixedDb = () => {
+    const r = rng(12);
+    const names = new Map<number, string>();
+    const db: FakeRecord[] = [];
+    for (let k = 1; k <= 30; k++) {
+      names.set(k, `Species ${k}`);
+      db.push(
+        ...species(k, 1 + Math.floor(r() * 500), () => ({
+          decimalLongitude: r() * 360 - 180,
+          decimalLatitude: r() * 180 - 90,
+          year: 1950 + Math.floor(r() * 70),
+        })),
+      );
+    }
+    names.set(100, 'Big one');
+    db.push(
+      ...species(100, 7000, (i) => ({
+        decimalLongitude: i % 40 === 0 ? 0 : r() * 360 - 180,
+        decimalLatitude: r() * 180 - 90,
+        year: 2000 + (i % 5),
+      })),
+    );
+    names.set(101, 'Dense one');
+    // 6200 records at one point and year: a truncated leaf.
+    db.push(
+      ...species(101, 6800, (i) => ({
+        decimalLongitude: 1,
+        decimalLatitude: 1,
+        year: i < 6200 ? 2000 : i % 2 ? 1990 + (i % 10) : null,
+      })),
+    );
+    return { db, names };
+  };
+
+  /** Records as comparable strings, sorted. */
+  const keysOf = (batches: RecordBatch[]) =>
+    batches
+      .flatMap((b) => b.records)
+      .map((x) => `${x.name}|${x.lon}|${x.lat}|${x.year}`)
+      .sort();
+
+  const finalOf = (batches: RecordBatch[]) => last(batches) as RecordBatch;
+
+  it('skips a part that keeps failing and reports it on the final batch', async () => {
+    const { db, names } = separateSpecies(5);
+    fakeGbif(db, names);
+    const p = await planGbif(query, { maxRecords: Infinity });
+    const state = failFetches((keys) => keys.includes('3'));
+    const { batches, summary } = await collect(streamGbif(p, { maxRecords: Infinity, concurrency: 2 }));
+    expect(state.failures).toBe(1 + BULK_RETRIES);
+    expect(batches.flatMap((b) => b.records)).toHaveLength(16_000);
+    expect(batches.flatMap((b) => b.records).some((x) => x.name === 'Species 3')).toBe(false);
+    const end = finalOf(batches);
+    expect(end.progress).toMatchObject({
+      failedParts: 1,
+      lastError: 'GBIF returned HTTP 503 Service Unavailable',
+    });
+    expect(end.progress.stoppedEarly).toBeUndefined();
+    const cursor = end.cursor as GbifStreamCursor;
+    expect(cursor.done.sort()).toEqual(['1', '2', '4', '5']);
+    expect(cursor.fetched).toBe(16_000);
+    expect(summary).toMatchObject({ failedParts: 1, reachedCap: false });
+
+    // Resuming fetches only the failed part, and the counters continue.
+    state.enabled = false;
+    const resumed = await collect(streamGbif(p, { maxRecords: Infinity, resume: cursor }));
+    expect(resumed.batches.flatMap((b) => b.records)).toHaveLength(4000);
+    expect(resumed.batches.flatMap((b) => b.records).every((x) => x.name === 'Species 3')).toBe(true);
+    const done = finalOf(resumed.batches);
+    expect(done.progress).toMatchObject({ fetched: 20_000, failedParts: 0, speciesDone: 5, speciesTotal: 5 });
+    expect(done.progress.requestsDone).toBe(5);
+    expect(done.progress.requestsDone).toBe(done.progress.requestsTotal);
+    expect((done.cursor as GbifStreamCursor).done.sort()).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('stops issuing requests after consecutive failures', async () => {
+    const { db, names } = separateSpecies(12);
+    fakeGbif(db, names);
+    const p = await planGbif(query, { maxRecords: Infinity });
+    // Species 1 succeeds; every other fetch fails.
+    const state = failFetches((keys) => !keys.includes('1'));
+    const { batches, summary } = await collect(streamGbif(p, { maxRecords: Infinity, concurrency: 1 }));
+    const end = finalOf(batches);
+    expect(end.records).toEqual([]);
+    expect(end.progress).toMatchObject({
+      failedParts: MAX_CONSECUTIVE_FAILURES,
+      stoppedEarly: 'errors',
+      lastError: 'GBIF returned HTTP 503 Service Unavailable',
+    });
+    expect(state.failures).toBe(MAX_CONSECUTIVE_FAILURES * (1 + BULK_RETRIES));
+    expect(summary).toMatchObject({ stoppedEarly: 'errors', failedParts: MAX_CONSECUTIVE_FAILURES });
+    const cursor = end.cursor as GbifStreamCursor;
+    expect(cursor.done.every((k) => k === '1')).toBe(true);
+    expect(batches.flatMap((b) => b.records).length).toBe(cursor.done.length * 4000);
+  });
+
+  it('resumes from a mid-stream cursor without losing or duplicating records', async () => {
+    const { db, names } = mixedDb();
+    const { server } = { server: fakeGbif(db, names) };
+    const p = await planGbif(query, { maxRecords: Infinity });
+    const full = await collect(streamGbif(p, { maxRecords: Infinity, concurrency: 2 }));
+    const all = keysOf(full.batches);
+    const fullEnd = finalOf(full.batches).progress;
+    expect(full.summary.truncated).toBeGreaterThan(0);
+    server.latency = 1;
+
+    const n = full.batches.length;
+    expect(n).toBeGreaterThan(6);
+    let sawSplitPart = false;
+    for (const stopAfter of [1, Math.floor(n / 3), Math.floor((2 * n) / 3)]) {
+      const first: RecordBatch[] = [];
+      const gen = streamGbif(p, { maxRecords: Infinity, concurrency: 2 });
+      for await (const batch of gen) {
+        first.push(batch);
+        if (first.length >= stopAfter) break;
+      }
+      const cursor = JSON.parse(JSON.stringify(finalOf(first).cursor)) as StreamCursor;
+      expect(cursor.source).toBe('gbif');
+      sawSplitPart ||= (cursor as GbifStreamCursor).done.some((k) => k.includes('@'));
+      const rest = await collect(streamGbif(p, { maxRecords: Infinity, concurrency: 2, resume: cursor }));
+      expect([...keysOf(first), ...keysOf(rest.batches)].sort()).toEqual(all);
+      const restFirst = rest.batches[0].progress;
+      expect(restFirst.fetched).toBeGreaterThan(cursor.fetched);
+      const end = finalOf(rest.batches).progress;
+      expect(end.fetched).toBe(fullEnd.fetched);
+      expect(end.requestsDone).toBe(end.requestsTotal);
+      expect(end.speciesDone).toBe(end.speciesTotal);
+      // The final cursor collapses finished splits to their species.
+      expect((finalOf(rest.batches).cursor as GbifStreamCursor).done).toHaveLength(names.size);
+    }
+    // Some stop fell inside a split species, so its finished cells were resumed by key.
+    expect(sawSplitPart).toBe(true);
+  }, 30_000);
+
+  it('keeps maxRecords as the cap across a resume', async () => {
+    const { db, names } = separateSpecies(5);
+    fakeGbif(db, names);
+    const p = await planGbif(query, { maxRecords: Infinity });
+    const gen = streamGbif(p, { maxRecords: 10_000, concurrency: 1 });
+    const first = (await gen.next()).value as RecordBatch;
+    await gen.return({ fetched: 0, truncated: 0, requests: 0, reachedCap: false });
+    const rest = await collect(streamGbif(p, { maxRecords: 10_000, concurrency: 1, resume: first.cursor }));
+    expect(first.records.length + rest.batches.flatMap((b) => b.records).length).toBe(10_000);
+    expect(finalOf(rest.batches).progress.fetched).toBe(10_000);
+    expect(rest.summary.reachedCap).toBe(true);
+  });
+
+  it('throws an AbortError on abort, and the last cursor resumes exactly', async () => {
+    const { db, names } = separateSpecies(12);
+    const server = fakeGbif(db, names);
+    const p = await planGbif(query, { maxRecords: Infinity });
+    server.latency = 15;
+    const controller = new AbortController();
+    const seen: RecordBatch[] = [];
+    const gen = streamGbif(p, { maxRecords: Infinity, signal: controller.signal });
+    for (let i = 0; i < 3; i++) {
+      const next = await gen.next();
+      seen.push(next.value as RecordBatch);
+    }
+    controller.abort();
+    await expect(gen.next()).rejects.toMatchObject({ name: 'AbortError' });
+    const cursor = finalOf(seen).cursor as GbifStreamCursor;
+    expect(cursor.done).toHaveLength(3);
+    expect(cursor.fetched).toBe(12_000);
+    server.latency = 0;
+    const rest = await collect(streamGbif(p, { maxRecords: Infinity, resume: cursor }));
+    const expected = db.map((x) => `${names.get(x.speciesKey)}|${x.decimalLongitude}|${x.decimalLatitude}|${x.year}`);
+    expect([...keysOf(seen), ...keysOf(rest.batches)].sort()).toEqual(expected.sort());
+  });
+
+  it('rejects an invalid plan or a cursor from another source', async () => {
+    const bad = { source: 'gbif', query, expectedRecords: 0, expectedSpecies: 0, requests: 0, estimatedBytes: 0, detail: {} } as const;
+    await expect(streamGbif(bad, { maxRecords: 10 }).next()).rejects.toThrow('Invalid GBIF stream plan');
+    const ok = { ...bad, detail: { species: [], total: 0 } };
+    await expect(
+      streamGbif(ok, { maxRecords: 10, resume: { source: 'obis', ranges: [], fetched: 0, requestsDone: 0 } }).next(),
+    ).rejects.toThrow('obis cursor');
   });
 });
 

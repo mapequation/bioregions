@@ -8,8 +8,22 @@
 // so each range over-fetches at most one page. One sequential page is ~1300
 // records/s, so four ranges stream ~5000 records/s.
 
-import { abortError, fetchText } from '../http';
-import type { OccurrenceQuery, RecordBatch, StreamOptions, StreamPlan } from '../types';
+import {
+  abortError,
+  BULK_RETRIES,
+  describeRequestError,
+  fetchText,
+  MAX_CONSECUTIVE_FAILURES,
+} from '../http';
+import type {
+  ObisRangeCursor,
+  ObisStreamCursor,
+  OccurrenceQuery,
+  RecordBatch,
+  StreamOptions,
+  StreamPlan,
+  StreamProgress,
+} from '../types';
 import { obisParams, supportsObis } from './params';
 import { obisStatistics, obisUrl } from './preview';
 import {
@@ -85,7 +99,11 @@ async function fetchPage(
   if (after) {
     params.set('after', after);
   }
-  const text = await fetchText(obisUrl('occurrence', params), { signal, timeoutMs: 60_000 });
+  const text = await fetchText(obisUrl('occurrence', params), {
+    signal,
+    timeoutMs: 60_000,
+    retries: BULK_RETRIES,
+  });
   const { results } = JSON.parse(text) as { results?: ObisOccurrence[] };
   return { rows: results ?? [], bytes: text.length };
 }
@@ -106,47 +124,81 @@ export function idRanges(n: number): IdRange[] {
   return bounds.slice(0, parts).map((after, i) => ({ after, end: bounds[i + 1] }));
 }
 
+type Event =
+  | {
+      kind: 'batch';
+      batch: RecordBatch;
+      /** Range index and its paging state once this batch is delivered. */
+      range: number;
+      state: ObisRangeCursor;
+    }
+  | { kind: 'failure'; error: unknown };
+
 /**
- * Yields one batch per page. Records failing the client-side filters are left out
- * of the batch but counted in `progress.fetched`. Stops after `maxRecords` raw
- * records, at the end of the data, or on abort (throws AbortError). Batches from
- * parallel id ranges arrive in completion order.
+ * Yields one batch per page, each with a resume `cursor`; pass a cursor as
+ * `resume` to continue an earlier run of the same plan (its id ranges are reused).
+ * Records failing the client-side filters are left out of the batch but counted in
+ * `progress.fetched`. Stops after `maxRecords` raw records over the whole load, at
+ * the end of the data, or on abort (throws AbortError). Batches from parallel id
+ * ranges arrive in completion order. A page that still fails after its retries ends
+ * its range (the cursor keeps the range's position, so a resume retries it), is
+ * counted in `progress.failedParts` and sets `progress.stoppedEarly`; the other
+ * ranges go on, until `MAX_CONSECUTIVE_FAILURES` pages in a row have failed.
  */
 export async function* streamObis(
   plan: StreamPlan,
-  { maxRecords, signal, concurrency = 4 }: StreamOptions,
+  { maxRecords, signal, concurrency = 4, resume }: StreamOptions,
 ): AsyncGenerator<RecordBatch> {
-  const detail = plan.detail as ObisPlanDetail;
+  const detail = plan.detail as ObisPlanDetail | undefined;
+  if (plan.source !== 'obis' || typeof detail?.params !== 'string' || !(detail.pageSize > 0)) {
+    throw new Error('Invalid OBIS stream plan');
+  }
+  if (resume && (resume.source !== 'obis' || !Array.isArray(resume.ranges))) {
+    throw new Error(`Cannot resume an OBIS stream from a ${resume.source} cursor`);
+  }
   const limit = Math.min(maxRecords, plan.expectedRecords);
-  if (limit <= 0) {
+  const base = { fetched: resume?.fetched ?? 0, requestsDone: resume?.requestsDone ?? 0 };
+  if (limit <= 0 || base.fetched >= maxRecords) {
     return;
+  }
+  if (signal?.aborted) {
+    throw abortError();
   }
   // Own controller so pending requests are cancelled when the consumer stops early.
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort, { once: true });
-  if (signal?.aborted) controller.abort();
 
-  const ranges = idRanges(limit > 2 * detail.pageSize ? concurrency : 1);
-  const progress = {
-    fetched: 0,
+  /** Paging state per range as of the last yielded batch (the cursor). */
+  const yielded: ObisRangeCursor[] = resume
+    ? resume.ranges.map((r) => ({ ...r }))
+    : idRanges(limit > 2 * detail.pageSize ? concurrency : 1).map((r) => ({ ...r, done: false }));
+  const ranges = yielded.map((r, i) => ({ ...r, index: i })).filter((r) => !r.done);
+  const progress: StreamProgress & { bytes: number } = {
+    fetched: base.fetched,
     expected: limit,
-    requestsDone: 0,
-    requestsTotal: Math.ceil(limit / detail.pageSize) + ranges.length - 1,
+    requestsDone: base.requestsDone,
+    requestsTotal:
+      base.requestsDone +
+      Math.ceil(Math.max(0, limit - base.fetched) / detail.pageSize) +
+      Math.max(0, ranges.length - 1),
     bytes: 0,
+    failedParts: 0,
   };
-  const queue: RecordBatch[] = [];
+  const queue: Event[] = [];
   let wake: (() => void) | null = null;
   let drained: (() => void)[] = [];
-  let failure: unknown = null;
   let active = ranges.length;
   let reserved = 0;
+  let consecutiveFailures = 0;
+  /** A range ended unfinished because a page failed. */
+  let stoppedEarly: 'errors' | undefined;
   const notify = () => {
     wake?.();
     wake = null;
   };
 
-  const runRange = async ({ after: start, end }: IdRange, close: () => void) => {
+  const runRange = async ({ after: start, end, index }: (typeof ranges)[number], close: () => void) => {
     let after = start;
     while (!controller.signal.aborted) {
       const size = Math.min(detail.pageSize, maxRecords - progress.fetched - reserved);
@@ -157,20 +209,28 @@ export async function* streamObis(
       let page: Page;
       try {
         page = await fetchPage(detail, size, after, controller.signal);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        // The cursor cannot skip a page: the range ends here, to be resumed later.
+        stoppedEarly = 'errors';
+        queue.push({ kind: 'failure', error });
+        if (++consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          controller.abort();
+        }
+        return;
       } finally {
         reserved -= size;
       }
+      consecutiveFailures = 0;
       progress.requestsDone++;
       progress.bytes += page.bytes;
       const inRange = end ? page.rows.filter((r) => r.id < end) : page.rows;
       const rows = inRange.slice(0, Math.max(0, maxRecords - progress.fetched));
       progress.fetched += rows.length;
-      after = page.rows[page.rows.length - 1]?.id;
-      const more =
-        page.rows.length >= size &&
-        inRange.length === page.rows.length &&
-        progress.fetched < maxRecords &&
-        !!after;
+      // Resume after the last row delivered; the range is done when its ids ran out.
+      const exhausted = page.rows.length < size || inRange.length < page.rows.length || !page.rows.length;
+      after = rows[rows.length - 1]?.id ?? after;
+      const more = !exhausted && rows.length === inRange.length && progress.fetched < maxRecords;
       const records = rows
         .map(toOccurrenceRecord)
         .filter((r) => passesClientFilter(r, detail.clientFilter));
@@ -182,7 +242,12 @@ export async function* streamObis(
       if (!more) {
         close(); // Before pushing, so the consumer can tell the last batch.
       }
-      queue.push({ source: 'obis', records, progress: { ...progress } });
+      queue.push({
+        kind: 'batch',
+        batch: { source: 'obis', records, progress: { ...progress } },
+        range: index,
+        state: { ...(after !== undefined && { after }), ...(end !== undefined && { end }), done: exhausted && rows.length === inRange.length },
+      });
       notify();
       if (!more) {
         return;
@@ -204,8 +269,11 @@ export async function* streamObis(
     };
     runRange(range, close)
       .catch((error) => {
-        failure ??= error;
-        controller.abort();
+        // Not a page failure (those are handled in `runRange`): report it and stop.
+        if (!controller.signal.aborted) {
+          stoppedEarly = 'errors';
+          queue.push({ kind: 'failure', error });
+        }
       })
       .finally(() => {
         close();
@@ -213,36 +281,63 @@ export async function* streamObis(
       });
   }
 
-  const final = () => ({
+  let failedParts = 0;
+  let lastError: string | undefined;
+  const cursor = (fetched: number, requestsDone: number): ObisStreamCursor => ({
+    source: 'obis',
+    ranges: yielded.map((r) => ({ ...r })),
+    fetched,
+    requestsDone,
+  });
+  const failureFields = () => ({
+    failedParts,
+    ...(lastError !== undefined && { lastError }),
+    ...(failedParts > 0 && stoppedEarly && { stoppedEarly }),
+  });
+  const final = (): StreamProgress => ({
     ...progress,
-    // The stream is done: the plan's estimates become exact.
-    expected: progress.fetched,
-    requestsTotal: progress.requestsDone,
+    // The stream is done: without failures the plan's estimates become exact.
+    ...(failedParts === 0 && { expected: progress.fetched, requestsTotal: progress.requestsDone }),
+    ...failureFields(),
   });
   let finalSent = false;
+  let last = { fetched: base.fetched, requestsDone: base.requestsDone };
   try {
     for (;;) {
       if (signal?.aborted) {
         throw abortError();
       }
-      if (failure) {
-        throw failure;
-      }
-      const batch = queue.shift();
-      if (batch) {
+      const event = queue.shift();
+      if (event) {
         const waiting = drained;
         drained = [];
         for (const resolve of waiting) resolve();
+        if (event.kind === 'failure') {
+          failedParts++;
+          lastError = describeRequestError(event.error, 'OBIS');
+          continue;
+        }
+        const { batch } = event;
+        yielded[event.range] = event.state;
+        last = { fetched: batch.progress.fetched, requestsDone: batch.progress.requestsDone };
         if (active === 0 && queue.length === 0) {
           batch.progress = final();
           finalSent = true;
+        } else {
+          batch.progress = { ...batch.progress, ...failureFields() };
         }
+        batch.cursor = cursor(last.fetched, last.requestsDone);
         yield batch;
         continue;
       }
       if (active === 0) {
         if (!finalSent) {
-          yield { source: 'obis', records: [], progress: final() };
+          yield {
+            source: 'obis',
+            records: [],
+            progress: final(),
+            cursor: cursor(last.fetched, last.requestsDone),
+          };
         }
         return;
       }

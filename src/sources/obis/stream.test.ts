@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { OccurrenceQuery, RecordBatch } from '../types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BULK_RETRIES, MAX_CONSECUTIVE_FAILURES, retryTiming } from '../http';
+import type { ObisStreamCursor, OccurrenceQuery, RecordBatch } from '../types';
 import { normalizeObisBasis, toOccurrenceRecord } from './records';
 import { idRanges, planObis, streamObis } from './stream';
 
@@ -159,5 +160,120 @@ describe('planObis / streamObis', () => {
     const plan = await planObis({ ...query(), taxa: [{ name: 'Nonexistus obisi', rank: 'SPECIES' }] });
     expect(plan.expectedRecords).toBe(0);
     expect(await collect(streamObis(plan, { maxRecords: 100 }))).toEqual([]);
+  });
+});
+
+describe('streamObis resume and failures', () => {
+  const timing = { ...retryTiming };
+  beforeEach(() => Object.assign(retryTiming, { baseMs: 1, maxMs: 2 }));
+  afterEach(() => Object.assign(retryTiming, timing));
+
+  /** A fake OBIS whose records are told apart by longitude; `fail` picks pages to fail. */
+  function setup(n: number) {
+    const server = fakeObis(n);
+    for (const [i, row] of server.rows.entries()) row.decimalLongitude = -30 + i * 1e-5;
+    const state = { fail: (_after: string) => false, failures: 0 };
+    vi.stubGlobal('fetch', async (url: string) => {
+      const u = new URL(url);
+      if (u.pathname.endsWith('/occurrence') && state.fail(u.searchParams.get('after') ?? '')) {
+        state.failures++;
+        return new Response('down', { status: 503, statusText: 'Service Unavailable' });
+      }
+      return server.fetch(url);
+    });
+    return { ...server, state };
+  }
+  const lons = (batches: RecordBatch[]) => batches.flatMap((b) => b.records.map((r) => r.lon)).sort();
+  const finalOf = (batches: RecordBatch[]) => batches[batches.length - 1];
+
+  it('skips a failing range, reports it, and resumes it from the cursor', async () => {
+    const { state } = setup(60_000);
+    const plan = await planObis(query());
+    const full = lons(await collect(streamObis(plan, { maxRecords: 1e9 })));
+
+    // The range "4"-"8" (rows 15 000-29 999) fails at its third page, after row 24 999.
+    state.fail = (after) => after >= '6' && after < '8';
+    const first = await collect(streamObis(plan, { maxRecords: 1e9 }));
+    expect(state.failures).toBe(1 + BULK_RETRIES);
+    const end = finalOf(first);
+    expect(end.progress).toMatchObject({
+      failedParts: 1,
+      lastError: 'OBIS returned HTTP 503 Service Unavailable',
+      stoppedEarly: 'errors',
+      fetched: 55_000,
+    });
+    const cursor = end.cursor as ObisStreamCursor;
+    expect(cursor.ranges.map((r) => r.done)).toEqual([true, false, true, true]);
+    expect(cursor.ranges[1]).toMatchObject({ end: '8' });
+    expect(cursor.ranges[1].after?.startsWith('6')).toBe(true);
+    expect(cursor).toMatchObject({ fetched: 55_000, requestsDone: end.progress.requestsDone });
+
+    state.fail = () => false;
+    const rest = await collect(streamObis(plan, { maxRecords: 1e9, resume: cursor }));
+    expect([...lons(first), ...lons(rest)].sort()).toEqual(full);
+    const done = finalOf(rest);
+    expect(done.progress).toMatchObject({ fetched: 60_000, failedParts: 0 });
+    expect(done.progress.stoppedEarly).toBeUndefined();
+    expect(done.progress.requestsDone).toBe(cursor.requestsDone + 2);
+    expect((done.cursor as ObisStreamCursor).ranges.every((r) => r.done)).toBe(true);
+  });
+
+  it('resumes from a mid-stream cursor without losing or duplicating records', async () => {
+    setup(43_210);
+    const plan = await planObis(query());
+    const full = lons(await collect(streamObis(plan, { maxRecords: 1e9 })));
+    for (const stopAfter of [1, 3, 6]) {
+      const first: RecordBatch[] = [];
+      for await (const batch of streamObis(plan, { maxRecords: 1e9 })) {
+        first.push(batch);
+        if (first.length >= stopAfter) break;
+      }
+      const cursor = JSON.parse(JSON.stringify(finalOf(first).cursor)) as ObisStreamCursor;
+      const rest = await collect(streamObis(plan, { maxRecords: 1e9, resume: cursor }));
+      expect([...lons(first), ...lons(rest)].sort()).toEqual(full);
+      expect(rest[0].progress.fetched).toBeGreaterThan(cursor.fetched);
+      expect(finalOf(rest).progress).toMatchObject({ fetched: 43_210 });
+    }
+  });
+
+  it('keeps maxRecords as the cap across a resume', async () => {
+    setup(30_000);
+    const plan = await planObis(query());
+    const gen = streamObis(plan, { maxRecords: 12_000, concurrency: 1 });
+    const first = (await gen.next()).value as RecordBatch;
+    await gen.return(undefined);
+    const rest = await collect(streamObis(plan, { maxRecords: 12_000, concurrency: 1, resume: first.cursor }));
+    expect(finalOf(rest).progress.fetched).toBe(12_000);
+    const raw = (first.cursor as ObisStreamCursor).fetched;
+    expect(raw).toBe(5000);
+  });
+
+  it('stops after consecutive failures', async () => {
+    const { state } = setup(200_000);
+    const plan = await planObis(query());
+    state.fail = () => true;
+    const batches = await collect(streamObis(plan, { maxRecords: 1e9, concurrency: 8 }));
+    expect(batches).toHaveLength(1);
+    expect(batches[0].records).toEqual([]);
+    expect(batches[0].progress).toMatchObject({
+      failedParts: MAX_CONSECUTIVE_FAILURES,
+      stoppedEarly: 'errors',
+      fetched: 0,
+    });
+    expect((batches[0].cursor as ObisStreamCursor).ranges.every((r) => !r.done)).toBe(true);
+  });
+
+  it('throws an AbortError on abort, and the last cursor resumes exactly', async () => {
+    setup(50_000);
+    const plan = await planObis(query());
+    const full = lons(await collect(streamObis(plan, { maxRecords: 1e9 })));
+    const controller = new AbortController();
+    const seen: RecordBatch[] = [];
+    const gen = streamObis(plan, { maxRecords: 1e9, signal: controller.signal });
+    for (let i = 0; i < 3; i++) seen.push((await gen.next()).value as RecordBatch);
+    controller.abort();
+    await expect(gen.next()).rejects.toMatchObject({ name: 'AbortError' });
+    const rest = await collect(streamObis(plan, { maxRecords: 1e9, resume: finalOf(seen).cursor }));
+    expect([...lons(seen), ...lons(rest)].sort()).toEqual(full);
   });
 });

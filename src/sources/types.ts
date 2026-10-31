@@ -111,13 +111,74 @@ export interface StreamProgress {
   retryAt?: number;
   /** Species whose records were capped at a partition limit. */
   truncated?: { name: string; kept: number; total: number }[];
+  /**
+   * Parts (GBIF partition requests, OBIS pages) that still failed after their retries,
+   * in this run. Their records are missing and their work is not in the cursor, so a
+   * resume fetches them again. Set by the online streams on every batch.
+   */
+  failedParts?: number;
+  /** Short, human-readable last failure, e.g. "GBIF returned HTTP 503 Service Unavailable". */
+  lastError?: string;
+  /**
+   * Set when the stream ended with work it never requested because of failures: GBIF
+   * after `MAX_CONSECUTIVE_FAILURES` failed parts in a row; OBIS when an id range
+   * stopped at a failed page (its cursor cannot skip it). Resume to continue.
+   */
+  stoppedEarly?: 'errors';
 }
+
+/**
+ * GBIF resume state: the parts whose records have been yielded. A part key is built
+ * from the species key, the cell box and the year range, so it is the same in every
+ * run of the same plan; a split part whose whole subtree is done is stored as its own
+ * key, replacing its children's.
+ */
+export interface GbifStreamCursor {
+  source: 'gbif';
+  /** Done part keys (opaque strings). */
+  done: string[];
+  /** Raw records yielded so far over all runs (continues `progress.fetched`). */
+  fetched: number;
+  /** Requests whose work is in `done`, over all runs (continues `progress.requestsDone`). */
+  requestsDone: number;
+}
+
+/** Paging state of one OBIS id range (ids sorted ascending, `after=` paging). */
+export interface ObisRangeCursor {
+  /** Last id delivered, or the range's exclusive lower bound before any page (undefined: start). */
+  after?: string;
+  /** Exclusive upper bound on ids (undefined: no bound). */
+  end?: string;
+  /** The range is exhausted. */
+  done: boolean;
+}
+
+/** OBIS resume state: the paging position of every id range. */
+export interface ObisStreamCursor {
+  source: 'obis';
+  ranges: ObisRangeCursor[];
+  /** Raw records yielded so far over all runs (continues `progress.fetched`). */
+  fetched: number;
+  /** Page requests yielded so far over all runs (continues `progress.requestsDone`). */
+  requestsDone: number;
+}
+
+/**
+ * JSON-serialisable snapshot of a stream's finished work, carried by every batch of
+ * the online streams. It covers exactly the work whose records were yielded up to and
+ * including that batch, never work in flight. Pass the latest one as
+ * `StreamOptions.resume` to a new run of the same `StreamPlan` to continue without
+ * losing or duplicating records (unless the remote data changed).
+ */
+export type StreamCursor = GbifStreamCursor | ObisStreamCursor;
 
 export interface RecordBatch {
   source: RecordSource;
   records: OccurrenceRecord[];
   /** Cumulative progress of the producing stream after this batch. */
   progress: StreamProgress;
+  /** Resume state after this batch; always set by `streamGbif` and `streamObis`. */
+  cursor?: StreamCursor;
 }
 
 export interface FacetBucket {
@@ -189,10 +250,15 @@ export interface StreamPlan {
 }
 
 export interface StreamOptions {
-  /** Stop after this many raw records. */
+  /** Stop after this many raw records, over the whole load including resumed runs. */
   maxRecords: number;
   signal?: AbortSignal;
   concurrency?: number;
+  /**
+   * Cursor from an earlier run of the same plan: work it marks done is skipped, and
+   * everything else (including parts that failed) is fetched. Its `source` must match.
+   */
+  resume?: StreamCursor;
 }
 
 export type Supports = { ok: true } | { ok: false; reason: string };

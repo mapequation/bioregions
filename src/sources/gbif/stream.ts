@@ -8,10 +8,18 @@
 // batches, so a stopped stream is not biased towards rare species.
 
 import { normalizeSpeciesName } from '../../utils/names';
-import { abortError, createLimiter, isAbortError, type FetchOptions } from '../http';
+import {
+  abortError,
+  BULK_RETRIES,
+  createLimiter,
+  describeRequestError,
+  type FetchOptions,
+  MAX_CONSECUTIVE_FAILURES,
+} from '../http';
 import { bboxQuadrants, bboxToWkt, bboxWidth, WORLD_BBOX } from '../geo';
 import type {
   BBox,
+  GbifStreamCursor,
   OccurrenceQuery,
   OccurrenceRecord,
   RecordBatch,
@@ -59,6 +67,10 @@ export interface GbifStreamSummary {
   requests: number;
   /** True when the stream stopped at `maxRecords`. */
   reachedCap: boolean;
+  /** Requests that still failed after their retries (see `StreamProgress.failedParts`). */
+  failedParts?: number;
+  /** Set when consecutive failures stopped the stream. */
+  stoppedEarly?: 'errors';
 }
 
 /** One search: a species, optionally narrowed to a cell and a year range. */
@@ -68,6 +80,29 @@ interface Part {
   /** Cell the part was split to; `root` is the cell splitting started from. */
   cell?: { bbox: BBox; root: BBox };
   years?: [number, number] | 'missing';
+  /** The split this part came from (set by the stream). */
+  parent?: SplitNode;
+}
+
+/** A part that was split: done once every non-empty child is done. */
+interface SplitNode {
+  key: string;
+  parent?: SplitNode;
+  /** Non-empty children not yet done. */
+  open: number;
+  /** Keys of the non-empty children, dropped from the cursor once this node is done. */
+  children: string[];
+}
+
+/**
+ * Stable key of a part for the resume cursor: species key, cell box and year range,
+ * which `partClauses` turns into the request predicate.
+ */
+export function gbifPartKey(part: Pick<Part, 'species' | 'cell' | 'years'>): string {
+  let key = String(part.species.key);
+  if (part.cell) key += `@${part.cell.bbox.join(',')}`;
+  if (part.years) key += `|${part.years === 'missing' ? 'missing' : part.years.join('-')}`;
+  return key;
 }
 
 interface FacetData {
@@ -264,34 +299,57 @@ function rootCell(query: OccurrenceQuery): BBox {
 /** Lane of the packed species that fit one search (large species use their key, >= 0). */
 const SMALL_LANE = -1;
 
-type Event = { kind: 'batch'; batch: RecordBatch } | { kind: 'error'; error: unknown };
+type Event =
+  | {
+      kind: 'batch';
+      batch: RecordBatch;
+      /** Parts whose records the batch holds in full. */
+      done: Part[];
+    }
+  | { kind: 'failure'; error: unknown };
 
 /**
- * Stream the planned records. Yields one batch per response in completion order;
- * throws an AbortError when `opts.signal` aborts.
+ * Stream the planned records. Yields one batch per response in completion order, each
+ * with a resume `cursor`; pass a cursor as `opts.resume` to continue an earlier run of
+ * the same plan. A request that still fails after its retries is skipped (counted in
+ * `progress.failedParts`, left out of the cursor) and the stream goes on; after
+ * `MAX_CONSECUTIVE_FAILURES` failures in a row it stops and ends normally with
+ * `progress.stoppedEarly = 'errors'`. Throws an AbortError when `opts.signal` aborts,
+ * and an Error for an invalid plan or cursor.
  */
 export async function* streamGbif(
   plan: StreamPlan,
   opts: StreamOptions,
 ): AsyncGenerator<RecordBatch, GbifStreamSummary> {
   const { query } = plan;
-  const detail = plan.detail as GbifPlanDetail;
+  const detail = plan.detail as GbifPlanDetail | undefined;
+  if (plan.source !== 'gbif' || !Array.isArray(detail?.species)) {
+    throw new Error('Invalid GBIF stream plan');
+  }
+  const resume = opts.resume;
+  if (resume && resume.source !== 'gbif') {
+    throw new Error(`Cannot resume a GBIF stream from a ${resume.source} cursor`);
+  }
   const { maxRecords, concurrency = 4 } = opts;
+  if (opts.signal?.aborted) {
+    throw abortError();
+  }
   const controller = new AbortController();
   const signal = controller.signal;
   const onOuterAbort = () => controller.abort();
   opts.signal?.addEventListener('abort', onOuterAbort, { once: true });
-  const request: FetchOptions = { signal, timeoutMs: 60_000 };
+  const request: FetchOptions = { signal, timeoutMs: 60_000, retries: BULK_RETRIES };
   const limit = createLimiter(concurrency);
 
   const progress: StreamProgress = {
-    fetched: 0,
+    fetched: resume?.fetched ?? 0,
     expected: Math.min(plan.expectedRecords, maxRecords),
-    requestsDone: 0,
+    requestsDone: resume?.requestsDone ?? 0,
     requestsTotal: 0,
     speciesDone: 0,
     speciesTotal: detail.species.length,
     bytes: 0,
+    failedParts: 0,
   };
   /** Truncated species by key; copied into `progress.truncated`. */
   const truncations = new Map<number, Truncation>();
@@ -301,6 +359,41 @@ export async function* streamGbif(
   /** Requests sent, and fetches still expected for parts waiting to be split. */
   let spawned = 0;
   let splitEstimate = 0;
+  /** Requests credited before this run (counted in `requestsDone`). */
+  const baseRequests = resume?.requestsDone ?? 0;
+
+  // Resume state, as of the last yielded batch.
+  /** Keys of parts whose records have been yielded (in this or an earlier run). */
+  const doneKeys = new Set(resume?.done ?? []);
+  /** Requests whose work is in `doneKeys`. */
+  let creditedRequests = baseRequests;
+  // Failures, as of the last yielded event (reported on batches).
+  let failedParts = 0;
+  let lastError: string | undefined;
+  // Failures as requests complete (decide when to stop).
+  let consecutiveFailures = 0;
+  let stoppedEarly: 'errors' | undefined;
+
+  const markDone = (key: string, parent?: SplitNode) => {
+    doneKeys.add(key);
+    if (parent) {
+      parent.open--;
+      if (parent.open === 0) completeSplit(parent);
+    }
+  };
+  /** A split whose children are all done stands in for them in the cursor. */
+  const completeSplit = (node: SplitNode) => {
+    for (const key of node.children) doneKeys.delete(key);
+    creditedRequests++; // The split request itself.
+    markDone(node.key, node.parent);
+  };
+  const cursor = (fetched: number): GbifStreamCursor => ({
+    source: 'gbif',
+    done: [...doneKeys],
+    fetched,
+    requestsDone: creditedRequests,
+  });
+
   /**
    * Requests not yet handed to the limiter, in lanes: one for the packed small species
    * and one per species too large for one search (its split, then its parts). `feed`
@@ -314,9 +407,12 @@ export async function* streamGbif(
   let largeCursor = 0;
   let queued = 0;
   let smallTurn = true;
-  /** `requestsTotal` starts at the plan's count and never shrinks. */
+  /** `requestsTotal` starts at the plan's count (less resumed work) and never shrinks. */
   const updateTotal = () => {
-    progress.requestsTotal = Math.max(progress.requestsTotal, spawned + queued + splitEstimate);
+    progress.requestsTotal = Math.max(
+      progress.requestsTotal,
+      baseRequests + spawned + queued + splitEstimate,
+    );
   };
   const enqueue = (lane: number, start: () => void) => {
     let items = lanes.get(lane);
@@ -377,7 +473,11 @@ export async function* streamGbif(
     }
   };
 
-  /** Run one request through the limiter; errors surface through `events`. */
+  /**
+   * Run one request through the limiter. A failure (after the retries in `http.ts` and
+   * `gbifGraphql`) becomes a `failure` event; the stream stops issuing requests after
+   * `MAX_CONSECUTIVE_FAILURES` of them in a row.
+   */
   const spawn = (task: () => Promise<void>) => {
     pending++;
     spawned++;
@@ -391,8 +491,18 @@ export async function* streamGbif(
         throw abortError();
       }
       await task();
+      consecutiveFailures = 0;
     })
-      .catch((error: unknown) => events.push({ kind: 'error', error }))
+      .catch((error: unknown) => {
+        // Aborted by the consumer, the outer signal or an early stop: not a failure.
+        if (signal.aborted) return;
+        events.push({ kind: 'failure', error });
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && !stoppedEarly) {
+          stoppedEarly = 'errors';
+          controller.abort(); // Cancel in-flight requests; their work stays undone.
+        }
+      })
       .finally(() => {
         pending--;
         feed();
@@ -424,6 +534,8 @@ export async function* streamGbif(
         request,
       );
       const records: OccurrenceRecord[] = [];
+      /** Raw records received up to and including each part. */
+      const ends: number[] = [];
       let received = 0;
       parts.forEach((part, i) => {
         const results = data[`a${i}`]?.documents.results ?? [];
@@ -434,10 +546,12 @@ export async function* streamGbif(
             records.push(record);
           }
         }
+        ends.push(received);
         closePart(part);
       });
       // Count raw records, so the cap reflects transfer; trim the final batch to it.
       const room = Math.max(0, maxRecords - progress.fetched);
+      const trimmed = received > room;
       const kept = records.length > room ? records.slice(0, room) : records;
       progress.fetched += Math.min(received, room);
       progress.bytes = (progress.bytes ?? 0) + JSON.stringify(data).length;
@@ -445,47 +559,79 @@ export async function* streamGbif(
       events.push({
         kind: 'batch',
         batch: { source: 'gbif', records: kept, progress: { ...progress } },
+        // A trimmed batch completes only the parts whose records all fit.
+        done: trimmed ? parts.filter((_, i) => ends[i] <= room) : parts,
       });
     }));
   };
 
+  const truncate = (part: Part) => {
+    const t = truncations.get(part.species.key) ?? {
+      name: part.species.name,
+      kept: 0,
+      total: 0,
+    };
+    t.kept += GBIF_MAX_DOCUMENTS;
+    t.total += part.count;
+    truncations.set(part.species.key, t);
+    truncatedRecords += part.count - GBIF_MAX_DOCUMENTS;
+    progress.truncated = [...truncations.values()].map((x) => ({ ...x }));
+  };
+
   /**
-   * Fetch parts that fit (packed), truncate too-large leaves, split the rest. Parts of a
-   * split go to `lane` (their species'); the first call sends fitting species to the
-   * small lane and each larger one to its own.
+   * Fetch parts that fit (packed), truncate too-large leaves, split the rest, and skip
+   * parts the resume cursor marks done. Parts of a split go to `lane` (their species')
+   * with `parent` set to the split; the first call sends fitting species to the small
+   * lane and each larger one to its own.
    */
-  const schedule = (parts: Part[], lane?: number) => {
+  const schedule = (parts: Part[], lane?: number, parent?: SplitNode) => {
     const fitting: Part[] = [];
     for (const part of parts) {
       if (part.count <= 0) {
         continue;
       }
+      const key = gbifPartKey(part);
+      parent?.children.push(key);
+      const leaf =
+        part.count > GBIF_MAX_DOCUMENTS &&
+        !(!part.cell || bboxWidth(part.cell.bbox) >= MIN_CELL_DEGREES * 2) &&
+        !(part.years !== 'missing' && (!part.years || part.years[0] < part.years[1]));
+      if (doneKeys.has(key)) {
+        // Done in an earlier run: still report a truncated leaf.
+        if (leaf) truncate(part);
+        if (!parent) progress.speciesDone = (progress.speciesDone ?? 0) + 1;
+        continue;
+      }
+      if (parent) parent.open++;
+      part.parent = parent;
       if (part.count <= GBIF_MAX_DOCUMENTS) {
         fitting.push(part);
       } else if (!part.cell || bboxWidth(part.cell.bbox) >= MIN_CELL_DEGREES * 2) {
         splitEstimate += splitFetchRequests(part.count);
         splitSpatially(part, lane ?? part.species.key);
-      } else if (part.years !== 'missing' && (!part.years || part.years[0] < part.years[1])) {
+      } else if (!leaf) {
         splitEstimate += splitFetchRequests(part.count);
         splitByYear(part, lane ?? part.species.key);
       } else {
-        const t = truncations.get(part.species.key) ?? {
-          name: part.species.name,
-          kept: 0,
-          total: 0,
-        };
-        t.kept += GBIF_MAX_DOCUMENTS;
-        t.total += part.count;
-        truncations.set(part.species.key, t);
-        truncatedRecords += part.count - GBIF_MAX_DOCUMENTS;
-        progress.truncated = [...truncations.values()].map((x) => ({ ...x }));
+        truncate(part);
         fitting.push({ ...part, count: GBIF_MAX_DOCUMENTS });
       }
     }
     for (const group of planRequests(fitting)) {
       fetchParts(lane ?? SMALL_LANE, group);
     }
+    // Every child was empty or done before: the split is done too.
+    if (parent && parent.open === 0) {
+      completeSplit(parent);
+    }
   };
+
+  const splitNode = (part: Part): SplitNode => ({
+    key: gbifPartKey(part),
+    parent: part.parent,
+    open: 0,
+    children: [],
+  });
 
   /** Count the four quadrants of the part's cell in one request. */
   const splitSpatially = (part: Part, lane: number) => {
@@ -507,7 +653,7 @@ export async function* streamGbif(
       });
       progress.requestsDone++;
       splitEstimate -= splitFetchRequests(part.count);
-      schedule(children, lane);
+      schedule(children, lane, splitNode(part));
       updateTotal();
       closePart(part);
     }));
@@ -552,7 +698,7 @@ export async function* streamGbif(
       }
       progress.requestsDone++;
       splitEstimate -= splitFetchRequests(part.count);
-      schedule(children, lane);
+      schedule(children, lane, splitNode(part));
       updateTotal();
       closePart(part);
     }));
@@ -562,9 +708,21 @@ export async function* streamGbif(
     fetched: progress.fetched,
     truncated: truncatedRecords,
     requests: progress.requestsDone,
+    failedParts,
+    ...(stoppedEarly && { stoppedEarly }),
+  });
+  /** Failure fields as of the events yielded so far. */
+  const failureFields = () => ({
+    failedParts,
+    ...(lastError !== undefined && { lastError }),
+    ...(stoppedEarly && { stoppedEarly }),
   });
 
+  let lastYielded: RecordBatch | undefined;
   try {
+    if (progress.fetched >= maxRecords) {
+      return { ...summary(), reachedCap: true };
+    }
     // Largest first, so the large lanes start in size order.
     schedule([...detail.species].sort((a, b) => b.count - a.count).map(toPart));
     feed();
@@ -578,19 +736,51 @@ export async function* streamGbif(
           resolve();
         }
         room = [];
-        if (event.kind === 'error') {
-          if (isAbortError(event.error) && opts.signal?.aborted) {
-            throw abortError();
-          }
-          throw event.error;
+        if (event.kind === 'failure') {
+          failedParts++;
+          lastError = describeRequestError(event.error, 'GBIF');
+          continue;
         }
-        yield event.batch;
-        if (progress.fetched >= maxRecords) {
+        const { batch } = event;
+        for (const part of event.done) {
+          markDone(gbifPartKey(part), part.parent);
+        }
+        creditedRequests++;
+        batch.progress = { ...batch.progress, ...failureFields() };
+        batch.cursor = cursor(batch.progress.fetched);
+        lastYielded = batch;
+        yield batch;
+        if (batch.progress.fetched >= maxRecords) {
           return { ...summary(), reachedCap: true };
         }
         continue;
       }
       if (pending === 0) {
+        // Report failures that came after the last batch on a final, empty one; so
+        // too a resumed run's request estimate, which can overshoot (splits under
+        // finished parts are counted before they are skipped).
+        const end = failureFields();
+        const seen = lastYielded?.progress;
+        const failed = failedParts > 0 || !!stoppedEarly;
+        const unreported =
+          seen?.failedParts !== end.failedParts ||
+          seen?.lastError !== end.lastError ||
+          seen?.stoppedEarly !== end.stoppedEarly;
+        const overestimated = !failed && !!seen && seen.requestsTotal > progress.requestsDone;
+        if ((failed && unreported) || overestimated) {
+          const fetched = seen?.fetched ?? progress.fetched;
+          yield {
+            source: 'gbif',
+            records: [],
+            progress: {
+              ...progress,
+              fetched,
+              ...(overestimated && { requestsTotal: progress.requestsDone }),
+              ...end,
+            },
+            cursor: cursor(fetched),
+          };
+        }
         return { ...summary(), reachedCap: false };
       }
       await new Promise<void>((resolve) => {
@@ -598,7 +788,7 @@ export async function* streamGbif(
       });
     }
   } finally {
-    // Stops in-flight requests when the consumer breaks out, a request fails or the cap is hit.
+    // Stops in-flight requests when the consumer breaks out, the stream stops or the cap is hit.
     controller.abort();
     opts.signal?.removeEventListener('abort', onOuterAbort);
     for (const resolve of room) {
