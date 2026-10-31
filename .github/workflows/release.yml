@@ -35,10 +35,10 @@ jobs:
       # is a private app, so no `publish:` is configured — merging the PR is the
       # release, and pages.yml deploys it. Nothing is pushed to npm.
       - name: Create Release Pull Request
-        uses: changesets/action@v1
+        # v2 requires @changesets/cli 3 and uses kebab-case inputs; the token
+        # defaults to github.token (the GITHUB_TOKEN env var is no longer read).
+        uses: changesets/action@v2.1.2
         with:
-          version: pnpm run version
-          commit: 'chore: version packages'
-          title: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm run version
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
