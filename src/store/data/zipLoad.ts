@@ -130,11 +130,14 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
         job.outcome = { emptyReason: empty, previousKept: job.targetId != null };
         return;
       }
-      finalState = cancelled ? 'cancelled' : 'done';
+      // A read error after the commit keeps what arrived, as a stopped (partial) load.
+      const stopped = cancelled != null || readError != null;
+      finalState = cancelled ? 'cancelled' : readError != null ? 'error' : 'done';
       // A discard after the commit removes the source once SpeciesStore is done.
       if (cancelled === 'discard') return;
       const completedAt = nowIso();
-      const read = summary ?? opts.download ?? null;
+      // Only a fully read table is the download: a stopped read cites no download DOI (§2.2).
+      const read = summary ?? (stopped ? null : (opts.download ?? null));
       const download: ZipOccurrences['download'] = read && {
         key: read.downloadKey ?? key,
         doi: read.doi ?? opts.download?.doi,
@@ -158,7 +161,7 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
               bySource: { ...tally.bySource },
             },
             accepted: funnel.accepted,
-            partial: cancelled
+            partial: stopped
               ? partialLoad({
                   planned: expected ?? progress.fetched,
                   accepted: funnel.accepted,

@@ -181,6 +181,23 @@ describe('DataStore.loadGbifZip', () => {
     expect(dataStore.job).toMatchObject({ state: 'error', error: expect.stringContaining('Not a GBIF occurrence table') });
   });
 
+  it('a read error after the commit keeps the records as a partial load that cites no download', async () => {
+    vi.mocked(importGbifZip).mockImplementation(async function* () {
+      yield { source: 'gbif', records: RECORDS, progress: { fetched: RECORDS.length } } as never;
+      throw new Error('invalid stored block lengths');
+    });
+    const { dataStore } = setup();
+    await dataStore.loadGbifZip(file(), { origin: 'search', query: QUERY, download: SUMMARY });
+    const source = dataStore.occurrence as ZipOccurrences;
+    expect(source.status).toBe('done');
+    expect(source.download).toBeNull();
+    expect(source.provenance?.partial).not.toBeNull();
+    expect(source.provenance?.gbifDownloadDoi).toBeUndefined();
+    expect(dataStore.job).toMatchObject({ state: 'error', error: expect.stringContaining('invalid stored block lengths') });
+    expect(dataStore.methodsText).not.toContain(SUMMARY.doi);
+    expect(JSON.stringify(dataStore.citations)).not.toContain(SUMMARY.doi);
+  });
+
   it('a discard after the commit removes the occurrences and keeps the tree', async () => {
     let open = () => {};
     const gate = new Promise<void>((r) => {
