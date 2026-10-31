@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import {
   Tag,
@@ -14,6 +14,7 @@ import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
 import { exampleCatalog, type ExampleEntry } from '../../store/data/catalog';
+import type { StartResult } from '../../store/data/types';
 import Select from './Select';
 import {
   FileUploadList,
@@ -58,6 +59,14 @@ const guessColumnNames = (cols: string[]) => {
 export const LoadData = observer(function LoadData() {
   const { speciesStore, dataStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
+  /** A tree from this drop committed without a rerun, waiting on its occurrences. */
+  const treePending = useRef(false);
+  /** Rerun Infomap with the dropped tree when its occurrences committed nothing. */
+  const settleTree = async (result: StartResult) => {
+    if (!treePending.current) return;
+    treePending.current = false;
+    await dataStore.rerunIfOnlyTreeCommitted(true, result);
+  };
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
   const [lines, setLines] = useState<Record<string, string>[]>([]);
@@ -94,7 +103,8 @@ export const LoadData = observer(function LoadData() {
     if (tree) {
       // With occurrences in the same drop, their load runs Infomap once.
       const withOccurrences = occurrenceData != null || zipFile != null || shpFiles.length > 0;
-      await dataStore.loadTree({ kind: 'file', file: tree }, { rerun: !withOccurrences });
+      const result = await dataStore.loadTree({ kind: 'file', file: tree }, { rerun: !withOccurrences });
+      treePending.current = withOccurrences && result.started && result.committed;
     }
 
     if (occurrenceData) {
@@ -117,11 +127,13 @@ export const LoadData = observer(function LoadData() {
     }
 
     if (zipFile || shpFiles.length > 0) {
-      await dataStore.loadOccurrenceFile({ format: 'shapefile', files: zipFile ?? shpFiles }, 'upload');
+      await settleTree(await dataStore.loadOccurrenceFile({ format: 'shapefile', files: zipFile ?? shpFiles }, 'upload'));
     }
   };
 
   const onClose = () => {
+    // Closed without loading the CSV: the dropped tree still needs its rerun.
+    void settleTree({ started: false, reason: 'Cancelled' });
     setIsOpen(false);
     setFile(undefined);
     setNameColumn('');
@@ -138,7 +150,7 @@ export const LoadData = observer(function LoadData() {
     }
 
     setIsOpen(false);
-    await dataStore.loadOccurrenceFile(
+    const result = await dataStore.loadOccurrenceFile(
       {
         format: extension(file.name).toLowerCase() === 'tsv' ? 'tsv' : 'csv',
         file,
@@ -146,6 +158,7 @@ export const LoadData = observer(function LoadData() {
       },
       'upload',
     );
+    await settleTree(result);
     onClose(); // cleanup state
   };
 
