@@ -457,7 +457,7 @@ export interface ExampleEntry {
   taxon: string; rank?: string; region: string;
   source: string;                                   // 'GBIF', 'GBIF + OBIS', or the dataset origin
   records: { n: number; approx: boolean }; species: { n: number; approx: boolean } | null;
-  size: string;                                      // '2.8 MB download' | 'Streams live from GBIF · ~6 MB · about 2 min'
+  size: string;                                      // '2.8 MB download' | 'Streams live from GBIF · ~6 MB' (no time: nothing to base it on)
   asOf?: string;                                     // date of the approximate counts (query kind)
   citation?: string;
   tree: { included: boolean; usedByDefault: boolean; citation?: string };
@@ -467,7 +467,7 @@ export interface ExampleEntry {
 }
 ```
 
-- **Sources:** `src/examples.json` gains `id`, `taxon`, `region`, `source`, `records`, `species`, `citation`, `treeCitation`, `why`, `icon`. `exampleStudies()` (examples.ts:42-101) is kept; `EXAMPLE_NOTES` (ExampleCards.tsx:10-19) moves into the catalog. Counts: files computed once from `public/data` with a throwaway script; queries approximate from one preview run, rounded, with `asOf`.
+- **Sources:** `src/examples.json` gains `id`, `taxon`, `region`, `source`, `records`, `species`, `citation`, `treeCitation`, `why`, `icon`. `exampleStudies()` (examples.ts:42-101) is kept; `EXAMPLE_NOTES` (ExampleCards.tsx:10-19) moves into the catalog (S5 added the catalog copy with string icon ids; the UI step that rewrites ExampleCards deletes the component copy). Counts: files computed once from `public/data` with a throwaway script; queries approximate from one `plan()` run per source (records summed over sources, the larger species count, bytes summed), rounded, with `asOf`. API: `exampleCatalog(dev = NODE_ENV === 'development')` returns files entries then query entries, `devOnly` dropped unless `dev`; `files.species`/`files.tree` are `/bioregions/...` URLs like ExampleStore's; `citation` falls back to `EXAMPLE_CITATION_PLACEHOLDER`. A zip whose entries could not be listed (`zipEntries` undefined) is an error "{name}: could not read the zip file"; copy strings live in `UPLOAD_COPY` (classify.ts).
 - **A card shows:** icon, title, "why"; taxon (rank) · region; source badges; "~40,000 records · 38 species" ("live count may differ" when approximate); the size; the citation in a "Cite" disclosure; a **tree badge**: "Includes a tree", "Includes a tree · not used by default" (`usedByDefault: false`, e.g. Global mammals `includeTree: false`), or "No tree · find one in Phylogeny".
 - **Buttons:** `Load`: a `files` example calls `dataStore.loadExample(entry, 'examples')` and closes the portal (progress on the sidebar card); a `query` example calls `explorerStore.loadExampleQuery(entry)` (Search tab, canLoad gate, cap, workspace labels and ledger). `Open in Search` (`query` only). Disabled while `isLoading`.
 - **Hidden:** `devOnly` entries in production (ExampleStore.ts:35).
@@ -581,7 +581,7 @@ Phases: **2.1** S1 ‖ S5 → **2.2** S2a ‖ S3 → **2.3** S2b → **2.4** S4 
 **S5: Pure modules** (≈35 calls; parallel with S1)
 
 - **Goal:** the classifier, zip lister, column guesser and example catalog, with no store or UI wiring.
-- **Owns:** new `src/store/data/classify.ts`, `src/utils/zipEntries.ts`, `src/store/data/columns.ts` (`guessColumnNames` from Load.tsx:24-57, no logging), `src/store/data/catalog.ts`, each with its test; edited `src/examples.json` (new fields; counts from a throwaway script over `public/data`; unknown citations empty and listed in the commit body).
+- **Owns:** new `src/store/data/classify.ts`, `src/utils/zipEntries.ts`, `src/store/data/columns.ts` (`guessColumnNames` from Load.tsx:24-57, no logging), `src/store/data/catalog.ts`, each with its test; edited `src/examples.json` (new fields; counts from a throwaway script over `public/data`; unknown citations get the §9.3 placeholder "Source: Infomap Bioregions example data" and are listed in the commit body).
 - **Must not touch:** DataStore.ts, `data/types.ts` (S5 defines its own `UploadPlan`/`ExampleEntry`), any UI.
 - **Accept:** S5 tests.
 
