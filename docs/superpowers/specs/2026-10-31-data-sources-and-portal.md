@@ -683,16 +683,8 @@ Phases: **3.1** U1 alone → **3.2** U2 ‖ U3 ‖ U4 ‖ U5 ‖ U6 (at most 2-3
 - Removing only the records a Continue run added (Discard during Continue).
 - Unifying the tip and species-name normalisers (dots, §5.2); documented in the format table instead.
 
-## 9. Open questions for the owner
+## 9. Owner decisions on the open questions (2026-10-31)
 
-1. **Continue after the cap is reached** (a cap stop means the estimate was low, since Load is blocked above the cap).
-   - (a) "Continue up to {niceCapAbove(max(planned, fetched) + 1)}" raises the cap and resumes. *(recommended; specified above)*
-   - (b) No Continue. Offer only "Raise the cap and load again", and drop the `cap` reason.
-   - (c) Continue ignores the cap.
-2. **A tree left over after the occurrence slot changes** (Canidae + an Open Tree tree, then "Cats of the world").
-   - (a) Keep the tree, as D1 says; the tree card shows the overlap live, warns below 50 %, offers Change and Remove. *(recommended: a CSV and a tree uploaded one after the other still combine)*
-   - (b) Remove the tree whenever the occurrences change to a different query, file or example; Continue and Load again keep it.
-   - (c) Ask each time, with "Keep the current tree".
-3. **Citations for the bundled example files** (`mapequation/bioregions-data`).
-   - (a) The owner provides them for `examples.json`. *(recommended)*
-   - (b) Until then, "Source: Infomap Bioregions example data" without a formal citation.
+1. **The cap is a gate on the estimate, not a limit during a load.** The cap applies only to explorer queries, where Load is blocked while the estimate is over it. Own data (uploaded files, bundled examples) has no cap: the user stops a load whenever they like, and "Stop and keep" keeps what arrived. A cap stop on an explorer query can happen only when the estimate was low. That rare case keeps (a): "Continue up to {niceCapAbove(max(planned, fetched) + 1)}" raises the cap and resumes. No step may add a cap to file or example loads.
+2. **A leftover tree is kept (a).** The tree card shows the live overlap with the loaded species, warns below 50 %, and offers Change and Remove.
+3. **Example citations: fill what exists, otherwise use a placeholder.** S5 fills `citation` in `examples.json` from what the repo and `mapequation/bioregions-data` (README, source notes) document. Where nothing is found, the card and methods text say "Source: Infomap Bioregions example data". The owner completes the rest later.
