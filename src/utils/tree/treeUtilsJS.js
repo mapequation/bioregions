@@ -368,23 +368,37 @@ export function normalizeNames(tree) {
  * originalChildIndex - original index in the children array, 0 for root.
  * isLeaf - boolean
  * depth - number of steps from root
- * branchLength - distance to parent node, > 0 || 1
+ * branchLength - distance to parent node, 0 for root; missing lengths are 0,
+ *    except in a tree without any lengths, which gets unit lengths; negative
+ *    lengths are set to 0 with a warning
  * numLeafs - number of leaf nodes under each node, 1 for leaf nodes
  * maxLeafDistance - max branch length to leafs under each node
  * rootDistance - total branch length from root
  * time - total branch length from root normalized in [0,1]
  */
 export function prepareTree(tree) {
+  const hasLength = (node) =>
+    node.branchLength !== undefined && node.branchLength !== null;
+  const missingLength = visitTreeDepthFirst(
+    tree,
+    (node) => node !== tree && hasLength(node),
+  )
+    ? 0
+    : 1; // Topology-only tree: unit lengths
+
   // Traverse from leaf nodes to root to define and aggregate some properties
 
-  tree.branchLength = 0; // Don't use default length 1 on root.
+  tree.branchLength = 0; // Don't use default length on root.
+  let numNegative = 0;
   visitTreeDepthFirst({ postOrder: true }, tree, (node, depth, childIndex) => {
     node.originalChildIndex = childIndex;
     node.isLeaf = node.children.length === 0;
     node.depth = depth;
-    // Ensure nodes has positive length property, else use length 1
-    if (node.branchLength === undefined || node.branchLength < 0) {
-      node.branchLength = 1;
+    if (!hasLength(node)) {
+      node.branchLength = missingLength;
+    } else if (node.branchLength < 0) {
+      node.branchLength = 0;
+      ++numNegative;
     }
     if (node.isLeaf) {
       node.numLeafs = 1;
@@ -401,6 +415,10 @@ export function prepareTree(tree) {
       node.maxLeafDistance = node.branchLength + maxLeafDistance;
     }
   });
+
+  if (numNegative > 0) {
+    console.warn(`Tree: ${numNegative} negative branch lengths set to 0`);
+  }
 
   // Traverse from root to leaf nodes to set accumulative root distance
   visitTreeDepthFirst(tree, (node, _depth, _childIndex, parent) => {

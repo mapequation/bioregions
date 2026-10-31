@@ -8,7 +8,7 @@ import {
   type IReactionDisposer,
 } from 'mobx';
 import type RootStore from './RootStore';
-import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
+import { prepareTree, parseTree, lineagesThroughTime } from '../utils/tree';
 import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
@@ -33,7 +33,6 @@ import { format } from 'd3-format';
 import { scaleLinear } from 'd3-scale';
 // d3 umbrella has the shape/scale helpers (d3-shape, d3-scale are transitive via `d3`).
 import { scaleSqrt } from 'd3';
-import { isEqual } from '../utils/math';
 import {
   plot,
   type Plot,
@@ -205,11 +204,7 @@ export default class TreeStore {
     if (this.tree === null) {
       return [];
     }
-    return getAccumulatedTreeData(this.tree, {
-      getNodeData: (node) =>
-        !node.isLeaf ? 1 : isEqual(node.time, 1, 1e-3) ? 0 : -1,
-      initialValue: 1,
-    });
+    return lineagesThroughTime(this.tree);
   }
 
   get nodeStyles() {
@@ -260,19 +255,41 @@ export default class TreeStore {
     this.isLoaded = isLoaded;
   });
 
-  loadString(tree: string) {
+  /**
+   * Parse and set a Newick tree. A malformed tree is reported through
+   * `infomapStore.addError` and leaves the current tree unchanged.
+   */
+  loadString(treeString: string) {
     this.setIsLoading();
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
+    let tree: PhyloNode;
+    try {
+      tree = prepareTree(parseTree(treeString));
+    } catch (error) {
+      this.reportLoadError(error);
+      return;
+    }
+    this.setTreeString(treeString);
+    this.setTree(tree);
     this.setIsLoaded();
   }
 
   async load(file: File | string) {
     this.setIsLoading();
-    const tree = await loadText(file);
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
-    this.setIsLoaded();
+    let treeString: string;
+    try {
+      treeString = await loadText(file);
+    } catch (error) {
+      this.reportLoadError(error);
+      return;
+    }
+    this.loadString(treeString);
+  }
+
+  private reportLoadError(error: unknown) {
+    console.error(error);
+    this.setIsLoading(false);
+    const message = error instanceof Error ? error.message : String(error);
+    this.rootStore.infomapStore.addError(`Could not load the tree: ${message}`);
   }
 
   clearBioregions() {

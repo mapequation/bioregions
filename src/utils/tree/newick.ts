@@ -58,8 +58,6 @@
  * }
  */
 
-const regMatchQuoted = new RegExp(/[['"]*['"]([^']+?)'/g);
-
 // Hoisted reference to Object.prototype.hasOwnProperty so call sites read it via
 // `.call` without accessing the prototype builtin on the target object directly
 // (Object.hasOwn is ES2022; this lib targets ES2020).
@@ -72,115 +70,167 @@ export interface ITree {
   children: ITree[];
 }
 
-function makeid(length: number): string {
-  let result = '';
-  const characters =
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const charactersLength = characters.length;
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+type Token =
+  | { kind: 'punct'; value: string; pos: number }
+  | { kind: 'label'; value: string; quoted: boolean; pos: number };
+
+const PUNCT = '(),:;';
+const BARE_END = '(),:;[\'"';
+
+function* tokenize(text: string): Generator<Token> {
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '[') {
+      // Comment, e.g. BEAST/FigTree annotations `[&rate=1]`
+      const end = text.indexOf(']', i + 1);
+      if (end === -1) {
+        throw new Error(`Newick: unclosed comment at character ${i}`);
+      }
+      i = end + 1;
+    } else if (PUNCT.includes(c)) {
+      yield { kind: 'punct', value: c, pos: i };
+      i++;
+    } else if (c === "'" || c === '"') {
+      // Quoted label; in single quotes, '' is an escaped quote
+      let value = '';
+      let j = i + 1;
+      for (;;) {
+        if (j >= text.length) {
+          throw new Error(`Newick: unclosed quote at character ${i}`);
+        }
+        if (text[j] === c) {
+          if (c === "'" && text[j + 1] === "'") {
+            value += "'";
+            j += 2;
+            continue;
+          }
+          break;
+        }
+        value += text[j++];
+      }
+      yield { kind: 'label', value, quoted: true, pos: i };
+      i = j + 1;
+    } else if (/\s/.test(c)) {
+      i++;
+    } else {
+      let j = i + 1;
+      while (j < text.length && !BARE_END.includes(text[j])) {
+        j++;
+      }
+      yield {
+        kind: 'label',
+        value: text.slice(i, j).trim(),
+        quoted: false,
+        pos: i,
+      };
+      i = j;
+    }
   }
-  return result;
 }
 
-function read(newickString: string) {
-  const emptyAncestor: ITree = {
-    branchLength: null,
-    children: [],
-    name: '',
-  };
-  const ancestors: ITree[] = [emptyAncestor];
-  let tree: ITree = {
-    branchLength: null,
-    children: [],
-    name: '',
-  };
-
-  const testString = newickString.split('(');
-
-  const exceptionHashTable: { [name: string]: string } = {};
-  const parts = testString.length;
-  for (let i = 0; i < parts; i++) {
-    let copyNewickString = testString[i];
-
-    while (copyNewickString.match(regMatchQuoted)) {
-      const matches = copyNewickString.match(regMatchQuoted);
-      if (matches) {
-        const id = makeid(10);
-        exceptionHashTable[id] = matches[0].replace(/'/g, '');
-        copyNewickString = copyNewickString.replace(matches[0], id);
-      }
+function setLabel(
+  node: ITree,
+  label: string,
+  quoted: boolean,
+  internal: boolean,
+) {
+  // Tip labels are always names. An unquoted numeric internal label is a
+  // support value (bootstrap/posterior), and 'NA' means no label.
+  if (internal && !quoted) {
+    if (label === 'NA') {
+      return;
     }
-    testString[i] = copyNewickString;
+    const support = Number(label);
+    if (Number.isFinite(support)) {
+      node.bs = support;
+      return;
+    }
   }
-  const fullString = testString.join('(');
-  const tokens = fullString.split(/\s*(;|\(|\)|,|:)\s*/);
-  for (let i = 0; i < tokens.length; i++) {
-    const token: string = tokens[i];
-    switch (token) {
+  node.name = label;
+}
+
+/**
+ * Parse the first tree in a Newick string. Anything after the first `;` is
+ * ignored, and `[...]` comments are skipped. Missing branch lengths are `null`.
+ * Throws on unbalanced parentheses and misplaced tokens.
+ */
+function read(newickString: string): ITree {
+  const newNode = (): ITree => ({ branchLength: null, children: [], name: '' });
+  const tree = newNode();
+  const ancestors: ITree[] = [];
+  let node = tree;
+  // 'start': node just opened; 'closed': after its ')'; 'labelled'; 'done': after its length
+  let state: 'start' | 'closed' | 'labelled' | 'done' = 'start';
+  let wantLength = false;
+
+  for (const token of tokenize(newickString)) {
+    const at = `at character ${token.pos}`;
+    if (wantLength) {
+      const length = token.kind === 'label' ? Number(token.value) : Number.NaN;
+      if (token.kind !== 'label' || token.quoted || !Number.isFinite(length)) {
+        throw new Error(`Newick: expected a branch length ${at}`);
+      }
+      node.branchLength = length;
+      wantLength = false;
+      state = 'done';
+      continue;
+    }
+    if (token.kind === 'label') {
+      if (state !== 'start' && state !== 'closed') {
+        throw new Error(`Newick: unexpected label ${at}`);
+      }
+      setLabel(node, token.value, token.quoted, state === 'closed');
+      state = 'labelled';
+      continue;
+    }
+    if (token.value === ';') {
+      break;
+    }
+    switch (token.value) {
       case '(': {
-        const newChildren: ITree = {
-          branchLength: null,
-          children: [],
-          name: '',
-        };
-        tree.children = [newChildren];
-        ancestors.push(tree);
-        tree = newChildren;
+        if (state !== 'start') {
+          throw new Error(`Newick: unexpected '(' ${at}`);
+        }
+        ancestors.push(node);
+        node = newNode();
+        ancestors[ancestors.length - 1].children.push(node);
+        state = 'start';
         break;
       }
       case ',': {
-        const anotherBranch: ITree = {
-          branchLength: null,
-          children: [],
-          name: '',
-        };
-        const children = ancestors[ancestors.length - 1].children;
-        if (children) {
-          children.push(anotherBranch);
-          tree = anotherBranch;
+        const parent = ancestors[ancestors.length - 1];
+        if (!parent) {
+          throw new Error(`Newick: ',' outside parentheses ${at}`);
         }
+        node = newNode();
+        parent.children.push(node);
+        state = 'start';
         break;
       }
-      case ')': { // optional name next
-        const lastAncestor = ancestors.pop();
-        if (lastAncestor) {
-          tree = lastAncestor;
+      case ')': {
+        const parent = ancestors.pop();
+        if (!parent) {
+          throw new Error(`Newick: unbalanced ')' ${at}`);
         }
+        node = parent;
+        state = 'closed';
         break;
       }
-      case ':': // optional length next
-        break;
-      default: {
-        const x: string = tokens[i - 1];
-        if (x === ')' || x === '(' || x === ',') {
-          if (hasOwn.call(exceptionHashTable, token)) {
-            const [str1, str2] = exceptionHashTable[token].split(':');
-            if (str2) {
-              tree.name = str2;
-              tree.bs = parseFloat(str1);
-            } else {
-              tree.name = '';
-              tree.bs = parseFloat(str1);
-            }
-          } else {
-            if (token.match(/[a-zA-Z]/)) {
-              tree.name = token;
-            } else {
-              tree.name = '';
-              if (!Number.isNaN(parseFloat(token))) {
-                tree.bs = parseFloat(token);
-              }
-            }
-          }
-          if (tree.name === 'NA') {
-            tree.name = '';
-          }
-        } else if (x === ':') {
-          tree.branchLength = parseFloat(token);
+      case ':': {
+        if (state === 'done') {
+          throw new Error(`Newick: second branch length ${at}`);
         }
+        wantLength = true;
+        break;
       }
     }
+  }
+  if (wantLength) {
+    throw new Error('Newick: missing branch length at end of input');
+  }
+  if (ancestors.length > 0) {
+    throw new Error("Newick: unbalanced '(' (missing ')')");
   }
   return tree;
 }

@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { parseTree, prepareTree, visitTreeDepthFirstPostOrder } from '.';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  lineagesThroughTime,
+  parseTree,
+  prepareTree,
+  visitTreeDepthFirstPostOrder,
+} from '.';
 import type { PhyloNode } from '.';
 
 function postOrder(tree: PhyloNode, f: (node: PhyloNode) => unknown = (node) => node.name) {
@@ -60,6 +65,63 @@ describe('tree utils', () => {
       ['A311', 3], ['A312', 3], ['a31', 2],
       ['A32', 2], ['a3', 1],
       ['root', 0],
+    ]);
+  });
+
+  it('gives a topology-only tree unit branch lengths', () => {
+    const tree = prepareTree(parseTree('((a,b),c);'));
+
+    expect(postOrder(tree, (node) => [node.name, node.time])).toEqual([
+      ['a', 1], ['b', 1], ['t1', 0.5], ['c', 0.5], ['t0', 0],
+    ]);
+    expect(tree.maxLeafDistance).toBe(2);
+  });
+
+  it('treats missing lengths as zero when the tree has lengths', () => {
+    const tree = prepareTree(parseTree('((a:1,b:1),c:2);'));
+
+    expect(postOrder(tree, (node) => node.branchLength)).toEqual([
+      1, 1, 0, 2, 0,
+    ]);
+    expect(postOrder(tree, (node) => node.time)).toEqual([0.5, 0.5, 0, 1, 0]);
+  });
+
+  it('keeps numeric and quoted tip labels as names', () => {
+    const tree = prepareTree(parseTree(`((1:1,'Homo sapiens':1)90:1,3:2);`));
+
+    expect(postOrder(tree)).toEqual(['1', 'Homo sapiens', 't1', '3', 't0']);
+  });
+
+  it('sets negative branch lengths to zero with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const tree = prepareTree(parseTree('((a:1,b:-0.5):1,c:-2);'));
+
+    expect(postOrder(tree, (node) => node.branchLength)).toEqual([
+      1, 0, 1, 0, 0,
+    ]);
+    expect(postOrder(tree, (node) => node.time)).toEqual([1, 0.5, 0.5, 0, 0]);
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0][0]).toMatch(/2 negative branch lengths/);
+    warn.mockRestore();
+  });
+});
+
+describe('lineages through time', () => {
+  const ltt = (newick: string) =>
+    lineagesThroughTime(prepareTree(parseTree(newick))).map(({ t, value }) => [
+      t,
+      value,
+    ]);
+
+  it('adds one lineage per extra child at a polytomy', () => {
+    expect(ltt('(a:1,b:1,c:1);')).toEqual([
+      [0, 1], [0, 3], [1, 3], [1, 3],
+    ]);
+  });
+
+  it('keeps tips that end before the present', () => {
+    expect(ltt('((a:1,b:1):1,c:0.5);')).toEqual([
+      [0, 1], [0, 2], [0.25, 2], [0.5, 3], [1, 3], [1, 3],
     ]);
   });
 });
