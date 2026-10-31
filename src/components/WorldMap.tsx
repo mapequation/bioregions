@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { reaction } from 'mobx';
 import { useStore } from '../store/';
-import { Box, Button, HStack, Stack, Text } from '@chakra-ui/react';
-import { LuSearch } from 'react-icons/lu';
-import { LoadData } from './ControlPanel/Load';
+import { Box, Button, Stack, Text } from '@chakra-ui/react';
+import { LuArrowRight, LuSearch, LuUpload } from 'react-icons/lu';
+import { primaryButtonProps, secondaryButtonProps } from './Explorer/buttonStyles';
 import { formatThousands } from '../utils/formats';
 import MapStatusBar from './StatusBar/MapStatusBar';
 import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
@@ -73,11 +73,11 @@ const MapTooltip = observer(function _MapTooltip() {
   );
 });
 
-// Centre card on the empty map: the two ways to get data in.
+// Centre card on the empty map: the ways to get data in, one full-width button each, so every
+// label keeps its padding at any card width.
 const EmptyMapCta = observer(function EmptyMapCta() {
-  const { speciesStore, explorerStore } = useStore();
-  const busy = speciesStore.isLoading || explorerStore.isLoading;
-  if (busy || speciesStore.numRecords > 0 || speciesStore.loaded) {
+  const { dataStore, explorerStore } = useStore();
+  if (dataStore.isLoading || dataStore.occurrence != null) {
     return null;
   }
   return (
@@ -92,21 +92,32 @@ const EmptyMapCta = observer(function EmptyMapCta() {
         borderWidth="1px"
         borderRadius="lg"
         boxShadow="md"
+        data-testid="empty-map-cta"
       >
         <Box>
           <Text fontWeight="semibold">No data yet</Text>
           <Text fontSize="sm" color="fg.muted">
-            Search GBIF and OBIS occurrence records, or load your own file.
+            Search GBIF and OBIS, upload your own files, or start from an example.
           </Text>
         </Box>
-        <HStack gap={2} align="stretch">
-          <Button size="sm" flex="1" onClick={() => explorerStore.open()}>
-            <LuSearch /> Explore GBIF &amp; OBIS
+        <Stack gap={2}>
+          <Button {...primaryButtonProps} w="full" onClick={() => explorerStore.open('search')}>
+            <LuSearch /> Search GBIF &amp; OBIS
           </Button>
-          <Box flex="1">
-            <LoadData />
-          </Box>
-        </HStack>
+          <Button {...secondaryButtonProps} w="full" onClick={() => explorerStore.open('upload')}>
+            <LuUpload /> Upload files
+          </Button>
+          <Button
+            variant="plain"
+            size="sm"
+            alignSelf="center"
+            color="fg.muted"
+            _hover={{ color: 'fg', textDecoration: 'underline' }}
+            onClick={() => explorerStore.open('examples')}
+          >
+            Try an example <LuArrowRight />
+          </Button>
+        </Stack>
       </Stack>
     </Box>
   );
@@ -115,7 +126,7 @@ const EmptyMapCta = observer(function EmptyMapCta() {
 export default observer(function WorldMap() {
   const hostRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
-  const { mapStore, explorerStore, speciesStore } = useStore();
+  const { mapStore, explorerStore, speciesStore, dataStore } = useStore();
 
   useEffect(() => {
     if (hostRef.current === null) {
@@ -143,15 +154,15 @@ export default observer(function WorldMap() {
   // Closing the explorer after a load ("View bioregions" or close) brings the map back into view
   // and re-frames it: the page under the dialog may have scrolled or reflowed meanwhile.
   useEffect(() => {
-    let seenLoad = explorerStore.loaded?.retrievedAt;
+    let seenSource = dataStore.occurrence?.id;
     let frame = 0;
     const dispose = reaction(
       () => explorerStore.isOpen,
       (shown) => {
-        const load = explorerStore.loaded;
-        if (shown || !load || load.retrievedAt === seenLoad) return;
-        seenLoad = load.retrievedAt;
-        if (load.accepted === 0) return;
+        const source = dataStore.occurrence;
+        if (shown || !source || source.id === seenSource) return;
+        seenSource = source.id;
+        if (speciesStore.numRecords === 0) return;
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           const box = frameRef.current;
@@ -170,7 +181,7 @@ export default observer(function WorldMap() {
       dispose();
       cancelAnimationFrame(frame);
     };
-  }, [mapStore, explorerStore]);
+  }, [mapStore, explorerStore, speciesStore, dataStore]);
 
   return (
     // Width leaves room for the left margin, so the map never runs 16px past the viewport.

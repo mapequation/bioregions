@@ -675,6 +675,7 @@ Phases: **3.1** U1 alone → **3.2** U2 ‖ U3 ‖ U4 ‖ U5 ‖ U6 (at most 2-3
 - **Owns:** `ControlPanel/Data.tsx` (rewrite), new `ControlPanel/SourceCards.tsx`, new `ControlPanel/cards.ts` + `cards.test.ts`, `WorldMap.tsx` (§5.6); deletes `ControlPanel/Load.tsx`.
 - **Must not touch:** stores, Explorer components.
 - **Accept:** U5 test; `tsc -b`.
+- **As built:** `sourceCards(input)` takes one object `{ sources, job, treeJob, overlap, counts, includeTree, continueCap }` (`continueCap` for the "Continue up to …" label). Models carry `key`, `badges`, `notes`, `stopOptions`, `removePrompt` and `openTab` beyond §5.5's shape; a running job without a committed source, and a Continue, render as a `role: 'job'` row above the card; a tree load and a tree error render as tree job rows. The Stop menu offers "keep" only for `continue`, `file` and `example` jobs (DataStore's cancel keeps what arrived for file loads), and "Cancel the load" in place of "Cancel; keep the previous data" when nothing was loaded before. An example without its own citation shows "Source: Infomap Bioregions example data" and no Cite. The `⋯` actions are a Popover of text buttons, not a Menu: Remove swaps its content for the confirmation, so focus moves to the confirm button and back to `⋯` on close (a Menu item opening a second popover lost focus to the closing menu). The empty-map overlay hides while `dataStore.isLoading` or an occurrence source exists; the framing reaction keys on `isOpen` and `dataStore.occurrence?.id`.
 
 **U6: Phylogeny upload and Cite tab** (≈35 calls)
 
