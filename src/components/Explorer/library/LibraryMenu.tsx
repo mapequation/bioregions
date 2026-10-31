@@ -8,9 +8,8 @@ import type { SavedQuery } from '../../../store/explorer/types';
 import { PopoverBody, PopoverContent, PopoverRoot, PopoverTrigger } from '../../ui/popover';
 import { downloadText, timeAgo } from '../cite/citeHelpers';
 import { fmtCompact } from '../format';
-import { restoreInto } from './ExampleCards';
 
-type LibraryTab = 'recent' | 'saved' | 'examples';
+type LibraryTab = 'recent' | 'saved';
 
 function querySubline(q: SavedQuery['query']): string {
   const d = describeQuery(q);
@@ -78,15 +77,19 @@ function Empty({ children }: { children: React.ReactNode }) {
 export default observer(function LibraryMenu() {
   const { explorerStore } = useStore();
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<LibraryTab>(() => (explorerStore.recent.length ? 'recent' : 'examples'));
+  const [tab, setTab] = useState<LibraryTab>(() =>
+    explorerStore.recent.length || !explorerStore.saved.length ? 'recent' : 'saved',
+  );
   const [name, setName] = useState('');
   const [message, setMessage] = useState<{ status: 'error' | 'success'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const placeholder = explorerStore.querySummary || 'Name this query';
   const queryEmpty = explorerStore.query.taxa.length === 0 && explorerStore.query.area.kind === 'world';
 
+  // Restore re-previews and never loads.
   const pick = (item: SavedQuery) => {
-    restoreInto(explorerStore, item);
+    explorerStore.restore(item.id);
+    explorerStore.setTab('search');
     setOpen(false);
   };
 
@@ -135,14 +138,12 @@ export default observer(function LibraryMenu() {
         <PopoverBody p={0}>
           <Tabs.Root value={tab} onValueChange={(e) => setTab(e.value as LibraryTab)} size="sm" variant="line" fitted>
             <Tabs.List px={2}>
-              {(['recent', 'saved', 'examples'] as const).map((t) => (
+              {(['recent', 'saved'] as const).map((t) => (
                 <Tabs.Trigger key={t} value={t} textTransform="capitalize">
                   {t}
-                  {t !== 'examples' && (
-                    <Text as="span" color="fg.muted" fontVariantNumeric="tabular-nums">
-                      {counts[t]}
-                    </Text>
-                  )}
+                  <Text as="span" color="fg.muted" fontVariantNumeric="tabular-nums">
+                    {counts[t]}
+                  </Text>
                 </Tabs.Trigger>
               ))}
             </Tabs.List>
@@ -181,13 +182,6 @@ export default observer(function LibraryMenu() {
                     ))}
                   </Stack>
                 )}
-              </Tabs.Content>
-              <Tabs.Content value="examples" p={0}>
-                <Stack as="ul" gap={0} m={0} p={0}>
-                  {explorerStore.examples.map((ex) => (
-                    <Row key={ex.id} item={ex} onPick={() => pick(ex)} />
-                  ))}
-                </Stack>
               </Tabs.Content>
             </Box>
           </Tabs.Root>

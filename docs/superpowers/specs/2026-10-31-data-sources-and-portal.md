@@ -668,6 +668,7 @@ Phases: **3.1** U1 alone → **3.2** U2 ‖ U3 ‖ U4 ‖ U5 ‖ U6 (at most 2-3
 - **Owns:** `examples/ExamplesTab.tsx`, `examples/ExampleCard.tsx`, `library/ExampleCards.tsx`, `library/LibraryMenu.tsx` (drop its Examples tab).
 - **Must not touch:** stores, `catalog.ts`.
 - **Accept:** `tsc -b`; tree badges render the three states.
+- **As built:** `examples/ExampleCard.tsx` is the one card for both kinds and both places (Examples tab, search-tab empty state): icon, title, taxon (rank) · region, why, source badges, counts with "(Estimated {asOf}; live count may differ)" when approximate, size, a tree badge (`data-state` `used`/`notUsed`/`none`), a native `<details>` "Cite" disclosure, Load and, for queries, Open in Search (`restoreQuery` + `setTab('search')`). Load is disabled while `dataStore.isLoading`; the Examples tab then shows a visible status line. The card's text is pure in new `examples/exampleText.ts`, tested by `exampleText.test.ts` (the three badge states, and that the production catalog covers all three). A query example has no `citation`, so "Cite" says its records stream live from GBIF/OBIS and the Cite tab lists citations after loading. `restoreInto` moved from ExampleCards into LibraryMenu's `pick` (its only remaining user); `EXAMPLE_NOTES`, `exampleNote` and `sourcesLabel` are deleted from ExampleCards. A files Load calls `loadExample` and closes the portal at once without awaiting, so a start failure is not shown in the portal.
 
 **U5: Sidebar and overlay** (≈40 calls)
 
