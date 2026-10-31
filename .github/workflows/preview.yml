@@ -1,0 +1,49 @@
+name: PR preview
+
+# Each pull request from this repo gets a preview on surge.sh, rebuilt on every push, and a comment
+# with its link: https://mapequation-bioregions-preview-pr-<number>.surge.sh/bioregions/ (the job name
+# is part of the domain). The preview is torn down when the pull request closes. Pull requests from
+# forks don't get one: their runs can't read the SURGE_TOKEN secret.
+#
+# The app keeps its GitHub Pages base, /bioregions/ (the logo, example data and land maps are fetched
+# from /bioregions/… paths), so the build goes into a bioregions/ folder and the root redirects there.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# A newer push replaces a deploy still running; a close tears down after it.
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: afc163/surge-preview@v1.13.0
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+        with:
+          surge_token: ${{ secrets.SURGE_TOKEN }}
+          dist: preview
+          teardown: "true"
+          failOnError: "true"
+          # Each line runs as one command without a shell: no redirects or pipes.
+          build: |
+            pnpm install --frozen-lockfile
+            pnpm run build
+            mkdir -p preview
+            cp -R dist preview/bioregions
+            cp .github/preview/index.html preview/index.html
