@@ -15,7 +15,7 @@ import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
 export const BACKENDS: BackendType[] = ['auto', 'canvas', 'svg'];
 
-const sphere: d3.GeoPermissibleObjects = { type: 'Sphere' };
+const sphere: d3.GeoSphere = { type: 'Sphere' };
 
 export type IMapRenderer = Record<string, never>;
 
@@ -321,7 +321,7 @@ export default class MapStore {
     // on every later resize via its own ResizeObserver (GeoMap.onResize).
     this.projection = fitProjection(
       PROJECTION_FACTORIES[this.projectionName]().precision(0.1),
-      sphere as GeoJSON.GeoJSON,
+      sphere,
       this.width,
       this.height,
     );
@@ -455,7 +455,7 @@ export default class MapStore {
     // the existing layers and re-dispatches the right interaction (globe rotation vs pan/zoom).
     this.projection = fitProjection(
       PROJECTION_FACTORIES[projection]().precision(0.1),
-      sphere as GeoJSON.GeoJSON,
+      sphere,
       this.width,
       this.height,
     );
