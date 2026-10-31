@@ -13,8 +13,6 @@ const ALLOW: (string | RegExp)[] = [
   /^src\/store\/data\//,
   'src/store/SpeciesStore.ts',
   'src/store/TreeStore.ts',
-  // TODO(S2b): ExplorerStore's stream and zip loads move to src/store/data/.
-  'src/store/ExplorerStore.ts',
 ];
 
 const PATTERNS: RegExp[] = [

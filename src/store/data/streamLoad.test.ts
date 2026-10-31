@@ -147,7 +147,6 @@ function setup() {
     ),
   };
   const rootStore = {
-    clearData: vi.fn(),
     speciesStore,
     infomapStore: { clearData: vi.fn(), run: vi.fn(async () => {}), setIncludeTree: vi.fn() },
     mapStore: { render: vi.fn(), setRenderType: vi.fn() },
@@ -272,7 +271,7 @@ describe('ExplorerStore.load into the data store', () => {
     // A partial load is on the map and in the insights: both describe the loaded records.
     expect(store.recentShare.scope).toBe('loaded');
     expect(store.mapScope).toBe('loaded');
-    expect(rootStore.clearData).not.toHaveBeenCalled();
+    expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
   });
 
   it('pauses while the cancel menu is open and keeps exactly the frozen records', async () => {
@@ -554,7 +553,7 @@ describe('ExplorerStore.load into the data store', () => {
     expect(store.job?.state).toBe('cancelled');
     expect(store.lastLoad).toBeNull();
     expect(store.rootStore.dataStore.occurrence).toBeNull();
-    expect(rootStore.clearData).not.toHaveBeenCalled();
+    expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
     // SpeciesStore reads the reason to skip binning and Infomap.
     const opts = vi.mocked(rootStore.speciesStore.loadRecords).mock.calls[0][1];
     expect(opts?.controller?.signal.reason).toBe('discard');
@@ -571,7 +570,7 @@ describe('ExplorerStore.load into the data store', () => {
     expect(store.rootStore.dataStore.occurrence).toBeNull();
     expect(store.rootStore.dataStore.job?.outcome).toEqual({ emptyReason: 'noMatches', previousKept: false });
     expect(store.recent).toHaveLength(0);
-    expect(rootStore.clearData).not.toHaveBeenCalled();
+    expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
   });
 
   it('reports a load whose records were all dropped, and that the previous dataset was kept', async () => {
@@ -610,7 +609,7 @@ describe('ExplorerStore.load into the data store', () => {
     expect(store.rootStore.dataStore.occurrence).toBeNull();
     expect(store.rootStore.dataStore.job?.outcome).toEqual({ emptyReason: 'cancelledEarly', previousKept: false });
     expect(store.rootStore.dataStore.job?.funnel).toMatchObject({ received: 0, accepted: 0 });
-    expect(rootStore.clearData).not.toHaveBeenCalled();
+    expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
   });
 
   it('reports a failing source and keeps the other', async () => {
@@ -690,7 +689,7 @@ describe('DataStore stream loads (S2a)', () => {
     expect(dataStore.job?.state).toBe('cancelled');
     expect(dataStore.occurrence).toBeNull();
     expect(speciesStore.clearData).toHaveBeenCalledTimes(1);
-    expect(rootStore.clearData).not.toHaveBeenCalled();
+    expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
     expect(store.recent).toHaveLength(0);
   });
 

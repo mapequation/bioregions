@@ -3,7 +3,7 @@ import { gbifCitation } from '../../sources/methods';
 import { queryKey } from '../../sources/query';
 import { type LoadProvenance, buildMethodsText, buildObisCitation, citingDownload, provenanceEntries } from '../explorer/provenance';
 import type { GbifDownload } from '../explorer/types';
-import type { LoadedSource, OccurrenceSource, TreeSource } from './types';
+import type { LoadedSource, OccurrenceSource, TreeSource, ZipOccurrences } from './types';
 
 /** What the citations read beyond the sources. */
 export interface CitationContext {
@@ -50,10 +50,28 @@ function occurrenceSentence(source: OccurrenceSource, counts: LiveCounts, ctx: C
     }
     case 'explorer-query':
     case 'gbif-zip':
-      // A zip "Replace" carries the loaded query's provenance; TODO(S2b): a zip without a query.
+      // A zip "Replace" carries the loaded query's provenance.
       if (source.provenance) return buildMethodsText({ load: source.provenance, downloadDoi: gbifDoi(source.provenance, ctx) });
+      if (source.kind === 'gbif-zip') return zipSentence(source, counts);
       return `Occurrence data: ${source.label} (${countsText(counts)}).`;
   }
+}
+
+/** A GBIF download zip loaded on its own (no query). */
+function zipSentence(source: ZipOccurrences, counts: LiveCounts): string {
+  const d = source.download;
+  // Stopped before the reader's summary: only the kept counts are known.
+  if (!d) return `Occurrence records were taken from ${source.label} (stopped before the end of the file; ${countsText(counts)} kept).`;
+  const name = d.key ? `GBIF download ${d.key}` : 'a GBIF download';
+  const format = d.format === 'DWCA' ? 'DwC-A' : 'SIMPLE_CSV';
+  return `Occurrence records were taken from ${name} (${format}; ${fmt(d.rows)} rows, ${fmt(d.absent)} absence records skipped; ${countsText(counts)} kept).`;
+}
+
+/** The citation of a zip loaded on its own: the zip's own text, else one built from its DOI. */
+function zipCitation(source: ZipOccurrences): string | undefined {
+  const d = source.download;
+  if (d?.citation) return d.citation;
+  return d?.doi ? `GBIF.org GBIF Occurrence Download https://doi.org/${d.doi}` : undefined;
 }
 
 function treeSentence(source: TreeSource): string {
@@ -95,9 +113,11 @@ export function citations(sources: LoadedSource[], ctx: CitationContext = {}): C
         break;
       case 'explorer-query':
       case 'gbif-zip': {
-        // TODO(S2b): the download citation of a zip without a query.
         const load = source.provenance;
-        if (!load) break;
+        if (!load) {
+          if (source.kind === 'gbif-zip') add(source, 'gbif-download', zipCitation(source), source.download?.doi);
+          break;
+        }
         // Only the sources that contributed records are cited.
         for (const entry of provenanceEntries(load, gbifDoi(load, ctx) ?? load.derivedDoi)) {
           if (entry.source === 'gbif') add(source, entry.doi ? 'gbif-download' : 'gbif', gbifCitation(entry), entry.doi);

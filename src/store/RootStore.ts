@@ -45,11 +45,6 @@ export default class RootStore {
     this.phyloStore = new PhyloStore(this);
   }
 
-  /** TODO(S2b): removed; callers use `dataStore.clear()`. */
-  clearData() {
-    this.dataStore.clear();
-  }
-
   clearBioregions() {
     this.infomapStore.clearBioregions();
     this.treeStore.clearBioregions();

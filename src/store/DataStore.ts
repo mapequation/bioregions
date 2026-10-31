@@ -10,6 +10,8 @@ import { loadText } from '../utils/loader';
 import { citations, methodsText, type CitationItem } from './data/methods';
 import type { ExampleEntry } from './data/catalog';
 import { type ActiveLoad, runQueryLoad } from './data/streamLoad';
+import { type ZipLoadOptions, runZipLoad } from './data/zipLoad';
+import type { LoadProvenance } from './explorer/provenance';
 import type {
   DataLoadJob,
   ExampleOccurrences,
@@ -28,9 +30,13 @@ import type {
   TreeLoadInput,
   TreeLoadOptions,
   TreeSource,
+  ZipOccurrences,
 } from './data/types';
 
 export const LOAD_RUNNING = 'A load is running';
+
+/** Citations of the same data that `patchOccurrence` may add (an absent key is kept, `undefined` clears). */
+export type OccurrencePatch = Partial<Pick<LoadProvenance, 'derivedDoi' | 'gbifDownloadKey' | 'gbifDownloadDoi'>>;
 
 /** Binner and network settings an example applies before it loads. */
 export interface ExampleSettings {
@@ -307,6 +313,38 @@ export default class DataStore {
   async loadQuery(req: QueryLoadRequest): Promise<StartResult> {
     if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
     return runQueryLoad(this, req);
+  }
+
+  /**
+   * Load a GBIF download zip into the occurrence slot; commits on the first record. With
+   * `opts.query` (a Cite-tab "Replace") the zip is cleaned like that query and the source
+   * gets its provenance at the finish; without it the records load as they are.
+   */
+  async loadGbifZip(file: Blob, opts: ZipLoadOptions = {}): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    return runZipLoad(this, file, opts);
+  }
+
+  /**
+   * Add citations of the *same* data to a loaded occurrence source: a derived-dataset DOI,
+   * or a GBIF download key and DOI. Returns false when `id` is not the loaded query or zip
+   * source, or the source is still loading. A zip without a query keeps the key and DOI
+   * in its `download` summary (it has no derived-dataset DOI).
+   */
+  patchOccurrence(id: string, patch: OccurrencePatch): boolean {
+    const source = this.occurrence;
+    if (!source || source.id !== id || source.status !== 'done') return false;
+    if (source.kind !== 'explorer-query' && source.kind !== 'gbif-zip') return false;
+    if (source.provenance) {
+      this.replaceSource(id, { provenance: { ...source.provenance, ...patch } });
+      return true;
+    }
+    if (source.kind !== 'gbif-zip' || !source.download || 'derivedDoi' in patch) return false;
+    const download = { ...source.download };
+    if ('gbifDownloadKey' in patch) download.key = patch.gbifDownloadKey;
+    if ('gbifDownloadDoi' in patch) download.doi = patch.gbifDownloadDoi;
+    this.replaceSource(id, { download } as Partial<ZipOccurrences>);
+    return true;
   }
 
   /**

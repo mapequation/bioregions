@@ -17,20 +17,13 @@ import {
 } from '../sources/gbif/download';
 import { gbifDownloadPredicate } from '../sources/gbif/predicate';
 import { type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../sources/gbif/zip';
-import type { Funnel, RecordBatch, StreamPlan } from '../sources/types';
+import type { Funnel, StreamPlan } from '../sources/types';
 import { exampleStudies } from './explorer/examples';
 import { LOAD_RUNNING } from './DataStore';
 import type { ExampleEntry } from './data/catalog';
-import { EMPTY_MESSAGES, emptyReasonOf, ledgerShare, partialLoad, shortError } from './data/streamLoad';
+import { ledgerShare, shortError } from './data/streamLoad';
 import type { DataLoadJob, QueryLoadRequest, StartResult } from './data/types';
-import {
-  JOB_UPDATE_MS,
-  type LoadStats,
-  LoadTally,
-  PauseGate,
-  type TallyLabels,
-  etaSeconds,
-} from './explorer/job';
+import { JOB_UPDATE_MS, type LoadStats, type TallyLabels } from './explorer/job';
 import {
   STORAGE_KEYS,
   type StoredDownload,
@@ -58,7 +51,6 @@ import {
   citingDownload,
 } from './explorer/provenance';
 import { resolveTaxonNames, unknownTaxonLabel } from './explorer/taxonNames';
-import type { SourceProgress } from './explorer/types';
 import { previewGbifImpact, previewGbifSummary } from '../sources/gbif/preview';
 import { gbifTaxonCount, suggestGbifTaxa } from '../sources/gbif/taxa';
 import { HttpError, isAbortError } from '../sources/http';
@@ -102,7 +94,6 @@ import type {
   Kpis,
   LedgerRow,
   LedgerRowId,
-  LoadJob,
   PlanState,
   Preset,
   MapScope,
@@ -942,8 +933,6 @@ export default class ExplorerStore {
   baseline: Baseline | null = null;
   /** Maximum raw records a load may fetch. */
   cap = DEFAULT_CAP;
-  /** The running or last zip load. TODO(S2b): zip loads become data-store jobs. */
-  private zipJob: LoadJob | null = null;
   /** The user's map scope while a load matches the query; null = the default (`mapScope`). */
   mapScopeChoice: MapScope | null = null;
   /** Stream plans for the current query, with `minRecordsPerSpecies` applied. */
@@ -978,16 +967,10 @@ export default class ExplorerStore {
   /** Unfiltered plans and the preview key they were made for. */
   private rawPlans: { key: string; plans: Partial<Record<SourceId, StreamPlan>> } | null = null;
   private planController: AbortController | null = null;
-  private loadController: AbortController | null = null;
-  private cancelMode: 'keep' | 'discard' | null = null;
   private downloadController: AbortController | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private zipController: AbortController | null = null;
   private zipFile: Blob | null = null;
-  /** Holds the running load's batches while paused (`pauseLoad`). */
-  private pauseGate: PauseGate | null = null;
-  /** Pushes the running load's exact counts to `job` (set while a load streams). */
-  private pauseFlush: (() => void) | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -1003,8 +986,6 @@ export default class ExplorerStore {
       | 'disposers'
       | 'rawPlans'
       | 'planController'
-      | 'loadController'
-      | 'cancelMode'
       | 'downloadController'
       | 'pollTimer'
       | 'zipController'
@@ -1020,8 +1001,6 @@ export default class ExplorerStore {
         disposers: false,
         rawPlans: observable.ref,
         planController: false,
-        loadController: false,
-        cancelMode: false,
         downloadController: false,
         pollTimer: false,
         zipController: false,
@@ -1897,6 +1876,12 @@ export default class ExplorerStore {
     return citingDownload(load, this.downloads, queryKey(load?.query ?? this.query));
   }
 
+  /** The loaded Open Tree tree's citation, for the methods text (derived from `dataStore.tree`, I4). */
+  private get treeCitation(): string | undefined {
+    const tree = this.rootStore.dataStore?.tree;
+    return tree?.kind === 'opentree' ? tree.citation : undefined;
+  }
+
   /** Methods paragraph for the loaded query; empty before a load (no draft, I4). */
   get methodsText(): string {
     const load = this.loaded;
@@ -1904,7 +1889,7 @@ export default class ExplorerStore {
     return buildMethodsText({
       load,
       downloadDoi: load.gbifDownloadDoi ?? this.citingDownload?.doi,
-      treeCitation: this.rootStore.phyloStore?.citationText,
+      treeCitation: this.treeCitation,
     });
   }
 
@@ -2014,7 +1999,7 @@ export default class ExplorerStore {
     return { datasets, basisOfRecord, countries };
   }
 
-  /** Whether an explorer load (a query, or a zip until S2b) is planning or streaming. */
+  /** Whether an explorer load (a query or a zip) is planning or streaming. */
   get isLoading(): boolean {
     const state = this.job?.state;
     return state === 'planning' || state === 'streaming';
@@ -2071,8 +2056,6 @@ export default class ExplorerStore {
     if (!can.ok) return { started: false, reason: can.reason };
     const query = toJS(this.query);
     const cap = this.cap;
-    // TODO(S2b): zip loads become data-store jobs.
-    this.zipJob = null;
     const request: QueryLoadRequest = {
       query,
       cap,
@@ -2142,11 +2125,10 @@ export default class ExplorerStore {
     };
   }
 
-  /** @deprecated removed in U1: `dataStore.job` (here only query loads, and zip loads until S2b). */
-  get job(): DataLoadJob | LoadJob | null {
-    if (this.zipJob) return this.zipJob;
+  /** @deprecated removed in U1: `dataStore.job` (here only query and zip loads). */
+  get job(): DataLoadJob | null {
     const job = this.rootStore.dataStore?.job;
-    return job && (job.kind === 'query' || job.kind === 'continue') ? job : null;
+    return job && (job.kind === 'query' || job.kind === 'continue' || job.kind === 'zip') ? job : null;
   }
 
   /** @deprecated removed in U1: "Add" is gone and every load replaces. */
@@ -2177,33 +2159,16 @@ export default class ExplorerStore {
 
   /** @deprecated removed in U1: `dataStore.cancel`. */
   cancel(mode: 'keep' | 'discard') {
-    if (this.zipJob?.state === 'streaming') this.cancelZip(mode);
-    else this.rootStore.dataStore.cancel(mode);
+    this.rootStore.dataStore.cancel(mode);
   }
 
   /** @deprecated removed in U1: `dataStore.pause`. */
   pauseLoad() {
-    const gate = this.pauseGate;
-    const zip = this.zipJob;
-    if (gate && zip?.state === 'streaming') {
-      if (gate.paused) return;
-      gate.close();
-      this.pauseFlush?.();
-      zip.paused = true;
-      zip.etaSeconds = null;
-      return;
-    }
     this.rootStore.dataStore.pause();
   }
 
   /** @deprecated removed in U1: `dataStore.resume`. */
   resumeLoad() {
-    const gate = this.pauseGate;
-    if (gate?.paused) {
-      if (this.zipJob) this.zipJob.paused = false;
-      gate.open();
-      return;
-    }
     this.rootStore.dataStore.resume();
   }
 
@@ -2212,45 +2177,17 @@ export default class ExplorerStore {
     return this.rootStore.dataStore.runBioregionsAnyway();
   }
 
-  // --- Zip load controls. TODO(S2b): they move to data/zipLoad.ts with `loadZip`. ------------
-
-  /** Stop the running zip load: keep what arrived or discard it. */
-  private cancelZip(mode: 'keep' | 'discard') {
-    const controller = this.loadController;
-    if (!controller) return;
-    this.cancelMode = mode;
-    // SpeciesStore.loadRecords reads the reason: 'discard' skips binning and Infomap.
-    controller.abort(mode);
-    // Release a paused load after the abort, so the held batch is dropped, not counted.
-    if (this.zipJob) this.zipJob.paused = false;
-    this.pauseGate?.open();
-    if (mode === 'discard') this.rootStore.clearData();
-  }
-
-  /** Open and forget a load's pause gate (the load ended or was cancelled). */
-  private releasePause(gate: PauseGate) {
-    gate.open();
-    if (this.pauseGate === gate) {
-      this.pauseGate = null;
-      this.pauseFlush = null;
-    }
-  }
-
   // --- Citation ---------------------------------------------------------------------
 
-  /** Store the DOI of a registered derived dataset (empty clears it). */
+  /**
+   * Store the DOI of a registered derived dataset (empty clears it).
+   * @deprecated removed in U1: `dataStore.patchOccurrence(id, { derivedDoi })`.
+   */
   setDerivedDoi(doi: string) {
-    if (!this.loaded) return;
-    const bare = doi.trim();
-    this.patchLoaded({ derivedDoi: bare || undefined });
-  }
-
-  /** Patch the loaded query (or zip) source's provenance. TODO(S2b): `dataStore.patchOccurrence`. */
-  private patchLoaded(patch: Partial<LoadProvenance>) {
     const { dataStore } = this.rootStore;
     const source = dataStore.occurrence;
-    if (!source || (source.kind !== 'explorer-query' && source.kind !== 'gbif-zip') || !source.provenance) return;
-    dataStore.replaceSource(source.id, { provenance: { ...source.provenance, ...patch } });
+    if (!source) return;
+    dataStore.patchOccurrence(source.id, { derivedDoi: doi.trim() || undefined });
   }
 
   /** Request a citable GBIF download for the loaded query; the password is used once and never stored. */
@@ -2434,169 +2371,25 @@ export default class ExplorerStore {
     const summary = this.zipSummary;
     const zip = this.zipImport;
     if (zip?.state !== 'ready' || !summary) return;
+    const { dataStore } = this.rootStore;
+    const downloadKey = zip.downloadKey ?? summary.downloadKey;
+    const doi = zip.doi ?? summary.doi;
     if (choice === 'keepStreamCiteDoi') {
-      if (!zip.canCiteDoi || !this.loaded) return;
-      this.patchLoaded({ gbifDownloadKey: zip.downloadKey ?? summary.downloadKey, gbifDownloadDoi: zip.doi ?? summary.doi });
+      const source = dataStore.occurrence;
+      if (!zip.canCiteDoi || !this.loaded || !source) return;
+      dataStore.patchOccurrence(source.id, { gbifDownloadKey: downloadKey, gbifDownloadDoi: doi });
       return;
     }
     const file = this.zipFile;
-    if (!zip.canReplace || !file || this.isLoading) return;
-    void this.loadZip(file, { ...summary, downloadKey: zip.downloadKey ?? summary.downloadKey, doi: zip.doi ?? summary.doi });
-  }
-
-  private async loadZip(file: Blob, summary: GbifZipSummary) {
     const previous = this.loaded;
-    const query = toJS(previous?.query ?? this.query);
-    const controller = new AbortController();
-    this.loadController = controller;
-    this.cancelMode = null;
-    const label = summary.downloadKey ? `GBIF download ${summary.downloadKey}` : 'GBIF download';
-    const labels = this.facetLabels;
-    const gate = new PauseGate();
-    this.pauseGate = gate;
-    this.zipJob = {
-      state: 'streaming',
-      label,
-      startedAt: Date.now(),
-      etaSeconds: null,
-      perSource: [],
-      funnel: emptyFunnel(),
-      truncated: [],
-      speciesCoverage: null,
-      paused: false,
-      speciesLoaded: 0,
-      speciesPlanned: null,
-    };
-    // The observable copy, so the writes below reach the UI.
-    const job = this.zipJob;
-    const { dataStore } = this.rootStore;
-    let zipSourceId: string | null = null;
-    const cleaner = new RecordCleaner({ dedupe: query.quality.dedupe, area: query.area });
-    const tally = new LoadTally();
-    const expected = this.zipImport?.funnel?.received ?? summary.rows;
-    const progress: SourceProgress = {
-      source: 'gbif',
-      state: 'streaming',
-      fetched: 0,
-      expected,
-      requestsDone: 0,
-      requestsTotal: 0,
-    };
-    let lastFlush = 0;
-    const flush = (force: boolean) => {
-      const now = Date.now();
-      if (!force && now - lastFlush < JOB_UPDATE_MS) return;
-      lastFlush = now;
-      runInAction(() => {
-        job.perSource = [{ ...progress }];
-        job.funnel = cleaner.funnel;
-        job.speciesLoaded = tally.species.size;
-        job.etaSeconds = gate.paused ? null : etaSeconds(progress.fetched, expected, now - job.startedAt);
-      });
-    };
-    this.pauseFlush = () => flush(true);
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      this.releasePause(gate);
-      flush(true);
-      runInAction(() => {
-        job.paused = false;
-        const funnel = cleaner.funnel;
-        const cancelled = this.cancelMode ?? (controller.signal.aborted ? 'keep' : null);
-        const failed = !cancelled && job.state === 'error';
-        const empty = funnel.accepted === 0 && !failed ? emptyReasonOf(funnel, cancelled != null) : undefined;
-        job.state = cancelled ? 'cancelled' : failed || empty ? 'error' : 'done';
-        if (empty && !cancelled) job.error = EMPTY_MESSAGES[empty];
-        job.etaSeconds = null;
-        if (cancelled === 'discard' || failed) return;
-        const load: LoadProvenance = {
-          query,
-          retrievedAt: new Date().toISOString(),
-          funnel,
-          ledger: previous?.ledger ?? this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row })),
-          kpis: {
-            records: funnel.accepted,
-            recordsUpperBound: false,
-            species: tally.species.size,
-            datasets: tally.datasetTotal,
-            yearRange: tally.yearRange,
-            bySource: { ...tally.bySource },
-          },
-          accepted: funnel.accepted,
-          partial: cancelled
-            ? partialLoad({
-                planned: expected,
-                accepted: funnel.accepted,
-                speciesLoaded: tally.species.size,
-                speciesPlanned: null,
-                fetched: progress.fetched,
-              })
-            : null,
-          datasetCounts: tally.datasetCounts(labels.datasets),
-          stats: tally.stats(labels),
-          requests: { gbif: gbifDownloadPredicate(query) },
-          gbifDownloadKey: summary.downloadKey,
-          gbifDownloadDoi: summary.doi,
-          fromZip: true,
-        };
-        // Nothing committed (an empty zip): the previous source stays as it was (I6).
-        if (zipSourceId) dataStore.replaceSource(zipSourceId, { status: 'done', completedAt: load.retrievedAt, provenance: load });
-      });
-    };
-    async function* records(): AsyncGenerator<RecordBatch['records']> {
-      try {
-        for await (const batch of importGbifZip(file, {
-          signal: controller.signal,
-          excludeIntroduced: query.quality.excludeIntroduced,
-        })) {
-          await gate.wait();
-          if (controller.signal.aborted) break;
-          progress.fetched += batch.records.length;
-          const accepted = cleaner.accept(batch.records);
-          tally.add('gbif', accepted);
-          flush(false);
-          if (accepted.length > 0) yield accepted;
-        }
-        progress.state = 'done';
-      } finally {
-        finish();
-      }
-    }
-    try {
-      await this.rootStore.speciesStore.loadRecords(records(), {
-        controller,
-        // The commit (I2). TODO(S2b): `dataStore.loadGbifZip` with the download summary.
-        onFirstRecord: () => {
-          zipSourceId = dataStore.mintSourceId();
-          dataStore.commitOccurrence({
-            id: zipSourceId,
-            role: 'occurrences',
-            kind: 'gbif-zip',
-            label,
-            exportName: label,
-            status: 'loading',
-            retrievedAt: new Date().toISOString(),
-            completedAt: null,
-            file: { name: 'name' in file && typeof file.name === 'string' ? file.name : label, size: file.size },
-            download: null,
-            provenance: null,
-          });
-        },
-      });
-    } catch (error) {
-      runInAction(() => {
-        job.state = 'error';
-        job.error = shortError(error);
-      });
-    } finally {
-      finish();
-      runInAction(() => {
-        if (this.loadController === controller) this.loadController = null;
-      });
-      if (this.cancelMode === 'discard' && this.zipJob === job) this.rootStore.clearData();
-    }
+    if (!zip.canReplace || !file || dataStore.isLoading) return;
+    void dataStore.loadGbifZip(file, {
+      origin: 'search',
+      query: toJS(previous?.query ?? this.query),
+      download: { ...summary, downloadKey, doi },
+      ledger: previous?.ledger ?? this.ledger.map(({ loadedImpact: _, ...row }) => ({ ...row })),
+      labels: this.facetLabels,
+    });
   }
 
   // --- Library ----------------------------------------------------------------------
