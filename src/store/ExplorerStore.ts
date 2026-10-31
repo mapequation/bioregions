@@ -2087,15 +2087,23 @@ export default class ExplorerStore {
    */
   async loadExampleQuery(entry: Pick<ExampleEntry, 'id' | 'query'>): Promise<StartResult> {
     if (!entry.query) return { started: false, reason: 'This example has no query' };
-    if (this.rootStore.dataStore.isLoading) return { started: false, reason: LOAD_RUNNING };
-    this.restoreQuery(entry.query);
-    this.open('occurrences');
-    // The preview pipeline may replace this plan request with its own: then wait for that one.
-    const ok = await this.fetchPlans();
-    if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
-    const can = this.canLoad;
-    if (!can.ok) return { started: false, reason: can.reason };
-    return this.load({ exampleId: entry.id });
+    // Hold the single-load guard while the plans load, so no other load starts (I9).
+    const guard = this.rootStore.dataStore.reserve();
+    if (!guard) return { started: false, reason: LOAD_RUNNING };
+    try {
+      this.restoreQuery(entry.query);
+      this.open('occurrences');
+      // The preview pipeline may replace this plan request with its own: then wait for that one.
+      const ok = await this.fetchPlans();
+      if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
+      return await guard.handOff(() => {
+        const can = this.canLoad;
+        if (!can.ok) return Promise.resolve<StartResult>({ started: false, reason: can.reason });
+        return this.load({ exampleId: entry.id });
+      });
+    } finally {
+      guard.release();
+    }
   }
 
   /** Replace the workspace query (e.g. an example's "Open in Search"); never loads. */

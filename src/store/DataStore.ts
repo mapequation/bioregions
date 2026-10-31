@@ -2,7 +2,7 @@
 // It holds an occurrence slot and a tree slot, and every load and clear of SpeciesStore
 // and TreeStore goes through it: a load replaces only its own slot, and only when it
 // commits (the first feature, or a validated tree).
-import { action, computed, makeObservable, observable, runInAction, toJS } from 'mobx';
+import { action, computed, makeObservable, observable, runInAction, toJS, when } from 'mobx';
 import type RootStore from './RootStore';
 import { RecordCleaner } from '../sources/clean';
 import { extension, getName } from '../utils/filename';
@@ -58,6 +58,8 @@ type UncommittedTree = OmitEach<TreeSource, 'id' | 'tips' | 'retrievedAt'>;
 type Uncommitted<T> = Omit<T, 'id' | 'status' | 'retrievedAt' | 'completedAt'>;
 
 const nowIso = () => new Date().toISOString();
+/** A job's sequence number (`job-N`). */
+const jobNumber = (job: DataLoadJob) => Number(job.id.slice(4));
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const fileInfo = (file: File | string) =>
   typeof file === 'string' ? { name: file.split('/').pop() ?? file, size: 0 } : { name: file.name, size: file.size };
@@ -76,6 +78,12 @@ export default class DataStore {
   readonly runs = new Map<string, ResumeState>();
   private nextSourceId = 1;
   private nextJobId = 1;
+  /** An example, upload or query example holds the guard before its job starts (I9). */
+  reserved = false;
+  /** Bumped by every Infomap rerun and by every swap of the occurrence data. */
+  private rerunGen = 0;
+  /** A tree committed during an occurrence load, rerun once the load ends unless it used it. */
+  private treeDuringLoad: { treeId: string; built: boolean; minJob: number } | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
@@ -83,6 +91,7 @@ export default class DataStore {
       sources: observable.ref,
       job: observable,
       treeJob: observable,
+      reserved: observable,
       occurrence: computed,
       tree: computed,
       isLoading: computed,
@@ -103,6 +112,7 @@ export default class DataStore {
 
   /** An occurrence load runs (I9). Pausing is a flag on a 'streaming' job. */
   get isLoading(): boolean {
+    if (this.reserved) return true;
     const state = this.job?.state;
     return state === 'planning' || state === 'streaming' || state === 'finishing';
   }
@@ -164,6 +174,7 @@ export default class DataStore {
    */
   commitOccurrence = action((source: OccurrenceSource) => {
     const { speciesStore, infomapStore } = this.rootStore;
+    this.stopInfomap();
     speciesStore.clearData();
     infomapStore.clearData();
     this.setSlot('occurrences', source);
@@ -215,6 +226,33 @@ export default class DataStore {
     });
     // The observable copy, so later writes notify observers.
     return this.job as DataLoadJob;
+  }
+
+  /**
+   * Hold the single-load guard (I9) across an async phase that runs before a job exists:
+   * an example's or upload's tree, a query example's plans. Null when a load runs.
+   * `handOff(start)` releases the guard and starts the job in one batch, so no other load
+   * and no `!isLoading` reaction sees a gap; `release()` (idempotent) frees it on any exit.
+   */
+  reserve(): { handOff: <T>(start: () => T) => T; release: () => void } | null {
+    if (this.isLoading) return null;
+    runInAction(() => {
+      this.reserved = true;
+    });
+    let held = true;
+    const release = () => {
+      if (!held) return;
+      held = false;
+      runInAction(() => {
+        this.reserved = false;
+      });
+    };
+    const handOff = <T>(start: () => T): T =>
+      runInAction(() => {
+        release();
+        return start();
+      });
+    return { release, handOff };
   }
 
   /**
@@ -499,18 +537,62 @@ export default class DataStore {
     });
     const { infomapStore, speciesStore } = this.rootStore;
     infomapStore.setIncludeTree(opts.includeTree ?? true);
-    // During an occurrence load, its postLoad runs Infomap with the new tree.
-    if (opts.rerun !== false && speciesStore.loaded && !this.isLoading) {
-      await this.rerunInfomap();
+    if (opts.rerun !== false) {
+      // During an occurrence load, rerun once it ends unless its postLoad used the new tree.
+      if (this.isLoading) this.rerunAfterLoad();
+      else if (speciesStore.loaded) await this.rerunInfomap();
     }
     return { started: true, committed: true };
   }
 
+  /**
+   * Run Infomap on the loaded data and show the bioregions. DataStore owns this run: a
+   * later rerun, an occurrence commit, remove or clear aborts it, and a superseded run
+   * renders nothing.
+   */
   private async rerunInfomap() {
-    const { infomapStore, mapStore } = this.rootStore;
+    const { infomapStore, mapStore, speciesStore } = this.rootStore;
+    const gen = ++this.rerunGen;
     await infomapStore.run();
+    if (gen !== this.rerunGen || !speciesStore.loaded) return;
     mapStore.setRenderType('bioregions');
     mapStore.render();
+  }
+
+  /** Abort an Infomap run on the data that is being replaced or removed. */
+  private stopInfomap() {
+    this.rerunGen++;
+    void this.rootStore.infomapStore.abort();
+  }
+
+  /**
+   * Note a tree committed while an occurrence load runs. The load's Infomap uses it only
+   * when the network is built after the commit: not when Infomap already ran or runs on
+   * the committed data, and not when the load commits nothing.
+   */
+  private rerunAfterLoad() {
+    const treeId = this.tree?.id;
+    if (!treeId) return;
+    const { infomapStore } = this.rootStore;
+    const job = this.job;
+    const running = job != null && (job.state === 'planning' || job.state === 'streaming' || job.state === 'finishing');
+    const built = running && job.committed && (infomapStore.isRunning || infomapStore.tree != null);
+    const first = this.treeDuringLoad == null;
+    this.treeDuringLoad = { treeId, built, minJob: running ? jobNumber(job) : this.nextJobId };
+    if (first) void this.settleTreeDuringLoad();
+  }
+
+  private async settleTreeDuringLoad() {
+    // A handOff starts the job right after the guard is released: check again after it.
+    while (this.isLoading) await when(() => !this.isLoading);
+    const pending = this.treeDuringLoad;
+    this.treeDuringLoad = null;
+    const source = this.occurrence;
+    if (!pending || this.tree?.id !== pending.treeId || !source || !this.rootStore.speciesStore.loaded) return;
+    if ('provenance' in source && source.provenance?.bioregionsSkipped) return;
+    const job = this.job;
+    const used = job?.committed === true && jobNumber(job) >= pending.minJob && !pending.built;
+    if (!used) await this.rerunInfomap();
   }
 
   // --- examples and the documentation demo ---------------------------------------------
@@ -526,8 +608,24 @@ export default class DataStore {
     if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
     if (entry.kind === 'query') return this.rootStore.explorerStore.loadExampleQuery(entry);
     if (!entry.files) return { started: false, reason: `The example "${entry.title}" has no files` };
+    // The tree phase runs before the job: hold the guard so no other load mixes in (I8, I9).
+    const guard = this.reserve();
+    if (!guard) return { started: false, reason: LOAD_RUNNING };
+    try {
+      return await this.loadExampleFiles(entry, entry.files, origin, guard.handOff);
+    } finally {
+      guard.release();
+    }
+  }
+
+  private async loadExampleFiles(
+    entry: ExampleEntry,
+    files: NonNullable<ExampleEntry['files']>,
+    origin: JobOrigin,
+    handOff: <T>(start: () => T) => T,
+  ): Promise<StartResult> {
     const { speciesStore } = this.rootStore;
-    const { species, tree, settings } = entry.files;
+    const { species, tree, settings } = files;
     if (settings.minCellSize != null) speciesStore.binner.setMinCellSizeLog2(settings.minCellSize);
     if (settings.maxCellSize != null) speciesStore.binner.setMaxCellSizeLog2(settings.maxCellSize);
     if (settings.minCellCapacity != null) speciesStore.binner.setMinCellCapacity(settings.minCellCapacity);
@@ -558,14 +656,16 @@ export default class DataStore {
           };
     // The placeholder is not frozen: methods.ts adds it for an example with no citation (§9.3).
     const citation = entry.citation && entry.citation !== EXAMPLE_CITATION_PLACEHOLDER ? entry.citation : undefined;
-    const result = await this.runFileLoad(input, 'example', origin, entry.title, {
-      role: 'occurrences',
-      kind: 'example',
-      label: entry.title,
-      exportName: getName(species) || entry.title,
-      exampleId: entry.id,
-      ...(citation ? { citation } : {}),
-    });
+    const result = await handOff(() =>
+      this.runFileLoad(input, 'example', origin, entry.title, {
+        role: 'occurrences',
+        kind: 'example',
+        label: entry.title,
+        exportName: getName(species) || entry.title,
+        exampleId: entry.id,
+        ...(citation ? { citation } : {}),
+      }),
+    );
     return this.rerunIfOnlyTreeCommitted(treeCommitted, result);
   }
 
@@ -591,8 +691,26 @@ export default class DataStore {
       return file;
     };
 
+    // The tree phase runs before the job: hold the guard so no other load mixes in (I8, I9).
+    const guard = this.reserve();
+    if (!guard) return { started: false, reason: LOAD_RUNNING };
+    try {
+      return await this.loadUploadPlan(plan, occ, fileAt, columns, guard);
+    } finally {
+      guard.release();
+    }
+  }
+
+  private async loadUploadPlan(
+    plan: UploadPlan,
+    occ: UploadPlan['occurrences'],
+    fileAt: (i: number) => File,
+    columns: { name: string; lat: string; long: string } | undefined,
+    guard: NonNullable<ReturnType<DataStore['reserve']>>,
+  ): Promise<StartResult> {
     let treeCommitted = false;
     if (plan.tree?.kind === 'tree') {
+      if (!occ) guard.release(); // A tree alone reruns Infomap itself, as no load runs.
       const result = await this.loadTree({ kind: 'file', file: fileAt(plan.tree.file) }, { rerun: !occ });
       treeCommitted = result.started && result.committed;
       if (!treeCommitted || !occ) return result;
@@ -600,20 +718,29 @@ export default class DataStore {
     if (!occ) return { started: false, reason: 'No files' };
 
     let result: StartResult;
+    const { handOff } = guard;
     switch (occ.kind) {
-      case 'points':
+      case 'points': {
         if (!columns) return { started: false, reason: NO_COLUMNS };
-        result = await this.loadOccurrenceFile({ format: occ.format, file: fileAt(occ.file), columns });
+        const file = fileAt(occ.file);
+        result = await handOff(() => this.loadOccurrenceFile({ format: occ.format, file, columns }));
         break;
-      case 'shapefile':
-        result = await this.loadOccurrenceFile({ format: 'shapefile', files: occ.files.map(fileAt) });
+      }
+      case 'shapefile': {
+        const files = occ.files.map(fileAt);
+        result = await handOff(() => this.loadOccurrenceFile({ format: 'shapefile', files }));
         break;
-      case 'shapefile-zip':
-        result = await this.loadOccurrenceFile({ format: 'shapefile', files: fileAt(occ.file) });
+      }
+      case 'shapefile-zip': {
+        const file = fileAt(occ.file);
+        result = await handOff(() => this.loadOccurrenceFile({ format: 'shapefile', files: file }));
         break;
-      case 'gbif-zip':
-        result = await this.loadGbifZip(fileAt(occ.file));
+      }
+      case 'gbif-zip': {
+        const file = fileAt(occ.file);
+        result = await handOff(() => this.loadGbifZip(file));
         break;
+      }
       default:
         return { started: false, reason: 'Unsupported occurrence input' };
     }
@@ -625,7 +752,7 @@ export default class DataStore {
    * Infomap. When that load committed nothing, the kept occurrences still need a rerun
    * with the new tree.
    */
-  private async rerunIfOnlyTreeCommitted(treeCommitted: boolean, result: StartResult): Promise<StartResult> {
+  async rerunIfOnlyTreeCommitted(treeCommitted: boolean, result: StartResult): Promise<StartResult> {
     const committed = result.started && result.committed;
     if (treeCommitted && !committed && this.rootStore.speciesStore.loaded && !this.isLoading) {
       await this.rerunInfomap();
@@ -684,6 +811,7 @@ export default class DataStore {
   removeOccurrences(): boolean {
     if (this.isLoading) return false;
     const { speciesStore, infomapStore } = this.rootStore;
+    this.stopInfomap();
     runInAction(() => {
       speciesStore.clearData();
       infomapStore.clearData();
@@ -709,6 +837,7 @@ export default class DataStore {
   clear(): boolean {
     if (this.isLoading) return false;
     const { speciesStore, infomapStore, treeStore } = this.rootStore;
+    this.stopInfomap();
     runInAction(() => {
       infomapStore.clearData();
       speciesStore.clearData();

@@ -82,6 +82,7 @@ function fakeRoot() {
     infomapStore: {
       setIncludeTree: vi.fn(),
       run: vi.fn(async () => {}),
+      abort: vi.fn(async () => false),
       clearData: vi.fn(),
       updateNetwork: vi.fn(),
       numBioregions: 0,

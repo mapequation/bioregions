@@ -218,7 +218,7 @@ function setup() {
   };
   const rootStore = {
     speciesStore,
-    infomapStore: { clearData: vi.fn(), run: vi.fn(async () => {}), setIncludeTree: vi.fn() },
+    infomapStore: { clearData: vi.fn(), run: vi.fn(async () => {}), abort: vi.fn(async () => false), setIncludeTree: vi.fn() },
     mapStore: { render: vi.fn(), setRenderType: vi.fn() },
     treeStore: { reset: vi.fn() },
   } as unknown as RootStore;

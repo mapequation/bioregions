@@ -258,6 +258,9 @@ export default class InfomapStore {
   currentTrial: number = 0;
   infomap: Infomap = new Infomap();
   infomapId: number | null = null;
+  /** The running `run()`'s token and resolver: `abort()` settles a superseded run. */
+  private runToken: object | null = null;
+  private settleRun: (() => void) | null = null;
   infomapOutput: string = '';
   // Worker output lines arrive one message at a time (tens per second during a
   // run). Buffer them and commit in one action per flush so observers re-render
@@ -707,12 +710,21 @@ export default class InfomapStore {
     console.time('infomap');
 
     return new Promise<void>((resolve, reject) => {
+      // The library keeps one handler per event: a later run replaces these, and an
+      // aborted run's late events are ignored.
+      const token = {};
+      this.runToken = token;
+      this.settleRun = resolve;
       this.infomapId = this.infomap
         .on('finished', (result, id) => {
+          if (this.runToken !== token) return;
+          this.runToken = this.settleRun = null;
           this.onInfomapFinished(result, id);
           resolve();
         })
         .on('error', (err, id) => {
+          if (this.runToken !== token) return;
+          this.runToken = this.settleRun = null;
           this.onInfomapError(err, id);
           reject(err);
         })
@@ -752,12 +764,21 @@ export default class InfomapStore {
     console.time('infomap');
 
     return new Promise<void>((resolve, reject) => {
+      // The library keeps one handler per event: a later run replaces these, and an
+      // aborted run's late events are ignored.
+      const token = {};
+      this.runToken = token;
+      this.settleRun = resolve;
       this.infomapId = this.infomap
         .on('finished', (result, id) => {
+          if (this.runToken !== token) return;
+          this.runToken = this.settleRun = null;
           this.onInfomapFinished(result, id);
           resolve();
         })
         .on('error', (err, id) => {
+          if (this.runToken !== token) return;
+          this.runToken = this.settleRun = null;
           this.onInfomapError(err, id);
           reject(err);
         })
@@ -768,22 +789,30 @@ export default class InfomapStore {
     });
   }
 
+  /**
+   * Stop the running Infomap. The state resets at once, so a run started right after is
+   * not undone; the aborted run's `run()` promise resolves once the worker is gone.
+   */
   async abort() {
-    if (this.infomapId === null) {
+    const id = this.infomapId;
+    if (id === null) {
       return false;
     }
-
-    try {
-      await this.infomap.terminate(this.infomapId, 0);
-    } catch (e: unknown) {
-      console.error('Worker error', e);
-    }
-    this.flushInfomapOutput();
+    const settle = this.settleRun;
+    this.runToken = this.settleRun = null;
     this.infomapId = null;
+    this.flushInfomapOutput();
     this.setIsRunning(false);
     this.setTree(null);
     this.setTreeString(undefined);
     this.setCurrentTrial(0);
+
+    try {
+      await this.infomap.terminate(id, 0);
+    } catch (e: unknown) {
+      console.error('Worker error', e);
+    }
+    settle?.();
 
     return true;
   }

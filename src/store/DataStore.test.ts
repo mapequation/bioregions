@@ -13,6 +13,8 @@ import type { TreeLoadInput } from './data/types';
 
 const TREE = '((Aa_a:1,Bb_b:1):1,Cc_c:2);';
 const TREE2 = '(Xx_x,Yy_y);';
+/** Let microtasks and `when` reactions settle. */
+const ticks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** How the fake SpeciesStore behaves for one file name. */
 type Script = { features: number; error?: string; gate?: Promise<void>; postLoad?: boolean };
@@ -79,6 +81,12 @@ function setup(scripts: Record<string, Script> = {}) {
     {
       includeTreeInNetwork: true,
       cleared: 0,
+      isRunning: false,
+      tree: null as unknown,
+      abort() {
+        calls.push('infomap.abort');
+        return Promise.resolve(false);
+      },
       clearData() {
         calls.push('infomap.clearData');
         this.cleared += 1;
@@ -302,7 +310,7 @@ describe('DataStore trees', () => {
     await store.loadTree(openTree());
     calls.length = 0;
     expect(store.removeOccurrences()).toBe(true);
-    expect(calls).toEqual(['species.clearData', 'infomap.clearData']);
+    expect(calls).toEqual(['infomap.abort', 'species.clearData', 'infomap.clearData']);
     expect(store.occurrence).toBeNull();
     expect(store.tree).not.toBeNull();
     expect(speciesStore.loaded).toBe(false);
@@ -341,6 +349,126 @@ describe('DataStore single-load guard', () => {
     await running;
     expect(store.isLoading).toBe(false);
     expect(store.occurrence?.label).toBe('slow.csv');
+    // The tree committed before the load's network was built: no rerun after it.
+    await ticks();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('holds the guard through an example\'s tree fetch: no other load mixes in (I8, I9)', async () => {
+    let respond = () => {};
+    const fetched = new Promise<void>((resolve) => (respond = resolve));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        await fetched;
+        return new Response(TREE);
+      }),
+    );
+    const { store, speciesLoad } = setup();
+    const a = store.loadExample(filesExample({ id: 'a', species: '/a.csv', tree: '/a.nwk' }));
+    expect(store.isLoading).toBe(true);
+    expect(await store.loadExample(filesExample({ id: 'b', species: '/b.csv' }))).toEqual({ started: false, reason: LOAD_RUNNING });
+    expect(await store.loadOccurrenceFile(csv('other.csv'))).toEqual({ started: false, reason: LOAD_RUNNING });
+    expect(store.removeOccurrences()).toBe(false);
+    expect(store.tree).toBeNull();
+    respond();
+    expect(await a).toEqual({ started: true, committed: true });
+    vi.unstubAllGlobals();
+    expect(speciesLoad).toHaveBeenCalledTimes(1);
+    expect(store.tree).toMatchObject({ exampleId: 'a' });
+    expect(store.occurrence).toMatchObject({ exampleId: 'a' });
+    expect(store.isLoading).toBe(false);
+  });
+
+  it('releases the guard when an example fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not a tree')));
+    const { store } = setup({ '/bad.csv': { features: 0 } });
+    await store.loadExample(filesExample({ id: 'bad', species: '/bad.csv', tree: '/bad.nwk' }));
+    vi.unstubAllGlobals();
+    expect(store.isLoading).toBe(false);
+    expect(store.reserved).toBe(false);
+  });
+
+  it('reruns Infomap once after a load whose Infomap already ran when a tree arrived', async () => {
+    const { store, infomapStore, run, calls } = setup({ 'slow.csv': { features: 2, postLoad: true } });
+    let finish = () => {};
+    run.mockImplementationOnce(async () => {
+      calls.push('infomap.run');
+      infomapStore.isRunning = true;
+      await new Promise<void>((resolve) => (finish = resolve));
+      infomapStore.isRunning = false;
+    });
+    const running = store.loadOccurrenceFile(csv('slow.csv'));
+    await ticks();
+    expect(run).toHaveBeenCalledTimes(1);
+    await store.loadTree(openTree());
+    expect(run).toHaveBeenCalledTimes(1);
+    finish();
+    await running;
+    await ticks();
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DataStore Infomap reruns', () => {
+  it('a commit, remove or clear aborts a rerun, and a superseded rerun renders nothing', async () => {
+    const { store, run, calls } = setup();
+    const root = (store as unknown as { rootStore: RootStore }).rootStore;
+    await store.loadOccurrenceFile(csv('birds.csv'));
+    let finish = () => {};
+    run.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)));
+    const loading = store.loadTree(openTree());
+    calls.length = 0;
+    expect(store.removeOccurrences()).toBe(true);
+    expect(calls[0]).toBe('infomap.abort');
+    finish();
+    await loading;
+    expect(root.mapStore.render).not.toHaveBeenCalled();
+    expect(store.clear()).toBe(true);
+    expect(calls.filter((c) => c === 'infomap.abort')).toHaveLength(2);
+  });
+});
+
+describe('InfomapStore.abort', () => {
+  it('settles the aborted run and ignores its late events', async () => {
+    const { default: InfomapStore } = await import('./InfomapStore');
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    let nextId = 1;
+    const infomap = {
+      on(event: string, cb: (...args: unknown[]) => void) {
+        handlers[event] = cb;
+        return infomap;
+      },
+      run: () => nextId++,
+      terminate: vi.fn(async () => {}),
+    };
+    const finished = vi.fn();
+    const fake = Object.create(InfomapStore.prototype);
+    Object.defineProperty(fake, 'cells', { value: [{}] });
+    const noop = () => {};
+    Object.assign(fake, {
+      infomap,
+      infomapId: null,
+      args: {},
+      updateNetwork: () => ({}),
+      setIsRunning: noop,
+      setCurrentTrial: noop,
+      flushInfomapOutput: noop,
+      setTree: noop,
+      setTreeString: noop,
+      onInfomapFinished: finished,
+      onInfomapError: noop,
+    });
+    const first = fake.run() as Promise<void>;
+    const lateFinish = handlers.finished;
+    const second = fake.run() as Promise<void>;
+    await first; // settled by the abort, not left hanging
+    expect(infomap.terminate).toHaveBeenCalledWith(1, 0);
+    lateFinish({}, 1);
+    expect(finished).toHaveBeenCalledTimes(0);
+    handlers.finished({}, 2);
+    await second;
+    expect(finished).toHaveBeenCalledTimes(1);
   });
 });
 
