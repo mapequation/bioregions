@@ -731,7 +731,9 @@ export default class DataStore {
         result = await handOff(() => this.loadOccurrenceFile({ format: 'shapefile', files }));
         break;
       }
-      case 'shapefile-zip': {
+      case 'shapefile-zip':
+      case 'geojson': {
+        // GeoJSON range polygons load like a shapefile (DataWorker reads both).
         const file = fileAt(occ.file);
         result = await handOff(() => this.loadOccurrenceFile({ format: 'shapefile', files: file }));
         break;

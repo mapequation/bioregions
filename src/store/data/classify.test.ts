@@ -34,6 +34,21 @@ describe('classifyFiles', () => {
     expect(plan.errors).toEqual([]);
   });
 
+  it.each(['ranges.geojson', 'ranges.JSON'])('reads %s as GeoJSON range polygons', (name) => {
+    expect(classifyFiles([f(name)])).toEqual({
+      occurrences: { kind: 'geojson', file: 0 },
+      tree: null,
+      ignored: [],
+      errors: [],
+    });
+  });
+
+  it('loads one GeoJSON file at a time', () => {
+    const plan = classifyFiles([f('a.geojson'), f('b.csv')]);
+    expect(plan.occurrences).toBeNull();
+    expect(plan.errors).toEqual([UPLOAD_COPY.manyOccurrences(['a.geojson', 'b.csv'])]);
+  });
+
   it('needs the .dbf with a loose .shp', () => {
     const plan = classifyFiles([f('r.shp'), f('r.shx')]);
     expect(plan.occurrences).toBeNull();

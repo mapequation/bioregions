@@ -1,5 +1,5 @@
-// Sorts dropped files into an upload plan: one occurrence input (points, a shapefile or
-// a GBIF download) and one tree. Pure apart from `inspectFiles`, which lists zip entries.
+// Sorts dropped files into an upload plan: one occurrence input (points, a shapefile, a
+// GeoJSON file or a GBIF download) and one tree. Pure apart from `inspectFiles`, which lists zip entries.
 import { listZipEntries } from '../../utils/zipEntries';
 
 export interface FileInfo {
@@ -13,6 +13,7 @@ export type UploadItem =
   | { kind: 'points'; format: 'csv' | 'tsv'; file: number } // index into files
   | { kind: 'shapefile'; files: number[] } // loose .shp + .dbf (+ .shx/.prj)
   | { kind: 'shapefile-zip'; file: number }
+  | { kind: 'geojson'; file: number } // .geojson or .json range polygons, checked when read
   | { kind: 'gbif-zip'; file: number; format: 'DWCA' | 'SIMPLE_CSV'; downloadKey?: string }
   | { kind: 'tree'; file: number };
 
@@ -24,7 +25,7 @@ export interface UploadPlan {
 }
 
 /** Accept list for the file input. */
-export const UPLOAD_ACCEPT = '.csv,.tsv,.zip,.shp,.shx,.dbf,.prj,.nwk,.tre,.tree';
+export const UPLOAD_ACCEPT = '.csv,.tsv,.zip,.shp,.shx,.dbf,.prj,.geojson,.json,.nwk,.tre,.tree';
 
 const TREE_EXTENSIONS = new Set(['nwk', 'tre', 'tree']);
 const SHAPEFILE_PARTS = new Set(['shp', 'dbf', 'shx', 'prj']);
@@ -112,6 +113,8 @@ export function classifyFiles(files: FileInfo[]): UploadPlan {
       trees.push({ kind: 'tree', file: index });
     } else if (SHAPEFILE_PARTS.has(ext)) {
       shapeParts.push(index);
+    } else if (ext === 'geojson' || ext === 'json') {
+      occurrences.push({ item: { kind: 'geojson', file: index }, name: file.name });
     } else if (ext === 'zip') {
       const result = classifyZip(file, index);
       if (typeof result === 'string') {

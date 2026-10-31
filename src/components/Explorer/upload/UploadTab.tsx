@@ -29,6 +29,8 @@ function itemText(item: UploadItem, files: File[]): string {
       return `Shapefile · ${item.files.map((i) => files[i].name).join(', ')}`;
     case 'shapefile-zip':
       return `Shapefile · ${files[item.file].name}`;
+    case 'geojson':
+      return `GeoJSON · ${files[item.file].name}`;
     case 'gbif-zip':
       return `GBIF download, as downloaded · ${files[item.file].name}`;
     case 'tree':

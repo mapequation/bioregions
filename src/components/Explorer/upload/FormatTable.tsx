@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 /**
  * The formats the Upload tab reads (spec §5.2). Every line states what the parsers do:
  * points: SpeciesStore.loadOccurrenceFile + utils/loader.ts (Papa Parse, header row,
- * auto delimiter) + data/columns.ts; shapefiles: workers/DataWorker.ts; GBIF zips:
+ * auto delimiter) + data/columns.ts; shapefiles and GeoJSON: workers/DataWorker.ts + workers/rangeFeatures.ts; GBIF zips:
  * sources/gbif/zip.ts + data/zipLoad.ts; trees: utils/tree/treeUtilsJS.js and utils/names.ts.
  */
 const ROWS: { data: string; files: ReactNode; requirements: ReactNode }[] = [
@@ -28,7 +28,8 @@ const ROWS: { data: string; files: ReactNode; requirements: ReactNode }[] = [
     files: (
       <>
         Shapefile: a <Code size="sm">.zip</Code> with one <Code size="sm">.shp</Code> and its{' '}
-        <Code size="sm">.dbf</Code>, or the loose <Code size="sm">.shp</Code> + <Code size="sm">.dbf</Code>
+        <Code size="sm">.dbf</Code>, or the loose <Code size="sm">.shp</Code> + <Code size="sm">.dbf</Code>. GeoJSON:
+        a <Code size="sm">.geojson</Code> or <Code size="sm">.json</Code> FeatureCollection (or one Feature)
       </>
     ),
     requirements: (
@@ -36,7 +37,8 @@ const ROWS: { data: string; files: ReactNode; requirements: ReactNode }[] = [
         Polygon/MultiPolygon or Point/MultiPoint. Coordinates must be longitude/latitude (the{' '}
         <Code size="sm">.prj</Code> is not read). The species name comes from the first of these attribute fields
         that exists, spelled exactly in lowercase: <Code size="sm">binomial</Code>, <Code size="sm">species</Code>,{' '}
-        <Code size="sm">name</Code>, <Code size="sm">id</Code>.
+        <Code size="sm">name</Code>, <Code size="sm">id</Code> (feature
+        properties in GeoJSON).
       </>
     ),
   },

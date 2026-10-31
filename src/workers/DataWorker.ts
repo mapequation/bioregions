@@ -5,13 +5,8 @@ import { loadFile, type ParseAsyncConfig } from '../utils/loader';
 import { extension } from '../utils/filename';
 import jszip from 'jszip';
 import * as shapefile from 'shapefile';
-import * as turf from '@turf/turf';
-import type {
-  PointFeature,
-  PolygonFeature,
-  GeometryFeature,
-} from '../store/SpeciesStore';
-import { normalizeSpeciesName } from '../utils/names';
+import type { GeometryFeature } from '../store/SpeciesStore';
+import { parseGeoJsonRanges, rangeFeatureSplitter } from './rangeFeatures';
 
 // let dataStream = new Subject();
 
@@ -49,6 +44,12 @@ async function loadShapefile(file: string | File | File[], nameKey?: string) {
   console.log('Load shapefile:', file);
   if (Array.isArray(file)) {
     return await loadShapefiles(file, nameKey);
+  }
+
+  // A GeoJSON file takes the shapefile route: same features, same source and methods text.
+  const name = typeof file === 'string' ? file : file.name;
+  if (['geojson', 'json'].includes(extension(name).toLowerCase())) {
+    return await loadGeoJson(file, nameKey);
   }
 
   if (typeof file === 'string') {
@@ -89,6 +90,16 @@ async function loadShapefile(file: string | File | File[], nameKey?: string) {
   return await loadShapefiles(files, nameKey);
 }
 
+async function loadGeoJson(file: string | File, nameKey?: string) {
+  const text = typeof file === 'string' ? await fetch(file).then((res) => res.text()) : await file.text();
+  const name = typeof file === 'string' ? file : file.name;
+  const features = parseGeoJsonRanges(text, name, nameKey);
+  for (let i = 0; i < features.length; i += 100) {
+    postMessage({ type: "data", data: features.slice(i, i + 100) });
+  }
+  postMessage({ type: "status", status: "complete" });
+}
+
 async function loadShapefiles(files: File[], nameKey?: string) {
   const shpFile = files.find((file) => extension(file.name) === 'shp');
   if (!shpFile) {
@@ -99,16 +110,7 @@ async function loadShapefiles(files: File[], nameKey?: string) {
   const shpStream = shpFile.stream() as unknown as ReadableStream;
   const dbfStream = dbfFile?.stream() as unknown as ReadableStream;
 
-  const getNameKey = (() => {
-    const keysToTest = ['binomial', 'species', 'name', 'id'] as const;
-    let nameKey: string | undefined;
-    return (properties: Record<string, unknown> | null | undefined) => {
-      if (nameKey != null) return nameKey;
-      const keys = Object.keys(properties ?? {});
-      nameKey = keysToTest.find((key) => keys.includes(key));
-      return nameKey;
-    };
-  })();
+  const split = rangeFeatureSplitter('shapefile', nameKey);
 
   {
     const source = await shapefile.open(shpStream, dbfStream);
@@ -123,47 +125,11 @@ async function loadShapefiles(files: File[], nameKey?: string) {
         batch = [];
       }
     };
-    const addFeature = (feature: GeometryFeature) => {
-      batch.push(feature);
-      if (batch.length > 100) {
-        flush();
-      }
-    };
 
     while (!result.done) {
-      const shp = result.value;
-
-      if (nameKey == null) {
-        nameKey = getNameKey(shp.properties);
-      }
-
-      if (!shp.properties || !nameKey) {
-        throw new Error(
-          `Can't deduce name key in shapefile from properties: ${JSON.stringify(
-            shp.properties,
-          )}`,
-        );
-      }
-
-      Object.assign(shp.properties, {
-        name: normalizeSpeciesName(shp.properties[nameKey]),
-      });
-
-      if (shp.geometry.type === 'MultiPolygon') {
-        shp.geometry.coordinates.forEach((coords) => {
-          addFeature(turf.polygon(coords, shp.properties) as PolygonFeature);
-        });
-      } else if (shp.geometry.type === 'MultiPoint') {
-        shp.geometry.coordinates.forEach((coords) => {
-          addFeature(turf.point(coords, shp.properties) as PointFeature);
-        });
-      } else if (
-        shp.geometry.type === 'Polygon' ||
-        shp.geometry.type === 'Point'
-      ) {
-        addFeature(shp as GeometryFeature);
-      } else {
-        throw new Error(`Unsupported geometry: '${shp.geometry.type}'`);
+      batch.push(...split(result.value));
+      if (batch.length > 100) {
+        flush();
       }
 
       result = await source.read();
