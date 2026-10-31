@@ -31,7 +31,6 @@ const guessColumnNames = (cols: string[]) => {
   let lat = '';
   let long = '';
   for (const col of cols) {
-    console.log(col, name, !name, reName.test(col));
     if (!name && reName.test(col)) {
       name = col;
       continue;
@@ -57,7 +56,7 @@ const guessColumnNames = (cols: string[]) => {
 };
 
 export const LoadData = observer(function LoadData() {
-  const { speciesStore, treeStore, infomapStore } = useStore();
+  const { speciesStore, dataStore } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [file, setFile] = useState<File>();
   const [header, setHeader] = useState<string[]>([]);
@@ -69,12 +68,9 @@ export const LoadData = observer(function LoadData() {
 
   const setColumn = [setNameColumn, setLatColumn, setLongColumn];
   const values = [nameColumn, latColumn, longColumn];
-  console.log(`name: ${nameColumn}, lat: ${latColumn}, long: ${longColumn}`);
 
   const onFileChange = async (details: FileUploadFileAcceptDetails) => {
     const { files } = details;
-
-    infomapStore.setTree(null);
 
     let occurrenceData: File | null = null;
     let tree: File | null = null;
@@ -96,7 +92,9 @@ export const LoadData = observer(function LoadData() {
     }
 
     if (tree) {
-      await treeStore.load(tree);
+      // With occurrences in the same drop, their load runs Infomap once.
+      const withOccurrences = occurrenceData != null || zipFile != null || shpFiles.length > 0;
+      await dataStore.loadTree({ kind: 'file', file: tree }, { rerun: !withOccurrences });
     }
 
     if (occurrenceData) {
@@ -119,7 +117,7 @@ export const LoadData = observer(function LoadData() {
     }
 
     if (zipFile || shpFiles.length > 0) {
-      await speciesStore.loadShapefile(zipFile ?? shpFiles);
+      await dataStore.loadOccurrenceFile({ format: 'shapefile', files: zipFile ?? shpFiles }, 'upload');
     }
   };
 
@@ -140,7 +138,14 @@ export const LoadData = observer(function LoadData() {
     }
 
     setIsOpen(false);
-    await speciesStore.load(file, nameColumn, longColumn, latColumn);
+    await dataStore.loadOccurrenceFile(
+      {
+        format: extension(file.name).toLowerCase() === 'tsv' ? 'tsv' : 'csv',
+        file,
+        columns: { name: nameColumn, lat: latColumn, long: longColumn },
+      },
+      'upload',
+    );
     onClose(); // cleanup state
   };
 

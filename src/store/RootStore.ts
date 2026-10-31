@@ -2,6 +2,7 @@ import MapStore from './MapStore';
 import LandStore from './LandStore';
 import SpeciesStore from './SpeciesStore';
 import TreeStore from './TreeStore';
+import DataStore from './DataStore';
 import InfomapStore from './InfomapStore';
 import ColorStore from './ColorStore';
 import SettingsStore from './SettingsStore';
@@ -19,6 +20,7 @@ export default class RootStore {
   infomapStore: InfomapStore;
   speciesStore: SpeciesStore;
   treeStore: TreeStore;
+  dataStore: DataStore;
   colorStore: ColorStore;
   settingsStore: SettingsStore;
   exampleStore: ExampleStore;
@@ -32,6 +34,7 @@ export default class RootStore {
     this.infomapStore = new InfomapStore(this);
     this.speciesStore = new SpeciesStore(this);
     this.treeStore = new TreeStore(this);
+    this.dataStore = new DataStore(this);
     this.colorStore = new ColorStore(this);
     this.settingsStore = new SettingsStore(this);
     this.exampleStore = new ExampleStore(this);
@@ -42,10 +45,9 @@ export default class RootStore {
     this.phyloStore = new PhyloStore(this);
   }
 
+  /** TODO(S2b): removed; callers use `dataStore.clear()`. */
   clearData() {
-    this.infomapStore.clearData();
-    this.speciesStore.clearData();
-    this.treeStore.clearData();
+    this.dataStore.clear();
   }
 
   clearBioregions() {

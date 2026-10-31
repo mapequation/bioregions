@@ -13,7 +13,6 @@ import type {
   Geometry,
   Polygon,
 } from '../types/geojson';
-import { getName } from '../utils/filename';
 import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
 import { normalizeSpeciesName } from '../utils/names';
@@ -74,6 +73,26 @@ export type Species = {
   numGridCells?: number;
   numGridCellsWithinModule?: number;
 };
+
+/** Outcome of the file loaders (`load`, `loadString`, `loadShapefile`). */
+export interface FileLoadResult {
+  /** Features added (0 only for a load cancelled before the first one). */
+  received: number;
+}
+
+export interface FileLoadOptions {
+  nameColumn?: string;
+  longColumn?: string;
+  latColumn?: string;
+  /**
+   * Called once, in the same action as the first feature, before it is added: the
+   * data owner's commit (it clears the previous data and swaps the source slot).
+   */
+  onFirstRecord?: () => void;
+}
+
+export const NO_USABLE_ROWS = 'No usable rows (check the species column)';
+export const NO_SHAPEFILE_FEATURES = 'No features found in the shapefile';
 
 /** Outcome of `SpeciesStore.loadRecords`. */
 export interface LoadRecordsResult {
@@ -259,7 +278,8 @@ export default class SpeciesStore {
 
   /**
    * Run the data worker with `message`, passing each data chunk to `onData`.
-   * Resolves when the worker completes or the current load is cancelled.
+   * Resolves when the worker completes or the current load is cancelled, and rejects
+   * when the worker reports an error (or fails to run at all).
    */
   private runWorker<T>(message: object, onData: (data: T) => void) {
     return new Promise<void>((resolve, reject) => {
@@ -273,13 +293,24 @@ export default class SpeciesStore {
           dataWorker.terminate();
           resolve();
         };
+        const fail = (message: string) => {
+          signal?.removeEventListener('abort', stop);
+          dataWorker.terminate();
+          reject(new Error(message));
+        };
         signal?.addEventListener('abort', stop, { once: true });
 
+        dataWorker.addEventListener('error', (event: ErrorEvent) => {
+          event.preventDefault?.();
+          fail(event.message || 'The data worker failed');
+        });
         dataWorker.addEventListener('message', (event: MessageEvent) => {
           if (event.data.type === 'status') {
             if (event.data.status === 'complete') {
               signal?.removeEventListener('abort', stop);
               stop();
+            } else if (event.data.status === 'error') {
+              fail(String(event.data.message ?? 'Could not read the file'));
             }
           } else if (event.data.type === 'data') {
             onData(event.data.data);
@@ -318,127 +349,167 @@ export default class SpeciesStore {
     console.timeEnd('load');
   });
 
+  /**
+   * Add the features of one parsed chunk. The first feature of a load first calls
+   * `onFirstRecord` (the owner's commit, which clears the previous data) in the same
+   * action, then marks the store as loading again (the clear reset that flag).
+   */
+  private addFileFeatures(
+    features: GeometryFeature[],
+    state: { received: number },
+    onFirstRecord?: () => void,
+  ) {
+    runInAction(() => {
+      for (const feature of features) {
+        if (state.received === 0) {
+          onFirstRecord?.();
+          this.setIsLoading();
+        }
+        ++state.received;
+        this.addFeature(feature);
+      }
+    });
+  }
+
+  /**
+   * End a file load. Nothing received: the previous data stays as it was (no binning, no
+   * Infomap) and the load rejects with `emptyMessage`, unless it was cancelled. A worker
+   * error after the first record keeps what arrived and rejects after `postLoad`.
+   */
+  private async finishFileLoad(
+    state: { received: number },
+    failure: unknown,
+    wasLoaded: boolean,
+    signal: AbortSignal | undefined,
+    emptyMessage: string,
+  ): Promise<FileLoadResult> {
+    this.loadEnd();
+    if (state.received === 0) {
+      runInAction(() => {
+        this.loadController = null;
+        this.setIsLoaded(wasLoaded);
+      });
+      if (failure) throw failure;
+      if (signal?.aborted) return { received: 0 };
+      throw new Error(emptyMessage);
+    }
+    await this.postLoad();
+    if (failure) throw failure;
+    return { received: state.received };
+  }
+
+  /**
+   * Load point records from CSV text (the documentation demo). Clears nothing itself:
+   * `onFirstRecord` (the owner's commit) runs with the first record.
+   */
   async loadString(
     data: string,
     {
-      add,
       nameColumn = 'species',
       longColumn = 'longitude',
       latColumn = 'latitude',
-    }: {
-      add?: boolean;
-      nameColumn?: string;
-      longColumn?: string;
-      latColumn?: string;
-    } = {},
-  ) {
-    if (!add) {
-      this.clearData();
-    }
-
+      onFirstRecord,
+    }: FileLoadOptions = {},
+  ): Promise<FileLoadResult> {
+    const wasLoaded = this.loaded;
     this.preLoad();
-
-    const records = csvParse(data);
-
-    const mapper = createMapper<string | undefined>(
-      nameColumn,
-      longColumn,
-      latColumn,
-    );
-
-    for (const item of records) {
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
+    const mapper = createMapper<string | undefined>(nameColumn, longColumn, latColumn);
+    const features = csvParse(data).map((item) => {
       const mappedItem = mapper(item);
-      const pointFeature = createPointFeature(
-        [mappedItem.longitude, mappedItem.latitude],
-        { name: normalizeSpeciesName(mappedItem.name) },
-      );
-
-      this.addFeature(pointFeature);
-    }
-
-    this.postLoad();
+      return createPointFeature([mappedItem.longitude, mappedItem.latitude], {
+        name: normalizeSpeciesName(mappedItem.name),
+      });
+    });
+    this.addFileFeatures(features, state, onFirstRecord);
+    return this.finishFileLoad(state, null, wasLoaded, signal, NO_USABLE_ROWS);
   }
 
+  /**
+   * Load a CSV/TSV file (or a zipped shapefile, by its `.zip` name) in the data worker.
+   * Clears nothing itself: `onFirstRecord` (the owner's commit) runs with the first
+   * record. Rejects on a worker error and when no row has a usable name.
+   */
   async load(
     file: string | File,
-    nameColumn = 'species',
-    longColumn = 'longitude',
-    latColumn = 'latitude',
-    clear = true,
-  ) {
-    if (clear) {
-      this.clearData();
-    }
-
+    {
+      nameColumn = 'species',
+      longColumn = 'longitude',
+      latColumn = 'latitude',
+      onFirstRecord,
+    }: FileLoadOptions = {},
+  ): Promise<FileLoadResult> {
     const filename = typeof file === 'string' ? file : file.name;
-    this.name = getName(filename);
-
-    if (filename.endsWith('.zip')) {
-      return this.loadShapefile(file);
+    if (filename.toLowerCase().endsWith('.zip')) {
+      return this.loadShapefile(file, { onFirstRecord });
     }
 
+    const wasLoaded = this.loaded;
     this.preLoad();
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
+    let ignoredRows = 0;
 
-    const nameHistogram: { [key: string]: number } = {};
-    const countName = (name: string) => {
-      if (!(name in nameHistogram)) {
-        nameHistogram[name] = 0;
-      }
-
-      nameHistogram[name]++;
-    };
-
-    const ignoredRows: { [key: string]: string | number }[] = [];
-
-    await this.loadData(file, (items) => {
-      const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
-
-      for (const item of items) {
-        const mappedItem = mapper(item);
-        const name = normalizeSpeciesName(mappedItem.name);
-        if (!name || name === 'NA') {
-          ignoredRows.push(item);
-          continue;
+    let failure: unknown = null;
+    try {
+      await this.loadData(file, (items) => {
+        const features: PointFeature[] = [];
+        for (const item of items) {
+          const mappedItem = mapper(item);
+          const name = normalizeSpeciesName(mappedItem.name);
+          if (!name || name === 'NA') {
+            ++ignoredRows;
+            continue;
+          }
+          features.push(createPointFeature([mappedItem.longitude, mappedItem.latitude], { name }));
         }
-        const pointFeature = createPointFeature(
-          [mappedItem.longitude, mappedItem.latitude],
-          { name },
-        );
+        if (features.length === 0) return;
+        this.addFileFeatures(features, state, onFirstRecord);
+        const multiPoint: MultiPoint = {
+          type: 'MultiPoint',
+          coordinates: features.map((feature) => feature.geometry.coordinates),
+        };
+        this.multiPointCollection.geometries.push(multiPoint);
+        mapStore.renderMultiPoint(multiPoint);
+      });
+    } catch (error) {
+      failure = error;
+    }
+    if (ignoredRows > 0) {
+      console.log(`Ignored ${ignoredRows} rows due to no name`);
+    }
 
-        countName(mappedItem.name);
-
-        this.addFeature(pointFeature);
-
-        multiPoint.coordinates.push(pointFeature.geometry.coordinates);
-      }
-      this.multiPointCollection.geometries.push(multiPoint);
-
-      mapStore.renderMultiPoint(multiPoint);
-    });
-
-    // await (await loader).next();
-    this.loadEnd();
-    console.log(
-      `Ignored ${ignoredRows.length} rows due to no name:`,
-      ignoredRows,
-    );
-
-    await this.postLoad();
+    return this.finishFileLoad(state, failure, wasLoaded, signal, NO_USABLE_ROWS);
   }
 
-  onFeatures = action((features: GeometryFeature[]) => {
-    features.forEach(this.addFeature);
-  });
-
-  async loadShapefile(file: string | File | File[], nameKey?: string) {
+  /**
+   * Load a zipped shapefile (or its .shp/.dbf files) in the data worker. Clears nothing
+   * itself: `onFirstRecord` (the owner's commit) runs with the first feature. Rejects on
+   * a worker error and when the shapefile holds no feature.
+   */
+  async loadShapefile(
+    file: string | File | File[],
+    { nameKey, onFirstRecord }: { nameKey?: string; onFirstRecord?: () => void } = {},
+  ): Promise<FileLoadResult> {
+    const wasLoaded = this.loaded;
     this.preLoad();
-
-    await this.loadShapefileInWorker(file, this.onFeatures, nameKey);
-
-    await this.postLoad();
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
+    let failure: unknown = null;
+    try {
+      await this.loadShapefileInWorker(
+        file,
+        (features) => this.addFileFeatures(features, state, onFirstRecord),
+        nameKey,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    return this.finishFileLoad(state, failure, wasLoaded, signal, NO_SHAPEFILE_FEATURES);
   }
 
   /**

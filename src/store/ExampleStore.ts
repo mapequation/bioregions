@@ -42,38 +42,8 @@ export default class ExampleStore {
       }));
   }
 
-  async loadExample(example: Example) {
-    const { speciesStore, treeStore, infomapStore, } = this.rootStore;
-
-    this.rootStore.clearData();
-    const { settings } = example;
-
-    settings.minCellSize != null &&
-      speciesStore.binner.setMinCellSizeLog2(settings.minCellSize);
-
-    settings.maxCellSize != null &&
-      speciesStore.binner.setMaxCellSizeLog2(settings.maxCellSize);
-
-    settings.minCellCapacity != null &&
-      speciesStore.binner.setMinCellCapacity(settings.minCellCapacity);
-
-    settings.maxCellCapacity != null &&
-      speciesStore.binner.setMaxCellCapacity(settings.maxCellCapacity);
-
-    settings.includeTree != null &&
-      infomapStore.setIncludeTree(settings.includeTree)
-
-    if (example.treeFile) {
-      await treeStore.load(example.treeFile);
-    }
-    await speciesStore.load(example.speciesFile);
-
-    // mapStore.setRenderType('heatmap');
-    // mapStore.render();
-
-    // await infomapStore.run();
-
-    // mapStore.setRenderType('bioregions');
-    // mapStore.render();
+  /** TODO(S6): this store is deleted; the Examples tab calls `dataStore.loadExample`. */
+  loadExample(example: Example) {
+    return this.rootStore.dataStore.loadExample({ ...example, id: example.name }, 'examples');
   }
 }

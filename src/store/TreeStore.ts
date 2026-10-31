@@ -10,7 +10,6 @@ import {
 } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
-import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
 import {
@@ -128,6 +127,46 @@ export interface TreeHoverInfo {
   name: string;
   speciesCount: number;
   regions: HoverRegion[];
+}
+
+/**
+ * Parse and check a Newick tree before anything is changed. The Newick reader never
+ * throws (a CSV or truncated text silently becomes an empty tree), so this requires
+ * balanced parentheses, nothing but an optional root label/length and a terminating `;`
+ * after the root, and at least two leaves. Throws `Not a valid Newick tree: {why}`.
+ */
+export function validateNewick(text: string): PhyloNode {
+  const fail = (why: string) => new Error(`Not a valid Newick tree: ${why}`);
+  // Quoted labels and [comments] may hold any character, so blank them out first.
+  const body = text.replace(/'[^']*'/g, "''").replace(/\[[^\]]*\]/g, '').trim();
+  if (body === '') throw fail('the text is empty');
+  if (!body.startsWith('(')) throw fail('it does not start with "("');
+  let depth = 0;
+  let rootEnd = -1;
+  for (let i = 0; i < body.length; ++i) {
+    const c = body[i];
+    if (c === '(') ++depth;
+    else if (c === ')' && --depth === 0) {
+      rootEnd = i;
+      break;
+    }
+  }
+  if (rootEnd < 0) throw fail('unbalanced parentheses');
+  if (!/^[^(),;:]*(:[^(),;:]*)?(;\s*)?$/.test(body.slice(rootEnd + 1))) {
+    throw fail('unexpected text after the root');
+  }
+  let root: PhyloNode;
+  try {
+    root = prepareTree(parseTree(text));
+  } catch (error) {
+    throw fail(error instanceof Error ? error.message : String(error));
+  }
+  let leaves = 0;
+  visitTreeDepthFirstPreOrder(root, (node) => {
+    if (node.isLeaf) ++leaves;
+  });
+  if (leaves < 2) throw fail('fewer than two leaves');
+  return root;
 }
 
 export default class TreeStore {
@@ -304,20 +343,28 @@ export default class TreeStore {
     this.isLoaded = isLoaded;
   });
 
+  /**
+   * Load a Newick tree. The text is validated first (`validateNewick` throws), so an
+   * invalid tree changes nothing; a valid one replaces the tree in one action.
+   */
   loadString(tree: string) {
-    this.setIsLoading();
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
-    this.setIsLoaded();
+    const root = validateNewick(tree);
+    runInAction(() => {
+      this.setTreeString(tree);
+      this.setTree(root);
+      this.setIsLoaded();
+    });
   }
 
-  async load(file: File | string) {
-    this.setIsLoading();
-    const tree = await loadText(file);
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
-    this.setIsLoaded();
-  }
+  /** Remove the tree with everything derived from it (`clearData` only nulls `tree`/`treeString`). */
+  reset = action(() => {
+    this.setTree(null);
+    this.treeString = null;
+    this.treeNodeMap = new Map<string, TreeNode>();
+    this.numLeafNodes = 0;
+    this.isLoading = false;
+    this.isLoaded = false;
+  });
 
   clearBioregions() {
     this.treeNodeMap.forEach((node) => {
