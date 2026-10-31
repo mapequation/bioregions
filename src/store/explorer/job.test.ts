@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RecordCleaner } from '../../sources/clean';
 import type { OccurrenceRecord, RecordBatch, SourceId } from '../../sources/types';
-import { LoadTally, PauseGate, SeededDedupe, etaSeconds, mergeBatches } from './job';
+import { LoadTally, PauseGate, SeededDedupe, etaSeconds, mergeBatches, mergeFunnels } from './job';
 
 const rec = (name: string, lon: number, lat: number, source: SourceId = 'gbif', extra: Partial<OccurrenceRecord> = {}) => ({
   name,
@@ -72,6 +72,28 @@ describe('SeededDedupe', () => {
   it('keeps everything without dedupe', () => {
     const seeded = new SeededDedupe('none', [{ name: 'Aa bb', lon: 10, lat: 20 }]);
     expect(seeded.filter([rec('Aa bb', 10, 20)])).toHaveLength(1);
+  });
+});
+
+describe('mergeFunnels', () => {
+  it('sums every count, drop reason and source', () => {
+    const first = new RecordCleaner({ dedupe: 'exact' });
+    first.accept([
+      { name: 'Callithrix jacchus', lon: 1, lat: 1, source: 'gbif' },
+      { name: 'Callithrix jacchus', lon: 1, lat: 1, source: 'gbif' },
+      { name: '', lon: 2, lat: 2, source: 'gbif' },
+    ]);
+    const second = new RecordCleaner({ dedupe: 'exact' });
+    second.accept([
+      { name: 'Saguinus oedipus', lon: 3, lat: 3, source: 'obis' },
+      { name: 'Saguinus midas', lon: 0, lat: 0, source: 'obis' },
+    ]);
+    const merged = mergeFunnels(first.funnel, second.funnel);
+    expect(merged).toMatchObject({ received: 5, accepted: 2 });
+    expect(merged.dropped).toMatchObject({ duplicate: 1, noSpecies: 1, zeroCoordinates: 1 });
+    expect(merged.bySource).toEqual({ gbif: { received: 3, accepted: 1 }, obis: { received: 2, accepted: 1 } });
+    // A run that received nothing leaves the funnel as it was.
+    expect(mergeFunnels(first.funnel, new RecordCleaner({ dedupe: 'none' }).funnel)).toEqual(first.funnel);
   });
 });
 

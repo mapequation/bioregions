@@ -234,10 +234,10 @@ export interface LoadJob {
 }
 
 /**
- * Why a load holds no records: nothing matched, cleaning dropped everything, or the
- * load was cancelled before the first record arrived.
+ * Why a load holds no records: nothing matched, cleaning dropped everything, the load
+ * was cancelled before the first record arrived, or its requests failed.
  */
-export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly';
+export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly' | 'failed';
 
 /** How much of a load arrived when it stopped early. */
 export interface PartialLoad {
@@ -283,7 +283,7 @@ export interface Provenance {
   completedAt?: string;
   /** The record cap the load ran with. */
   cap?: number;
-  /** Why the load stopped early, null when complete. TODO(S4): set by the stop reasons. */
+  /** Why the load stopped early (cancelled, request errors or the cap), null when complete. */
   stop?: StopState | null;
   funnel: Funnel;
   ledger: LedgerRow[];

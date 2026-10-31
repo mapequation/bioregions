@@ -144,10 +144,13 @@ export interface StopState {
   failedParts: number;     // Σ progress.failedParts of the last run
   stoppedEarly: boolean;   // a source reported progress.stoppedEarly === 'errors'
   sources: SourceId[];     // sources that failed or hit the cap
+  requests?: number; requestsDone?: number; // Σ progress.requestsTotal / requestsDone, for "{n} of {m} requests"
+  estimate?: number;       // Σ plan.expectedRecords of `sources` (all plans when none), for the cap copy
 }
 export interface ResumeState {    // per QueryOccurrences id, in a non-observable Map
   plans: StreamPlan[];      // the exact plans of the first run (a cursor is only valid for its plan)
   cursors: Partial<Record<SourceId, StreamCursor>>; // last cursor whose records reached SpeciesStore
+  fetched: Partial<Record<SourceId, number>>;       // last progress.fetched per source (cumulative), for the Continue cap
   tally: LoadTally;         // kpis, datasetCounts and stats keep accumulating
   labels: TallyLabels; ledger: LedgerRow[]; ledgerBase: number | null; // unfrozen, for rebuilding rows
 }
@@ -197,7 +200,8 @@ export type StartResult = { started: true; committed: boolean } | { started: fal
 | `citations: CitationItem[]` | computed | `{ id, sourceId, kind: 'gbif'\|'gbif-download'\|'obis'\|'example'\|'opentree', text, doi? }`, each citation once. Empty for a `'loading'` source. |
 | `treeOverlap` | computed | `{ tips, inTree, datasetSpecies } \| null`: species in `speciesStore.speciesMap` that are also in `treeStore.treeNodeMap`. |
 | `loadQuery(req)` | action | Plans, then streams (§4). Commits on the first accepted record. Returns `StartResult`. |
-| `continueLoad()` / `loadAgain()` / `retry()` | action | §4.2, §4.3. |
+| `continueLoad(origin?)` / `loadAgain(origin?)` / `retry()` | action | §4.2, §4.3 (`origin` defaults to `'search'`). Refused with `LOAD_RUNNING`, `NOT_RESUMABLE`, `NOTHING_TO_RELOAD` or `NOTHING_TO_RETRY`. |
+| `continueCap` | computed | The cap the next Continue runs with ("Continue up to …"; `continueCap()` in `data/streamLoad.ts`); null when the loaded data is not resumable. |
 | `loadGbifZip(file, opts?: ZipLoadOptions)` | action | The moved `loadZip` (ExplorerStore.ts:2721-2855), in `data/zipLoad.ts`. `ZipLoadOptions` is `{ origin?, query?, download?: GbifZipSummary, ledger?, labels? }`: with `query` (a Cite-tab "Replace") the zip is cleaned like that query and the source gets its provenance at the finish; without it the records load as they are (`dedupe: 'none'`). Commits on the first record; `download` is filled from the reader's own summary at the finish (else from `opts.download`; null when stopped before the reader's summary). |
 | `loadOccurrenceFile(input, origin)` | action | Creates a `file` job, calls `speciesStore.load` / `loadShapefile` with `onFirstRecord: commit`. Zero features → `job.state='error'`, `job.error = 'No usable rows (check the species column)'` (or the shapefile equivalent), slots untouched. A parse error before the first feature → `job.error`, slots untouched. An error after the commit keeps what arrived (status `'done'`, card warns). |
 | `loadTree(input, opts?: TreeLoadOptions)` | action | Reads the text, `commitTree` (validate, `treeStore.loadString`, slot swap, one action). Then `infomapStore.setIncludeTree(opts.includeTree ?? true)` and, when `opts.rerun !== false`, occurrences are loaded and no occurrence load runs: `infomapStore.run()` and a re-render (moved from PhyloStore.ts:746-756). An invalid tree sets `treeJob.error` and changes nothing. |
@@ -617,6 +621,7 @@ Phases: **2.1** S1 ‖ S5 → **2.2** S2a ‖ S3 → **2.3** S2b → **2.4** S4 
 - **Owns:** `DataStore.ts` (`continueLoad`, `loadAgain`, `retry`, `resumable`), `data/streamLoad.ts` (cursors, stop state, `mergeProgress` fields, failed outcome), `data/types.ts`, `explorer/types.ts` (`EmptyReason` + `'failed'` only), `explorer/provenance.ts` (`partialSentence` by reason, "retrieved between"), `data/methods.ts` (stop and date wording), `explorer/job.ts` (`mergeFunnels`), `streamLoad.test.ts`, `job.test.ts`.
 - **Must not touch:** UI, ExplorerStore.ts, `src/sources/**`.
 - **Accept:** S4 tests.
+- **As built:** `runQueryLoad` and `runContinueLoad` share one stream run in `data/streamLoad.ts`; `stopStateOf` and `continueCap` are pure and exported. `StopState` gained `requests`, `requestsDone` and `estimate` (for the §4.4 copy) and `ResumeState` gained `fetched` (for the cap, since cursors are opaque). The §4.4 stop copy the UI needs is in `explorer/provenance.ts`: `stopShort(stop)` (DoneRow and card status) and `stopSentence(stop, cap)` (the banner's "why it stopped"); U2's `partialText.ts` and U5's cards read them. The stop and date wording of the methods text lives in `buildMethodsText`/`partialSentence` (provenance.ts), which `data/methods.ts` already calls, so `methods.ts` needed no change. A failed plan also ends with `outcome.emptyReason 'failed'` (so "Try again" works). A Continue that received nothing new changes only `provenance.stop`; any other Continue also sets `source.cap` to `cap'`, and keeps the earlier provenance's citation fields (`derivedDoi`, download key and DOI). `cleaningSteps.ts` keeps its own copy of `EmptyReason`, so it gained `'failed'` there too (with the `EMPTY_REASON_TEXT`/`_SHORT` entries). `niceCapAbove` is imported from `components/Explorer/load/loadMath.ts` (pure).
 
 **S6: Catalog loads and upload orchestration** (≈25 calls)
 

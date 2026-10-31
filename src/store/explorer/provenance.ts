@@ -1,7 +1,8 @@
 // Provenance of a load turned into citation text: methods paragraph, OBIS citation,
 // GBIF derived-dataset CSV and the decision ledger as CSV.
-import { type PhylogenyInfo, derivedDatasetCsv, methodsParagraph, obisCitation } from '../../sources/methods';
+import { type PhylogenyInfo, citationDate, derivedDatasetCsv, methodsParagraph, obisCitation } from '../../sources/methods';
 import type { DropReason, Funnel, ProvenanceEntry, SourceId } from '../../sources/types';
+import type { StopState } from '../data/types';
 import type { LoadStats } from './job';
 import type { GbifDownload, LedgerRow, PartialLoad, Provenance } from './types';
 
@@ -72,18 +73,84 @@ function partialPct(accepted: number, planned: number): string {
   return `${Math.round(pct)} %`;
 }
 
+const SOURCE_SHORT: Record<SourceId, string> = { gbif: 'GBIF', obis: 'OBIS' };
+
+/** "GBIF", "GBIF and OBIS", or "the data sources" when none is named. */
+function sourceNames(ids: SourceId[]): string {
+  const names = ids.map((id) => SOURCE_SHORT[id] ?? id);
+  if (names.length === 0) return 'the data sources';
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+const requestsText = (n: number) => `${fmt(n)} ${n === 1 ? 'request' : 'requests'}`;
+
 /**
- * "Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of 210 species
- * were loaded; requests alternate packed batches of small species with parts of large
- * ones, so the missing species are absent rather than thinned, and species still being
- * fetched have fewer records than they would. The largest of the 209 missing species are
- * A b (~9,000 planned records), C d (~450) and E f (~30). Species coverage is <1 %."
+ * The stop in a few words, for one-line status rows and the source card (spec §4.4):
+ * "you stopped the load", the last error, or "stopped at the cap".
  */
-export function partialSentence(partial: PartialLoad, bioregionsSkipped = false): string {
+export function stopShort(stop: StopState): string {
+  if (stop.reason === 'cancelled') return 'you stopped the load';
+  if (stop.reason === 'cap') return 'stopped at the cap';
+  return stop.lastError ?? `requests to ${sourceNames(stop.sources)} failed`;
+}
+
+/**
+ * Why a load stopped, for the partial banner (spec §4.4): the user stopped it, repeated
+ * errors ended it (`stoppedEarly`), some requests failed after their retries, or a source
+ * reached the record `cap` because the estimate was low.
+ */
+export function stopSentence(stop: StopState, cap: number): string {
+  const from = sourceNames(stop.sources);
+  const error = stop.lastError ?? 'request error';
+  switch (stop.reason) {
+    case 'cancelled':
+      return 'You stopped the load before every record arrived.';
+    case 'cap': {
+      const estimate = stop.estimate != null ? `; the estimate was ~${fmt(stop.estimate)}, so` : ', so';
+      return `${from} stopped at the cap of ${fmt(cap)} records${estimate} more records may exist.`;
+    }
+    case 'errors': {
+      if (stop.stoppedEarly) {
+        const open = stop.requests != null && stop.requestsDone != null ? stop.requests - stop.requestsDone : 0;
+        const missing = Math.max(open, stop.failedParts);
+        return `Loading stopped after repeated errors from ${from}: ${error}.${missing > 0 ? ` ${requestsText(missing)} did not complete.` : ''}`;
+      }
+      if (stop.failedParts > 0) {
+        return `${requestsText(stop.failedParts)} to ${from} still failed after retries (${error}); everything else loaded.`;
+      }
+      return `${from} failed (${error}); everything else loaded.`;
+    }
+  }
+}
+
+/**
+ * The partial-load sentence of the methods text, by stop reason (spec §4.4). Cancelled (or
+ * no stop): "Loading was stopped early: 819 of ~272,546 planned records (<1 %) from 1 of
+ * 210 species were loaded; requests alternate packed batches of small species with parts
+ * of large ones, so the missing species are absent rather than thinned, and species still
+ * being fetched have fewer records than they would. The largest of the 209 missing species
+ * are A b (~9,000 planned records), C d (~450) and E f (~30). Species coverage is <1 %."
+ * A cap stop starts "Loading stopped at the record cap of {cap}:"; request errors give
+ * "Loading ended early after request errors: {n} of {m} requests failed, …".
+ */
+export function partialSentence(
+  partial: PartialLoad,
+  bioregionsSkipped = false,
+  stop: StopState | null = null,
+  cap?: number,
+): string {
   const { planned, accepted, speciesLoaded, speciesPlanned } = partial;
   const records = `${fmt(accepted)} of ~${fmt(planned)} planned records (${partialPct(accepted, planned)})`;
-  const head = 'Loading was stopped early:';
   const regions = bioregionsSkipped ? '; bioregions were not computed for this incomplete dataset.' : '.';
+  if (stop?.reason === 'errors') {
+    const failed =
+      stop.failedParts > 0
+        ? `${fmt(stop.failedParts)} of ${stop.requests != null ? requestsText(Math.max(stop.requests, stop.failedParts)) : 'the requests'} failed`
+        : `requests to ${sourceNames(stop.sources)} failed`;
+    return `Loading ended early after request errors: ${failed}, so records for some species, areas or years may be missing${regions}`;
+  }
+  const head =
+    stop?.reason === 'cap' && cap != null ? `Loading stopped at the record cap of ${fmt(cap)}:` : 'Loading was stopped early:';
   const known = speciesPlanned != null && speciesPlanned > 0;
   if (!known) {
     return `${head} ${records} from ${fmt(speciesLoaded)} species were loaded; the planned species are unknown, and later records were not received, so record counts per species are not representative. Record coverage is ${partialPct(accepted, planned)}${regions}`;
@@ -152,11 +219,26 @@ export function buildMethodsText(input: MethodsTextInput): string {
   if (min > 1 && !text.includes(`fewer than ${min} records`)) {
     text = insertBeforeCitations(text, `Species with fewer than ${min} records were left out.`);
   }
-  if (load.partial) text = insertBeforeCitations(text, partialSentence(load.partial, load.bioregionsSkipped));
+  if (load.partial) {
+    text = insertBeforeCitations(text, partialSentence(load.partial, load.bioregionsSkipped, load.stop, load.cap));
+  }
+  text = retrievedBetween(text, load);
   if (input.treeCitation && !input.phylogeny) {
     text = insertBeforeCitations(text, `Phylogeny: ${input.treeCitation.replace(/\.$/, '')}.`);
   }
   return text;
+}
+
+/**
+ * A load finished (or last continued) on a later day than it started: its sources were
+ * "retrieved between {first day} and {last day}" rather than on the first day.
+ */
+function retrievedBetween(text: string, load: LoadProvenance): string {
+  if (!load.completedAt || load.completedAt <= load.retrievedAt) return text;
+  const first = citationDate(load.retrievedAt);
+  const last = citationDate(load.completedAt);
+  if (first === last) return text;
+  return text.split(`retrieved ${first})`).join(`retrieved between ${first} and ${last})`);
 }
 
 /** Insert a sentence before "Data citations:", or append it. */

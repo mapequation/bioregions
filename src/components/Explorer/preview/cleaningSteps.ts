@@ -54,7 +54,7 @@ export function cleaningSteps(funnel: Funnel, showLowCount: boolean): CleaningSt
 // --- Load outcome wording, shared by the loaded panel, the load dock and the ledger. ---
 
 /** Why a load ended with no records. */
-export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly';
+export type EmptyReason = 'noMatches' | 'allDropped' | 'cancelledEarly' | 'failed';
 
 /** A partial (cancelled or failed) load, as recorded on the load snapshot. */
 export interface PartialLoad {
@@ -117,6 +117,7 @@ export const EMPTY_REASON_TEXT: Record<EmptyReason, string> = {
   noMatches: 'No records match this query.',
   allDropped: 'Cleaning removed every record received (no species, invalid or outside the area, duplicates).',
   cancelledEarly: 'The load was cancelled before any records arrived.',
+  failed: 'The requests failed before any records arrived.',
 };
 
 /** Short form for one-line status rows. */
@@ -124,6 +125,7 @@ export const EMPTY_REASON_SHORT: Record<EmptyReason, string> = {
   noMatches: 'no records match this query',
   allDropped: 'cleaning removed every record',
   cancelledEarly: 'cancelled before any records arrived',
+  failed: 'the requests failed',
 };
 
 export const PREVIOUS_KEPT = 'Your previous data is unchanged.';

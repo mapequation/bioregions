@@ -2,14 +2,14 @@
 // It holds an occurrence slot and a tree slot, and every load and clear of SpeciesStore
 // and TreeStore goes through it: a load replaces only its own slot, and only when it
 // commits (the first feature, or a validated tree).
-import { action, computed, makeObservable, observable, runInAction } from 'mobx';
+import { action, computed, makeObservable, observable, runInAction, toJS } from 'mobx';
 import type RootStore from './RootStore';
 import { RecordCleaner } from '../sources/clean';
 import { extension, getName } from '../utils/filename';
 import { loadText } from '../utils/loader';
 import { citations, methodsText, type CitationItem } from './data/methods';
 import type { ExampleEntry } from './data/catalog';
-import { type ActiveLoad, runQueryLoad } from './data/streamLoad';
+import { type ActiveLoad, continueCap, runContinueLoad, runQueryLoad } from './data/streamLoad';
 import { type ZipLoadOptions, runZipLoad } from './data/zipLoad';
 import type { LoadProvenance } from './explorer/provenance';
 import type {
@@ -34,6 +34,9 @@ import type {
 } from './data/types';
 
 export const LOAD_RUNNING = 'A load is running';
+export const NOT_RESUMABLE = 'The loaded data cannot be continued';
+export const NOTHING_TO_RELOAD = 'No query load to repeat';
+export const NOTHING_TO_RETRY = 'No failed or stopped load to retry';
 
 /** Citations of the same data that `patchOccurrence` may add (an absent key is kept, `undefined` clears). */
 export type OccurrencePatch = Partial<Pick<LoadProvenance, 'derivedDoi' | 'gbifDownloadKey' | 'gbifDownloadDoi'>>;
@@ -313,6 +316,69 @@ export default class DataStore {
   async loadQuery(req: QueryLoadRequest): Promise<StartResult> {
     if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
     return runQueryLoad(this, req);
+  }
+
+  /**
+   * The cap the next `continueLoad()` runs with ("Continue up to …"): the load's cap, raised
+   * after a cap stop (§4.2, §9.1). Null when the loaded data cannot be continued.
+   */
+  get continueCap(): number | null {
+    const source = this.occurrence;
+    if (source?.kind !== 'explorer-query' || !source.resumable || !source.provenance) return null;
+    return continueCap(source.provenance, this.runs.get(source.id));
+  }
+
+  /**
+   * Continue the loaded query where it stopped (§4.2): the same plans resume from their
+   * cursors, the new records are appended, and the source keeps its id, query and
+   * `retrievedAt`. The source stays `'done'` with its old provenance until the finish (I7).
+   * Only a stopped (`resumable`) query load, and only while no load runs.
+   */
+  async continueLoad(origin: JobOrigin = 'search'): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    const source = this.occurrence;
+    const run = source ? this.runs.get(source.id) : undefined;
+    if (source?.kind !== 'explorer-query' || source.status !== 'done' || !source.resumable || !source.provenance || !run) {
+      return { started: false, reason: NOT_RESUMABLE };
+    }
+    return runContinueLoad(this, source, run, origin);
+  }
+
+  /**
+   * Load the loaded query again from scratch (§4.3): fresh plans of `source.query` with its
+   * cap, a new source on the first record, the old one kept on an empty or failed result
+   * (I6). The workspace query, plans and plan controller are not touched.
+   */
+  async loadAgain(origin: JobOrigin = 'search'): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    const source = this.occurrence;
+    if (source?.kind !== 'explorer-query' || source.status !== 'done') return { started: false, reason: NOTHING_TO_RELOAD };
+    const run = this.runs.get(source.id);
+    const { query, cap } = source;
+    const explorer = this.rootStore.explorerStore;
+    return runQueryLoad(this, {
+      query,
+      cap,
+      ...(source.exampleId ? { exampleId: source.exampleId } : {}),
+      origin,
+      plan: (signal) => explorer.planQuery(query, cap, signal),
+      labels: run?.labels ?? {},
+      ledger: run?.ledger ?? source.provenance?.ledger ?? [],
+      ledgerBase: run?.ledgerBase ?? null,
+    });
+  }
+
+  /** "Try again": rerun the last job's request when it ended `failed` or `cancelledEarly` (§4.3). */
+  async retry(): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    const job = this.job;
+    const reason = job?.outcome?.emptyReason;
+    if (!job?.request || (reason !== 'failed' && reason !== 'cancelledEarly')) {
+      return { started: false, reason: NOTHING_TO_RETRY };
+    }
+    // The job holds an observable copy: rerun with plain data and the original planner.
+    const { plan } = job.request;
+    return runQueryLoad(this, { ...toJS(job.request), plan });
   }
 
   /**

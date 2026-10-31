@@ -2,10 +2,13 @@
 // §4.1), with mocked sources and a fake SpeciesStore.
 import { describe, expect, it, vi } from 'vitest';
 import type { GbifPlanDetail } from '../../sources/gbif/stream';
-import type { OccurrenceQuery, RecordBatch, StreamOptions, StreamPlan } from '../../sources/types';
-import DataStore, { LOAD_RUNNING } from '../DataStore';
+import type { OccurrenceQuery, RecordBatch, StreamCursor, StreamOptions, StreamPlan } from '../../sources/types';
+import DataStore, { LOAD_RUNNING, NOTHING_TO_RETRY } from '../DataStore';
 import ExplorerStore from '../ExplorerStore';
 import type RootStore from '../RootStore';
+import { buildMethodsText, partialSentence, stopSentence, stopShort } from '../explorer/provenance';
+import { partialLoad } from './streamLoad';
+import type { QueryOccurrences, StopState } from './types';
 
 vi.mock('../../sources/gbif/stream', async (orig) => ({
   ...(await orig<typeof import('../../sources/gbif/stream')>()),
@@ -102,8 +105,68 @@ function batches(source: 'gbif' | 'obis', list: RecordBatch['records'][], gate?:
   };
 }
 
+type Rec = ReturnType<typeof record>;
+const failure = (source: 'gbif' | 'obis') => `${source.toUpperCase()} returned HTTP 503 Service Unavailable`;
+
+/**
+ * A resumable stream over `parts` (one request each), like streamGbif: each batch carries
+ * the cursor of the parts yielded so far, and a resume skips them. Each entry of `fail`
+ * fails that part once (failedParts, lastError, not in the cursor); with `stoppedEarly`
+ * the first failure ends the stream. `hold` waits before yielding part `at`.
+ */
+function resumable(
+  source: 'gbif' | 'obis',
+  parts: Rec[][],
+  opts: { fail?: number[]; stoppedEarly?: boolean; hold?: { at: number; until: Promise<void> } } = {},
+) {
+  const fail = [...(opts.fail ?? [])];
+  const total = parts.flat().length;
+  return async function* (_plan: StreamPlan, so: StreamOptions) {
+    const cursor = so.resume as unknown as { done: string[]; fetched: number; requestsDone: number } | undefined;
+    const done = new Set(cursor?.done ?? []);
+    let fetched = cursor?.fetched ?? 0;
+    let requestsDone = cursor?.requestsDone ?? 0;
+    let failedParts = 0;
+    let lastError: string | undefined;
+    let stopped = false;
+    const state = () => ({
+      progress: {
+        fetched,
+        expected: total,
+        requestsDone,
+        requestsTotal: parts.length,
+        failedParts,
+        ...(lastError ? { lastError } : {}),
+        ...(stopped ? { stoppedEarly: 'errors' as const } : {}),
+      },
+      cursor: { source, done: [...done], fetched, requestsDone } as unknown as StreamCursor,
+    });
+    for (const [i, records] of parts.entries()) {
+      if (done.has(String(i))) continue;
+      if (so.maxRecords != null && fetched >= so.maxRecords) break;
+      if (opts.hold?.at === i) await opts.hold.until;
+      if (fail.includes(i)) {
+        fail.splice(fail.indexOf(i), 1);
+        failedParts++;
+        lastError = failure(source);
+        if (opts.stoppedEarly) {
+          stopped = true;
+          break;
+        }
+        continue;
+      }
+      done.add(String(i));
+      fetched += records.length;
+      requestsDone++;
+      yield { source, records, ...state() };
+    }
+    if (failedParts > 0) yield { source, records: [], ...state() };
+    return { fetched, truncated: 0, requests: requestsDone, reachedCap: false };
+  };
+}
+
 function setup() {
-  const consumed: { name: string }[][] = [];
+  const consumed: Rec[][] = [];
   const speciesStore = {
     collection: { features: [] as unknown[] },
     loaded: false,
@@ -119,6 +182,7 @@ function setup() {
     clearData: vi.fn(() => {
       speciesStore.loaded = false;
       speciesStore.numRecords = 0;
+      speciesStore.collection.features = [];
     }),
     cancelLoad: vi.fn(),
     runBioregions: vi.fn(async () => {}),
@@ -129,7 +193,7 @@ function setup() {
     }),
     loadRecords: vi.fn(
       async (
-        iter: AsyncIterable<{ name: string }[]>,
+        iter: AsyncIterable<Rec[]>,
         opts: { controller: AbortController; skipBioregions?: () => boolean; onFirstRecord?: () => void },
       ) => {
         let received = 0;
@@ -138,6 +202,12 @@ function setup() {
           if (b.length === 0) continue;
           if (received === 0) opts.onFirstRecord?.();
           consumed.push(b);
+          for (const r of b) {
+            speciesStore.collection.features.push({
+              geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
+              properties: { name: r.name },
+            });
+          }
           received += b.length;
         }
         if (received > 0) speciesStore.loaded = true;
@@ -773,5 +843,236 @@ describe('DataStore stream loads (S2a)', () => {
       // @ts-expect-error minimized is read-only: the portal is open or closed.
       store.minimized = true;
     }).toThrow();
+  });
+});
+
+describe('Continue loading, Load again, retry and stop reasons (S4)', () => {
+  const A = record('Callithrix jacchus', -40, -10, 'gbif', 'd1');
+  const B = record('Callithrix jacchus', -41, -11, 'gbif', 'd2');
+  const C = record('Saguinus oedipus', -75, 9, 'gbif', 'd1');
+  const O = record('Saguinus oedipus', -70, 5, 'obis', 'o1');
+  // Part 1 repeats A (a duplicate across the resume boundary) and adds B.
+  const gbifParts = () => [[A], [A, B], [C]];
+  const obisParts = () => [[O]];
+  const occurrence = (t: ReturnType<typeof setup>) => t.dataStore.occurrence as QueryOccurrences;
+  /** What a load gives: the funnel, the kpis and the records SpeciesStore received. */
+  const outcome = (t: ReturnType<typeof setup>) => ({
+    funnel: occurrence(t).provenance?.funnel,
+    kpis: occurrence(t).provenance?.kpis,
+    datasets: occurrence(t).provenance?.datasetCounts,
+    records: t.consumed
+      .flat()
+      .map((r) => `${r.name}|${r.lon}|${r.lat}`)
+      .sort(),
+  });
+  async function wholeLoad() {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts()));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    expect(occurrence(t).provenance?.stop).toBeNull();
+    return outcome(t);
+  }
+
+  it('continues a load with failed parts in place, as if it had never stopped', async () => {
+    const whole = await wholeLoad();
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { fail: [1] }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    const first = occurrence(t);
+    expect(t.dataStore.job?.state).toBe('done');
+    expect(first.provenance?.stop).toMatchObject({
+      reason: 'errors',
+      failedParts: 1,
+      lastError: failure('gbif'),
+      stoppedEarly: false,
+      sources: ['gbif'],
+    });
+    expect(first.provenance?.partial).not.toBeNull();
+    expect(first.resumable).toBe(true);
+    expect(t.dataStore.methodsText).toContain('Loading ended early after request errors: 1 of 4 requests failed');
+    const cursors = t.dataStore.runs.get(first.id)?.cursors;
+    vi.mocked(streamGbif).mockClear();
+    vi.mocked(streamObis).mockClear();
+
+    expect(await t.dataStore.continueLoad()).toEqual({ started: true, committed: true });
+    expect(t.dataStore.job).toMatchObject({ kind: 'continue', state: 'done', targetId: first.id, label: `Continuing ${first.label}` });
+    // The streams resumed from the cursors whose records reached SpeciesStore.
+    expect(vi.mocked(streamGbif).mock.calls[0][1].resume).toEqual(cursors?.gbif);
+    expect(vi.mocked(streamObis).mock.calls[0][1].resume).toEqual(cursors?.obis);
+    const after = occurrence(t);
+    expect(after.id).toBe(first.id);
+    expect(after.query).toBe(first.query);
+    expect(after.retrievedAt).toBe(first.retrievedAt);
+    expect(after.provenance?.retrievedAt).toBe(first.provenance?.retrievedAt);
+    expect(after.provenance?.stop).toBeNull();
+    expect(after.provenance?.partial).toBeNull();
+    expect(after.resumable).toBe(false);
+    // Appended, not replaced: the slot was committed once.
+    expect(t.speciesStore.clearData).toHaveBeenCalledTimes(1);
+    // Records summed and the funnel merged, with no double counting.
+    expect(outcome(t)).toEqual(whole);
+    expect(after.provenance?.funnel).toMatchObject({ received: 5, accepted: 4 });
+    expect(after.provenance?.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(1);
+    expect(t.dataStore.methodsText).not.toContain('Loading ended early');
+    expect(await t.dataStore.continueLoad()).toMatchObject({ started: false });
+  });
+
+  it('changes only the stop when a Continue gets nothing new', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { fail: [1, 1] }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    const first = occurrence(t);
+    await t.dataStore.continueLoad();
+    const after = occurrence(t);
+    expect(after.id).toBe(first.id);
+    expect(after.completedAt).toBe(first.completedAt);
+    expect(after.provenance).toEqual({ ...first.provenance, stop: expect.objectContaining({ reason: 'errors', failedParts: 1 }) });
+    expect(after.resumable).toBe(true);
+  });
+
+  it('does not advance a cursor past a batch an abort dropped', async () => {
+    const whole = await wholeLoad();
+    let open!: () => void;
+    const until = new Promise<void>((r) => {
+      open = r;
+    });
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', gbifParts(), { hold: { at: 1, until } }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    const running = t.store.load();
+    await vi.waitFor(() => expect(t.consumed.flat()).toHaveLength(2));
+    t.dataStore.cancel('keep');
+    open();
+    await running;
+    const first = occurrence(t);
+    expect(first.provenance?.stop?.reason).toBe('cancelled');
+    // Part 1 arrived after the stop and was dropped: the cursor still ends at part 0.
+    expect(t.dataStore.runs.get(first.id)?.cursors.gbif).toMatchObject({ done: ['0'] });
+    await t.dataStore.continueLoad();
+    expect(vi.mocked(streamGbif).mock.lastCall?.[1].resume).toMatchObject({ done: ['0'] });
+    expect(outcome(t)).toEqual(whole);
+  });
+
+  it('stops at the cap when the estimate was low, and Continue raises the cap', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A], [B], [C]]));
+    const t = setup();
+    await t.dataStore.loadQuery({
+      query: QUERY,
+      cap: 2,
+      origin: 'search',
+      plan: async () => [gbifPlan(QUERY)],
+      labels: {},
+      ledger: [],
+      ledgerBase: null,
+    });
+    const stop = occurrence(t).provenance?.stop as StopState;
+    expect(stop).toMatchObject({ reason: 'cap', sources: ['gbif'], estimate: 3 });
+    expect(stopShort(stop)).toBe('stopped at the cap');
+    expect(stopSentence(stop, 2)).toBe('GBIF stopped at the cap of 2 records; the estimate was ~3, so more records may exist.');
+    expect(t.dataStore.methodsText).toContain('Loading stopped at the record cap of 2: 2 of ~2 planned records');
+    expect(t.dataStore.continueCap).toBe(1000);
+    await t.dataStore.continueLoad();
+    expect(vi.mocked(streamGbif).mock.lastCall?.[1].maxRecords).toBe(1000);
+    const after = occurrence(t);
+    expect(after).toMatchObject({ cap: 1000, provenance: { cap: 1000, stop: null, kpis: { records: 3 } } });
+  });
+
+  it('gives the repeated-errors copy when a source stopped early', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A], [B], [C]], { fail: [1], stoppedEarly: true }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', obisParts()));
+    const t = setup();
+    await t.store.load();
+    const stop = occurrence(t).provenance?.stop as StopState;
+    expect(stop).toMatchObject({ reason: 'errors', stoppedEarly: true, failedParts: 1, sources: ['gbif'] });
+    expect(stopSentence(stop, 100)).toBe(
+      `Loading stopped after repeated errors from GBIF: ${failure('gbif')}. 2 requests did not complete.`,
+    );
+    expect(stopShort(stop)).toBe(failure('gbif'));
+  });
+
+  it('keeps the previous source when every request fails', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A]]));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', [[O]]));
+    const t = setup();
+    await t.store.load();
+    const previous = occurrence(t);
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[B], [C]], { fail: [0, 1] }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', [[O]], { fail: [0] }));
+    t.store.setYears([1980, 2025]);
+    expect(await t.store.load()).toEqual({ started: true, committed: false });
+    expect(t.dataStore.job).toMatchObject({ state: 'error', error: failure('gbif') });
+    expect(t.dataStore.job?.outcome).toMatchObject({
+      emptyReason: 'failed',
+      previousKept: true,
+      stop: { reason: 'errors', failedParts: 3, sources: ['gbif', 'obis'] },
+    });
+    expect(t.dataStore.occurrence).toBe(previous);
+    expect(t.speciesStore.clearData).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads the loaded query again, not the edited workspace query', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A]]));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', [[O]]));
+    const t = setup();
+    await t.store.load();
+    const first = occurrence(t);
+    t.store.setYears([1980, 2025]);
+    const plans = t.store.plans;
+    vi.mocked(planSource).mockClear();
+    expect(await t.dataStore.loadAgain()).toEqual({ started: true, committed: true });
+    expect(vi.mocked(planSource)).toHaveBeenCalledWith('gbif', first.query, first.cap, expect.any(AbortSignal));
+    expect(vi.mocked(planSource).mock.calls.every(([, q]) => q.years?.[0] === 1970)).toBe(true);
+    expect(t.store.plans).toBe(plans);
+    const again = occurrence(t);
+    expect(again.id).not.toBe(first.id);
+    expect(again.query).toEqual(first.query);
+    expect(t.store.query.years).toEqual([1980, 2025]);
+  });
+
+  it('retries the request of a failed load', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A]], { fail: [0] }));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', [[O]], { fail: [0] }));
+    const t = setup();
+    await t.store.load();
+    const request = t.dataStore.job?.request;
+    expect(t.dataStore.job?.outcome?.emptyReason).toBe('failed');
+    // The failures were one-off: the same request now loads.
+    expect(await t.dataStore.retry()).toEqual({ started: true, committed: true });
+    expect(t.dataStore.job?.request?.query).toEqual(request?.query);
+    expect(occurrence(t).provenance?.kpis.records).toBe(2);
+    expect(await t.dataStore.retry()).toEqual({ started: false, reason: NOTHING_TO_RETRY });
+  });
+
+  it('words the partial sentence and the stop by reason', () => {
+    const partial = partialLoad({ planned: 10, accepted: 5, speciesLoaded: 2, speciesPlanned: 4, fetched: 5 });
+    const base = { failedParts: 0, stoppedEarly: false, sources: ['gbif' as const] };
+    const errors: StopState = { ...base, reason: 'errors', failedParts: 2, requests: 40, lastError: failure('gbif') };
+    expect(partialSentence(partial, false, { ...base, reason: 'cancelled' })).toMatch(/^Loading was stopped early: 5 of ~10 planned/);
+    expect(partialSentence(partial, false, { ...base, reason: 'cap' }, 500_000)).toMatch(
+      /^Loading stopped at the record cap of 500,000: 5 of ~10 planned/,
+    );
+    expect(partialSentence(partial, false, errors)).toBe(
+      'Loading ended early after request errors: 2 of 40 requests failed, so records for some species, areas or years may be missing.',
+    );
+    expect(partialSentence(partial, true, errors)).toContain('may be missing; bioregions were not computed');
+    expect(stopShort({ ...base, reason: 'cancelled' })).toBe('you stopped the load');
+    expect(stopSentence({ ...base, reason: 'cancelled' }, 10)).toBe('You stopped the load before every record arrived.');
+    expect(stopSentence(errors, 10)).toBe(`2 requests to GBIF still failed after retries (${failure('gbif')}); everything else loaded.`);
+  });
+
+  it('says "retrieved between" when a load finished on a later day', async () => {
+    vi.mocked(streamGbif).mockImplementation(resumable('gbif', [[A]]));
+    vi.mocked(streamObis).mockImplementation(resumable('obis', [[O]]));
+    const t = setup();
+    await t.store.load();
+    const load = occurrence(t).provenance;
+    if (!load) throw new Error('no provenance');
+    const sameDay = buildMethodsText({ load: { ...load, retrievedAt: '2026-10-30T10:00:00Z', completedAt: '2026-10-30T11:00:00Z' } });
+    expect(sameDay).not.toContain('retrieved between');
+    const text = buildMethodsText({ load: { ...load, retrievedAt: '2026-10-30T23:50:00Z', completedAt: '2026-10-31T00:10:00Z' } });
+    expect(text).toContain('retrieved between 30 October 2026 and 31 October 2026)');
   });
 });

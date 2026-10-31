@@ -126,6 +126,11 @@ export interface StopState {
   stoppedEarly: boolean;
   /** Sources that failed or hit the cap. */
   sources: SourceId[];
+  /** Σ progress.requestsTotal and Σ progress.requestsDone of the last run, for the copy (§4.4). */
+  requests?: number;
+  requestsDone?: number;
+  /** Records the plans estimated for `sources` (all plans when none), uncapped, for the cap copy. */
+  estimate?: number;
 }
 
 /** Per QueryOccurrences id, in a non-observable Map. */
@@ -134,6 +139,8 @@ export interface ResumeState {
   plans: StreamPlan[];
   /** Last cursor whose records reached SpeciesStore. */
   cursors: Partial<Record<SourceId, StreamCursor>>;
+  /** Last progress.fetched per source (cumulative over all runs), for the Continue cap. */
+  fetched: Partial<Record<SourceId, number>>;
   /** kpis, datasetCounts and stats keep accumulating. */
   tally: LoadTally;
   /** Unfrozen, for rebuilding rows. */

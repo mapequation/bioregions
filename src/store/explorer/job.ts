@@ -1,9 +1,10 @@
-// Pure pieces of a running load: merging source streams, seeded deduplication for
-// "add" mode, per-source dataset tallies and the ETA.
+// Pure pieces of a running load: merging source streams, seeded deduplication across a
+// Continue's resume boundary, merging funnels, per-source dataset tallies and the ETA.
 import { isAbortError } from '../../sources/http';
 import { BASIS_LABELS } from '../../sources/query';
 import type {
   DedupeMode,
+  DropReason,
   FacetBucket,
   Funnel,
   OccurrenceRecord,
@@ -68,8 +69,8 @@ export function dedupeKey(mode: Exclude<DedupeMode, 'none'>, name: string, lon: 
 }
 
 /**
- * Drops records that duplicate data loaded before an "add" load. The cleaner
- * deduplicates within the load; this extends it to the existing points.
+ * Drops records that duplicate data loaded before a Continue (the run's own cleaner
+ * deduplicates within the run; this extends it to the points already loaded).
  */
 export class SeededDedupe {
   private readonly keys = new Set<string>();
@@ -116,6 +117,24 @@ export class SeededDedupe {
 }
 
 /** Labels for bucket keys the tally cannot name itself (from the preview facets). */
+/**
+ * The funnel of a load and a later run of it (a Continue) as one funnel: every count,
+ * drop reason and source is summed.
+ */
+export function mergeFunnels(a: Funnel, b: Funnel): Funnel {
+  const dropped = { ...a.dropped };
+  for (const [reason, n] of Object.entries(b.dropped) as [DropReason, number][]) {
+    dropped[reason] = (dropped[reason] ?? 0) + n;
+  }
+  const bySource: Funnel['bySource'] = {};
+  for (const id of new Set([...Object.keys(a.bySource), ...Object.keys(b.bySource)]) as Set<RecordSource>) {
+    const x = a.bySource[id];
+    const y = b.bySource[id];
+    bySource[id] = { received: (x?.received ?? 0) + (y?.received ?? 0), accepted: (x?.accepted ?? 0) + (y?.accepted ?? 0) };
+  }
+  return { received: a.received + b.received, accepted: a.accepted + b.accepted, dropped, bySource };
+}
+
 export interface TallyLabels {
   datasets?: ReadonlyMap<string, string>;
   basisOfRecord?: ReadonlyMap<string, string>;
