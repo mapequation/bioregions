@@ -481,11 +481,11 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   };
 
   // Loaded records, flattened once per load and binned like the GBIF hexagons of the view.
-  const lastLoad = explorerStore.lastLoad;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `loadedCount` and `lastLoad` stand for the (non-observable) point collection
+  const loaded = explorerStore.loaded;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `loadedCount` and `loaded` stand for the (non-observable) point collection
   const loadedPoints = useMemo(
     () => (loadedScope ? cachedPoints(speciesStore.multiPointCollection) : null),
-    [loadedScope, loadedCount, lastLoad, speciesStore],
+    [loadedScope, loadedCount, loaded, speciesStore],
   );
   const hexTile = zoomedToArea ? densityTiles[0] : undefined;
   const hexDx = hexTile ? hexTile.size / hexPerTile(hexTile.size) : HEX_PX;

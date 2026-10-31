@@ -1,2 +1,2 @@
-export { default as ExplorerDialog } from './ExplorerDialog';
+export { default as DataPortal } from './DataPortal';
 export { explorerUi, focusTaxonSearch, useInsightsDrawer } from './explorerUi';

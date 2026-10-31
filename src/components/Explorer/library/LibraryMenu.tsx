@@ -104,7 +104,7 @@ export default observer(function LibraryMenu() {
       const res = explorerStore.importQueryJson(await file.text());
       if (res.ok) {
         setMessage(null);
-        explorerStore.setTab('occurrences');
+        explorerStore.setTab('search');
         setOpen(false);
       } else setMessage({ status: 'error', text: res.reason });
     } catch {

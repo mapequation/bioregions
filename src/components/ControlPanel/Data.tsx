@@ -4,16 +4,17 @@ import { Button, HStack, Menu, Portal, Progress, Stack, Text, VStack } from '@ch
 import { queryTitle } from '@/sources';
 import { LoadData, LoadExample } from './Load';
 import { useStore } from '../../store';
+import { explorerJob } from '../../store/ExplorerStore';
 import Stat from '../Stat';
 import { fmtCompact, fmtInt } from '../Explorer/format';
 
 /** Keeps year ranges such as 1970–2025 on one line (word joiners around the dash). */
 const keepRangesTogether = (s: string) => s.replace(/(\d)–(\d)/g, '$1\u2060–\u2060$2');
 
-/** Live status of an explorer load, shown while the explorer is minimized or closed. */
+/** Live status of an explorer load, shown while the Data portal is closed. */
 const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
-  const { explorerStore } = useStore();
-  const job = explorerStore.job;
+  const { explorerStore, dataStore } = useStore();
+  const job = explorerJob(dataStore.job);
   if (!job || (job.state !== 'planning' && job.state !== 'streaming')) return null;
   const fetched = job.perSource.reduce((s, p) => s + p.fetched, 0);
   const expected = job.perSource.reduce((s, p) => s + p.expected, 0);
@@ -43,7 +44,7 @@ const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
         )}
       </HStack>
       <HStack gap={2}>
-        <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('occurrences')}>
+        <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('search')}>
           Open explorer
         </Button>
         <Menu.Root>
@@ -55,10 +56,10 @@ const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
           <Portal>
             <Menu.Positioner>
               <Menu.Content>
-                <Menu.Item value="keep" onClick={() => explorerStore.cancel('keep')}>
+                <Menu.Item value="keep" onClick={() => dataStore.cancel('keep')}>
                   Keep {fmtInt(job.funnel.accepted)} records and run Infomap
                 </Menu.Item>
-                <Menu.Item value="discard" color="fg.error" onClick={() => explorerStore.cancel('discard')}>
+                <Menu.Item value="discard" color="fg.error" onClick={() => dataStore.cancel('discard')}>
                   Discard and restore previous data
                 </Menu.Item>
               </Menu.Content>
@@ -73,9 +74,8 @@ const ExplorerLoadStatus = observer(function ExplorerLoadStatus() {
 /** After an explorer load: what was loaded, with shortcuts back into the explorer. */
 const ExplorerLoadedSummary = observer(function ExplorerLoadedSummary() {
   const { explorerStore } = useStore();
-  const last = explorerStore.lastLoad;
-  const job = explorerStore.job;
-  if (!last || (job && (job.state === 'planning' || job.state === 'streaming'))) return null;
+  const last = explorerStore.loaded;
+  if (!last || explorerStore.isLoading) return null;
   const title = keepRangesTogether(queryTitle(last.query));
   return (
     <Stack gap={1.5} p={2.5} borderWidth="1px" borderRadius="md">
@@ -88,7 +88,7 @@ const ExplorerLoadedSummary = observer(function ExplorerLoadedSummary() {
         {last.partial ? ' · partial' : ''}
       </Text>
       <HStack gap={2}>
-        <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('occurrences')}>
+        <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('search')}>
           <LuSquarePen /> Edit query
         </Button>
         <Button size="xs" variant="outline" flex="1" onClick={() => explorerStore.open('cite')}>
@@ -100,23 +100,20 @@ const ExplorerLoadedSummary = observer(function ExplorerLoadedSummary() {
 });
 
 export default observer(function Data() {
-  const { speciesStore, treeStore, explorerStore } = useStore();
-  const minimizedIdle =
-    explorerStore.isOpen &&
-    explorerStore.minimized &&
-    !(explorerStore.job && (explorerStore.job.state === 'planning' || explorerStore.job.state === 'streaming'));
+  const { speciesStore, treeStore, explorerStore, dataStore } = useStore();
+  const explorerLoad = explorerJob(dataStore.job) != null;
   return (
     <VStack align="stretch">
       <LoadData />
       <LoadExample />
       <Button size="sm" variant="solid" data-testid="explorer-open" onClick={() => explorerStore.open()}>
-        <LuSearch /> {minimizedIdle ? 'Back to the data explorer' : 'Explore GBIF & OBIS…'}
+        <LuSearch /> Explore GBIF & OBIS…
       </Button>
 
       <ExplorerLoadStatus />
       <ExplorerLoadedSummary />
 
-      {(treeStore.isLoading || speciesStore.isLoading) && !explorerStore.job && (
+      {(treeStore.isLoading || speciesStore.isLoading) && !explorerLoad && (
         <Progress.Root size="xs" value={null}>
           <Progress.Track>
             <Progress.Range />
@@ -124,7 +121,7 @@ export default observer(function Data() {
         </Progress.Root>
       )}
 
-      {speciesStore.isLoading && !explorerStore.job && (
+      {speciesStore.isLoading && !explorerLoad && (
         <Button size="sm" colorPalette="red" variant="outline" onClick={() => speciesStore.cancelLoad()}>
           Cancel
         </Button>

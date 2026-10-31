@@ -69,7 +69,7 @@ function mockOtol() {
 
 function fakeRoot() {
   const explorerStore = observable(
-    { isOpen: false, tab: 'occurrences', query: defaultQuery(), querySpecies: vi.fn(async () => names) },
+    { isOpen: false, tab: 'search', query: defaultQuery(), querySpecies: vi.fn(async () => names) },
     { querySpecies: false },
   );
   const speciesStore = observable(

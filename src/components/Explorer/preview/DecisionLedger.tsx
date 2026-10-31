@@ -16,6 +16,7 @@ import { Fragment, type ReactNode, useId, useRef, useState } from 'react';
 import { LuCheck, LuChevronDown, LuChevronRight, LuDownload, LuMinus, LuPlus } from 'react-icons/lu';
 import type { Funnel } from '../../../sources/types';
 import { useStore } from '../../../store';
+import { explorerJob } from '@/store/ExplorerStore';
 import type { LedgerRow } from '../../../store/explorer/types';
 import { Checkbox } from '../../ui/checkbox';
 import { InfoTip } from '../../ui/toggle-tip';
@@ -757,13 +758,13 @@ function SkeletonRows({ n }: { n: number }) {
 
 /** Decision ledger: what each filter removes (each alone) and the cleaning funnel (in order). */
 export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
-  const { explorerStore: ex } = useStore();
+  const { explorerStore: ex, dataStore } = useStore();
   const [asTable, setAsTable] = useState(false);
   const everExcluded = useRef(false);
   // Rows switched in this ledger stay in place (no jump into the optional list).
   const pinned = useRef(new Set<string>());
 
-  const snapshot = ex.lastLoad;
+  const snapshot = ex.loaded;
   const frozen = mode === 'frozen' && snapshot != null;
   const query = frozen ? snapshot.query : ex.query;
   if ((query.quality.excludeDatasets?.length ?? 0) > 0) everExcluded.current = true;
@@ -797,7 +798,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
   const scale = Math.max(1, total, base ?? total + maxImpact);
 
   const funnel: Funnel | null =
-    mode === 'live' ? (ex.job?.funnel ?? null) : mode === 'frozen' ? (snapshot?.funnel ?? null) : null;
+    mode === 'live' ? (explorerJob(dataStore.job)?.funnel ?? null) : mode === 'frozen' ? (snapshot?.funnel ?? null) : null;
   const minRecordsOn = (query.quality.minRecordsPerSpecies ?? 1) > 1;
   const steps = funnel ? cleaningSteps(funnel, minRecordsOn) : null;
 
@@ -891,7 +892,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     path.push({
       id: 'loaded',
       kind: 'end',
-      label: `${snapshot.mode === 'add' ? 'Added' : 'Loaded'}${snapshot.partial ? ' (partial)' : ''}`,
+      label: `Loaded${snapshot.partial ? ' (partial)' : ''}`,
       value: f.accepted,
       tip: snapshot.partial ? `Partial dataset: ${partialSummary(snapshot.partial)} ${partialBiasText(snapshot.partial)}` : undefined,
     });
@@ -928,7 +929,7 @@ export default observer(function DecisionLedger({ mode }: DecisionLedgerProps) {
     );
   }
   const waiting = mode === 'live' && (funnel?.received ?? 0) === 0;
-  const truncated = mode !== 'preview' ? (ex.job?.truncated ?? []) : [];
+  const truncated = mode !== 'preview' ? (explorerJob(dataStore.job)?.truncated ?? []) : [];
 
   const interactive = frozen ? 'static' : mode === 'live' ? 'readonly' : 'toggle';
   const showRows = state === 'ready' || state === 'stale' || frozen;

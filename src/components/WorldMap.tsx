@@ -143,15 +143,15 @@ export default observer(function WorldMap() {
   // Closing the explorer after a load ("View bioregions" or close) brings the map back into view
   // and re-frames it: the page under the dialog may have scrolled or reflowed meanwhile.
   useEffect(() => {
-    let seenLoad = explorerStore.lastLoad?.retrievedAt;
+    let seenLoad = explorerStore.loaded?.retrievedAt;
     let frame = 0;
     const dispose = reaction(
-      () => explorerStore.isOpen && !explorerStore.minimized,
+      () => explorerStore.isOpen,
       (shown) => {
-        const load = explorerStore.lastLoad;
+        const load = explorerStore.loaded;
         if (shown || !load || load.retrievedAt === seenLoad) return;
         seenLoad = load.retrievedAt;
-        if (load.accepted === 0 || load.emptyReason) return;
+        if (load.accepted === 0) return;
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           const box = frameRef.current;

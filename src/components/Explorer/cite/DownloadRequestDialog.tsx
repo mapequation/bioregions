@@ -50,7 +50,7 @@ export interface DownloadRequestDialogProps {
 /** Credentials dialog for a citable GBIF download (flow 5). The password lives only in this component's state. */
 export default observer(function DownloadRequestDialog({ open, onOpenChange, query }: DownloadRequestDialogProps) {
   const { explorerStore } = useStore();
-  const q = query ?? explorerStore.lastLoad?.query ?? explorerStore.query;
+  const q = query ?? explorerStore.loaded?.query ?? explorerStore.query;
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');

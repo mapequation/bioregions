@@ -245,12 +245,12 @@ describe('ExplorerStore.load into the data store', () => {
     await store.load();
     expect(speciesStore.name).toBe(store.querySummary);
     expect(consumed.flat()).toHaveLength(3);
-    expect(store.job?.state).toBe('done');
-    expect(store.job?.funnel).toMatchObject({ received: 5, accepted: 3 });
+    expect(store.rootStore.dataStore.job?.state).toBe('done');
+    expect(store.rootStore.dataStore.job?.funnel).toMatchObject({ received: 5, accepted: 3 });
     // One GBIF record twice (same source), one also in OBIS (cross-source).
-    expect(store.job?.funnel.dropped).toMatchObject({ duplicate: 1, crossSource: 1 });
-    expect(store.job?.perSource.map((p) => p.state)).toEqual(['done', 'done']);
-    const last = store.lastLoad;
+    expect(store.rootStore.dataStore.job?.funnel.dropped).toMatchObject({ duplicate: 1, crossSource: 1 });
+    expect(store.rootStore.dataStore.job?.perSource.map((p) => p.state)).toEqual(['done', 'done']);
+    const last = store.loaded;
     expect(last?.partial).toBeNull();
     expect(last?.kpis).toMatchObject({ records: 3, species: 2, datasets: 3 });
     expect(last?.datasetCounts.gbif?.map((b) => b.key)).toEqual(['d1', 'd2']);
@@ -297,8 +297,8 @@ describe('ExplorerStore.load into the data store', () => {
     const { store } = setup();
     store.setQuality({ minRecordsPerSpecies: 2 });
     await store.load();
-    expect(store.job?.funnel.dropped.lowCount).toBe(1);
-    expect(store.lastLoad?.kpis.records).toBe(1);
+    expect(store.rootStore.dataStore.job?.funnel.dropped.lowCount).toBe(1);
+    expect(store.loaded?.kpis.records).toBe(1);
   });
 
   it('keeps what arrived on cancel and marks the load partial', async () => {
@@ -310,13 +310,13 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], gate));
     const { store, rootStore, speciesStore } = setup();
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
-    store.cancel('keep');
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1));
+    store.rootStore.dataStore.cancel('keep');
     open();
     await running;
-    expect(store.job?.state).toBe('cancelled');
+    expect(store.rootStore.dataStore.job?.state).toBe('cancelled');
     // GBIF fetched 1 of 3, OBIS 0 of 2; the plans name 2 species, 1 arrived.
-    expect(store.lastLoad?.partial).toEqual({
+    expect(store.loaded?.partial).toEqual({
       kind: 'speciesMissing',
       planned: 5,
       accepted: 1,
@@ -328,12 +328,12 @@ describe('ExplorerStore.load into the data store', () => {
       missingSpecies: [{ name: 'Saguinus oedipus', expected: 1 }],
     });
     // Half the species arrived: bioregions run as usual.
-    expect(store.lastLoad?.bioregionsSkipped).toBeUndefined();
+    expect(store.loaded?.bioregionsSkipped).toBeUndefined();
     expect(speciesStore.skipped).toBe(false);
     expect(store.insightsScope).toMatchObject({ kind: 'partial', records: 1 });
     expect(store.insightsScope.label).toBe('For the partial load · 1 of ~5 records loaded (1 of 2 species)');
-    expect(store.lastLoad?.accepted).toBe(1);
-    expect(store.lastLoad?.emptyReason).toBeUndefined();
+    expect(store.loaded?.accepted).toBe(1);
+    expect(store.rootStore.dataStore.job?.outcome?.emptyReason).toBeUndefined();
     expect(store.methodsText).toContain(
       'Loading was stopped early: 1 of ~5 planned records (20 %) from 1 of 2 species were loaded; requests alternate packed batches',
     );
@@ -360,22 +360,22 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], more));
     const { store, consumed } = setup();
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
-    store.pauseLoad();
-    expect(store.job?.paused).toBe(true);
-    expect(store.job?.speciesLoaded).toBe(1);
-    expect(store.job?.speciesPlanned).toBe(2);
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1));
+    store.rootStore.dataStore.pause();
+    expect(store.rootStore.dataStore.job?.paused).toBe(true);
+    expect(store.rootStore.dataStore.job?.speciesLoaded).toBe(1);
+    expect(store.rootStore.dataStore.job?.speciesPlanned).toBe(2);
     open();
     await new Promise((r) => setTimeout(r, 30));
     // Batches arrived but none was counted or handed on.
-    expect(store.job?.funnel.accepted).toBe(1);
+    expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1);
     expect(consumed.flat()).toHaveLength(1);
-    store.cancel('keep');
+    store.rootStore.dataStore.cancel('keep');
     await running;
-    expect(store.job?.paused).toBe(false);
-    expect(store.lastLoad?.accepted).toBe(1);
+    expect(store.rootStore.dataStore.job?.paused).toBe(false);
+    expect(store.loaded?.accepted).toBe(1);
     expect(consumed.flat()).toHaveLength(1);
-    expect(store.lastLoad?.partial).toMatchObject({ kind: 'speciesMissing', speciesLoaded: 1, speciesPlanned: 2 });
+    expect(store.loaded?.partial).toMatchObject({ kind: 'speciesMissing', speciesLoaded: 1, speciesPlanned: 2 });
   });
 
   it('resumes a paused load to completion', async () => {
@@ -387,16 +387,16 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', [[record('Saguinus oedipus', -75, 9, 'obis', 'o1')]], more));
     const { store, consumed } = setup();
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
-    store.pauseLoad();
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1));
+    store.rootStore.dataStore.pause();
     open();
     await new Promise((r) => setTimeout(r, 20));
-    expect(store.job?.funnel.accepted).toBe(1);
-    store.resumeLoad();
+    expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1);
+    store.rootStore.dataStore.resume();
     await running;
-    expect(store.job?.state).toBe('done');
+    expect(store.rootStore.dataStore.job?.state).toBe('done');
     expect(consumed.flat()).toHaveLength(2);
-    expect(store.lastLoad?.partial).toBeNull();
+    expect(store.loaded?.partial).toBeNull();
   });
 
   it('describes the loaded records, not the preview, once the query is loaded', async () => {
@@ -536,18 +536,18 @@ describe('ExplorerStore.load into the data store', () => {
       };
     });
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.funnel.accepted).toBe(1));
-    store.cancel('keep');
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.funnel.accepted).toBe(1));
+    store.rootStore.dataStore.cancel('keep');
     open();
     await running;
     // 1 of 3 planned species: below half, so Infomap does not run.
-    expect(store.lastLoad?.partial?.coverage).toBeCloseTo(1 / 3);
-    expect(store.lastLoad?.bioregionsSkipped).toBe(true);
+    expect(store.loaded?.partial?.coverage).toBeCloseTo(1 / 3);
+    expect(store.loaded?.bioregionsSkipped).toBe(true);
     expect(speciesStore.skipped).toBe(true);
     expect(store.methodsText).toContain('Species coverage is 33 %; bioregions were not computed for this incomplete dataset.');
-    await store.runBioregionsAnyway();
+    await store.rootStore.dataStore.runBioregionsAnyway();
     expect(speciesStore.runBioregions).toHaveBeenCalledTimes(1);
-    expect(store.lastLoad?.bioregionsSkipped).toBeUndefined();
+    expect(store.loaded?.bioregionsSkipped).toBeUndefined();
     expect(store.methodsText).toContain('Species coverage is 33 %.');
   });
 
@@ -565,9 +565,9 @@ describe('ExplorerStore.load into the data store', () => {
     });
     const { store } = setup();
     await store.load();
-    const gbif = store.job?.perSource.find((p) => p.source === 'gbif');
+    const gbif = store.rootStore.dataStore.job?.perSource.find((p) => p.source === 'gbif');
     expect(gbif?.requestsTotal).toBe(3);
-    expect(store.job?.speciesCoverage).toBe(0.5);
+    expect(store.rootStore.dataStore.job?.speciesCoverage).toBe(0.5);
   });
 
   it('cites the data on screen after an empty load kept it', async () => {
@@ -616,12 +616,12 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', [], gate));
     const { store, rootStore } = setup();
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.state).toBe('streaming'));
-    store.cancel('discard');
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.state).toBe('streaming'));
+    store.rootStore.dataStore.cancel('discard');
     open();
     await running;
-    expect(store.job?.state).toBe('cancelled');
-    expect(store.lastLoad).toBeNull();
+    expect(store.rootStore.dataStore.job?.state).toBe('cancelled');
+    expect(store.loaded).toBeNull();
     expect(store.rootStore.dataStore.occurrence).toBeNull();
     expect(rootStore.treeStore.reset).not.toHaveBeenCalled();
     // SpeciesStore reads the reason to skip binning and Infomap.
@@ -634,8 +634,8 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', []));
     const { store, rootStore } = setup();
     await store.load();
-    expect(store.job?.state).toBe('error');
-    expect(store.job?.error).toBe('No records matched this query');
+    expect(store.rootStore.dataStore.job?.state).toBe('error');
+    expect(store.rootStore.dataStore.job?.error).toBe('No records matched this query');
     expect(store.loaded).toBeNull();
     expect(store.rootStore.dataStore.occurrence).toBeNull();
     expect(store.rootStore.dataStore.job?.outcome).toEqual({ emptyReason: 'noMatches', previousKept: false });
@@ -654,8 +654,8 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamGbif).mockImplementation(batches('gbif', [[record('Callithrix jacchus', 100, 10, 'gbif', 'd1')]]));
     store.setYears([1980, 2025]);
     await store.load();
-    expect(store.job?.state).toBe('error');
-    expect(store.job?.error).toBe('Cleaning removed every record');
+    expect(store.rootStore.dataStore.job?.state).toBe('error');
+    expect(store.rootStore.dataStore.job?.error).toBe('Cleaning removed every record');
     expect(store.loaded).toBe(first);
     expect(store.rootStore.dataStore.job?.outcome).toEqual({ emptyReason: 'allDropped', previousKept: true });
     expect(store.recent).toHaveLength(1);
@@ -670,11 +670,11 @@ describe('ExplorerStore.load into the data store', () => {
     vi.mocked(streamObis).mockImplementation(batches('obis', [], gate));
     const { store, rootStore } = setup();
     const running = store.load();
-    await vi.waitFor(() => expect(store.job?.state).toBe('streaming'));
-    store.cancel('keep');
+    await vi.waitFor(() => expect(store.rootStore.dataStore.job?.state).toBe('streaming'));
+    store.rootStore.dataStore.cancel('keep');
     open();
     await running;
-    expect(store.job?.state).toBe('cancelled');
+    expect(store.rootStore.dataStore.job?.state).toBe('cancelled');
     expect(store.loaded).toBeNull();
     expect(store.rootStore.dataStore.occurrence).toBeNull();
     expect(store.rootStore.dataStore.job?.outcome).toEqual({ emptyReason: 'cancelledEarly', previousKept: false });
@@ -690,10 +690,10 @@ describe('ExplorerStore.load into the data store', () => {
     });
     const { store } = setup();
     await store.load();
-    expect(store.job?.state).toBe('done');
-    expect(store.job?.error).toContain('OBIS');
-    expect(store.job?.perSource.find((p) => p.source === 'obis')?.state).toBe('error');
-    expect(store.lastLoad?.partial).not.toBeNull();
+    expect(store.rootStore.dataStore.job?.state).toBe('done');
+    expect(store.rootStore.dataStore.job?.error).toContain('OBIS');
+    expect(store.rootStore.dataStore.job?.perSource.find((p) => p.source === 'obis')?.state).toBe('error');
+    expect(store.loaded?.partial).not.toBeNull();
   });
 });
 
@@ -713,7 +713,7 @@ describe('DataStore stream loads (S2a)', () => {
     expect(dataStore.citations).toEqual([]);
     expect(dataStore.methodsText).not.toContain('GBIF');
     expect(store.loaded).toBeNull();
-    expect(store.lastLoad).toBeNull();
+    expect(store.loaded).toBeNull();
   });
 
   it('discards before the first record without touching the previous source or data', async () => {
@@ -753,7 +753,7 @@ describe('DataStore stream loads (S2a)', () => {
     const running = store.load();
     await vi.waitFor(() => expect(dataStore.occurrence?.status).toBe('loading'));
     speciesStore.clearData.mockClear();
-    store.cancel('discard');
+    store.rootStore.dataStore.cancel('discard');
     open();
     await running;
     expect(dataStore.job?.state).toBe('cancelled');
@@ -777,7 +777,7 @@ describe('DataStore stream loads (S2a)', () => {
     const source = dataStore.occurrence;
     expect(source).toMatchObject({ kind: 'explorer-query', status: 'loading', provenance: null, completedAt: null, cap: store.cap });
     expect(store.loaded).toBeNull();
-    expect(store.lastLoad).toBeNull();
+    expect(store.loaded).toBeNull();
     expect(store.loadedMatchesQuery).toBe(false);
     expect(store.methodsText).toBe('');
     expect(dataStore.methodsText).toBe(`Loading ${store.querySummary}…`);
@@ -827,22 +827,15 @@ describe('DataStore stream loads (S2a)', () => {
     expect(internals.planController).toBe(before.controller);
   });
 
-  it('has no add mode and no minimized state', () => {
+  it('has no add mode and one open flag', () => {
     const { store } = setup();
-    store.setLoadMode('add');
-    expect(store.loadMode).toBe('replace');
-    expect(() => {
-      // @ts-expect-error loadMode is read-only: every load replaces.
-      store.loadMode = 'add';
-    }).toThrow();
+    for (const removed of ['loadMode', 'setLoadMode', 'minimized', 'setMinimized', 'lastLoad', 'job']) {
+      expect(removed in store).toBe(false);
+    }
     store.open();
-    store.setMinimized(true);
+    expect(store.isOpen).toBe(true);
+    store.close();
     expect(store.isOpen).toBe(false);
-    expect(store.minimized).toBe(false);
-    expect(() => {
-      // @ts-expect-error minimized is read-only: the portal is open or closed.
-      store.minimized = true;
-    }).toThrow();
   });
 });
 

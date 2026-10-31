@@ -137,7 +137,7 @@ export default observer(function DownloadStatus() {
   const [checking, setChecking] = useState(false);
 
   if (downloads.length === 0) return null;
-  const citedKey = explorerStore.lastLoad?.gbifDownloadKey;
+  const citedKey = explorerStore.loaded?.gbifDownloadKey;
 
   return (
     <Box>

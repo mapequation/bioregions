@@ -12,6 +12,7 @@ import {
   LuTriangleAlert,
 } from 'react-icons/lu';
 import { useStore } from '@/store';
+import { explorerJob } from '@/store/ExplorerStore';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt, fmtTimestamp } from '../format';
 import {
@@ -148,9 +149,11 @@ export interface LoadedPanelProps {
 
 /** Success panel shown in place of the KPI strip after a load, with the partial-load banner. */
 export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
-  const { explorerStore: ex, infomapStore, speciesStore } = useStore();
-  const last = ex.lastLoad;
-  if (!last) return null;
+  const { explorerStore: ex, dataStore, infomapStore, speciesStore } = useStore();
+  const loaded = ex.loaded;
+  if (!loaded) return null;
+  // An empty load keeps the previous source; its outcome is on the job.
+  const last = { ...loaded, ...explorerJob(dataStore.job)?.outcome };
 
   const empty = emptyReasonOf(last);
   if (empty) return <EmptyPanel reason={empty} previousKept={last.previousKept} />;
@@ -166,7 +169,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const time = fmtTimestamp(last.retrievedAt);
   const partial = last.partial;
   const skipped = (last as { bioregionsSkipped?: boolean }).bioregionsSkipped === true;
-  const runAnyway = (ex as { runBioregionsAnyway?: () => void }).runBioregionsAnyway;
+  const runAnyway = () => void dataStore.runBioregionsAnyway();
   const coverage =
     partial?.speciesLoaded != null && partial.speciesPlanned != null && partial.speciesPlanned > 0
       ? ` (${fmtInt(partial.speciesLoaded)} of ${fmtInt(partial.speciesPlanned)} species)`
@@ -187,7 +190,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
     partial: last.partial,
   });
   const story =
-    matching != null && matching > 0 && last.mode !== 'add' ? loadStory({ matching, notSpecies, lowCount, drops }) : null;
+    matching != null && matching > 0 ? loadStory({ matching, notSpecies, lowCount, drops }) : null;
   const palette = partial ? 'orange' : 'green';
   const missing = partial ? missingSpeciesOf(partial) : [];
 
@@ -222,7 +225,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
         <Flex gridColumn="2 / -1" align="center" columnGap={3} rowGap={1.5} wrap="wrap" minW={0}>
           <HStack gap={2} minW={0} align="baseline" flex="1 0 auto">
             <Text fontSize="md" fontWeight="semibold" color="fg">
-              {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(records)} records
+              Loaded {fmtInt(records)} records
             </Text>
             {time && (
               <Text as="span" fontSize="xs" color="fg.muted" flexShrink={0} data-testid="loaded-time">

@@ -136,7 +136,7 @@ function OrDivider() {
 /** Why a citable download can't be requested for the query, or null. */
 function useRequestBlocker(): string | null {
   const { explorerStore } = useStore();
-  const q = explorerStore.lastLoad?.query ?? explorerStore.query;
+  const q = explorerStore.loaded?.query ?? explorerStore.query;
   if (!explorerStore.online) return 'You’re offline.';
   const runnable = isQueryRunnable(q);
   if (!runnable.ok) return runnable.reason;
@@ -210,7 +210,7 @@ const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void
             </Flex>
           ))}
         </Box>
-        <Button {...secondaryButtonProps} mt={5} onClick={() => explorerStore.setTab('occurrences')}>
+        <Button {...secondaryButtonProps} mt={5} onClick={() => explorerStore.setTab('search')}>
           Go to Occurrences
           <LuArrowRight />
         </Button>
@@ -313,7 +313,10 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
                 ))}
               </Flex>
             </Box>
-            <Button {...secondaryButtonProps} onClick={() => explorerStore.editAndReload()}>
+            <Button {...secondaryButtonProps} onClick={() => {
+                explorerStore.resetToLoaded();
+                explorerStore.setTab('search');
+              }}>
               <LuPencil />
               Edit query & reload
             </Button>
@@ -423,7 +426,7 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
 export default observer(function CiteTab() {
   const { explorerStore } = useStore();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const last = explorerStore.lastLoad;
+  const last = explorerStore.loaded;
   return (
     <Box data-testid="cite-tab" maxW="960px" mx="auto" px={{ base: 4, md: 6 }} pt={6} pb={12}>
       {last ? (

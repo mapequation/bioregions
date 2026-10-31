@@ -1,4 +1,4 @@
-import { Box, Button, chakra, Flex, HStack, Icon, SegmentGroup, Skeleton, Text } from '@chakra-ui/react';
+import { Box, Button, chakra, Flex, HStack, Icon, Skeleton, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
@@ -6,17 +6,12 @@ import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input'
 import { InfoTip } from '@/components/ui/toggle-tip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
-import { NO_MATCHES_REASON } from '@/store/ExplorerStore';
+import { explorerJob, NO_MATCHES_REASON } from '@/store/ExplorerStore';
 import { primaryButtonProps } from '../buttonStyles';
 import { fmtBytes, fmtCompact, fmtInt } from '../format';
 import { acceptedOf, EMPTY_REASON_SHORT, EMPTY_TITLE, emptyReasonOf } from '../preview/cleaningSteps';
 import LoadProgress from './LoadProgress';
 import { fmtApproxMinutes, modEnterLabel, niceCapAbove, yearsToFitCap } from './loadMath';
-
-const MODE_ITEMS = [
-  { value: 'replace', label: 'Replace' },
-  { value: 'add', label: 'Add' },
-];
 
 const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
 const DUPLICATES_HINT = 'duplicates removed while loading';
@@ -143,9 +138,11 @@ const EstimateLine = observer(function EstimateLine() {
 
 /** Done state after a load of the current query: status text only (the actions live in LoadedPanel). */
 const DoneRow = observer(function DoneRow() {
-  const { explorerStore: ex } = useStore();
-  const last = ex.lastLoad;
-  if (!last) return null;
+  const { explorerStore: ex, dataStore } = useStore();
+  const loaded = ex.loaded;
+  if (!loaded) return null;
+  // An empty load keeps the previous source; its outcome is on the job.
+  const last = { ...loaded, ...explorerJob(dataStore.job)?.outcome };
   const empty = emptyReasonOf(last);
   if (empty) {
     // A cancelled-early load offers "Load again" in the panel above; the others need a new query.
@@ -194,7 +191,7 @@ const DoneRow = observer(function DoneRow() {
       />
       <Text fontSize="sm" color="fg.muted" truncate fontVariantNumeric="tabular-nums">
         <Box as="span" color="fg" fontWeight="semibold">
-          {last.mode === 'add' ? 'Added' : 'Loaded'} {fmtInt(accepted)} records
+          Loaded {fmtInt(accepted)} records
         </Box>
         {partial && (
           <Box as="span" color="orange.fg" fontWeight="semibold">
@@ -231,7 +228,7 @@ const CapField = observer(function CapField() {
           setText(e.value);
           if (Number.isFinite(e.valueAsNumber) && e.valueAsNumber >= MIN_CAP) ex.setCap(Math.round(e.valueAsNumber));
         }}
-        disabled={!!ex.job && (ex.job.state === 'planning' || ex.job.state === 'streaming')}
+        disabled={ex.isLoading}
         data-testid="load-cap"
       >
         <NumberInputField fontVariantNumeric="tabular-nums" aria-label="Record cap" />
@@ -300,10 +297,12 @@ const OverCapRow = observer(function OverCapRow() {
   );
 });
 
-/** Bottom dock: estimate, cap, Replace/Add and the Load button; becomes LoadProgress (same height) while loading. */
+/** Bottom dock: estimate, cap and the Load button; becomes LoadProgress (same height) while loading. */
 export default observer(function LoadDock() {
-  const { explorerStore: ex, speciesStore } = useStore();
-  const { job, canLoad, estimate, lastLoad, loadMode } = ex;
+  const { explorerStore: ex, dataStore, speciesStore } = useStore();
+  const { canLoad, estimate, loaded } = ex;
+  const job = explorerJob(dataStore.job);
+  const outcome = job?.outcome;
   const loading = !!job && (job.state === 'planning' || job.state === 'streaming');
   const rootRef = useRef<HTMLDivElement>(null);
   // Height of the dock before the load started: the progress row keeps it, so nothing above moves.
@@ -328,7 +327,7 @@ export default observer(function LoadDock() {
     );
 
   // An empty load ends as a job error; the dock says why in the neutral empty row instead.
-  const emptyLoad = lastLoad != null && emptyReasonOf(lastLoad) != null;
+  const emptyLoad = loaded != null && emptyReasonOf({ ...loaded, ...outcome }) != null;
   if (ex.loadedMatchesQuery && (job?.state !== 'error' || emptyLoad)) {
     return (
       <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
@@ -337,9 +336,9 @@ export default observer(function LoadDock() {
     );
   }
 
-  const dirty = !!lastLoad && ex.dirty.size > 0;
+  const dirty = !!loaded && ex.dirty.size > 0;
   // The count lives in the estimate line; the button never promises a number.
-  const label = loadMode === 'add' ? 'Add records' : dirty ? 'Reload with changes' : 'Load records';
+  const label = dirty ? 'Reload with changes' : 'Load records';
   const reason = canLoad.ok ? null : canLoad.reason;
   // Reasons already said elsewhere in the dock are not repeated next to the button.
   const inlineReason =
@@ -364,7 +363,7 @@ export default observer(function LoadDock() {
           <Icon as={LuCircleX} boxSize={4} flexShrink={0} />
           <Text fontSize="sm" flex="1" minW={0} truncate>
             Load failed{job.error ? `: ${job.error}` : ''}.
-            {(emptyLoad ? lastLoad?.previousKept : speciesStore.numRecords > 0) && ' Your previous data is unchanged.'}
+            {(emptyLoad ? outcome?.previousKept : speciesStore.numRecords > 0) && ' Your previous data is unchanged.'}
           </Text>
           <Button size="xs" variant="outline" onClick={() => ex.load()}>
             Try again
@@ -378,18 +377,6 @@ export default observer(function LoadDock() {
         </Box>
         <HStack gap={4} flexShrink={0}>
           <CapField />
-          <SegmentGroup.Root
-            size="sm"
-            value={loadMode}
-            onValueChange={(e) => {
-              if (e.value === 'replace' || e.value === 'add') ex.setLoadMode(e.value);
-            }}
-            aria-label="Load mode"
-            data-testid="load-mode"
-          >
-            <SegmentGroup.Indicator />
-            <SegmentGroup.Items items={MODE_ITEMS} />
-          </SegmentGroup.Root>
         </HStack>
         <HStack gap={3} flexShrink={0} ms="auto">
           {inlineReason && (
@@ -398,7 +385,7 @@ export default observer(function LoadDock() {
             </Text>
           )}
           <Tooltip
-            content={reason ?? `${loadMode === 'add' ? 'Add to the current data' : 'Load'} (${SHORTCUT})`}
+            content={reason ?? `Load (${SHORTCUT})`}
             disabled={!reason}
             openDelay={300}
           >
@@ -411,7 +398,7 @@ export default observer(function LoadDock() {
                 fontVariantNumeric="tabular-nums"
                 data-testid="load-button"
               >
-                {dirty && loadMode !== 'add' && <LuRefreshCw />}
+                {dirty && <LuRefreshCw />}
                 {label}
                 <Box as="span" aria-hidden fontSize="xs" opacity={0.7} ms={1} fontWeight="normal">
                   {SHORTCUT}

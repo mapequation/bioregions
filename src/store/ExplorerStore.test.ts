@@ -3,6 +3,7 @@ import { HttpError } from '../sources/http';
 import { DEFAULT_BASIS } from '../sources/query';
 import type { PreviewSummary, SourceId, TaxonRef } from '../sources/types';
 import ExplorerStore, {
+  explorerJob,
   buildLedger,
   checkDownload,
   computeBiasFlags,
@@ -277,21 +278,45 @@ describe('load progress helpers', () => {
     expect(speciesCoverage([{}])).toBeNull();
   });
 
-  it('keeps the loaded provenance after an empty load and reads the outcome from the job', () => {
+  it('keeps the loaded provenance after an empty load; the outcome stays on the job', () => {
     const first = { accepted: 5, query: explorerDefaultQuery() } as LoadProvenance;
     const source = { id: 'src-1', kind: 'explorer-query', status: 'done', provenance: first } as QueryOccurrences;
     const job = { kind: 'query', state: 'error', outcome: { emptyReason: 'noMatches', previousKept: true } } as DataLoadJob;
     const s = new ExplorerStore({ dataStore: { occurrence: source, job, isLoading: false } } as unknown as RootStore);
     expect(s.loaded).toBe(first);
-    expect(s.lastLoad).toMatchObject({ accepted: 5, mode: 'replace', emptyReason: 'noMatches', previousKept: true });
+    expect(explorerJob(job)?.outcome).toEqual({ emptyReason: 'noMatches', previousKept: true });
+    expect(explorerJob({ ...job, kind: 'file' })).toBeNull();
     // While the source streams, nothing counts as loaded.
     const streaming = new ExplorerStore({
       dataStore: { occurrence: { ...source, status: 'loading', provenance: null }, job: null, isLoading: true },
     } as unknown as RootStore);
     expect(streaming.loaded).toBeNull();
-    expect(streaming.lastLoad).toBeNull();
     s.dispose();
     streaming.dispose();
+  });
+
+  it('schedules no preview while the portal is closed and catches up on open (§5.7)', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new ExplorerStore({ dataStore: { occurrence: null, job: null, isLoading: false } } as unknown as RootStore);
+      const timer = () => (s as unknown as { previewTimer: unknown }).previewTimer;
+      s.addTaxon(felidae);
+      expect(timer()).toBeNull();
+      s.open();
+      expect(s.tab).toBe('search');
+      expect(timer()).not.toBeNull();
+      s.close();
+      expect(s.isOpen).toBe(false);
+      expect(timer()).toBeNull();
+      s.setArea({ kind: 'countries', codes: ['SE'] });
+      expect(timer()).toBeNull();
+      s.open('cite');
+      expect(s.tab).toBe('cite');
+      expect(timer()).not.toBeNull();
+      s.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -667,6 +692,12 @@ describe('dirtySections', () => {
 });
 
 describe('preview pipeline', () => {
+  // Previews run only while the portal is open (§5.7).
+  const openStore = () => {
+    const s = newStore();
+    s.open();
+    return s;
+  };
   beforeEach(() => {
     vi.useFakeTimers();
     vi.mocked(previewGbif).mockReset();
@@ -681,7 +712,7 @@ describe('preview pipeline', () => {
       preview('gbif', { total: 900, filterImpact: { uncertainty: 100 } }),
     );
     vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 100 }));
-    const s = newStore();
+    const s = openStore();
     expect(s.previewState).toBe('empty');
     s.addTaxon(felidae);
     s.addTaxon({ ...felidae, name: 'felidae' });
@@ -714,7 +745,7 @@ describe('preview pipeline', () => {
       preview('gbif', { total: 900, baseTotal: 1800, filterImpact: { uncertainty: 450 } }),
     );
     vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 0, baseTotal: 0 }));
-    const s = newStore();
+    const s = openStore();
     s.addTaxon(felidae);
     await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
     expect(s.ledgerBase).toBe(1800);
@@ -735,7 +766,7 @@ describe('preview pipeline', () => {
       .mockRejectedValueOnce(new HttpError(429, '', 'https://api.gbif.org/v1/x'))
       .mockResolvedValueOnce(preview('gbif'));
     vi.mocked(previewObis).mockRejectedValue(new HttpError(502, 'bad', 'https://api.obis.org/v3/x'));
-    const s = newStore();
+    const s = openStore();
     s.addTaxon(felidae);
     await vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS + 10);
     expect(s.sources.gbif.state).toBe('rateLimited');
@@ -753,7 +784,7 @@ describe('preview pipeline', () => {
   });
 
   it('does not preview a query that cannot run and explains why Load is disabled', () => {
-    const s = newStore();
+    const s = openStore();
     expect(s.canLoad).toEqual({ ok: false, reason: 'Add a taxon or narrow the area to a region' });
     s.addTaxon(felidae);
     expect(s.canLoad).toEqual({ ok: true });
@@ -765,7 +796,7 @@ describe('preview pipeline', () => {
   it('disables Load when every settled preview matches no record', async () => {
     vi.mocked(previewGbif).mockResolvedValue(preview('gbif', { total: 0, species: 0 }));
     vi.mocked(previewObis).mockResolvedValue(preview('obis', { total: 0, species: 0 }));
-    const s = newStore();
+    const s = openStore();
     s.addTaxon(felidae);
     // Previews still pending: Load keeps its usual state.
     expect(s.canLoad).toEqual({ ok: true });

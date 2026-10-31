@@ -29,8 +29,8 @@ function Step({ title, children }: { title: string; children: React.ReactNode })
 
 /** Option ①: register the streamed records as a GBIF derived dataset and cite its DOI. */
 export default observer(function DerivedDatasetCard() {
-  const { explorerStore } = useStore();
-  const last = explorerStore.lastLoad;
+  const { explorerStore, dataStore } = useStore();
+  const last = explorerStore.loaded;
   const gbifDatasets = last?.datasetCounts.gbif ?? [];
   const gbifRecords = gbifDatasets.reduce((s, d) => s + d.count, 0);
   const csv =
@@ -89,7 +89,8 @@ export default observer(function DerivedDatasetCard() {
           onSubmit={(e) => {
             e.preventDefault();
             setTouched(true);
-            if (normalized) explorerStore.setDerivedDoi(normalized);
+            const source = dataStore.occurrence;
+            if (normalized && source) dataStore.patchOccurrence(source.id, { derivedDoi: normalized });
           }}
         >
           <HStack gap={2} align="center" maxW="480px">

@@ -24,7 +24,7 @@ export function exampleNote(item: SavedQuery): { why: string; icon: IconType } {
 /** Restore a saved, recent or example query and show it (restore re-previews, never loads). */
 export function restoreInto(store: { restore(id: string): void; setTab(tab: Tab): void }, item: Pick<SavedQuery, 'id'>) {
   store.restore(item.id);
-  store.setTab('occurrences');
+  store.setTab('search');
 }
 
 /** Sources that can serve the example: OBIS only when a taxon has an AphiaID. */

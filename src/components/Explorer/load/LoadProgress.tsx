@@ -13,7 +13,6 @@ import {
   Text,
   VisuallyHidden,
 } from '@chakra-ui/react';
-import { reaction } from 'mobx';
 import { observer } from 'mobx-react';
 import { type ComponentProps, useEffect, useId, useRef, useState } from 'react';
 import {
@@ -21,7 +20,6 @@ import {
   LuChevronDown,
   LuChevronUp,
   LuCircleX,
-  LuMinimize2,
   LuPause,
   LuPlay,
   LuSquare,
@@ -29,8 +27,8 @@ import {
 } from 'react-icons/lu';
 import type { SourceId } from '@/sources/types';
 import { useStore } from '@/store';
+import { explorerJob } from '@/store/ExplorerStore';
 import type { SourceProgress } from '@/store/explorer/types';
-import { explorerUi } from '../explorerUi';
 import { fmtBytes, fmtDuration, fmtInt } from '../format';
 import { progressPercent, secondsUntil } from './loadMath';
 
@@ -144,12 +142,6 @@ function SourceRow({ p, now }: { p: SourceProgress | { source: SourceId; plannin
   );
 }
 
-/** Optional pause API on the store (guarded until every path has it). */
-interface PausableStore {
-  pauseLoad?: () => void;
-  resumeLoad?: () => void;
-}
-
 /** Choice row in the cancel popover: equal weight, nothing pre-selected, label and an optional note. */
 function ChoiceButton({
   icon,
@@ -201,13 +193,12 @@ function ChoiceButton({
  * while it is open and resumes when it closes without a choice (Esc, click outside, trigger).
  */
 const CancelPopover = observer(function CancelPopover() {
-  const { explorerStore: ex } = useStore();
-  const pausable = ex as unknown as PausableStore;
+  const { dataStore } = useStore();
   const [open, setOpen] = useState(false);
   const continueRef = useRef<HTMLButtonElement>(null);
   // Set when a choice is made, so closing the popover by its choice does not also resume.
   const chose = useRef(false);
-  const job = ex.job;
+  const job = explorerJob(dataStore.job);
   // The load is paused while the popover is open, so these counts are what "Keep" keeps.
   const accepted = job?.funnel.accepted ?? 0;
   // Species with at least one kept record (what the loaded panel counts after a keep);
@@ -221,32 +212,27 @@ const CancelPopover = observer(function CancelPopover() {
   const openPopover = useRef(() => {});
   openPopover.current = () => {
     chose.current = false;
-    pausable.pauseLoad?.call(ex);
+    dataStore.pause();
     setOpen(true);
   };
   const dismiss = () => {
     setOpen(false);
     // Closed with Esc, a click outside or the trigger: carry on loading.
     queueMicrotask(() => {
-      if (!chose.current) pausable.resumeLoad?.call(ex);
+      if (!chose.current) dataStore.resume();
     });
   };
   const choose = (choice: 'continue' | 'keep' | 'discard') => {
     chose.current = true;
     setOpen(false);
-    if (choice === 'continue') pausable.resumeLoad?.call(ex);
-    else ex.cancel(choice);
+    if (choice === 'continue') dataStore.resume();
+    else dataStore.cancel(choice);
   };
 
   useEffect(() => {
     const onEvent = () => openPopover.current();
     window.addEventListener(CANCEL_MENU_EVENT, onEvent);
-    // Esc while streaming: the dialog bumps explorerUi.cancelMenuRequest.
-    const stop = reaction(() => explorerUi.cancelMenuRequest, onEvent);
-    return () => {
-      window.removeEventListener(CANCEL_MENU_EVENT, onEvent);
-      stop();
-    };
+    return () => window.removeEventListener(CANCEL_MENU_EVENT, onEvent);
   }, []);
 
   const speciesText = speciesTotal > 0 ? ` (${fmtInt(speciesDone)} of ${fmtInt(speciesTotal)} species)` : '';
@@ -321,8 +307,8 @@ const CancelPopover = observer(function CancelPopover() {
  * change; the per-source rows open as a sheet overlaid above the dock.
  */
 export default observer(function LoadProgress() {
-  const { explorerStore: ex } = useStore();
-  const job = ex.job;
+  const { explorerStore: ex, dataStore } = useStore();
+  const job = explorerJob(dataStore.job);
   const active = !!job && (job.state === 'planning' || job.state === 'streaming');
   const now = useNow(active);
   const [announcement, setAnnouncement] = useState('');
@@ -460,9 +446,6 @@ export default observer(function LoadProgress() {
             data-testid="load-progress-details"
           >
             {details ? <LuChevronDown /> : <LuChevronUp />} Details
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => ex.setMinimized(true)}>
-            <LuMinimize2 /> Minimize
           </Button>
           <CancelPopover />
         </HStack>

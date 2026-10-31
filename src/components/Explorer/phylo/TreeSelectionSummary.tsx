@@ -377,7 +377,7 @@ export default observer(function TreeSelectionSummary() {
                   </Alert.Title>
                   <Alert.Description>The tree citation is now part of the methods text.</Alert.Description>
                 </Alert.Content>
-                <Button {...primaryButtonProps} flexShrink={0} onClick={() => explorerStore.setMinimized(true)}>
+                <Button {...primaryButtonProps} flexShrink={0} onClick={() => explorerStore.close()}>
                   <LuMap /> View bioregions
                 </Button>
               </Alert.Root>

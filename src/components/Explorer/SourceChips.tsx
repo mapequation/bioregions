@@ -86,7 +86,7 @@ const SourceChip = observer(function SourceChip({ id }: { id: SourceId }) {
   const visibleSuffix =
     status === 'empty' ? ' no records' : status === 'rateLimited' && seconds != null ? ` ${seconds} s` : '';
   const label = SOURCES[id].label;
-  const locked = explorerStore.job?.state === 'planning' || explorerStore.job?.state === 'streaming';
+  const locked = explorerStore.isLoading;
 
   let detail: string;
   if (status === 'off') detail = `${label} is switched off, so it adds no records. Click to include it.`;

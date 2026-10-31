@@ -230,12 +230,12 @@ const InsightsButton = observer(function InsightsButton() {
 export default observer(function PreviewColumn() {
   const { explorerStore } = useStore();
   const drawer = useInsightsDrawer();
-  const { job, lastLoad, previewState } = explorerStore;
-  const loading = job != null && (job.state === 'planning' || job.state === 'streaming');
-  const unchangedSinceLoad = lastLoad != null && explorerStore.dirty.size === 0;
+  const { loaded, previewState } = explorerStore;
+  const loading = explorerStore.isLoading;
+  const unchangedSinceLoad = loaded != null && explorerStore.dirty.size === 0;
   const mode = loading ? 'live' : unchangedSinceLoad ? 'frozen' : 'preview';
   const rootRef = useRef<HTMLDivElement>(null);
-  useScrollTopOnLoad(rootRef, loading ? null : (lastLoad?.retrievedAt ?? null));
+  useScrollTopOnLoad(rootRef, loading ? null : (loaded?.retrievedAt ?? null));
 
   if (previewState === 'empty' && !loading && !unchangedSinceLoad && !isQueryRunnable(explorerStore.query).ok) {
     return (

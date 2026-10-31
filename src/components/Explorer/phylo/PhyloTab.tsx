@@ -91,7 +91,7 @@ export default observer(function PhyloTab() {
               pick a published tree to weight the bioregions by phylogeny.
             </Text>
           </Stack>
-          <Button {...secondaryButtonProps} onClick={() => explorerStore.setTab('occurrences')}>
+          <Button {...secondaryButtonProps} onClick={() => explorerStore.setTab('search')}>
             <LuArrowLeft /> Go to Occurrences
           </Button>
         </StartCard>

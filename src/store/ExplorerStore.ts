@@ -87,7 +87,6 @@ import type {
   Composition,
   CountStory,
   DownloadCredentials,
-  EmptyReason,
   Estimate,
   GbifDownload,
   InsightsScope,
@@ -230,14 +229,13 @@ export function previewKey(query: OccurrenceQuery): string {
   });
 }
 
+/** The DataStore job when it is an explorer load (a query, a Continue or a zip), else null. */
+export function explorerJob(job: DataLoadJob | null | undefined): DataLoadJob | null {
+  return job && (job.kind === 'query' || job.kind === 'continue' || job.kind === 'zip') ? job : null;
+}
+
 /** Load-button reason when every source's preview matched no record. */
 export const NO_MATCHES_REASON = 'No records match this query';
-
-/**
- * @deprecated removed in U1: the shape `lastLoad` had (a load's provenance with its mode and
- * empty-load outcome), kept for the UI until it reads `loaded` and `dataStore.job.outcome`.
- */
-export type LegacyLoad = LoadProvenance & { mode: 'replace' | 'add'; emptyReason?: EmptyReason; previousKept?: boolean };
 
 /**
  * Previews of enabled sources that have a (possibly stale) result, with the ledger counts
@@ -916,10 +914,14 @@ function listWords(items: string[]): string {
 export default class ExplorerStore {
   rootStore: RootStore;
 
-  /** Whether the full-screen explorer is shown. */
+  /** Whether the Data portal is shown (the one open flag; `tab` says where). */
   isOpen = false;
+  /** Set while closed when a preview was skipped or aborted; open() then reruns it. */
+  private previewStale = true;
+  /** Preview key of the last preview started. */
+  private previewedKey: string | null = null;
   /** Active header tab. */
-  tab: Tab = 'occurrences';
+  tab: Tab = 'search';
   /** Browser connectivity; previews pause and loading is disabled while offline. */
   online = typeof navigator === 'undefined' ? true : navigator.onLine !== false;
   /** The query being edited. */
@@ -982,6 +984,8 @@ export default class ExplorerStore {
       | 'previewController'
       | 'previewTimer'
       | 'retryTimers'
+      | 'previewStale'
+      | 'previewedKey'
       | 'gbifCountCache'
       | 'disposers'
       | 'rawPlans'
@@ -997,6 +1001,8 @@ export default class ExplorerStore {
         previewController: false,
         previewTimer: false,
         retryTimers: false,
+        previewStale: false,
+        previewedKey: false,
         gbifCountCache: false,
         disposers: false,
         rawPlans: observable.ref,
@@ -1074,17 +1080,24 @@ export default class ExplorerStore {
 
   // --- Workspace --------------------------------------------------------------------
 
-  /** Show the explorer, optionally on a tab. */
+  /**
+   * Show the portal, on `tab` or else the last tab. Previews resume when the query changed
+   * while it was closed (or has never been previewed).
+   */
   open(tab?: Tab) {
     this.isOpen = true;
     if (tab) this.tab = tab;
-    const idle = SOURCE_IDS.every((id) => !this.query.sources[id] || this.sources[id].state === 'idle');
-    if (idle && isQueryRunnable(this.query).ok) this.schedulePreview();
+    if (this.previewStale || this.previewedKey !== previewKey(this.query)) this.schedulePreview();
   }
 
-  /** Hide the explorer. */
+  /**
+   * Hide the portal. In-flight previews and their retries stop, and no new one starts until it
+   * opens again; a running load and download polling continue.
+   */
   close() {
     this.isOpen = false;
+    this.abortPreview();
+    this.previewStale = true;
   }
 
   /** Switch header tab. */
@@ -1256,7 +1269,14 @@ export default class ExplorerStore {
       }
       return;
     }
+    // No plan or preview fetching while the portal is closed: open() catches up.
+    if (!this.isOpen) {
+      this.previewStale = true;
+      return;
+    }
     if (!this.online) return;
+    this.previewStale = false;
+    this.previewedKey = previewKey(query);
     for (const id of SOURCE_IDS) {
       const s = this.sources[id];
       if (!s.enabled || !s.supports.ok) {
@@ -2001,7 +2021,7 @@ export default class ExplorerStore {
 
   /** Whether an explorer load (a query or a zip) is planning or streaming. */
   get isLoading(): boolean {
-    const state = this.job?.state;
+    const state = explorerJob(this.rootStore.dataStore?.job)?.state;
     return state === 'planning' || state === 'streaming';
   }
 
@@ -2092,7 +2112,7 @@ export default class ExplorerStore {
     if (!guard) return { started: false, reason: LOAD_RUNNING };
     try {
       this.restoreQuery(entry.query);
-      this.open('occurrences');
+      this.open('search');
       // The preview pipeline may replace this plan request with its own: then wait for that one.
       const ok = await this.fetchPlans();
       if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
@@ -2118,85 +2138,7 @@ export default class ExplorerStore {
     if (query) this.setQuery(query);
   }
 
-  // --- Compat for the UI until U1 ---------------------------------------------------------
-
-  /** @deprecated removed in U1: read `loaded` and `dataStore.job.outcome`. */
-  get lastLoad(): LegacyLoad | null {
-    const load = this.loaded;
-    if (!load) return null;
-    const job = this.job;
-    const outcome = job && 'outcome' in job ? job.outcome : undefined;
-    return {
-      ...load,
-      mode: 'replace',
-      ...(outcome && { emptyReason: outcome.emptyReason, previousKept: outcome.previousKept }),
-    };
-  }
-
-  /** @deprecated removed in U1: `dataStore.job` (here only query and zip loads). */
-  get job(): DataLoadJob | null {
-    const job = this.rootStore.dataStore?.job;
-    return job && (job.kind === 'query' || job.kind === 'continue' || job.kind === 'zip') ? job : null;
-  }
-
-  /** @deprecated removed in U1: "Add" is gone and every load replaces. */
-  get loadMode(): 'replace' | 'add' {
-    return 'replace';
-  }
-
-  /** @deprecated removed in U1: a no-op, since "Add" is gone. */
-  setLoadMode(_mode: 'replace' | 'add') {
-    // Every load replaces its slot (D1).
-  }
-
-  /** @deprecated removed in U1: the portal is open or closed (D4). */
-  get minimized(): boolean {
-    return false;
-  }
-
-  /** @deprecated removed in U1: minimizing closes the portal; a running load continues. */
-  setMinimized(minimized: boolean) {
-    if (minimized) this.close();
-  }
-
-  /** @deprecated removed in U1: `resetToLoaded()`, then the search tab. */
-  editAndReload() {
-    this.resetToLoaded();
-    this.setTab('occurrences');
-  }
-
-  /** @deprecated removed in U1: `dataStore.cancel`. */
-  cancel(mode: 'keep' | 'discard') {
-    this.rootStore.dataStore.cancel(mode);
-  }
-
-  /** @deprecated removed in U1: `dataStore.pause`. */
-  pauseLoad() {
-    this.rootStore.dataStore.pause();
-  }
-
-  /** @deprecated removed in U1: `dataStore.resume`. */
-  resumeLoad() {
-    this.rootStore.dataStore.resume();
-  }
-
-  /** @deprecated removed in U1: `dataStore.runBioregionsAnyway`. */
-  runBioregionsAnyway(): Promise<void> {
-    return this.rootStore.dataStore.runBioregionsAnyway();
-  }
-
   // --- Citation ---------------------------------------------------------------------
-
-  /**
-   * Store the DOI of a registered derived dataset (empty clears it).
-   * @deprecated removed in U1: `dataStore.patchOccurrence(id, { derivedDoi })`.
-   */
-  setDerivedDoi(doi: string) {
-    const { dataStore } = this.rootStore;
-    const source = dataStore.occurrence;
-    if (!source) return;
-    dataStore.patchOccurrence(source.id, { derivedDoi: doi.trim() || undefined });
-  }
 
   /** Request a citable GBIF download for the loaded query; the password is used once and never stored. */
   async requestDownload({ user, password, email }: DownloadCredentials): Promise<void> {
@@ -2452,7 +2394,7 @@ export default class ExplorerStore {
     const q = structuredClone(toJS(query));
     this.query = q;
     for (const id of SOURCE_IDS) this.sources[id].enabled = q.sources[id];
-    this.tab = 'occurrences';
+    this.tab = 'search';
   }
 
   /** Expand or collapse the methods strip. */

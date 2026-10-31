@@ -7,7 +7,7 @@ import { controlPanelWidth } from './ControlPanel/ControlPanel';
 import { useStore } from '../store';
 import Statistics from './Statistics';
 import Documentation from './Documentation';
-import { ExplorerDialog } from './Explorer';
+import { DataPortal } from './Explorer';
 import ColorMode from './ControlPanel/ColorMode';
 import TreeStatusBar from './StatusBar/TreeStatusBar';
 import { formatThousands } from '../utils/formats';
@@ -143,7 +143,7 @@ export default observer(function App() {
         <Statistics />
         <Documentation />
       </VStack>
-      <ExplorerDialog />
+      <DataPortal />
     </Box>
   );
 });

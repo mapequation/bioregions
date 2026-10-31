@@ -1,23 +1,27 @@
 import { Box, Flex, HStack, Icon, IconButton, Kbd, Separator, Stack, Tabs, Text } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { LuCircleHelp, LuMinimize2, LuWifiOff, LuX } from 'react-icons/lu';
+import { LuCircleHelp, LuWifiOff, LuX } from 'react-icons/lu';
 import { useStore } from '../../store';
 import type { Tab } from '../../store/explorer/types';
 import { DialogContent, DialogRoot, DialogTitle } from '../ui/dialog';
 import { PopoverArrow, PopoverBody, PopoverContent, PopoverRoot, PopoverTitle, PopoverTrigger } from '../ui/popover';
 import { Tooltip } from '../ui/tooltip';
 import CiteTab from './cite/CiteTab';
+import ExamplesTab from './examples/ExamplesTab';
 import { explorerUi, TAXON_INPUT_SELECTOR } from './explorerUi';
 import LibraryMenu from './library/LibraryMenu';
 import OccurrencesTab from './OccurrencesTab';
 import PhyloTab from './phylo/PhyloTab';
 import SourceChips from './SourceChips';
+import UploadTab from './upload/UploadTab';
 import useExplorerShortcuts, { SHORTCUTS } from './useExplorerShortcuts';
 
 const TABS: { value: Tab; label: string }[] = [
-  { value: 'occurrences', label: 'Occurrences' },
+  { value: 'search', label: 'Search GBIF & OBIS' },
   { value: 'phylogeny', label: 'Phylogeny' },
-  { value: 'cite', label: 'Cite & reproduce' },
+  { value: 'upload', label: 'Upload' },
+  { value: 'examples', label: 'Examples' },
+  { value: 'cite', label: 'Cite' },
 ];
 
 const ShortcutHelp = observer(function ShortcutHelp() {
@@ -92,18 +96,19 @@ const OfflineBanner = observer(function OfflineBanner() {
   );
 });
 
-/** Full-screen data explorer: header with tabs, source chips and library; one body per tab. */
-export default observer(function ExplorerDialog() {
-  const { explorerStore } = useStore();
-  const open = explorerStore.isOpen && !explorerStore.minimized;
-  const streaming = explorerStore.job?.state === 'planning' || explorerStore.job?.state === 'streaming';
+/**
+ * Full-screen Data portal: header with tabs (plus source chips and library on the search
+ * tab); one body per tab. Close (✕, Esc) only hides it: a running load continues and its
+ * progress shows in the Data panel.
+ */
+export default observer(function DataPortal() {
+  const { explorerStore, dataStore } = useStore();
+  const open = explorerStore.isOpen;
+  // Any load (search, upload, example, tree) keeps running after Close.
+  const loading = dataStore.isLoading;
+  const onSearch = explorerStore.tab === 'search';
   useExplorerShortcuts(open);
-
-  // ✕ while streaming minimizes: the load continues and its progress shows in the Data section.
-  const closeOrMinimize = () => {
-    if (streaming) explorerStore.setMinimized(true);
-    else explorerStore.close();
-  };
+  const closeLabel = loading ? 'Close (Esc): loading continues; progress shows in the Data panel' : 'Close (Esc)';
 
   return (
     <DialogRoot
@@ -118,13 +123,10 @@ export default observer(function ExplorerDialog() {
         if (explorerUi.drawing) {
           e.preventDefault();
           explorerUi.setDrawing(false);
-        } else if (streaming) {
-          e.preventDefault();
-          explorerUi.requestCancelMenu();
         }
       }}
       onOpenChange={(e) => {
-        if (!e.open) closeOrMinimize();
+        if (!e.open) explorerStore.close();
       }}
     >
       <DialogContent
@@ -168,7 +170,7 @@ export default observer(function ExplorerDialog() {
               whiteSpace="nowrap"
               letterSpacing="tight"
             >
-              Data explorer
+              Data
             </DialogTitle>
             <Tabs.List borderBottomWidth={0} gap={1} css={{ '--tabs-height': '44px' }}>
               {TABS.map((t) => (
@@ -186,28 +188,21 @@ export default observer(function ExplorerDialog() {
             </Tabs.List>
             <Box flex="1" minW={2} />
             <HStack gap={2} flexShrink={0}>
-              <SourceChips />
-              <Separator orientation="vertical" h={5} />
-              <LibraryMenu />
+              {onSearch && (
+                <>
+                  <SourceChips />
+                  <Separator orientation="vertical" h={5} />
+                  <LibraryMenu />
+                </>
+              )}
               <ShortcutHelp />
-              <Tooltip content={streaming ? 'Minimize: the load continues' : 'Minimize to the map'} openDelay={400}>
+              <Tooltip content={closeLabel} openDelay={400}>
                 <IconButton
-                  aria-label="Minimize explorer"
-                  size="xs"
-                  variant="ghost"
-                  data-testid="explorer-minimize"
-                  onClick={() => explorerStore.setMinimized(true)}
-                >
-                  <LuMinimize2 />
-                </IconButton>
-              </Tooltip>
-              <Tooltip content={streaming ? 'Close (the load continues in the background)' : 'Close (Esc)'} openDelay={400}>
-                <IconButton
-                  aria-label="Close explorer"
+                  aria-label={closeLabel}
                   size="xs"
                   variant="ghost"
                   data-testid="explorer-close"
-                  onClick={closeOrMinimize}
+                  onClick={() => explorerStore.close()}
                 >
                   <LuX />
                 </IconButton>
@@ -215,11 +210,17 @@ export default observer(function ExplorerDialog() {
             </HStack>
           </Flex>
           <OfflineBanner />
-          <Tabs.Content value="occurrences" flex="1" minH={0} p={0}>
+          <Tabs.Content value="search" flex="1" minH={0} p={0}>
             <OccurrencesTab />
           </Tabs.Content>
           <Tabs.Content value="phylogeny" flex="1" minH={0} p={0} overflowY="auto">
             <PhyloTab />
+          </Tabs.Content>
+          <Tabs.Content value="upload" flex="1" minH={0} p={0} overflowY="auto">
+            <UploadTab />
+          </Tabs.Content>
+          <Tabs.Content value="examples" flex="1" minH={0} p={0} overflowY="auto">
+            <ExamplesTab />
           </Tabs.Content>
           <Tabs.Content value="cite" flex="1" minH={0} p={0} overflowY="auto">
             <CiteTab />

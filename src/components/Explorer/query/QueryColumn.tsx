@@ -59,8 +59,7 @@ export const QuerySectionBox = observer(function QuerySectionBox({ id, title, su
 export default observer(function QueryColumn() {
   const { explorerStore } = useStore();
   const q = explorerStore.query;
-  const job = explorerStore.job;
-  const locked = job?.state === 'planning' || job?.state === 'streaming';
+  const locked = explorerStore.isLoading;
   const presetLabel = { recommended: 'Recommended', permissive: 'Permissive', custom: 'Custom' }[explorerStore.preset];
 
   return (

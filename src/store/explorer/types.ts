@@ -16,7 +16,8 @@ import type { StopState } from '../data/types';
 
 // --- ExplorerStore -----------------------------------------------------------------
 
-export type Tab = 'occurrences' | 'phylogeny' | 'cite';
+/** Data portal tabs; `search` is the GBIF & OBIS query explorer. */
+export type Tab = 'search' | 'phylogeny' | 'upload' | 'examples' | 'cite';
 export type Preset = 'recommended' | 'permissive' | 'custom';
 export type ReqState = 'idle' | 'loading' | 'ready' | 'error' | 'rateLimited';
 
@@ -221,7 +222,7 @@ export interface LoadJob {
   /** Live species completeness (0..1) from the sources' speciesDone/speciesTotal; null when unknown. */
   speciesCoverage: number | null;
   /**
-   * Held by `pauseLoad()` (the cancel menu is open): no batch is counted or handed to
+   * Held by `dataStore.pause()` (the cancel menu is open): no batch is counted or handed to
    * SpeciesStore, so `funnel`, `speciesLoaded` and `perSource` stay frozen and
    * `cancel('keep')` keeps exactly those records.
    */

@@ -11,7 +11,7 @@ export default observer(function MethodsStrip() {
   const { explorerStore: ex } = useStore();
   const panelId = useId();
   // Until the query is runnable (and nothing is loaded) there is nothing to describe yet.
-  const draftable = ex.lastLoad != null || ex.previewState !== 'empty';
+  const draftable = ex.loaded != null || ex.previewState !== 'empty';
   const text = draftable ? ex.methodsText.trim() : '';
   const expanded = ex.methodsExpanded;
   // Same text as the store (and the Cite tab); "draft" until it describes the loaded data.

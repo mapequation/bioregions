@@ -6,8 +6,6 @@
 //   `setDrawing(false)` once a rectangle is committed with explorerStore.setArea.
 // - preview/KpiStrip renders the "Insights · ⚠ n" button when `useInsightsDrawer()` is
 //   true (below 1280 px) and calls `setInsightsOpen(true)`; OccurrencesTab owns the Drawer.
-// - load/LoadProgress opens its cancel menu when `cancelMenuRequest` changes (Esc while
-//   streaming bumps it).
 import { useBreakpointValue } from '@chakra-ui/react';
 import { makeAutoObservable } from 'mobx';
 
@@ -18,8 +16,6 @@ class ExplorerUi {
   insightsOpen = false;
   /** Shortcut help popover in the header. */
   helpOpen = false;
-  /** Incremented to ask the load progress to open its cancel menu. */
-  cancelMenuRequest = 0;
 
   constructor() {
     makeAutoObservable(this, {}, { autoBind: true });
@@ -35,10 +31,6 @@ class ExplorerUi {
 
   setHelpOpen(open: boolean) {
     this.helpOpen = open;
-  }
-
-  requestCancelMenu() {
-    this.cancelMenuRequest += 1;
   }
 }
 

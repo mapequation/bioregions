@@ -88,7 +88,7 @@ export default observer(function ZipDropzone({ onRequest }: ZipDropzoneProps) {
     else runInAction(() => (explorerStore.zipImport = null));
   };
   const zip = explorerStore.zipImport;
-  const lastLoad = explorerStore.lastLoad;
+  const lastLoad = explorerStore.loaded;
   const streamed = lastLoad?.funnel.accepted ?? null;
 
   if (zip?.state === 'parsing') {
