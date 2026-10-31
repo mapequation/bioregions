@@ -150,3 +150,46 @@ describe('ExplorerStore citation and library', () => {
     store.dispose();
   });
 });
+
+describe('ExplorerStore query examples', () => {
+  const bigGbifPlan = (q: OccurrenceQuery): StreamPlan => {
+    const n = 580_000;
+    const detail: GbifPlanDetail = { species: [{ key: 1, name: 'Felis catus', count: n }], total: n };
+    return { ...gbifPlan(q), expectedRecords: n, speciesCounts: [{ key: '1', label: 'Felis catus', count: n }], detail };
+  };
+  // A query example bigger than the default cap (finding: "Cats of the world", ~580k records).
+  function exampleSetup() {
+    const ctx = setup();
+    const loadQuery = vi.fn(async (_req: { cap: number }) => ({ started: true as const, committed: false }));
+    const dataStore = {
+      isLoading: false,
+      reserve: () => ({ handOff: <T>(start: () => T) => start(), release: () => {} }),
+      loadQuery,
+    };
+    (ctx.rootStore as unknown as { dataStore: unknown }).dataStore = dataStore;
+    vi.mocked(planSource).mockImplementation(async (id, q) =>
+      id === 'gbif' ? bigGbifPlan(q) : obisPlan(q),
+    );
+    return { ...ctx, loadQuery };
+  }
+
+  it('raises the cap to the example record count and loads', async () => {
+    const { store, loadQuery } = exampleSetup();
+    expect(store.cap).toBe(500_000);
+    const result = await store.loadExampleQuery({ id: 'cats', query: structuredClone(QUERY), records: { n: 580_000, approx: true } });
+    expect(result.started).toBe(true);
+    expect(store.cap).toBe(600_000);
+    expect(loadQuery).toHaveBeenCalledTimes(1);
+    expect(loadQuery.mock.calls[0][0].cap).toBe(600_000);
+    store.dispose();
+  });
+
+  it('raises the cap to the plan estimate when the catalog count is low', async () => {
+    const { store, loadQuery } = exampleSetup();
+    const result = await store.loadExampleQuery({ id: 'cats', query: structuredClone(QUERY), records: { n: 400_000, approx: true } });
+    expect(result.started).toBe(true);
+    expect(store.cap).toBe(600_000);
+    expect(loadQuery.mock.calls[0][0].cap).toBe(600_000);
+    store.dispose();
+  });
+});

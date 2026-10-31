@@ -32,7 +32,7 @@ const ICONS: Record<ExampleIcon, IconType> = {
 function loadTooltip(entry: ExampleEntry, busy: boolean): string {
   if (busy) return 'A load is running. Wait for it to finish or stop it first.';
   if (entry.kind === 'query')
-    return `Fill in this query on the Search tab and load it from ${entry.source.replace(' + ', ' and ')} if it is under the record cap`;
+    return `Fill in this query on the Search tab and load it from ${entry.source.replace(' + ', ' and ')}; the record cap is raised to fit the example`;
   return entry.tree.included
     ? 'Load these occurrences and their tree, run Infomap, and close this dialog; progress shows in the Data panel'
     : 'Load these occurrences, run Infomap, and close this dialog; progress shows in the Data panel';

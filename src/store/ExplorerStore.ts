@@ -21,6 +21,7 @@ import type { Funnel, StreamPlan } from '../sources/types';
 import { exampleStudies } from './explorer/examples';
 import { LOAD_RUNNING } from './DataStore';
 import type { ExampleEntry } from './data/catalog';
+import { niceCapAbove } from '../components/Explorer/load/loadMath';
 import { ledgerShare, shortError } from './data/streamLoad';
 import type { DataLoadJob, QueryLoadRequest, StartResult } from './data/types';
 import { JOB_UPDATE_MS, type LoadStats, type TallyLabels } from './explorer/job';
@@ -2105,7 +2106,7 @@ export default class ExplorerStore {
    * Load a query example: restore its query, show the search tab, await the plans, then
    * load when the Load gate allows; otherwise the dock shows why (e.g. over the cap).
    */
-  async loadExampleQuery(entry: Pick<ExampleEntry, 'id' | 'query'>): Promise<StartResult> {
+  async loadExampleQuery(entry: Pick<ExampleEntry, 'id' | 'query'> & Partial<Pick<ExampleEntry, 'records'>>): Promise<StartResult> {
     if (!entry.query) return { started: false, reason: 'This example has no query' };
     // Hold the single-load guard while the plans load, so no other load starts (I9).
     const guard = this.rootStore.dataStore.reserve();
@@ -2113,9 +2114,21 @@ export default class ExplorerStore {
     try {
       this.restoreQuery(entry.query);
       this.open('search');
+      // An example loads whole: raise the cap to its record count before planning.
+      const records = entry.records?.n ?? 0;
+      if (records > this.cap) this.setCap(niceCapAbove(records));
       // The preview pipeline may replace this plan request with its own: then wait for that one.
-      const ok = await this.fetchPlans();
-      if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
+      const plan = async () => {
+        const ok = await this.fetchPlans();
+        if (!ok && this.plans.state === 'loading') await when(() => this.plans.state !== 'loading');
+      };
+      await plan();
+      // The catalog count may be out of date: raise the cap to the plan estimate and replan.
+      const estimate = this.estimate;
+      if (estimate?.overCap) {
+        this.setCap(niceCapAbove(estimate.records));
+        await plan();
+      }
       return await guard.handOff(() => {
         const can = this.canLoad;
         if (!can.ok) return Promise.resolve<StartResult>({ started: false, reason: can.reason });
