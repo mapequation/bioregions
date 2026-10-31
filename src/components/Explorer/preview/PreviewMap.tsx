@@ -2,7 +2,7 @@ import { Box, Button, Group, HStack, Icon, SegmentGroup, Spinner, Text } from '@
 import { toJS } from 'mobx';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LuCloudOff, LuGlobe, LuInfo, LuScan, LuSquareDashed, LuX } from 'react-icons/lu';
+import { LuCheck, LuCloudOff, LuGlobe, LuInfo, LuScan, LuSquareDashed, LuX } from 'react-icons/lu';
 import { useColorMode } from '@/components/ui/color-mode';
 import { Tooltip } from '@/components/ui/tooltip';
 import {
@@ -27,7 +27,10 @@ import {
   bboxRings,
   decadeSteps,
   densityZoom,
+  type BoxHandle,
+  boxHandleAt,
   dragBbox,
+  editBbox,
   fitPolarView,
   fitView,
   legendLabel,
@@ -508,15 +511,24 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   // Over GBIF hexagons the OBIS cells are outlines, so neither layer hides the other.
   const obisOutlined = gbifLayer;
 
-  // Rectangle draw (Esc cancels the drag, a second Esc leaves draw mode).
+  // Draw mode (always the plate carrée world view): drag to draw a box; a committed box
+  // shows handles to move it or drag its edges and corners. Every finished drag sets the
+  // area and draw mode stays on until Done or Esc (Esc during a drag undoes that drag).
   // Drag corners in CSS px of the map frame.
   const [drag, setDrag] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
-  const dragRef = useRef(drag);
-  dragRef.current = drag;
+  /** A handle of the committed box being dragged, from `start` (lon/lat) on `orig`. */
+  const [edit, setEdit] = useState<{ handle: BoxHandle; start: [number, number]; orig: BBox; box: BBox } | null>(
+    null,
+  );
+  const [hover, setHover] = useState<BoxHandle | null>(null);
+  const gestureRef = useRef(drag ?? edit);
+  gestureRef.current = drag ?? edit;
   // biome-ignore lint/correctness/useExhaustiveDependencies: `drawing` is MobX state read during render
   useEffect(() => {
     if (!drawing) {
       setDrag(null);
+      setEdit(null);
+      setHover(null);
       return;
     }
     const onKey = (e: KeyboardEvent) => {
@@ -524,8 +536,10 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
       // Capture phase on window: runs before the dialog's own Esc handling.
       e.preventDefault();
       e.stopPropagation();
-      if (dragRef.current) setDrag(null);
-      else explorerUi.setDrawing(false);
+      if (gestureRef.current) {
+        setDrag(null);
+        setEdit(null);
+      } else explorerUi.setDrawing(false);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -543,24 +557,68 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     const box = dragBbox(la, lb);
     return box ? wrapBbox(box) : null;
   };
+  /** The box being edited (unwrapped lon), shown with handles in draw mode. */
+  const editBox: BBox | null =
+    drawing && !drag ? (edit?.box ?? (query.area.kind === 'bbox' ? unwrapBbox(query.area.bbox) : null)) : null;
+  /** The box's px rectangle and its copies one world west and east, for a box across 180°. */
+  const editRects = (box: BBox) =>
+    [0, -360, 360].map((dx): [number, number, number, number] => [
+      ...proj.toPx(box[0] + dx, box[3]),
+      ...proj.toPx(box[2] + dx, box[1]),
+    ]);
+  const handleAt = (p: [number, number]): BoxHandle | null => {
+    if (!editBox) return null;
+    for (const r of editRects(editBox)) {
+      const h = boxHandleAt(p[0], p[1], r);
+      if (h) return h;
+    }
+    return null;
+  };
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!drawing || e.button !== 0) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = localPx(e);
-    setDrag({ a: p, b: p });
+    const handle = handleAt(p);
+    if (handle && editBox) setEdit({ handle, start: proj.fromPx(p[0], p[1]), orig: editBox, box: editBox });
+    else setDrag({ a: p, b: p });
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (drag) setDrag({ a: drag.a, b: localPx(e) });
+    const p = localPx(e);
+    if (edit) {
+      const [lon, lat] = proj.fromPx(p[0], p[1]);
+      setEdit({ ...edit, box: editBbox(edit.orig, edit.handle, lon - edit.start[0], lat - edit.start[1]) });
+    } else if (drag) setDrag({ a: drag.a, b: p });
+    else if (drawing) setHover(handleAt(p));
   };
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (edit) {
+      setEdit(null);
+      if (edit.box.some((v, i) => v !== edit.orig[i])) {
+        explorerStore.setArea({ kind: 'bbox', bbox: wrapBbox(edit.box) });
+      }
+      return;
+    }
     if (!drag) return;
     const box = dragArea(drag.a, localPx(e));
     setDrag(null);
-    if (box) {
-      explorerStore.setArea({ kind: 'bbox', bbox: box });
-      explorerUi.setDrawing(false);
-    }
+    if (box) explorerStore.setArea({ kind: 'bbox', bbox: box });
   };
+  const handle = edit?.handle ?? hover;
+  const cursor = !drawing
+    ? 'default'
+    : handle === 'move'
+      ? edit
+        ? 'grabbing'
+        : 'move'
+      : handle === 'nw' || handle === 'se'
+        ? 'nwse-resize'
+        : handle === 'ne' || handle === 'sw'
+          ? 'nesw-resize'
+          : handle === 'n' || handle === 's'
+            ? 'ns-resize'
+            : handle
+              ? 'ew-resize'
+              : 'crosshair';
 
   // Overlays are drawn in CSS px through the view's projection (plate carrée or polar).
   const outline = useMemo(() => {
@@ -808,8 +866,11 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                 onPointerDown={onPointerDown}
                 onPointerMove={onPointerMove}
                 onPointerUp={onPointerUp}
-                onPointerCancel={() => setDrag(null)}
-                style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: drawing ? 'none' : 'auto' }}
+                onPointerCancel={() => {
+                  setDrag(null);
+                  setEdit(null);
+                }}
+                style={{ cursor, touchAction: drawing ? 'none' : 'auto' }}
               >
                 {worldBox && (
                   <defs>
@@ -828,9 +889,46 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                     <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.45} fillRule="evenodd" />
                   )}
                   {obisLayer}
-                  {outline && (
+                  {outline && !editBox && (
                     <path d={outline} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
                   )}
+                  {editBox &&
+                    editRects(editBox).map(([x0, y0, x1, y1], i) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: fixed world copies
+                      <g key={i} data-testid={i === 0 ? 'map-edit-box' : undefined}>
+                        <rect
+                          x={x0}
+                          y={y0}
+                          width={x1 - x0}
+                          height={y1 - y0}
+                          fill="var(--chakra-colors-brand-solid)"
+                          fillOpacity={0.12}
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                        />
+                        {[
+                          [x0, y0],
+                          [(x0 + x1) / 2, y0],
+                          [x1, y0],
+                          [x1, (y0 + y1) / 2],
+                          [x1, y1],
+                          [(x0 + x1) / 2, y1],
+                          [x0, y1],
+                          [x0, (y0 + y1) / 2],
+                        ].map(([x, y]) => (
+                          <rect
+                            key={`${x},${y}`}
+                            x={x - 3.5}
+                            y={y - 3.5}
+                            width={7}
+                            height={7}
+                            fill="var(--chakra-colors-bg)"
+                            stroke="currentColor"
+                            strokeWidth={1.25}
+                          />
+                        ))}
+                      </g>
+                    ))}
                 </g>
                 {dragPath && (
                   <path
@@ -919,7 +1017,11 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             role="status"
           >
             <Icon as={LuSquareDashed} color="fg.muted" />
-            <Text>Drag on the map to draw an area · Esc to cancel</Text>
+            <Text>
+              {editBox
+                ? 'Drag the box or its edges to adjust, or drag elsewhere for a new box · Esc when done'
+                : 'Drag on the map to draw an area · Esc to cancel'}
+            </Text>
           </HStack>
         )}
 
@@ -959,9 +1061,10 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             bg={drawing ? undefined : 'bg'}
             aria-pressed={drawing}
             onClick={() => explorerUi.setDrawing(!drawing)}
+            data-testid="map-draw"
           >
-            <Icon as={LuSquareDashed} />
-            {drawing ? 'Drawing…' : 'Draw area'}
+            <Icon as={drawing ? LuCheck : LuSquareDashed} />
+            {drawing ? 'Done' : query.area.kind === 'bbox' ? 'Edit area' : 'Draw area'}
           </Button>
         </Group>
 

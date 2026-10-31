@@ -194,6 +194,48 @@ export function dragBbox(a: [number, number], b: [number, number], minDegrees = 
   return bbox[2] - bbox[0] < minDegrees || bbox[3] - bbox[1] < minDegrees ? null : bbox;
 }
 
+/** What a pointer grabs on an editable box: a corner, an edge, or the inside (move). */
+export type BoxHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'move';
+
+/**
+ * The handle of a box in CSS px (`[x0, y0, x1, y1]`, y down) under a point, or null:
+ * a corner or edge within `tol` px, else the inside. A small box narrows `tol` to a
+ * third of its size, so its middle can still be grabbed to move it.
+ */
+export function boxHandleAt(
+  px: number,
+  py: number,
+  [x0, y0, x1, y1]: [number, number, number, number],
+  tol = 8,
+): BoxHandle | null {
+  const tx = Math.min(tol, (x1 - x0) / 3);
+  const ty = Math.min(tol, (y1 - y0) / 3);
+  if (px < x0 - tol || px > x1 + tol || py < y0 - tol || py > y1 + tol) return null;
+  const v = Math.abs(py - y0) <= ty ? 'n' : Math.abs(py - y1) <= ty ? 's' : '';
+  const h = Math.abs(px - x0) <= tx ? 'w' : Math.abs(px - x1) <= tx ? 'e' : '';
+  if (v || h) return (v + h) as BoxHandle;
+  return px >= x0 && px <= x1 && py >= y0 && py <= y1 ? 'move' : null;
+}
+
+/**
+ * `box` (unwrapped lon/lat) with a handle dragged by (dLon, dLat): a corner or edge
+ * resizes, stopping `minDegrees` short of the opposite side and at 360° wide; 'move'
+ * shifts the whole box, kept within ±90° latitude. Rounded to 0.1° like `dragBbox`.
+ */
+export function editBbox(box: BBox, handle: BoxHandle, dLon: number, dLat: number, minDegrees = 1): BBox {
+  const r = (v: number) => Math.round(v * 10) / 10;
+  let [w, s, e, n] = box;
+  if (handle === 'move') {
+    const dy = Math.min(90 - n, Math.max(-90 - s, dLat));
+    return [r(w + dLon), r(s + dy), r(e + dLon), r(n + dy)];
+  }
+  if (handle.endsWith('w')) w = Math.max(e - 360, Math.min(e - minDegrees, w + dLon));
+  if (handle.endsWith('e')) e = Math.min(w + 360, Math.max(w + minDegrees, e + dLon));
+  if (handle.startsWith('s')) s = Math.max(-90, Math.min(n - minDegrees, s + dLat));
+  if (handle.startsWith('n')) n = Math.min(90, Math.max(s + minDegrees, n + dLat));
+  return [r(w), r(s), r(e), r(n)];
+}
+
 /**
  * Extent of the non-transparent pixels in an RGBA image that spans `bounds`, ignoring
  * the outermost `trim` share of pixels on each axis so a few remote islands or

@@ -284,7 +284,14 @@ export default observer(function AreaPicker() {
 
       <HStack gap={2}>
         <CountryPicker />
-        <Tooltip content="Drag a rectangle on the preview map" openDelay={300}>
+        <Tooltip
+          content={
+            explorerUi.drawing
+              ? 'Leave draw mode and zoom to the area'
+              : 'Drag a box on the preview map, then drag the box or its edges to adjust it'
+          }
+          openDelay={300}
+        >
           <Button
             size="sm"
             variant={explorerUi.drawing ? 'solid' : 'outline'}
@@ -294,7 +301,7 @@ export default observer(function AreaPicker() {
             onClick={() => explorerUi.setDrawing(!explorerUi.drawing)}
           >
             <LuSquareDashedMousePointer />
-            {explorerUi.drawing ? 'Drawing…' : 'Draw'}
+            {explorerUi.drawing ? 'Done' : area.kind === 'bbox' ? 'Edit' : 'Draw'}
           </Button>
         </Tooltip>
       </HStack>

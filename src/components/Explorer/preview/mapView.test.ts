@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BBox } from '@/sources/types';
 import {
   alphaExtent,
   bboxRings,
@@ -16,7 +17,9 @@ import {
   polarTilesForView,
   decadeSteps,
   MAX_TILE_ZOOM,
+  boxHandleAt,
   dragBbox,
+  editBbox,
   fitView,
   mapNote,
   pxToLonLat,
@@ -157,6 +160,27 @@ describe('boxes', () => {
   it('rounds dragged boxes and ignores clicks', () => {
     expect(dragBbox([10.04, 5.06], [-3.33, 20])).toEqual([-3.3, 5.1, 10, 20]);
     expect(dragBbox([0, 0], [0.2, 0.2])).toBeNull();
+  });
+
+  it('finds the handle under the pointer', () => {
+    const r: [number, number, number, number] = [100, 50, 200, 150];
+    expect(boxHandleAt(98, 52, r)).toBe('nw');
+    expect(boxHandleAt(205, 148, r)).toBe('se');
+    expect(boxHandleAt(150, 51, r)).toBe('n');
+    expect(boxHandleAt(196, 100, r)).toBe('e');
+    expect(boxHandleAt(150, 100, r)).toBe('move');
+    expect(boxHandleAt(250, 100, r)).toBeNull();
+    // A 9 px box keeps its middle for moving.
+    expect(boxHandleAt(104.5, 104.5, [100, 100, 109, 109])).toBe('move');
+  });
+
+  it('resizes and moves edited boxes', () => {
+    const box: BBox = [-10, 0, 10, 20];
+    expect(editBbox(box, 'ne', 5.04, -2)).toEqual([-10, 0, 15, 18]);
+    expect(editBbox(box, 'w', 30, 0)).toEqual([9, 0, 10, 20]);
+    expect(editBbox(box, 'n', 0, 100)).toEqual([-10, 0, 10, 90]);
+    expect(editBbox(box, 'move', 175, 80)).toEqual([165, 70, 185, 90]);
+    expect(editBbox(box, 'e', 400, 0)).toEqual([-10, 0, 350, 20]);
   });
 
   it('unions boxes', () => {

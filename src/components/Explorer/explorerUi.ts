@@ -2,15 +2,15 @@
 // belong in ExplorerStore (nothing here affects the query, the preview or the load).
 //
 // Readers:
-// - preview/PreviewMap reads `drawing` (AreaPicker's Draw toggle) and calls
-//   `setDrawing(false)` once a rectangle is committed with explorerStore.setArea.
+// - preview/PreviewMap reads `drawing` (AreaPicker's Draw toggle): it draws and edits the
+//   box, setting the area after every drag, and calls `setDrawing(false)` on Esc.
 // - preview/KpiStrip renders the "Insights · ⚠ n" button when `useInsightsDrawer()` is
 //   true (below 1280 px) and calls `setInsightsOpen(true)`; OccurrencesTab owns the Drawer.
 import { useBreakpointValue } from '@chakra-ui/react';
 import { makeAutoObservable } from 'mobx';
 
 class ExplorerUi {
-  /** Rectangle draw mode on the preview map. */
+  /** Draw mode on the preview map: draw a box, or move and resize the current one. */
   drawing = false;
   /** Insights drawer (only used below 1280 px). */
   insightsOpen = false;
