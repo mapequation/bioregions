@@ -1,5 +1,7 @@
 # Data explorer: GBIF + OBIS occurrences and Open Tree phylogenies
 
+> **Superseded by docs/superpowers/specs/2026-10-31-data-sources-and-portal.md.** Kept for history; where they differ, the newer spec holds.
+
 Status: design, 2026-10-30. UI layout and interaction spec: `2026-10-30-data-explorer-ui.md`.
 
 ## Goal

@@ -1,5 +1,7 @@
 # Data explorer: UI and interaction spec (final)
 
+> **Superseded by docs/superpowers/specs/2026-10-31-data-sources-and-portal.md.** Kept for history; where they differ, the newer spec holds.
+
 Status: final design, 2026-10-30. Architecture and API facts: `2026-10-30-data-explorer-design.md`. Data contract: `src/sources/types.ts`.
 The base is design C ("decision ledger"). It adds B's pinned baseline, insights drawer and accessible brush, and A's live methods draft, actionable bias flags, zero-result relax and library behaviour.
 
