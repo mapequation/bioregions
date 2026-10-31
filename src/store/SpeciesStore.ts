@@ -223,8 +223,8 @@ export default class SpeciesStore {
 
   addFeature = action((feature: GeometryFeature) => {
     this.collection.features.push(feature);
+    this.binner.addFeature(feature);
     if (feature.geometry.type === 'Point') {
-      this.binner.addFeature(feature);
       ++this.numPoints;
       this.setNumPointsDebounced(this.numPoints);
       this.setSpeed(this.timer.speed(this.numPoints));

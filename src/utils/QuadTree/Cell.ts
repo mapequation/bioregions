@@ -14,8 +14,65 @@ import type {
   VisitCallback,
 } from './QuadTreeGeoBinner';
 import * as turf from '@turf/turf';
-import booleanIntersects from '@turf/boolean-intersects';
 import { calcMedian } from '../math';
+
+/**
+ * Whether a range overlaps the interior of a cell. A range that only touches
+ * the cell's boundary, or has the cell in one of its holes, does not count.
+ */
+function overlapsInterior(cell: Cell, feature: PolygonFeature) {
+  const [minX, minY, maxX, maxY] = feature.bbox ?? turf.bbox(feature);
+  if (
+    maxX <= cell.x1 ||
+    minX >= cell.x2 ||
+    maxY <= cell.y1 ||
+    minY >= cell.y2
+  ) {
+    return false;
+  }
+  // If no ring edge passes through the open cell, the cell lies entirely
+  // inside or entirely outside the range, so its center decides.
+  for (const ring of feature.geometry.coordinates) {
+    for (let i = 1; i < ring.length; ++i) {
+      if (crossesInterior(cell, ring[i - 1], ring[i])) return true;
+    }
+  }
+  return turf.booleanPointInPolygon(cell.center, feature);
+}
+
+/**
+ * Whether the segment from a to b passes through the open cell, rather than
+ * missing it, touching a corner or running along an edge.
+ */
+function crossesInterior(cell: Cell, [ax, ay]: Position, [bx, by]: Position) {
+  // Liang-Barsky: clip a + t (b - a), t in [0, 1], to the closed cell.
+  const dx = bx - ax;
+  const dy = by - ay;
+  let t0 = 0;
+  let t1 = 1;
+  const edges = [
+    [-dx, ax - cell.x1],
+    [dx, cell.x2 - ax],
+    [-dy, ay - cell.y1],
+    [dy, cell.y2 - ay],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+    } else if (p < 0) {
+      t0 = Math.max(t0, q / p);
+    } else {
+      t1 = Math.min(t1, q / p);
+    }
+  }
+  if (t0 > t1) return false;
+  // The clipped part lies in the closed cell, so it is on an edge unless its
+  // midpoint is strictly inside.
+  const t = (t0 + t1) / 2;
+  const x = ax + t * dx;
+  const y = ay + t * dy;
+  return cell.x1 < x && x < cell.x2 && cell.y1 < y && y < cell.y2;
+}
 
 export default class Cell
   implements ExtendedFeature<Polygon, QuadtreeNodeProperties> {
@@ -302,6 +359,7 @@ export default class Cell
       feature.bbox = turf.bbox(feature.geometry);
     }
 
+    this.isLeaf = false;
     const { x1, y1, x2, y2 } = this;
     const xm = (x1 + x2) * 0.5;
     const ym = (y1 + y2) * 0.5;
@@ -342,7 +400,8 @@ export default class Cell
         [xm, y1],
       ],
     ]);
-    const subPolygons = [topLeft, topRight, lowerLeft, lowerRight];
+    // Same quadrant order as addChildPoint: 0 = SW, 1 = SE, 2 = NW, 3 = NE.
+    const subPolygons = [lowerLeft, lowerRight, topLeft, topRight];
 
     const getChild = (i: number) => {
       let child = this.children[i];
@@ -368,7 +427,13 @@ export default class Cell
     for (let i = 0; i < 4; ++i) {
       const child = getChild(i);
 
-      if (booleanIntersects(child.geometry, feature.geometry)) {
+      // Sub-cells beyond lon ±180 or lat ±90 are clamped by the Cell
+      // constructor and can end up with zero width or height.
+      if (child.x2 <= child.x1 || child.y2 <= child.y1) {
+        continue;
+      }
+
+      if (overlapsInterior(child, feature)) {
         if (!this.children[i]) {
           addChild(i, child);
         }
