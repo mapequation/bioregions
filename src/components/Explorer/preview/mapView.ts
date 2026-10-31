@@ -67,8 +67,11 @@ export function wrapBbox(bbox: BBox): BBox {
 /**
  * Fit `bbox` (null = world) into a `width` x `height` px frame with some padding,
  * keeping the area below the top `insetTop` px (the map controls).
- * The view never gets wider than the world, and stays inside it when it is smaller;
- * a box across the antimeridian is fitted unwrapped (the view then reaches past 180°).
+ * The world (or a box covering it) is contain-fitted and centred on lat 0, so the whole
+ * globe is visible and the frame letterboxes the rest (the view is then wider or taller
+ * than the world). An area view fills the frame's width without getting wider than the
+ * world, and stays inside it; a box across the antimeridian is fitted unwrapped (the
+ * view then reaches past 180°).
  */
 export function fitView(bbox: BBox | null, width: number, height: number, insetTop = 0): MapView {
   const w = Math.max(1, width);
@@ -80,15 +83,15 @@ export function fitView(bbox: BBox | null, width: number, height: number, insetT
   const th = Math.max(MIN_VIEW_DEGREES / 2, bn - bs + 2 * pad);
   // An area keeps clear of the top `insetTop` px, where the map controls sit.
   const inset = world ? 0 : Math.min(Math.max(0, insetTop), h / 3);
-  const scale = Math.max(Math.min(w / tw, (h - inset) / th), w / 360);
+  const scale = world ? Math.min(w / 360, h / 180) : Math.max(Math.min(w / tw, (h - inset) / th), w / 360);
   const vw = w / scale;
   const vh = h / scale;
+  if (world) return { west: -vw / 2, east: vw / 2, south: -vh / 2, north: vh / 2, scale };
   // A box across the antimeridian is centred as is (tiles wrap); others stay inside the world.
   const crosses = be > 180;
   const cx = crosses ? (bw + be) / 2 : vw >= 360 ? 0 : clamp((bw + be) / 2, -180 + vw / 2, 180 - vw / 2);
   const shift = inset / 2 / scale;
-  const cy =
-    vh >= 180 ? 0 : world ? clamp(8, -90 + vh / 2, 90 - vh / 2) : clamp((bs + bn) / 2 + shift, -90 + vh / 2, 90 - vh / 2);
+  const cy = vh >= 180 ? 0 : clamp((bs + bn) / 2 + shift, -90 + vh / 2, 90 - vh / 2);
   return { west: cx - vw / 2, east: cx + vw / 2, south: cy - vh / 2, north: cy + vh / 2, scale };
 }
 
@@ -115,10 +118,15 @@ export function densityZoom(scale: number): number {
 /**
  * Tiles of zoom `z` that cover the view, positioned in CSS px. Columns wrap around the
  * antimeridian; `within` (unwrapped lon/lat box) limits them to tiles touching it.
+ * A letterboxed world view (wider than 360°) gets the world once, not repeated copies.
  */
 export function tilesForView(view: MapView, z = chooseZoom(view.scale), within?: BBox | null): PlacedTile[] {
   const { cols, rows, degrees } = gbifTileGrid(z);
   let { west, east, south, north } = view;
+  if (east - west > 360) {
+    west = Math.max(west, -180);
+    east = Math.min(east, 180);
+  }
   if (within) {
     const [bw, bs, be, bn] = unwrapBbox(within);
     west = Math.max(west, bw);
@@ -157,7 +165,8 @@ export function tilesForView(view: MapView, z = chooseZoom(view.scale), within?:
  * unwrapped, so it can pass 180° in a view across the antimeridian; see `wrapBbox`).
  */
 export function pxToLonLat(view: MapView, px: number, py: number): [number, number] {
-  const east = Math.max(180, view.east);
+  // A letterboxed world view (wider than 360°) clamps to the world itself.
+  const east = view.east - view.west > 360 ? 180 : Math.max(180, view.east);
   return [clamp(view.west + px / view.scale, east - 360, east), clamp(view.north - py / view.scale, -90, 90)];
 }
 

@@ -2,7 +2,7 @@ import { Box, Button, Group, HStack, Icon, SegmentGroup, Spinner, Text } from '@
 import { toJS } from 'mobx';
 import { observer } from 'mobx-react';
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { LuCloudOff, LuGlobe, LuInfo, LuScan, LuSquareDashed } from 'react-icons/lu';
+import { LuCloudOff, LuGlobe, LuInfo, LuScan, LuSquareDashed, LuX } from 'react-icons/lu';
 import { useColorMode } from '@/components/ui/color-mode';
 import { Tooltip } from '@/components/ui/tooltip';
 import {
@@ -394,9 +394,13 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
 
   const bbox = useAreaBbox(query.area, query);
   const hasArea = query.area.kind !== 'world';
+  // Drawing shows the whole world, so any box can be drawn; a committed box changes the
+  // area, which refits the view to it.
+  const drawing = explorerUi.drawing;
+  const showWorld = fit === 'world' || drawing;
   // Fitted to an area, density tiles are hexagon bins of about HEX_PX, requested only where
   // the area is and never at zoom 0, whose ad-hoc tiles bin records too coarsely to touch.
-  const zoomedToArea = fit === 'area' && hasArea && bbox != null;
+  const zoomedToArea = !showWorld && hasArea && bbox != null;
   // Circumpolar areas switch to GBIF's polar tiles; plate carrée would show a thin strip.
   const srs = zoomedToArea ? polarSrsFor(bbox) : null;
   const areaKeyRings = JSON.stringify(areaRings(query.area, srs != null));
@@ -414,8 +418,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             width: legendW,
             height: legendH,
           })
-        : fitView(fit === 'world' || !hasArea ? null : bbox, size.width, size.height, inset),
-    [srs, rings, fit, hasArea, bbox, size.width, size.height, inset, legendW, legendH],
+        : fitView(showWorld || !hasArea ? null : bbox, size.width, size.height, inset),
+    [srs, rings, showWorld, hasArea, bbox, size.width, size.height, inset, legendW, legendH],
   );
   const proj = useMemo(() => mapProjection(view, srs), [view, srs]);
   const ready = size.width > 0 && size.height > 0;
@@ -505,7 +509,6 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   const obisOutlined = gbifLayer;
 
   // Rectangle draw (Esc cancels the drag, a second Esc leaves draw mode).
-  const drawing = explorerUi.drawing;
   // Drag corners in CSS px of the map frame.
   const [drag, setDrag] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
   const dragRef = useRef(drag);
@@ -613,7 +616,9 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     );
   }, [obisCells, obis.max, proj, srs, view.east, obisOutlined]);
   // The density layer is clipped to the area outline; the basemap outside it is dimmed.
-  const densityClip = outline && fit === 'area' ? `path(evenodd, '${outline}')` : undefined;
+  const densityClip = outline && !showWorld ? `path(evenodd, '${outline}')` : undefined;
+  // A letterboxed world view keeps the overlays on the world, out of the muted margins.
+  const worldBox = !srs && view.east - view.west > 360 ? [proj.toPx(-180, 90), proj.toPx(180, -90)] : null;
   const dragPath = useMemo(() => {
     if (!drag) return null;
     if (!srs) {
@@ -806,13 +811,27 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
                 onPointerCancel={() => setDrag(null)}
                 style={{ cursor: drawing ? 'crosshair' : 'default', touchAction: drawing ? 'none' : 'auto' }}
               >
-                {outline && fit === 'area' && (
-                  <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.45} fillRule="evenodd" />
+                {worldBox && (
+                  <defs>
+                    <clipPath id={`${filterId}-world`}>
+                      <rect
+                        x={worldBox[0][0]}
+                        y={worldBox[0][1]}
+                        width={worldBox[1][0] - worldBox[0][0]}
+                        height={worldBox[1][1] - worldBox[0][1]}
+                      />
+                    </clipPath>
+                  </defs>
                 )}
-                {obisLayer}
-                {outline && (
-                  <path d={outline} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
-                )}
+                <g clipPath={worldBox ? `url(#${filterId}-world)` : undefined}>
+                  {outline && !showWorld && (
+                    <path d={outer + outline} fill="var(--chakra-colors-bg)" fillOpacity={0.45} fillRule="evenodd" />
+                  )}
+                  {obisLayer}
+                  {outline && (
+                    <path d={outline} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+                  )}
+                </g>
                 {dragPath && (
                   <path
                     d={dragPath}
@@ -905,7 +924,22 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
         )}
 
         <Group attached position="absolute" top={2} right={2} boxShadow="xs" borderRadius="l2">
-          {hasArea && !faint && (
+          {hasArea && !faint && !drawing && (
+            <Tooltip content="Clear area (search the whole world)" portalled={false}>
+              <Button
+                size="xs"
+                variant="outline"
+                bg="bg"
+                onClick={() => explorerStore.setArea({ kind: 'world' })}
+                aria-label="Clear area (search the whole world)"
+                data-testid="map-clear-area"
+              >
+                <Icon as={LuX} />
+                Clear area
+              </Button>
+            </Tooltip>
+          )}
+          {hasArea && !faint && !drawing && (
             <Tooltip content={fit === 'area' ? 'Show the whole world' : 'Zoom to the area'} portalled={false}>
               <Button
                 size="xs"

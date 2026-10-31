@@ -7,6 +7,7 @@ import {
   Grid,
   HStack,
   Icon,
+  IconButton,
   Input,
   InputGroup,
   Stack,
@@ -16,7 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
 import { useMemo, useState } from 'react';
-import { LuChevronRight, LuGlobe, LuSearch, LuSquareDashedMousePointer } from 'react-icons/lu';
+import { LuChevronRight, LuGlobe, LuSearch, LuSquareDashedMousePointer, LuX } from 'react-icons/lu';
 import { COUNTRIES, countryName, REGION_PRESETS, regionByBbox } from '@/sources';
 import type { AreaFilter, BBox } from '@/sources/types';
 import { useStore } from '../../../store';
@@ -231,37 +232,55 @@ export default observer(function AreaPicker() {
 
   return (
     <Stack gap={2}>
-      <SelectRoot
-        // Mount the portalled content on open: the explorer dialog aria-hides body children present when it opens.
-        lazyMount
-        unmountOnExit
-        collection={collection}
-        size="sm"
-        value={[value]}
-        onValueChange={(e) => {
-          const v = e.value[0];
-          if (!v || v === value) return;
-          if (v === 'world') explorerStore.setArea({ kind: 'world' });
-          const preset = REGION_PRESETS.find((r) => r.id === v);
-          if (preset) explorerStore.setArea({ kind: 'bbox', bbox: [...preset.bbox] as BBox, label: preset.label });
-        }}
-      >
-        <SelectLabel srOnly>Area preset</SelectLabel>
-        <SelectTrigger data-testid="area-preset" bg="bg">
-          <SelectValueText placeholder="Choose an area" />
-        </SelectTrigger>
-        <SelectContent maxH="320px">
-          {groups.map(({ g, list }) => (
-            <SelectItemGroup key={g} label={g}>
-              {list.map((i) => (
-                <SelectItem key={i.value} item={i}>
-                  {i.label}
-                </SelectItem>
-              ))}
-            </SelectItemGroup>
-          ))}
-        </SelectContent>
-      </SelectRoot>
+      <HStack gap={1.5}>
+        <SelectRoot
+          // Mount the portalled content on open: the explorer dialog aria-hides body children present when it opens.
+          lazyMount
+          unmountOnExit
+          collection={collection}
+          size="sm"
+          flex="1"
+          minW={0}
+          value={[value]}
+          onValueChange={(e) => {
+            const v = e.value[0];
+            if (!v || v === value) return;
+            if (v === 'world') explorerStore.setArea({ kind: 'world' });
+            const preset = REGION_PRESETS.find((r) => r.id === v);
+            if (preset) explorerStore.setArea({ kind: 'bbox', bbox: [...preset.bbox] as BBox, label: preset.label });
+          }}
+        >
+          <SelectLabel srOnly>Area preset</SelectLabel>
+          <SelectTrigger data-testid="area-preset" bg="bg">
+            <SelectValueText placeholder="Choose an area" />
+          </SelectTrigger>
+          <SelectContent maxH="320px">
+            {groups.map(({ g, list }) => (
+              <SelectItemGroup key={g} label={g}>
+                {list.map((i) => (
+                  <SelectItem key={i.value} item={i}>
+                    {i.label}
+                  </SelectItem>
+                ))}
+              </SelectItemGroup>
+            ))}
+          </SelectContent>
+        </SelectRoot>
+        {area.kind !== 'world' && (
+          <Tooltip content="Clear area (search the whole world)" openDelay={300}>
+            <IconButton
+              aria-label="Clear area (search the whole world)"
+              size="sm"
+              variant="ghost"
+              flex="none"
+              data-testid="area-clear"
+              onClick={() => explorerStore.setArea({ kind: 'world' })}
+            >
+              <LuX />
+            </IconButton>
+          </Tooltip>
+        )}
+      </HStack>
 
       <HStack gap={2}>
         <CountryPicker />

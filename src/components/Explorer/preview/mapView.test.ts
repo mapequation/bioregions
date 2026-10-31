@@ -35,11 +35,38 @@ describe('fitView', () => {
     expect([v.west, v.south, v.east, v.north]).toEqual([-180, -90, 180, 90]);
   });
 
-  it('never gets wider than the world', () => {
-    const v = fitView(null, 1000, 300);
-    expect(v.east - v.west).toBeCloseTo(360);
-    expect(v.north - v.south).toBeCloseTo(108);
-    expect(v.north).toBeLessThanOrEqual(90);
+  it.each([
+    [800, 322],
+    [1200, 300],
+    [1000, 300],
+    [300, 220],
+  ])('contain-fits the whole world at %ix%i, centred on lat 0', (w, h) => {
+    const v = fitView(null, w, h);
+    expect(v.east - v.west).toBeGreaterThanOrEqual(360 - 1e-9);
+    expect(v.north - v.south).toBeGreaterThanOrEqual(180 - 1e-9);
+    expect(v.west).toBeLessThanOrEqual(-180);
+    expect(v.east).toBeGreaterThanOrEqual(180);
+    expect(v.south).toBeLessThanOrEqual(-90);
+    expect(v.north).toBeGreaterThanOrEqual(90);
+    expect((v.north + v.south) / 2).toBeCloseTo(0);
+    expect((v.west + v.east) / 2).toBeCloseTo(0);
+    expect(v.scale).toBeCloseTo(Math.min(w / 360, h / 180));
+  });
+
+  it('contain-fits a box that covers the world', () => {
+    const v = fitView([-180, -90, 180, 90], 1200, 300);
+    expect(v.north - v.south).toBeCloseTo(180);
+    expect(v.east - v.west).toBeGreaterThan(360);
+  });
+
+  it('draws a letterboxed world once and maps the letterbox to its edge', () => {
+    const v = fitView(null, 1200, 300);
+    const tiles = tilesForView(v, 0);
+    expect(tiles.map((t) => t.col)).toEqual([0, 1]);
+    expect(tiles[0].left).toBeCloseTo((1200 - 600) / 2);
+    expect(pxToLonLat(v, 0, 0)).toEqual([-180, 90]);
+    expect(pxToLonLat(v, 1200, 300)).toEqual([180, -90]);
+    expect(pxToLonLat(v, 600, 150)).toEqual([0, 0]);
   });
 
   it('fits a region with padding and keeps it centred', () => {
