@@ -199,6 +199,7 @@ const CancelPopover = observer(function CancelPopover() {
   // Set when a choice is made, so closing the popover by its choice does not also resume.
   const chose = useRef(false);
   const job = explorerJob(dataStore.job);
+  const continuing = job?.kind === 'continue';
   // The load is paused while the popover is open, so these counts are what "Keep" keeps.
   const accepted = job?.funnel.accepted ?? 0;
   // Species with at least one kept record (what the loaded panel counts after a keep);
@@ -273,27 +274,44 @@ const CancelPopover = observer(function CancelPopover() {
                 onClick={() => choose('continue')}
                 data-testid="cancel-continue"
               />
-              <ChoiceButton
-                icon={LuSquare}
-                label={`Keep ${fmtInt(accepted)} records${speciesText} and stop`}
-                note={
-                  accepted === 0
-                    ? 'Nothing received yet'
-                    : fewSpecies
-                      ? 'Under half the species: too few for representative bioregions'
-                      : undefined
-                }
-                disabled={accepted === 0}
-                onClick={() => choose('keep')}
-                data-testid="cancel-keep"
-              />
-              <ChoiceButton
-                icon={LuTrash2}
-                danger
-                label="Discard and restore previous data"
-                onClick={() => choose('discard')}
-                data-testid="cancel-discard"
-              />
+              {continuing ? (
+                // Stopping a Continue keeps what it added; a later Continue starts from there.
+                <ChoiceButton
+                  icon={LuSquare}
+                  label={`Keep ${fmtInt(accepted)} new ${accepted === 1 ? 'record' : 'records'} and stop`}
+                  note="Continue loading can pick up from here later"
+                  onClick={() => choose('keep')}
+                  data-testid="cancel-keep"
+                />
+              ) : (
+                <>
+                  <ChoiceButton
+                    icon={LuSquare}
+                    label={`Keep ${fmtInt(accepted)} records${speciesText} and stop`}
+                    note={
+                      accepted === 0
+                        ? 'Nothing received yet'
+                        : [
+                            fewSpecies ? 'Under half the species: too few for representative bioregions.' : '',
+                            // Only a query load keeps the cursors that Continue resumes from.
+                            job?.kind === 'query' ? 'Continue loading can fetch the rest later.' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ') || undefined
+                    }
+                    disabled={accepted === 0}
+                    onClick={() => choose('keep')}
+                    data-testid="cancel-keep"
+                  />
+                  <ChoiceButton
+                    icon={LuTrash2}
+                    danger
+                    label="Discard and restore previous data"
+                    onClick={() => choose('discard')}
+                    data-testid="cancel-discard"
+                  />
+                </>
+              )}
             </Popover.Body>
           </Popover.Content>
         </Popover.Positioner>
@@ -413,7 +431,10 @@ export default observer(function LoadProgress() {
           <Spinner size="sm" color="colorPalette.solid" flexShrink={0} />
         )}
         <Text fontSize="sm" fontWeight="semibold" truncate minW={0} flex="1" data-state={paused ? 'paused' : undefined}>
-          {job.state === 'planning' ? 'Planning' : paused ? 'Paused' : 'Loading'} “{job.label}”
+          {/* A Continue job's label already says "Continuing …". */}
+          {job.kind === 'continue'
+            ? `${paused ? 'Paused: ' : ''}${job.label}`
+            : `${job.state === 'planning' ? 'Planning' : paused ? 'Paused' : 'Loading'} “${job.label}”`}
         </Text>
         <Text fontSize="xs" color="fg.muted" fontVariantNumeric="tabular-nums" flexShrink={0} whiteSpace="nowrap">
           {busySource ? (

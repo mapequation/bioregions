@@ -155,6 +155,20 @@ const TaxonChips = observer(function TaxonChips() {
   );
 });
 
+/**
+ * With one taxon selected while occurrences are loaded: a new load replaces them, so taxa
+ * meant to be combined go in this one query (spec §5.8).
+ */
+const CombineHint = observer(function CombineHint() {
+  const { explorerStore, dataStore } = useStore();
+  if (explorerStore.query.taxa.length !== 1 || dataStore.occurrence == null) return null;
+  return (
+    <Text fontSize="xs" color="fg.muted" mt={1.5} data-testid="taxon-combine-hint">
+      Add more taxa here to load them together.
+    </Text>
+  );
+});
+
 /** Taxon search (GBIF + OBIS suggestions) with the selected taxa as chips. */
 export default observer(function TaxonPicker() {
   const { explorerStore } = useStore();
@@ -267,6 +281,7 @@ export default observer(function TaxonPicker() {
         </Portal>
       </Combobox.Root>
       <TaxonChips />
+      <CombineHint />
     </Box>
   );
 });

@@ -12,7 +12,7 @@ import {
   LuTriangleAlert,
 } from 'react-icons/lu';
 import { useStore } from '@/store';
-import { explorerJob } from '@/store/ExplorerStore';
+import { Tooltip } from '@/components/ui/tooltip';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt, fmtTimestamp } from '../format';
 import {
@@ -20,17 +20,26 @@ import {
   EMPTY_REASON_TEXT,
   EMPTY_TITLE,
   dedupeText,
-  type EmptyReason,
-  emptyReasonOf,
   loadDrops,
   loadStory,
   type MissingSpecies,
   missingSpeciesOf,
   notReceivedOf,
   PREVIOUS_KEPT,
-  partialSummary,
 } from '../preview/cleaningSteps';
-import { partialExplanation } from './partialText';
+import {
+  CHANGE_QUERY_HINT,
+  continueLabel,
+  continueTip,
+  emptyAction,
+  emptyOutcomeFor,
+  LOAD_AGAIN_TIP,
+  nextStepText,
+  partialMissingText,
+  partialTitle,
+  stopReasonText,
+  TRY_AGAIN_TIP,
+} from './partialText';
 
 const Sep = () => (
   <Box as="span" aria-hidden color="fg.muted" mx={1.5}>
@@ -38,10 +47,15 @@ const Sep = () => (
   </Box>
 );
 
-/** Shown instead of the success panel when a load kept no records: why, and that nothing was replaced. */
-const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reason: EmptyReason; previousKept?: boolean }) {
-  const { explorerStore: ex } = useStore();
-  const retry = reason === 'cancelledEarly' && ex.canLoad.ok;
+/** Shown instead of the success panel when a load of this query kept nothing: why, and that nothing was replaced. */
+const EmptyPanel = observer(function EmptyPanel() {
+  const { explorerStore: ex, dataStore } = useStore();
+  const job = dataStore.job;
+  const outcome = emptyOutcomeFor(job, ex.query);
+  if (!outcome) return null;
+  const reason = outcome.emptyReason;
+  const action = emptyAction(reason);
+  const lastError = outcome.stop?.lastError ?? job?.error;
   return (
     <Flex direction="column" gap={2} data-testid="loaded-panel" data-state="empty">
       <Grid
@@ -53,7 +67,7 @@ const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reas
         py={2.5}
         borderRadius="md"
         borderWidth="1px"
-        colorPalette={reason === 'cancelledEarly' ? 'gray' : 'orange'}
+        colorPalette={reason === 'failed' ? 'red' : reason === 'cancelledEarly' ? 'gray' : 'orange'}
         borderColor="colorPalette.muted"
         bg="colorPalette.subtle"
         role="status"
@@ -63,16 +77,23 @@ const EmptyPanel = observer(function EmptyPanel({ reason, previousKept }: { reas
         <Text fontSize="md" fontWeight="semibold" color="fg" data-testid="loaded-empty-title">
           {EMPTY_TITLE}
         </Text>
-        <Box>
-          {retry && (
-            <Button {...secondaryButtonProps} onClick={() => ex.load()}>
-              <LuRotateCw /> Load again
-            </Button>
+        <Box colorPalette="gray">
+          {action && (
+            <Tooltip content={TRY_AGAIN_TIP} openDelay={300}>
+              <Button
+                {...(action === 'tryAgain' ? primaryButtonProps : secondaryButtonProps)}
+                onClick={() => void dataStore.retry()}
+              >
+                <LuRotateCw /> {action === 'tryAgain' ? 'Try again' : 'Load again'}
+              </Button>
+            </Tooltip>
           )}
         </Box>
         <Text gridColumn="2 / -1" fontSize="sm" color="fg.muted" data-testid="loaded-empty-reason">
           {EMPTY_REASON_TEXT[reason]}
-          {previousKept ? ` ${PREVIOUS_KEPT}` : ''}
+          {reason === 'failed' && lastError ? ` ${lastError}.` : ''}
+          {outcome.previousKept ? ` ${PREVIOUS_KEPT}` : ''}
+          {action ? '' : ` ${CHANGE_QUERY_HINT}.`}
         </Text>
       </Grid>
     </Flex>
@@ -150,13 +171,10 @@ export interface LoadedPanelProps {
 /** Success panel shown in place of the KPI strip after a load, with the partial-load banner. */
 export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   const { explorerStore: ex, dataStore, infomapStore, speciesStore } = useStore();
-  const loaded = ex.loaded;
-  if (!loaded) return null;
-  // An empty load keeps the previous source; its outcome is on the job.
-  const last = { ...loaded, ...explorerJob(dataStore.job)?.outcome };
-
-  const empty = emptyReasonOf(last);
-  if (empty) return <EmptyPanel reason={empty} previousKept={last.previousKept} />;
+  const last = ex.loaded;
+  if (!last) return null;
+  // An empty load of this query keeps the previous source; its outcome is on the job.
+  if (emptyOutcomeFor(dataStore.job, ex.query)) return <EmptyPanel />;
 
   const records = acceptedOf(last);
   const species = last.kpis.species;
@@ -168,8 +186,11 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
   // Same full timestamp as the Cite tab header.
   const time = fmtTimestamp(last.retrievedAt);
   const partial = last.partial;
-  const skipped = (last as { bioregionsSkipped?: boolean }).bioregionsSkipped === true;
-  const runAnyway = () => void dataStore.runBioregionsAnyway();
+  const skipped = last.bioregionsSkipped === true;
+  const stop = last.stop ?? null;
+  const source = dataStore.occurrence;
+  const query = source?.kind === 'explorer-query' && source.status === 'done' ? source : null;
+  const continueCap = dataStore.continueCap;
   const coverage =
     partial?.speciesLoaded != null && partial.speciesPlanned != null && partial.speciesPlanned > 0
       ? ` (${fmtInt(partial.speciesLoaded)} of ${fmtInt(partial.speciesPlanned)} species)`
@@ -225,7 +246,7 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
         <Flex gridColumn="2 / -1" align="center" columnGap={3} rowGap={1.5} wrap="wrap" minW={0}>
           <HStack gap={2} minW={0} align="baseline" flex="1 0 auto">
             <Text fontSize="md" fontWeight="semibold" color="fg">
-              Loaded {fmtInt(records)} records
+              {partial ? partialTitle(partial, stop) : `Loaded ${fmtInt(records)} records`}
             </Text>
             {time && (
               <Text as="span" fontSize="xs" color="fg.muted" flexShrink={0} data-testid="loaded-time">
@@ -249,15 +270,39 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
           </HStack>
         </Flex>
         {partial && (
-          <Text gridColumn="2 / -1" fontSize="sm" color="fg" data-testid="loaded-partial">
-            <Box as="span" fontWeight="semibold">
-              Partial dataset:
-            </Box>{' '}
-            {partialSummary(partial)}{' '}
-            <Box as="span" color="fg.muted" data-testid="loaded-partial-reason">
-              {partialExplanation(partial)}
-            </Box>
-          </Text>
+          <Flex gridColumn="2 / -1" direction="column" gap={1.5} data-testid="loaded-partial">
+            <Text fontSize="sm" color="fg" data-testid="loaded-partial-reason">
+              {stopReasonText(stop, last.cap) ?? ''}{' '}
+              <Box as="span" color="fg.muted">
+                {partialMissingText(stop, partial)}
+              </Box>
+            </Text>
+            {query && (
+              <Flex align="center" columnGap={2} rowGap={1.5} wrap="wrap" colorPalette="gray">
+                {query.resumable && (
+                  <Text fontSize="xs" color="fg.muted" flexBasis="100%">
+                    {nextStepText(stop, continueCap)}
+                  </Text>
+                )}
+                {query.resumable && (
+                  <Tooltip content={continueTip(stop, continueCap)} openDelay={300}>
+                    <Button
+                      {...primaryButtonProps}
+                      onClick={() => void dataStore.continueLoad()}
+                      data-testid="loaded-continue"
+                    >
+                      <LuPlay /> {continueLabel(stop, continueCap)}
+                    </Button>
+                  </Tooltip>
+                )}
+                <Tooltip content={LOAD_AGAIN_TIP} openDelay={300}>
+                  <Button {...secondaryButtonProps} onClick={() => void dataStore.loadAgain()} data-testid="loaded-load-again">
+                    <LuRotateCw /> Load again
+                  </Button>
+                </Tooltip>
+              </Flex>
+            )}
+          </Flex>
         )}
         {missing.length > 0 && <MissingSpeciesList species={missing} />}
         <Flex gridColumn="2 / -1" fontSize="xs" color="fg.muted" wrap="wrap" align="center" minW={0} rowGap={1}>
@@ -287,11 +332,9 @@ export default observer(function LoadedPanel({ extra }: LoadedPanelProps) {
             <Text fontSize="sm" color="fg">
               Bioregions not computed for a partial dataset{coverage}.
             </Text>
-            {runAnyway && (
-              <Button {...secondaryButtonProps} onClick={() => runAnyway.call(ex)}>
-                <LuPlay /> Run anyway
-              </Button>
-            )}
+            <Button {...secondaryButtonProps} onClick={() => void dataStore.runBioregionsAnyway()}>
+              <LuPlay /> Run anyway
+            </Button>
           </HStack>
         )}
         {story && (

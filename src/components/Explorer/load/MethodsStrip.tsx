@@ -4,7 +4,7 @@ import { useId } from 'react';
 import { LuCheck, LuChevronUp, LuCopy } from 'react-icons/lu';
 import { useStore } from '@/store';
 
-const EMPTY_TEXT = 'The methods paragraph is drafted once you add a taxon or choose an area';
+const EMPTY_TEXT = 'Methods text appears once data is loaded.';
 
 /** Sticky methods draft: one line collapsed (32 px), a 180 px reading panel expanded. */
 export default observer(function MethodsStrip() {

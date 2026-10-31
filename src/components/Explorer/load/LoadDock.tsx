@@ -1,17 +1,39 @@
-import { Box, Button, chakra, Flex, HStack, Icon, Skeleton, Text } from '@chakra-ui/react';
+import { Box, Button, chakra, Flex, HStack, Icon, Skeleton, Text, VisuallyHidden } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { LuCircleAlert, LuCircleCheck, LuCircleX, LuInfo, LuRefreshCw, LuSearchX, LuTriangleAlert } from 'react-icons/lu';
+import { Fragment, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  LuCircleAlert,
+  LuCircleCheck,
+  LuCircleX,
+  LuInfo,
+  LuPlay,
+  LuRefreshCw,
+  LuRotateCw,
+  LuSearchX,
+  LuTriangleAlert,
+} from 'react-icons/lu';
 import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
 import { InfoTip } from '@/components/ui/toggle-tip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useStore } from '@/store';
 import { explorerJob, NO_MATCHES_REASON } from '@/store/ExplorerStore';
-import { primaryButtonProps } from '../buttonStyles';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtBytes, fmtCompact, fmtInt } from '../format';
-import { acceptedOf, EMPTY_REASON_SHORT, EMPTY_TITLE, emptyReasonOf } from '../preview/cleaningSteps';
+import { acceptedOf } from '../preview/cleaningSteps';
 import LoadProgress from './LoadProgress';
 import { fmtApproxMinutes, modEnterLabel, niceCapAbove, yearsToFitCap } from './loadMath';
+import {
+  CHANGE_QUERY_HINT,
+  continueLabel,
+  continueTip,
+  doneRowText,
+  EMPTY_ROW_TITLE,
+  emptyAction,
+  emptyOutcomeFor,
+  emptyRowReason,
+  LOAD_AGAIN_TIP,
+  TRY_AGAIN_TIP,
+} from './partialText';
 
 const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
 const DUPLICATES_HINT = 'duplicates removed while loading';
@@ -19,6 +41,15 @@ const DUPLICATES_HINT = 'duplicates removed while loading';
 const NARROW = '@container loadEstimate (max-width: 44rem)';
 const MIN_CAP = 1000;
 const SHORTCUT = modEnterLabel(typeof navigator === 'undefined' ? '' : navigator.platform);
+const CAP_TIP =
+  'Most records each source may download. Loading is blocked while the estimated total is above the cap: raise it or narrow the query.';
+
+/** What Load does; the replace sentence only when occurrences are loaded (spec §5.8). */
+function loadTip(replaces: boolean): string {
+  return `Fetch every matching record from the enabled sources (up to the cap) and clean it with the filters above.${
+    replaces ? ' It replaces the loaded occurrences; the tree stays.' : ''
+  } (${SHORTCUT})`;
+}
 
 const Sep = () => (
   <Box as="span" aria-hidden color="fg.muted" mx={1.5}>
@@ -136,71 +167,132 @@ const EstimateLine = observer(function EstimateLine() {
   );
 });
 
-/** Done state after a load of the current query: status text only (the actions live in LoadedPanel). */
+/** Compact dock action with a tooltip that says what it does. */
+function RowAction({ tip, primary, onClick, children, testId }: {
+  tip: string;
+  primary?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  testId: string;
+}) {
+  return (
+    <Tooltip content={tip} openDelay={300}>
+      <Button
+        {...(primary ? primaryButtonProps : secondaryButtonProps)}
+        size="xs"
+        flexShrink={0}
+        onClick={onClick}
+        data-testid={testId}
+      >
+        {children}
+      </Button>
+    </Tooltip>
+  );
+}
+
+/** Done state after a load of the current query: status and its next steps (spec §4.4). */
 const DoneRow = observer(function DoneRow() {
   const { explorerStore: ex, dataStore } = useStore();
   const loaded = ex.loaded;
   if (!loaded) return null;
-  // An empty load keeps the previous source; its outcome is on the job.
-  const last = { ...loaded, ...explorerJob(dataStore.job)?.outcome };
-  const empty = emptyReasonOf(last);
-  if (empty) {
-    // A cancelled-early load offers "Load again" in the panel above; the others need a new query.
-    const retry = empty === 'cancelledEarly' && ex.canLoad.ok;
-    return (
-      <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done" data-state="empty">
+  const source = dataStore.occurrence;
+  const query = source?.kind === 'explorer-query' && source.status === 'done' ? source : null;
+  const stop = loaded.stop ?? null;
+  const { title, parts } = doneRowText({
+    accepted: acceptedOf(loaded),
+    species: loaded.kpis.species,
+    partial: loaded.partial,
+    stop,
+  });
+  const partial = loaded.partial != null || stop != null;
+  const continueCap = dataStore.continueCap;
+  return (
+    <HStack gap={2} minH={10} minW={0} data-testid="load-done" data-state={partial ? 'partial' : 'complete'}>
+      <HStack gap={2} flex="1" minW={0} role="status">
         <Icon
-          as={LuCircleAlert}
+          as={partial ? LuTriangleAlert : LuCircleCheck}
           boxSize={4}
-          color={empty === 'cancelledEarly' ? 'fg.muted' : 'orange.fg'}
+          color={partial ? 'orange.fg' : 'green.fg'}
           flexShrink={0}
           aria-hidden
         />
-        <Text fontSize="sm" color="fg.muted" truncate minW={0}>
+        <Text fontSize="sm" color="fg.muted" minW={0} fontVariantNumeric="tabular-nums" lineClamp={2}>
           <Box as="span" color="fg" fontWeight="semibold">
-            {EMPTY_TITLE}
+            {title}
+          </Box>
+          {parts.map((part, i) => (
+            <Fragment key={part}>
+              <Sep />
+              <Box as="span" color={partial && i === 0 ? 'orange.fg' : undefined}>
+                {part}
+              </Box>
+            </Fragment>
+          ))}
+        </Text>
+      </HStack>
+      {query?.resumable && (
+        <RowAction primary tip={continueTip(stop, continueCap)} onClick={() => void dataStore.continueLoad()} testId="load-continue">
+          <LuPlay /> {continueLabel(stop, continueCap)}
+        </RowAction>
+      )}
+      {query && (
+        <RowAction tip={LOAD_AGAIN_TIP} onClick={() => void dataStore.loadAgain()} testId="load-again">
+          <LuRotateCw /> Load again
+        </RowAction>
+      )}
+    </HStack>
+  );
+});
+
+/** A load of the current query that kept nothing: why, and Try again / Load again when a rerun can help. */
+const EmptyRow = observer(function EmptyRow() {
+  const { explorerStore: ex, dataStore } = useStore();
+  const job = dataStore.job;
+  const outcome = emptyOutcomeFor(job, ex.query);
+  if (!outcome) return null;
+  const reason = outcome.emptyReason;
+  const action = emptyAction(reason);
+  const failed = reason === 'failed';
+  return (
+    <HStack gap={2} minH={10} minW={0} data-testid="load-done" data-state="empty" data-reason={reason}>
+      <HStack gap={2} flex="1" minW={0} role="status">
+        <Icon
+          as={failed ? LuCircleX : LuCircleAlert}
+          boxSize={4}
+          color={failed ? 'red.fg' : reason === 'cancelledEarly' ? 'fg.muted' : 'orange.fg'}
+          flexShrink={0}
+          aria-hidden
+        />
+        <Text fontSize="sm" color="fg.muted" minW={0} lineClamp={2}>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {EMPTY_ROW_TITLE}
           </Box>
           <Sep />
-          {EMPTY_REASON_SHORT[empty]}
-          {last.previousKept && (
+          {emptyRowReason(reason, outcome.stop?.lastError ?? job?.error)}
+          {outcome.previousKept && (
             <>
               <Sep />
               previous data unchanged
             </>
           )}
-          {!retry && (
+          {!action && (
             <>
               <Sep />
-              Edit the query to load again
+              {CHANGE_QUERY_HINT}
             </>
           )}
         </Text>
       </HStack>
-    );
-  }
-  const accepted = acceptedOf(last);
-  const partial = last.partial != null;
-  return (
-    <HStack gap={2} minH={10} minW={0} role="status" data-testid="load-done" data-state={partial ? 'partial' : 'complete'}>
-      <Icon
-        as={partial ? LuTriangleAlert : LuCircleCheck}
-        boxSize={4}
-        color={partial ? 'orange.fg' : 'green.fg'}
-        flexShrink={0}
-        aria-hidden
-      />
-      <Text fontSize="sm" color="fg.muted" truncate fontVariantNumeric="tabular-nums">
-        <Box as="span" color="fg" fontWeight="semibold">
-          Loaded {fmtInt(accepted)} records
-        </Box>
-        {partial && (
-          <Box as="span" color="orange.fg" fontWeight="semibold">
-            {' (partial)'}
-          </Box>
-        )}
-        <Sep />
-        Edit the query to load again
-      </Text>
+      {action && (
+        <RowAction
+          primary={action === 'tryAgain'}
+          tip={TRY_AGAIN_TIP}
+          onClick={() => void dataStore.retry()}
+          testId={action === 'tryAgain' ? 'load-try-again' : 'load-again'}
+        >
+          <LuRotateCw /> {action === 'tryAgain' ? 'Try again' : 'Load again'}
+        </RowAction>
+      )}
     </HStack>
   );
 });
@@ -209,31 +301,35 @@ const DoneRow = observer(function DoneRow() {
 const CapField = observer(function CapField() {
   const { explorerStore: ex } = useStore();
   const id = useId();
+  const tipId = useId();
   const [text, setText] = useState(String(ex.cap));
   useEffect(() => setText(String(ex.cap)), [ex.cap]);
   return (
-    <HStack gap={2}>
-      <chakra.label htmlFor={id} fontSize="sm" color="fg.muted">
-        Cap
-      </chakra.label>
-      <NumberInputRoot
-        ids={{ input: id }}
-        size="sm"
-        w="8.5rem"
-        min={MIN_CAP}
-        step={50_000}
-        value={text}
-        formatOptions={{ maximumFractionDigits: 0, useGrouping: true }}
-        onValueChange={(e) => {
-          setText(e.value);
-          if (Number.isFinite(e.valueAsNumber) && e.valueAsNumber >= MIN_CAP) ex.setCap(Math.round(e.valueAsNumber));
-        }}
-        disabled={ex.isLoading}
-        data-testid="load-cap"
-      >
-        <NumberInputField fontVariantNumeric="tabular-nums" aria-label="Record cap" />
-      </NumberInputRoot>
-    </HStack>
+    <Tooltip content={CAP_TIP} openDelay={300}>
+      <HStack gap={2}>
+        <chakra.label htmlFor={id} fontSize="sm" color="fg.muted">
+          Cap
+        </chakra.label>
+        <NumberInputRoot
+          ids={{ input: id }}
+          size="sm"
+          w="8.5rem"
+          min={MIN_CAP}
+          step={50_000}
+          value={text}
+          formatOptions={{ maximumFractionDigits: 0, useGrouping: true }}
+          onValueChange={(e) => {
+            setText(e.value);
+            if (Number.isFinite(e.valueAsNumber) && e.valueAsNumber >= MIN_CAP) ex.setCap(Math.round(e.valueAsNumber));
+          }}
+          disabled={ex.isLoading}
+          data-testid="load-cap"
+        >
+          <NumberInputField fontVariantNumeric="tabular-nums" aria-label="Record cap" aria-describedby={tipId} />
+        </NumberInputRoot>
+        <VisuallyHidden id={tipId}>{CAP_TIP}</VisuallyHidden>
+      </HStack>
+    </Tooltip>
   );
 });
 
@@ -302,7 +398,8 @@ export default observer(function LoadDock() {
   const { explorerStore: ex, dataStore, speciesStore } = useStore();
   const { canLoad, estimate, loaded } = ex;
   const job = explorerJob(dataStore.job);
-  const outcome = job?.outcome;
+  // The loaded occurrence source a load would replace.
+  const occurrence = dataStore.occurrence?.status === 'done' ? dataStore.occurrence : null;
   const loading = !!job && (job.state === 'planning' || job.state === 'streaming');
   const rootRef = useRef<HTMLDivElement>(null);
   // Height of the dock before the load started: the progress row keeps it, so nothing above moves.
@@ -326,9 +423,15 @@ export default observer(function LoadDock() {
       </Flex>
     );
 
-  // An empty load ends as a job error; the dock says why in the neutral empty row instead.
-  const emptyLoad = loaded != null && emptyReasonOf({ ...loaded, ...outcome }) != null;
-  if (ex.loadedMatchesQuery && (job?.state !== 'error' || emptyLoad)) {
+  // A load of this query that kept nothing says why (and offers a rerun) in place of the controls.
+  if (emptyOutcomeFor(dataStore.job, ex.query)) {
+    return (
+      <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
+        <EmptyRow />
+      </Box>
+    );
+  }
+  if (ex.loadedMatchesQuery && job?.state !== 'error') {
     return (
       <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
         <DoneRow />
@@ -363,11 +466,8 @@ export default observer(function LoadDock() {
           <Icon as={LuCircleX} boxSize={4} flexShrink={0} />
           <Text fontSize="sm" flex="1" minW={0} truncate>
             Load failed{job.error ? `: ${job.error}` : ''}.
-            {(emptyLoad ? outcome?.previousKept : speciesStore.numRecords > 0) && ' Your previous data is unchanged.'}
+            {speciesStore.numRecords > 0 && ' Your previous data is unchanged.'}
           </Text>
-          <Button size="xs" variant="outline" onClick={() => ex.load()}>
-            Try again
-          </Button>
         </Flex>
       )}
       <OverCapRow />
@@ -384,11 +484,7 @@ export default observer(function LoadDock() {
               {inlineReason}
             </Text>
           )}
-          <Tooltip
-            content={reason ?? `Load (${SHORTCUT})`}
-            disabled={!reason}
-            openDelay={300}
-          >
+          <Tooltip content={reason ?? loadTip(occurrence != null)} openDelay={300}>
             <Box as="span" display="inline-flex">
               <Button
                 {...primaryButtonProps}
@@ -408,6 +504,13 @@ export default observer(function LoadDock() {
           </Tooltip>
         </HStack>
       </Flex>
+      {occurrence && (
+        <Text fontSize="xs" color="fg.muted" data-testid="load-replaces">
+          Replaces {occurrence.label}
+          {speciesStore.numRecords > 0 ? ` (${fmtInt(speciesStore.numRecords)} records)` : ''}. To combine taxa, add
+          them to this query.
+        </Text>
+      )}
     </Flex>
   );
 });
