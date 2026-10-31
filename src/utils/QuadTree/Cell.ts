@@ -43,8 +43,8 @@ export default class Cell
   private _recalcStats: boolean = true;
   private _speciesTopList: { count: number; name: string }[] = [];
   private _speciesRichness: number = 0;
-  // @ts-expect-error narrows ExtendedFeature's `type?: string` to the literal 'Feature'
-  type = 'Feature';
+  // The literal type makes a Cell a GeoJSON Feature, which d3gl's map layers accept.
+  type = 'Feature' as const;
 
   constructor(extent: BBox, maxCellSizeLog2: number) {
     this.x1 = extent[0];

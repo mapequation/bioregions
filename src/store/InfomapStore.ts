@@ -60,6 +60,19 @@ export interface BioregionsMultilayerNetwork
   layers: { id: number; name: string }[];
 }
 
+/**
+ * Leaf nodes of the `json` / `json_states` output that this store reads.
+ * Since 2.16 Infomap types `modules`, `name` and `flow` as optional, because the
+ * physical-level JSON of a higher-order run omits `modules`. The first-order
+ * `json` and the `json_states` output always write path, modules, name, flow,
+ * mec and id (Infomap `writeJsonTree`), so `createBioregions` narrows to these
+ * types after checking `modules` at runtime.
+ */
+type OutputNode<NodeType> = NodeType &
+  Required<Pick<Tree['nodes'][number], 'modules' | 'name' | 'flow'>>;
+export type OutputTree = Tree<OutputNode<Tree['nodes'][number]>>;
+export type OutputStateTree = Tree<OutputNode<StateTree['nodes'][number]>>;
+
 type RequiredArgs = Required<Readonly<Pick<Arguments, 'silent' | 'output'>>>;
 
 const defaultArgs: RequiredArgs = {
@@ -1846,15 +1859,19 @@ export default class InfomapStore {
     if (!tree?.nodes || tree.nodes.length === 0) {
       return;
     }
+    if (tree.nodes.some((node) => node.modules == null)) {
+      this.addError(`Infomap output has no node modules, please report.`);
+      return;
+    }
     const haveStates = 'stateId' in tree.nodes[0];
     if (haveStates) {
-      this.createStateBioregions(tree as StateTree);
+      this.createStateBioregions(tree as OutputStateTree);
     } else {
-      this.createNonStateBioregions(tree as Tree);
+      this.createNonStateBioregions(tree as OutputTree);
     }
   }
 
-  createNonStateBioregions(tree: Tree) {
+  createNonStateBioregions(tree: OutputTree) {
     const { speciesStore, treeStore } = this.rootStore;
     const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
@@ -1940,7 +1957,7 @@ export default class InfomapStore {
     this.setBioregions(bioregions);
   }
 
-  createStateBioregions(tree: StateTree) {
+  createStateBioregions(tree: OutputStateTree) {
     if (tree.args.includes('multilayer-relax-limit')) {
       this.createMultilayerBioregions(tree);
       return;
@@ -2021,7 +2038,7 @@ export default class InfomapStore {
     this.setStateBioregions(bioregions);
   }
 
-  createMultilayerBioregions(tree: StateTree) {
+  createMultilayerBioregions(tree: OutputStateTree) {
     const { speciesStore, treeStore } = this.rootStore;
     const { cells } = this;
     this.rootStore.clearBioregions();
