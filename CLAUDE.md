@@ -241,9 +241,14 @@ ships via the GitHub Pages deploy (`.github/workflows/pages.yml`).
 - **Record a change:** run `pnpm changeset`, pick a bump type, write a user-facing
   summary. This writes a markdown file under `.changeset/`. Commit it with your PR.
 - **Pre-release mode:** the app is in `alpha` pre-release mode (`.changeset/pre.json`),
-  so version runs produce `2.0.0-alpha.N`. Run `pnpm exec changeset pre exit` to
+  so version runs produce `2.0.0-alpha.N`. Changesets already released in an alpha are
+  moved to `.changeset/pre/` (kept for the final stable changelog); edit or delete
+  them there if they no longer apply. Run `pnpm exec changeset pre exit` to
   graduate to a stable `2.0.0` (then the next version run finalizes it).
-- **The release PR:** `.github/workflows/release.yml` runs `changesets/action@v1` on
+- **Config:** `.changeset/config.json` sets `privatePackages.version: true` (Changesets 3
+  skips private packages by default, which would make version runs a no-op) and
+  `format: false` (the repo uses Biome, not Prettier).
+- **The release PR:** `.github/workflows/release.yml` runs `changesets/action@v2` on
   every push to `main`. When unreleased changesets exist, it opens/updates a
   **"Version Packages"** PR (branch `changeset-release/main`) that applies them —
   bumping the version and updating `CHANGELOG.md`. Merging that PR *is* the release;

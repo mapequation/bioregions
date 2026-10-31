@@ -56,7 +56,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.3",
     "@types/d3": "^7.4.3",
     "@types/d3-array": "^3.2.2",
     "@types/d3-format": "^3.0.4",
@@ -72,8 +72,8 @@
     "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^6.0.2",
     "tsx": "4.23.12",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vite": "^8.0.16",
-    "vitest": "4.1.11"
+    "vitest": "5.0.5"
   }
 }

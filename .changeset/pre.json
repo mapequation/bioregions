@@ -1,16 +1,4 @@
 {
   "mode": "pre",
-  "tag": "alpha",
-  "initialVersions": {
-    "bioregions": "2.0.0-alpha.18"
-  },
-  "changesets": [
-    "bioregion-list-top-n",
-    "d3gl-0-7-oriented-labels",
-    "migrate-pnpm-changesets",
-    "responsive-map-tree",
-    "tree-zoom-perf",
-    "view-reset-and-label-spacing",
-    "view-status-bars"
-  ]
+  "tag": "alpha"
 }
