@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import { LuChevronDown, LuEllipsis } from 'react-icons/lu';
-import { Badge, Box, Button, HStack, IconButton, Menu, Popover, Portal, Progress, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, chakra, HStack, IconButton, Menu, Popover, Portal, Progress, Stack, Text } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type { Tab } from '../../store/explorer/types';
 import { Tooltip } from '../ui/tooltip';
@@ -59,12 +59,16 @@ const StopMenu = observer(function StopMenu({ card }: { card: SourceCardModel })
         dataStore.cancel(e.value === 'discard' ? 'discard' : 'keep');
       }}
     >
+      {/* The tooltip sits on a wrapper: on the trigger itself it would overwrite the
+          data-scope/part/ownedby attributes the menu finds its anchor by. */}
       <Tooltip content="Stop the load: keep what arrived, or cancel it" openDelay={300}>
-        <Menu.Trigger asChild>
-          <Button size="xs" variant="outline" colorPalette="red" flex="1" data-testid="card-stop">
-            Stop <LuChevronDown />
-          </Button>
-        </Menu.Trigger>
+        <chakra.span display="flex" flex="1">
+          <Menu.Trigger asChild>
+            <Button size="xs" variant="outline" colorPalette="red" flex="1" data-testid="card-stop">
+              Stop <LuChevronDown />
+            </Button>
+          </Menu.Trigger>
+        </chakra.span>
       </Tooltip>
       <Portal>
         <Menu.Positioner>
@@ -215,12 +219,15 @@ const SourceCard = observer(function SourceCard({ card }: { card: SourceCardMode
               finalFocusEl={() => moreRef.current}
               positioning={{ placement: 'bottom-end', gutter: 6 }}
             >
+              {/* On a wrapper, like the Stop menu's tooltip, so the popover keeps its anchor. */}
               <Tooltip content={`More actions for ${card.title}`} openDelay={300}>
-                <Popover.Trigger asChild>
-                  <IconButton ref={moreRef} size="xs" variant="ghost" flexShrink={0} aria-label={`More actions for ${card.title}`}>
-                    <LuEllipsis />
-                  </IconButton>
-                </Popover.Trigger>
+                <chakra.span display="inline-flex" flexShrink={0}>
+                  <Popover.Trigger asChild>
+                    <IconButton ref={moreRef} size="xs" variant="ghost" aria-label={`More actions for ${card.title}`}>
+                      <LuEllipsis />
+                    </IconButton>
+                  </Popover.Trigger>
+                </chakra.span>
               </Tooltip>
               <Portal>
                 <Popover.Positioner>
