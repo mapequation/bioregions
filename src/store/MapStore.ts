@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, observableRef, computed } from 'mobx';
 import type { Cell } from '../utils/QuadTree';
 import type RootStore from './RootStore';
 import type { MultiPoint } from '../types/geojson';
@@ -144,8 +144,8 @@ export default class MapStore {
       colorModuleParticipationStrength: observable,
       waterColor: observable,
       landColor: observable,
-      hoverCell: observable.ref,
-      hoverPos: observable.ref,
+      hoverCell: observableRef,
+      hoverPos: observableRef,
       setHover: action,
       heatmapTarget: observable,
       heatmapScale: computed,

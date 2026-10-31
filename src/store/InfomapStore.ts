@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, observableRef, computed } from 'mobx';
 import Infomap from '@mapequation/infomap';
 import type { Tree, StateTree, Result } from '@mapequation/infomap';
 import type {
@@ -342,18 +342,18 @@ export default class InfomapStore {
 
     makeObservable(this, {
       error: observable,
-      network: observable.ref,
-      multilayerNetwork: observable.ref,
+      network: observableRef,
+      multilayerNetwork: observableRef,
       numLayers: observable,
       multilayerLogTime: observable,
-      tree: observable.ref,
+      tree: observableRef,
       treeString: observable,
       infomapOutput: observable,
       haveStateNodes: observable,
       args: observable,
       currentTrial: observable,
       isRunning: observable,
-      bioregions: observable.ref,
+      bioregions: observableRef,
       useWeightedSpeciesLinks: observable,
       useWeightedTreeNodeLinksIfTimeSlice: observable,
       spatialNormalizationOrder: observable,
