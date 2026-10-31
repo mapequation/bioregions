@@ -3,17 +3,19 @@
 // validates trees; SpeciesStore, Infomap and the map are stubs that record call order.
 import { action, autorun, makeAutoObservable } from 'mobx';
 import { describe, expect, it, vi } from 'vitest';
-import DataStore, { LOAD_RUNNING, type ExampleFiles } from './DataStore';
+import DataStore, { LOAD_RUNNING } from './DataStore';
 import type RootStore from './RootStore';
 import { NO_USABLE_ROWS, type FileLoadOptions } from './SpeciesStore';
 import TreeStore from './TreeStore';
+import { EXAMPLE_CITATION_PLACEHOLDER, exampleCatalog, type ExampleEntry } from './data/catalog';
+import type { UploadPlan } from './data/classify';
 import type { TreeLoadInput } from './data/types';
 
 const TREE = '((Aa_a:1,Bb_b:1):1,Cc_c:2);';
 const TREE2 = '(Xx_x,Yy_y);';
 
 /** How the fake SpeciesStore behaves for one file name. */
-type Script = { features: number; error?: string; gate?: Promise<void> };
+type Script = { features: number; error?: string; gate?: Promise<void>; postLoad?: boolean };
 
 function setup(scripts: Record<string, Script> = {}) {
   const calls: string[] = [];
@@ -60,6 +62,8 @@ function setup(scripts: Record<string, Script> = {}) {
       ]);
       speciesStore.loaded = true;
     })();
+    // The real SpeciesStore.postLoad runs Infomap once after a committed load.
+    if (script.postLoad) await (infomapStore as unknown as { run: () => Promise<void> }).run();
     if (script.error) throw new Error(script.error);
     return { received: script.features };
   };
@@ -96,7 +100,7 @@ function setup(scripts: Record<string, Script> = {}) {
   root.treeStore = treeStore;
   const store = new DataStore(root);
   root.dataStore = store;
-  return { store, speciesStore, infomapStore, treeStore, run, speciesLoad, calls };
+  return { store, speciesStore, infomapStore, treeStore, run, speciesLoad, fakeLoad, calls };
 }
 
 const csv = (name: string) => ({
@@ -106,6 +110,38 @@ const csv = (name: string) => ({
 });
 
 const fileTree = (text: string, name = 'tree.nwk'): TreeLoadInput => ({ kind: 'file', file: new File([text], name) });
+
+/** A `files` catalog entry; the citation defaults to the placeholder, as the catalog sets it. */
+function filesExample(o: {
+  id: string;
+  title?: string;
+  species: string;
+  tree?: string;
+  treeCitation?: string;
+  citation?: string;
+  settings?: NonNullable<ExampleEntry['files']>['settings'];
+}): ExampleEntry {
+  return {
+    id: o.id,
+    title: o.title ?? o.id,
+    kind: 'files',
+    why: '',
+    icon: 'map',
+    taxon: 'Mammalia',
+    region: 'World',
+    source: 'Example',
+    records: { n: 2, approx: false },
+    species: { n: 2, approx: false },
+    size: '1 kB download',
+    citation: o.citation ?? EXAMPLE_CITATION_PLACEHOLDER,
+    tree: {
+      included: Boolean(o.tree),
+      usedByDefault: Boolean(o.tree) && o.settings?.includeTree !== false,
+      ...(o.treeCitation ? { citation: o.treeCitation } : {}),
+    },
+    files: { species: o.species, ...(o.tree ? { tree: o.tree } : {}), settings: o.settings ?? {} },
+  };
+}
 
 const openTree = (newick = TREE): TreeLoadInput => ({
   kind: 'opentree',
@@ -293,8 +329,7 @@ describe('DataStore single-load guard', () => {
     const running = store.loadOccurrenceFile(csv('slow.csv'));
     expect(store.isLoading).toBe(true);
     expect(await store.loadOccurrenceFile(csv('other.csv'))).toEqual({ started: false, reason: LOAD_RUNNING });
-    const example: ExampleFiles = { id: 'ex', name: 'Ex', speciesFile: '/ex.csv', settings: {} };
-    expect(await store.loadExample(example)).toEqual({ started: false, reason: LOAD_RUNNING });
+    expect(await store.loadExample(filesExample({ id: 'ex', species: '/ex.csv' }))).toEqual({ started: false, reason: LOAD_RUNNING });
     expect(store.removeOccurrences()).toBe(false);
     expect(store.clear()).toBe(false);
 
@@ -325,13 +360,9 @@ describe('DataStore methods text and citations', () => {
       await gate;
       return { received: 1 };
     });
-    const running = store.loadExample({
-      id: 'ex',
-      name: 'Birds of Europe',
-      speciesFile: '/data/birds.csv',
-      citation: 'Bird atlas (2020).',
-      settings: {},
-    });
+    const running = store.loadExample(
+      filesExample({ id: 'ex', title: 'Birds of Europe', species: '/data/birds.csv', citation: 'Bird atlas (2020).' }),
+    );
     await vi.waitFor(() => expect(store.occurrence?.status).toBe('loading'));
     expect(store.methodsText).toBe('Loading Birds of Europe…');
     expect(store.citations).toEqual([]);
@@ -354,14 +385,15 @@ describe('DataStore methods text and citations', () => {
   it('describes an example with its tree and citations, or the placeholder', async () => {
     const { store } = setup();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(TREE)));
-    await store.loadExample({
-      id: 'mammals',
-      name: 'Neotropical mammals',
-      speciesFile: '/data/mammals.csv',
-      treeFile: '/data/mammals.nwk',
-      treeCitation: 'Mammal tree (2008)',
-      settings: {},
-    });
+    await store.loadExample(
+      filesExample({
+        id: 'mammals',
+        title: 'Neotropical mammals',
+        species: '/data/mammals.csv',
+        tree: '/data/mammals.nwk',
+        treeCitation: 'Mammal tree (2008)',
+      }),
+    );
     vi.unstubAllGlobals();
     expect(store.tree).toMatchObject({ kind: 'example', exampleId: 'mammals', tips: 3 });
     expect(store.methodsText).toBe(
@@ -392,5 +424,163 @@ describe('DataStore.loadInline', () => {
       { role: 'tree', kind: 'example', exampleId: 'docs-demo', tips: 3 },
     ]);
     expect(store.treeOverlap).toEqual({ tips: 3, inTree: 1, datasetSpecies: 2 });
+  });
+});
+
+describe('DataStore.loadExample (catalog)', () => {
+  const catalogEntry = (id: string) => {
+    const entry = exampleCatalog(true).find((e) => e.id === id);
+    if (!entry?.files) throw new Error(`no files example ${id}`);
+    return entry as ExampleEntry & { files: NonNullable<ExampleEntry['files']> };
+  };
+
+  it('Global mammals (includeTree: false) leaves includeTreeInNetwork false and runs Infomap exactly once', async () => {
+    const entry = catalogEntry('mammals-global');
+    expect(entry.files.settings.includeTree).toBe(false);
+    const { store, infomapStore, run } = setup({ [entry.files.species]: { features: 2, postLoad: true } });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(TREE)));
+    const result = await store.loadExample(entry);
+    vi.unstubAllGlobals();
+    expect(result).toEqual({ started: true, committed: true });
+    expect(infomapStore.includeTreeInNetwork).toBe(false);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(store.tree).toMatchObject({ kind: 'example', exampleId: 'mammals-global' });
+    expect(store.occurrence).toMatchObject({ kind: 'example', exampleId: 'mammals-global', label: entry.title });
+  });
+
+  it('fills both slots tree-first, with includeTree on', async () => {
+    const entry = catalogEntry('mammals-neotropics');
+    const { store, infomapStore, run, speciesLoad, fakeLoad } = setup({
+      [entry.files.species]: { features: 2, postLoad: true },
+    });
+    let treeAtLoad: string | undefined;
+    speciesLoad.mockImplementationOnce(async (file, opts) => {
+      treeAtLoad = store.tree?.kind;
+      return fakeLoad(file, opts);
+    });
+    infomapStore.setIncludeTree(false);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(TREE)));
+    await store.loadExample(entry);
+    vi.unstubAllGlobals();
+    expect(treeAtLoad).toBe('example');
+    expect(infomapStore.includeTreeInNetwork).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(store.occurrence).toMatchObject({ kind: 'example', exampleId: 'mammals-neotropics' });
+  });
+
+  it('freezes a documented catalog citation', async () => {
+    const entry = catalogEntry('birches');
+    expect(entry.citation).not.toBe(EXAMPLE_CITATION_PLACEHOLDER);
+    const { store } = setup();
+    await store.loadExample(entry);
+    expect(store.occurrence).toMatchObject({ kind: 'example', exampleId: 'birches', citation: entry.citation });
+  });
+
+  it('does not freeze the placeholder citation (§9.3)', async () => {
+    const { store } = setup();
+    await store.loadExample(filesExample({ id: 'plain', species: '/plain.csv' }));
+    expect(store.occurrence).toMatchObject({ kind: 'example', exampleId: 'plain' });
+    expect(store.occurrence && 'citation' in store.occurrence).toBe(false);
+    expect(store.methodsText).toContain(`${EXAMPLE_CITATION_PLACEHOLDER}.`);
+  });
+
+  it('keeps a leftover tree for an example without one, with its overlap available (§9.2)', async () => {
+    const { store, run } = setup({ '/plain.csv': { features: 2, postLoad: true } });
+    await store.loadTree(fileTree(TREE));
+    const treeId = store.tree?.id;
+    await store.loadExample(filesExample({ id: 'plain', species: '/plain.csv' }));
+    expect(store.tree?.id).toBe(treeId);
+    expect(store.treeOverlap).toMatchObject({ tips: 3, inTree: 1, datasetSpecies: 2 });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('reruns Infomap once when the tree committed but the occurrences did not', async () => {
+    const { store, run } = setup({ '/empty.csv': { features: 0 } });
+    await store.loadOccurrenceFile(csv('birds.csv'));
+    run.mockClear();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(TREE)));
+    const result = await store.loadExample(filesExample({ id: 'empty', species: '/empty.csv', tree: '/t.nwk' }));
+    vi.unstubAllGlobals();
+    expect(result).toEqual({ started: true, committed: false });
+    expect(store.occurrence?.label).toBe('birds.csv');
+    expect(store.tree?.kind).toBe('example');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('delegates a query example to explorerStore.loadExampleQuery', async () => {
+    const { store } = setup();
+    const loadExampleQuery = vi.fn(async () => ({ started: true as const, committed: true }));
+    (store.rootStore as unknown as { explorerStore: unknown }).explorerStore = { loadExampleQuery };
+    const entry = exampleCatalog().find((e) => e.kind === 'query');
+    if (!entry) throw new Error('no query example');
+    expect(await store.loadExample(entry)).toEqual({ started: true, committed: true });
+    expect(loadExampleQuery).toHaveBeenCalledWith(entry);
+  });
+});
+
+describe('DataStore.loadUpload', () => {
+  const plan = (p: Partial<UploadPlan>): UploadPlan => ({ occurrences: null, tree: null, ignored: [], errors: [], ...p });
+  const columns = { name: 'species', lat: 'latitude', long: 'longitude' };
+
+  it('loads a csv and a tree: tree first, one Infomap run', async () => {
+    const { store, run, speciesLoad, fakeLoad } = setup({ 'birds.csv': { features: 2, postLoad: true } });
+    let treeAtLoad: string | undefined;
+    speciesLoad.mockImplementationOnce(async (file, opts) => {
+      treeAtLoad = store.tree?.kind;
+      return fakeLoad(file, opts);
+    });
+    const files = [new File(['x'], 'birds.csv'), new File([TREE], 'birds.nwk')];
+    const result = await store.loadUpload(
+      files,
+      plan({ occurrences: { kind: 'points', format: 'csv', file: 0 }, tree: { kind: 'tree', file: 1 } }),
+      columns,
+    );
+    expect(result).toEqual({ started: true, committed: true });
+    expect(treeAtLoad).toBe('file');
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(store.occurrence).toMatchObject({ kind: 'file', label: 'birds.csv', columns });
+    expect(store.tree).toMatchObject({ kind: 'file', tips: 3 });
+  });
+
+  it('a tree alone reruns Infomap when occurrences are loaded', async () => {
+    const { store, run } = setup();
+    await store.loadOccurrenceFile(csv('birds.csv'));
+    run.mockClear();
+    const result = await store.loadUpload([new File([TREE], 't.nwk')], plan({ tree: { kind: 'tree', file: 0 } }));
+    expect(result).toEqual({ started: true, committed: true });
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads a shapefile zip and loose shapefile parts', async () => {
+    const { store, speciesStore } = setup();
+    const zip = new File(['z'], 'ranges.zip');
+    await store.loadUpload([zip], plan({ occurrences: { kind: 'shapefile-zip', file: 0 } }));
+    expect(store.occurrence).toMatchObject({ kind: 'file', format: 'shapefile', label: 'ranges.zip' });
+    const shp = new File(['s'], 'r.shp');
+    const dbf = new File(['d'], 'r.dbf');
+    await store.loadUpload([dbf, shp], plan({ occurrences: { kind: 'shapefile', files: [1, 0] } }));
+    expect((speciesStore as unknown as { loadShapefile: ReturnType<typeof vi.fn> }).loadShapefile).toHaveBeenLastCalledWith(
+      [shp, dbf],
+      expect.anything(),
+    );
+    expect(store.occurrence?.label).toBe('r.shp');
+  });
+
+  it('refuses a plan with errors, points without columns, and a running load; an invalid tree stops the upload', async () => {
+    const { store, speciesLoad } = setup();
+    const files = [new File(['x'], 'a.csv'), new File(['((('], 'bad.nwk')];
+    expect(await store.loadUpload(files, plan({ errors: ['No files'] }))).toEqual({ started: false, reason: 'No files' });
+    expect(await store.loadUpload(files, plan({ occurrences: { kind: 'points', format: 'csv', file: 0 } }))).toMatchObject({
+      started: false,
+    });
+    const result = await store.loadUpload(
+      files,
+      plan({ occurrences: { kind: 'points', format: 'csv', file: 0 }, tree: { kind: 'tree', file: 1 } }),
+      columns,
+    );
+    expect(result).toEqual({ started: true, committed: false });
+    expect(store.treeJob?.state).toBe('error');
+    expect(speciesLoad).not.toHaveBeenCalled();
+    expect(store.occurrence).toBeNull();
   });
 });

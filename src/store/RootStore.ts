@@ -6,7 +6,6 @@ import DataStore from './DataStore';
 import InfomapStore from './InfomapStore';
 import ColorStore from './ColorStore';
 import SettingsStore from './SettingsStore';
-import ExampleStore from './ExampleStore';
 import DocumentationStore from './DocumentationStore';
 import ExplorerStore from './ExplorerStore';
 import PhyloStore from './PhyloStore';
@@ -23,7 +22,6 @@ export default class RootStore {
   dataStore: DataStore;
   colorStore: ColorStore;
   settingsStore: SettingsStore;
-  exampleStore: ExampleStore;
   documentationStore?: DocumentationStore;
   explorerStore: ExplorerStore;
   phyloStore: PhyloStore;
@@ -37,7 +35,6 @@ export default class RootStore {
     this.dataStore = new DataStore(this);
     this.colorStore = new ColorStore(this);
     this.settingsStore = new SettingsStore(this);
-    this.exampleStore = new ExampleStore(this);
     if (!demo) {
       this.documentationStore = new DocumentationStore(this);
     }

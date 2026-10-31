@@ -40,7 +40,7 @@ export interface ExampleEntry {
   citation?: string;
   tree: { included: boolean; usedByDefault: boolean; citation?: string };
   devOnly?: boolean;
-  /** Paths are app URLs under the `/bioregions` base, as ExampleStore builds them. */
+  /** Paths are app URLs under the `/bioregions` base, as the old ExampleStore built them. */
   files?: { species: string; tree?: string; settings: ExampleSettings };
   query?: OccurrenceQuery;
 }
@@ -169,7 +169,7 @@ function queryEntries(): ExampleEntry[] {
 
 /**
  * Every example, bundled files first. `devOnly` entries are left out unless `dev`
- * (ExampleStore shows them only in development).
+ * (the old ExampleStore showed them only in development).
  */
 export function exampleCatalog(dev: boolean = process.env.NODE_ENV === 'development'): ExampleEntry[] {
   const files = (examplesData as FileExampleJson[]).map(fileEntry);

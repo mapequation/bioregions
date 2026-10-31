@@ -8,7 +8,8 @@ import { RecordCleaner } from '../sources/clean';
 import { extension, getName } from '../utils/filename';
 import { loadText } from '../utils/loader';
 import { citations, methodsText, type CitationItem } from './data/methods';
-import type { ExampleEntry } from './data/catalog';
+import { EXAMPLE_CITATION_PLACEHOLDER, type ExampleEntry } from './data/catalog';
+import type { UploadPlan } from './data/classify';
 import { type ActiveLoad, continueCap, runContinueLoad, runQueryLoad } from './data/streamLoad';
 import { type ZipLoadOptions, runZipLoad } from './data/zipLoad';
 import type { LoadProvenance } from './explorer/provenance';
@@ -34,35 +35,13 @@ import type {
 } from './data/types';
 
 export const LOAD_RUNNING = 'A load is running';
+export const NO_COLUMNS = 'Choose the species, latitude and longitude columns';
 export const NOT_RESUMABLE = 'The loaded data cannot be continued';
 export const NOTHING_TO_RELOAD = 'No query load to repeat';
 export const NOTHING_TO_RETRY = 'No failed or stopped load to retry';
 
 /** Citations of the same data that `patchOccurrence` may add (an absent key is kept, `undefined` clears). */
 export type OccurrencePatch = Partial<Pick<LoadProvenance, 'derivedDoi' | 'gbifDownloadKey' | 'gbifDownloadDoi'>>;
-
-/** Binner and network settings an example applies before it loads. */
-export interface ExampleSettings {
-  minCellSize?: number;
-  maxCellSize?: number;
-  minCellCapacity?: number;
-  maxCellCapacity?: number;
-  includeTree?: boolean;
-}
-
-/**
- * A bundled example with its files.
- * TODO(S6): replaced by the catalog's `ExampleEntry` (src/store/data/catalog.ts).
- */
-export interface ExampleFiles {
-  id: string;
-  name: string;
-  speciesFile: string;
-  treeFile?: string;
-  citation?: string;
-  treeCitation?: string;
-  settings: ExampleSettings;
-}
 
 /** The inline dataset of the documentation demo. */
 export interface InlineData {
@@ -537,53 +516,121 @@ export default class DataStore {
   // --- examples and the documentation demo ---------------------------------------------
 
   /**
-   * Load a bundled example: its binner settings, its tree (if any) without a rerun, then
-   * its occurrences, whose `postLoad` runs Infomap once. A `query` catalog entry delegates
-   * to `explorerStore.loadExampleQuery` (restore, Search tab, the Load gate, then load).
-   * TODO(S6): the catalog's `files` entries and `includeTree` handling.
+   * Load a catalog example (§5.3). A `files` entry applies its binner settings, loads its
+   * tree (if any) without a rerun and with `includeTree` from its settings, then its
+   * occurrences, whose `postLoad` runs Infomap once. An example without a tree keeps a
+   * leftover tree (§9.2). A `query` entry delegates to `explorerStore.loadExampleQuery`
+   * (restore, Search tab, the Load gate, then load).
    */
-  async loadExample(
-    example: ExampleFiles | (ExampleEntry & { kind: 'query' }),
-    origin: JobOrigin = 'examples',
-  ): Promise<StartResult> {
+  async loadExample(entry: ExampleEntry, origin: JobOrigin = 'examples'): Promise<StartResult> {
     if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
-    if ('kind' in example) return this.rootStore.explorerStore.loadExampleQuery(example);
-    const { speciesStore, infomapStore } = this.rootStore;
-    const { settings } = example;
+    if (entry.kind === 'query') return this.rootStore.explorerStore.loadExampleQuery(entry);
+    if (!entry.files) return { started: false, reason: `The example "${entry.title}" has no files` };
+    const { speciesStore } = this.rootStore;
+    const { species, tree, settings } = entry.files;
     if (settings.minCellSize != null) speciesStore.binner.setMinCellSizeLog2(settings.minCellSize);
     if (settings.maxCellSize != null) speciesStore.binner.setMaxCellSizeLog2(settings.maxCellSize);
     if (settings.minCellCapacity != null) speciesStore.binner.setMinCellCapacity(settings.minCellCapacity);
     if (settings.maxCellCapacity != null) speciesStore.binner.setMaxCellCapacity(settings.maxCellCapacity);
-    if (settings.includeTree != null) infomapStore.setIncludeTree(settings.includeTree);
 
-    if (example.treeFile) {
-      await this.loadTree(
+    let treeCommitted = false;
+    if (tree) {
+      const result = await this.loadTree(
         {
           kind: 'example',
-          url: example.treeFile,
-          exampleId: example.id,
-          label: example.name,
-          ...(example.treeCitation ? { citation: example.treeCitation } : {}),
+          url: tree,
+          exampleId: entry.id,
+          label: entry.title,
+          ...(entry.tree.citation ? { citation: entry.tree.citation } : {}),
         },
         { rerun: false, includeTree: settings.includeTree ?? true },
       );
+      treeCommitted = result.started && result.committed;
     }
-    const isShapefile = extension(example.speciesFile).toLowerCase() === 'zip';
-    const input: OccurrenceFileInput = isShapefile
-      ? { format: 'shapefile', files: example.speciesFile }
-      : {
-          format: extension(example.speciesFile).toLowerCase() === 'tsv' ? 'tsv' : 'csv',
-          file: example.speciesFile,
-          columns: { name: 'species', lat: 'latitude', long: 'longitude' },
-        };
-    return this.runFileLoad(input, 'example', origin, example.name, {
+    const ext = extension(species).toLowerCase();
+    const input: OccurrenceFileInput =
+      ext === 'zip'
+        ? { format: 'shapefile', files: species }
+        : {
+            format: ext === 'tsv' ? 'tsv' : 'csv',
+            file: species,
+            columns: { name: 'species', lat: 'latitude', long: 'longitude' },
+          };
+    // The placeholder is not frozen: methods.ts adds it for an example with no citation (§9.3).
+    const citation = entry.citation && entry.citation !== EXAMPLE_CITATION_PLACEHOLDER ? entry.citation : undefined;
+    const result = await this.runFileLoad(input, 'example', origin, entry.title, {
       role: 'occurrences',
       kind: 'example',
-      label: example.name,
-      exportName: getName(example.speciesFile) || example.name,
-      exampleId: example.id,
-      ...(example.citation ? { citation: example.citation } : {}),
+      label: entry.title,
+      exportName: getName(species) || entry.title,
+      exampleId: entry.id,
+      ...(citation ? { citation } : {}),
     });
+    return this.rerunIfOnlyTreeCommitted(treeCommitted, result);
+  }
+
+  /**
+   * Load what the Upload tab classified (§5.2): the tree first without a rerun, then the
+   * occurrences, whose `postLoad` runs Infomap once. A tree alone reruns Infomap when
+   * occurrences are loaded. `files` are the files `plan` indexes; `columns` is required
+   * for CSV/TSV points. A plan with errors, or an invalid tree, loads nothing more.
+   */
+  async loadUpload(
+    files: File[],
+    plan: UploadPlan,
+    columns?: { name: string; lat: string; long: string },
+  ): Promise<StartResult> {
+    if (this.isLoading) return { started: false, reason: LOAD_RUNNING };
+    if (plan.errors.length > 0) return { started: false, reason: plan.errors[0] };
+    const occ = plan.occurrences;
+    if (!occ && !plan.tree) return { started: false, reason: 'No files' };
+    if (occ?.kind === 'points' && !columns) return { started: false, reason: NO_COLUMNS };
+    const fileAt = (i: number) => {
+      const file = files[i];
+      if (!file) throw new Error(`Upload plan refers to a missing file (${i})`);
+      return file;
+    };
+
+    let treeCommitted = false;
+    if (plan.tree?.kind === 'tree') {
+      const result = await this.loadTree({ kind: 'file', file: fileAt(plan.tree.file) }, { rerun: !occ });
+      treeCommitted = result.started && result.committed;
+      if (!treeCommitted || !occ) return result;
+    }
+    if (!occ) return { started: false, reason: 'No files' };
+
+    let result: StartResult;
+    switch (occ.kind) {
+      case 'points':
+        if (!columns) return { started: false, reason: NO_COLUMNS };
+        result = await this.loadOccurrenceFile({ format: occ.format, file: fileAt(occ.file), columns });
+        break;
+      case 'shapefile':
+        result = await this.loadOccurrenceFile({ format: 'shapefile', files: occ.files.map(fileAt) });
+        break;
+      case 'shapefile-zip':
+        result = await this.loadOccurrenceFile({ format: 'shapefile', files: fileAt(occ.file) });
+        break;
+      case 'gbif-zip':
+        result = await this.loadGbifZip(fileAt(occ.file));
+        break;
+      default:
+        return { started: false, reason: 'Unsupported occurrence input' };
+    }
+    return this.rerunIfOnlyTreeCommitted(treeCommitted, result);
+  }
+
+  /**
+   * After a tree committed with `rerun: false`, the occurrence load's `postLoad` runs
+   * Infomap. When that load committed nothing, the kept occurrences still need a rerun
+   * with the new tree.
+   */
+  private async rerunIfOnlyTreeCommitted(treeCommitted: boolean, result: StartResult): Promise<StartResult> {
+    const committed = result.started && result.committed;
+    if (treeCommitted && !committed && this.rootStore.speciesStore.loaded && !this.isLoading) {
+      await this.rerunInfomap();
+    }
+    return result;
   }
 
   /** The documentation demo: inline CSV (and Newick) as `docs-demo` example sources. */

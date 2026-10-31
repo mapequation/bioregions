@@ -13,7 +13,7 @@ import Modal from './Modal';
 import { useStore } from '../../store';
 import { loadPreview } from '../../utils/loader';
 import { extension } from '../../utils/filename';
-import type { Example } from '../../store/ExampleStore';
+import { exampleCatalog, type ExampleEntry } from '../../store/data/catalog';
 import Select from './Select';
 import {
   FileUploadList,
@@ -243,21 +243,23 @@ export const LoadData = observer(function LoadData() {
 export const LoadExample = observer(function LoadExample() {
   const store = useStore();
   const [isOpen, setIsOpen] = useState(false);
-  const { speciesStore, exampleStore } = store;
+  const { dataStore } = store;
+  // Bundled file examples only; query examples load from the explorer.
+  const [examples] = useState(() => exampleCatalog().filter((e) => e.kind === 'files'));
 
   const rowHover = {
     background: 'var(--chakra-colors-gray-50)',
   };
 
-  const loadExample = (example: Example) => {
+  const loadExample = (example: ExampleEntry) => {
     setIsOpen(false);
-    exampleStore.loadExample(example);
+    void dataStore.loadExample(example);
   };
 
   return (
     <>
       <Button
-        disabled={speciesStore.isLoading}
+        disabled={dataStore.isLoading}
         size="sm"
         onClick={() => setIsOpen(true)}
         variant="outline"
@@ -278,13 +280,13 @@ export const LoadExample = observer(function LoadExample() {
             </Table.Row>
           </Table.Header>
           <Table.Body style={{ cursor: 'pointer' }}>
-            {exampleStore.examples.map((example) => (
+            {examples.map((example) => (
               <Table.Row
-                key={example.name}
+                key={example.id}
                 _hover={rowHover}
                 onClick={() => loadExample(example)}
               >
-                <Table.Cell>{example.name}</Table.Cell>
+                <Table.Cell>{example.title}</Table.Cell>
                 <Table.Cell>{example.size}</Table.Cell>
               </Table.Row>
             ))}
