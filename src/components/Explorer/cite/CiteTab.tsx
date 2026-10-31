@@ -2,21 +2,18 @@ import { Alert, Badge, Box, Button, Circle, Flex, Heading, HStack, Icon, Stack, 
 import { observer } from 'mobx-react';
 import { useState } from 'react';
 import type { IconType } from 'react-icons';
-import { LuArrowRight, LuBookMarked, LuFileArchive, LuFileJson, LuListChecks, LuPencil, LuQuote, LuSend } from 'react-icons/lu';
-import {
-  isQueryRunnable,
-  methodsParagraph,
-  queryTitle,
-  supportsGbif,
-} from '@/sources';
+import { LuArrowRight, LuBookMarked, LuFileJson, LuListChecks, LuPencil, LuQuote, LuSend } from 'react-icons/lu';
+import { isQueryRunnable, queryTitle, supportsGbif } from '@/sources';
 import { useStore } from '../../../store';
+import type { LoadedSource } from '../../../store/data/types';
 import type { Provenance } from '../../../store/explorer/types';
+import { Tooltip } from '../../ui/tooltip';
 import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt } from '../format';
 import { partialExplanation } from '../load/partialText';
 import { partialSummary } from '../preview/cleaningSteps';
 import DecisionLedger from '../preview/DecisionLedger';
-import { contributingSources, gbifReference, obisCitationHead, retrievedLabel } from './citeHelpers';
+import { contributingSources, obisCitationHead, retrievedLabel } from './citeHelpers';
 import DerivedDatasetCard from './DerivedDatasetCard';
 import DownloadRequestDialog from './DownloadRequestDialog';
 import DownloadStatus from './DownloadStatus';
@@ -172,9 +169,8 @@ const UPCOMING: { icon: IconType; title: string; text: string }[] = [
   { icon: LuFileJson, title: 'Query JSON', text: 'Rebuild the exact query later or share it.' },
 ];
 
-const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void }) {
+const EmptyCite = observer(function EmptyCite() {
   const { explorerStore } = useStore();
-  const hasQuery = isQueryRunnable(explorerStore.query).ok;
   return (
     <Stack gap={8}>
       <Box borderWidth="1px" borderColor="border" borderStyle="dashed" rounded="lg" p={6} bg="bg.subtle">
@@ -182,8 +178,8 @@ const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void
           Nothing to cite yet
         </Heading>
         <Text fontSize="sm" color="fg.muted" mt={1} maxW="60ch">
-          Load data from the Occurrences tab and this tab fills in with everything a paper needs to describe and
-          reproduce the dataset.
+          Load data to get a methods paragraph and citations. A query loaded from Search also gets its decision
+          ledger, a citable GBIF DOI and the query JSON.
         </Text>
         <Box
           as="ul"
@@ -211,21 +207,10 @@ const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void
           ))}
         </Box>
         <Button {...secondaryButtonProps} mt={5} onClick={() => explorerStore.setTab('search')}>
-          Go to Occurrences
+          Go to Search
           <LuArrowRight />
         </Button>
       </Box>
-
-      <Section title="Citable GBIF download" aside="for the current query">
-        <OptionCard
-          icon={LuFileArchive}
-          title={hasQuery ? queryTitle(explorerStore.query) : 'Current query'}
-          tag="Official DOI · 5–60 min"
-          description="Skip streaming: GBIF prepares every matching record as a zip with its own DOI. Useful above the record cap. Drop the zip here to load it."
-        >
-          <DownloadOption onRequest={onRequest} />
-        </OptionCard>
-      </Section>
 
       <Section title="Query">
         <QueryJsonCard />
@@ -234,24 +219,96 @@ const EmptyCite = observer(function EmptyCite({ onRequest }: { onRequest(): void
   );
 });
 
+/** The methods paragraph and references of everything loaded (`dataStore`). */
+const MethodsSection = observer(function MethodsSection() {
+  const { dataStore } = useStore();
+  const methods = dataStore.methodsText;
+  const references = dataStore.citations.map((c) => c.text);
+  return (
+    <Section
+      title="Methods paragraph"
+      actions={
+        <>
+          <CopyButton text={methods} disabled={!methods} />
+          <CopyButton text={references.join('\n\n')} label="Copy references" disabled={references.length === 0} />
+        </>
+      }
+    >
+      <Box bg="bg.subtle" borderWidth="1px" borderColor="border.muted" rounded="md" px={5} py={4}>
+        <Text fontSize="sm" lineHeight="1.7" maxW="80ch" fontVariantNumeric="tabular-nums">
+          {methods}
+        </Text>
+        {references.length > 0 && (
+          <Box mt={4} pt={3} borderTopWidth="1px" borderColor="border.muted">
+            <Text fontSize="xs" fontWeight="semibold" color="fg.muted" mb={1.5}>
+              References
+            </Text>
+            <Stack as="ol" gap={1} m={0} ps={4} fontSize="xs" color="fg.muted" listStyleType="decimal">
+              {references.map((r) => (
+                <Box as="li" key={r} wordBreak="break-word">
+                  <Text lineClamp={3} title={r.length > 240 ? r : undefined}>
+                    {r}
+                  </Text>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        )}
+      </Box>
+    </Section>
+  );
+});
+
+/** What each loaded source is, in a few words. */
+function sourceLine(source: LoadedSource): string {
+  switch (source.kind) {
+    case 'file':
+      return 'Your file. Cite the source it came from.';
+    case 'example':
+      return source.role === 'tree' ? 'Example tree' : 'Example dataset';
+    case 'explorer-query':
+      return source.status === 'loading' ? 'GBIF/OBIS query, loading' : 'GBIF/OBIS query';
+    case 'gbif-zip':
+      return 'GBIF download zip';
+    case 'opentree':
+      return 'Open Tree of Life';
+  }
+}
+
+/** Loaded data without a query provenance: files, examples, a standalone zip, a tree, a running load. */
+const SourcesCite = observer(function SourcesCite() {
+  const { dataStore } = useStore();
+  return (
+    <Stack gap={8}>
+      <Box borderWidth="1px" borderColor="border" rounded="lg" bg="bg.subtle" px={5} py={4}>
+        <Text fontSize="xs" fontWeight="semibold" textTransform="uppercase" letterSpacing="wider" color="fg.muted">
+          Loaded data
+        </Text>
+        <Stack as="ul" gap={1.5} mt={1.5} p={0} listStyleType="none">
+          {dataStore.sources.map((source) => (
+            <Box as="li" key={source.id} minW={0}>
+              <Text fontSize="sm" fontWeight="medium" wordBreak="break-word">
+                {source.label}
+              </Text>
+              <Text fontSize="xs" color="fg.muted">
+                {source.role === 'tree' ? 'Tree' : 'Occurrences'} · {sourceLine(source)}
+              </Text>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+      <MethodsSection />
+    </Stack>
+  );
+});
+
 const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Provenance; onRequest(): void }) {
-  const { explorerStore, phyloStore } = useStore();
+  const { explorerStore, dataStore } = useStore();
   const sources = contributingSources(last);
+  // A citable download is requested only for a streamed query; a zip already has its DOI.
+  const isQuery = dataStore.occurrence?.kind === 'explorer-query';
   const usesGbif = sources.includes('gbif');
   const usesObis = sources.includes('obis');
-  const methods =
-    explorerStore.methodsText ||
-    methodsParagraph({
-      entries: [],
-      funnel: last.funnel,
-      speciesCount: last.kpis.species ?? 0,
-      query: last.query,
-    });
-  const references = [
-    usesGbif ? gbifReference(last, explorerStore.downloads) : null,
-    usesObis ? explorerStore.obisCitation : null,
-    phyloStore.citationText || null,
-  ].filter((r): r is string => !!r);
   const obisIds = (last.datasetCounts.obis ?? []).map((d) => d.key);
   const obisCitation = explorerStore.obisCitation;
   const records = last.funnel.accepted || last.kpis.records;
@@ -313,13 +370,19 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
                 ))}
               </Flex>
             </Box>
-            <Button {...secondaryButtonProps} onClick={() => {
-                explorerStore.resetToLoaded();
-                explorerStore.setTab('search');
-              }}>
-              <LuPencil />
-              Edit query & reload
-            </Button>
+            <Tooltip content="Put the loaded query back into Search to change it. Nothing reloads until you press Load.">
+              <Button
+                {...secondaryButtonProps}
+                data-testid="cite-edit-query"
+                onClick={() => {
+                  explorerStore.resetToLoaded();
+                  explorerStore.setTab('search');
+                }}
+              >
+                <LuPencil />
+                Edit query
+              </Button>
+            </Tooltip>
           </Flex>
         </Box>
         {last.partial && (
@@ -339,39 +402,9 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
         <DecisionLedger mode="frozen" />
       </Box>
 
-      <Section
-        title="Methods paragraph"
-        actions={
-          <>
-            <CopyButton text={methods} disabled={!methods} />
-            <CopyButton text={references.join('\n\n')} label="Copy references" disabled={references.length === 0} />
-          </>
-        }
-      >
-        <Box bg="bg.subtle" borderWidth="1px" borderColor="border.muted" rounded="md" px={5} py={4}>
-          <Text fontSize="sm" lineHeight="1.7" maxW="80ch" fontVariantNumeric="tabular-nums">
-            {methods || 'The methods paragraph appears here once the load has finished.'}
-          </Text>
-          {references.length > 0 && (
-            <Box mt={4} pt={3} borderTopWidth="1px" borderColor="border.muted">
-              <Text fontSize="xs" fontWeight="semibold" color="fg.muted" mb={1.5}>
-                References
-              </Text>
-              <Stack as="ol" gap={1} m={0} ps={4} fontSize="xs" color="fg.muted" listStyleType="decimal">
-                {references.map((r) => (
-                  <Box as="li" key={r} wordBreak="break-word">
-                    <Text lineClamp={3} title={r.length > 240 ? r : undefined}>
-                      {r}
-                    </Text>
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
-          )}
-        </Box>
-      </Section>
+      <MethodsSection />
 
-      {usesGbif && (
+      {usesGbif && isQuery && (
         <Section title="GBIF citation" aside="choose one">
           <OptionCard
             n={1}
@@ -424,15 +457,17 @@ const LoadedCite = observer(function LoadedCite({ last, onRequest }: { last: Pro
 
 /** Cite & reproduce tab (spec layout C, flow 5). */
 export default observer(function CiteTab() {
-  const { explorerStore } = useStore();
+  const { explorerStore, dataStore } = useStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const last = explorerStore.loaded;
   return (
     <Box data-testid="cite-tab" maxW="960px" mx="auto" px={{ base: 4, md: 6 }} pt={6} pb={12}>
       {last ? (
         <LoadedCite last={last} onRequest={() => setDialogOpen(true)} />
+      ) : dataStore.sources.length > 0 ? (
+        <SourcesCite />
       ) : (
-        <EmptyCite onRequest={() => setDialogOpen(true)} />
+        <EmptyCite />
       )}
       <DownloadRequestDialog open={dialogOpen} onOpenChange={setDialogOpen} query={last?.query} />
     </Box>

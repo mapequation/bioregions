@@ -8,6 +8,7 @@ import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
 import { fmtInt } from '../format';
 import CladeCard from './CladeCard';
 import NameMatchSummary from './NameMatchSummary';
+import NewickUpload from './NewickUpload';
 import TreeSelectionSummary from './TreeSelectionSummary';
 import TreeSourceTable from './TreeSourceTable';
 
@@ -41,6 +42,9 @@ function StartCard({ children }: { children: React.ReactNode }) {
           <Icon as={LuNetwork} boxSize={5} />
         </Flex>
         {children}
+        <Box w="full" pt={4} borderTopWidth="1px" borderColor="border.muted">
+          <NewickUpload variant="start" />
+        </Box>
       </Stack>
     </Flex>
   );
@@ -92,7 +96,7 @@ export default observer(function PhyloTab() {
             </Text>
           </Stack>
           <Button {...secondaryButtonProps} onClick={() => explorerStore.setTab('search')}>
-            <LuArrowLeft /> Go to Occurrences
+            <LuArrowLeft /> Go to Search
           </Button>
         </StartCard>
       );
@@ -122,6 +126,9 @@ export default observer(function PhyloTab() {
     <Grid data-testid="phylo-tab" templateColumns="360px minmax(0, 1fr)" h="full" minH={0}>
       <Box as="aside" aria-label="Names and clade" borderRightWidth="1px" borderColor="border" overflowY="auto" minH={0}>
         <Stack gap={0} separator={<Box borderTopWidth="1px" borderColor="border.muted" />}>
+          <Box px={4} py={3}>
+            <NewickUpload variant="compact" />
+          </Box>
           <NameMatchSummary />
           <CladeCard />
         </Stack>

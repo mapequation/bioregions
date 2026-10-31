@@ -315,15 +315,6 @@ export default class PhyloStore {
     return { unmatched, notInTree };
   }
 
-  /**
-   * Citation of the loaded Open Tree tree, for the methods text.
-   * @deprecated Read `dataStore.tree` / `dataStore.citations` instead (removed in U6).
-   */
-  get citationText(): string {
-    const tree = this.rootStore.dataStore.tree;
-    return tree?.kind === 'opentree' ? tree.citation : '';
-  }
-
   /** Tree tip -> dataset species lookups from the current matches. */
   get tipJoin(): TipJoin {
     return { ottToDataset: ottToDatasetMap(this.matches), nameToDataset: nameToDatasetMap(this.matches) };

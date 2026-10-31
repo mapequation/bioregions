@@ -178,7 +178,6 @@ describe('PhyloStore', () => {
     });
     expect(tree?.kind === 'opentree' && tree.citation).toMatch(/Perelman/);
     expect(tree?.kind === 'opentree' && tree.citation).not.toMatch(/Grafen/);
-    expect(store.citationText).toMatch(/Perelman/);
     expect(root.dataStore.citations).toEqual([expect.objectContaining({ kind: 'opentree' })]);
     expect(Object.keys(store)).not.toContain('loadedTree');
     expect(Object.keys(store)).not.toContain('loadedGrafen');
@@ -187,7 +186,6 @@ describe('PhyloStore', () => {
     // A file tree replaces it: the slot is a file source and the Open Tree citation is gone.
     await root.dataStore.loadTree({ kind: 'file', file: new File(['(Aa_a,Bb_b);'], 'mine.nwk') });
     expect(root.dataStore.tree).toMatchObject({ kind: 'file', label: 'mine.nwk', tips: 2 });
-    expect(store.citationText).toBe('');
     expect(root.dataStore.citations.some((c) => c.kind === 'opentree')).toBe(false);
     expect(root.dataStore.methodsText).not.toMatch(/Perelman|Open Tree/);
   });
@@ -211,7 +209,8 @@ describe('PhyloStore', () => {
     expect(root.infomapStore.run).toHaveBeenCalled();
     expect(root.mapStore.setRenderType).toHaveBeenCalledWith('bioregions');
     expect(root.dataStore.tree).toMatchObject({ kind: 'opentree', grafen: true, matchedFrom: 'loaded' });
-    expect(store.citationText).toMatch(/Grafen/);
+    const loaded = root.dataStore.tree;
+    expect(loaded?.kind === 'opentree' && loaded.citation).toMatch(/Grafen/);
     store.dispose();
   });
 

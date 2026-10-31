@@ -95,7 +95,7 @@ export interface OpenTreeSource extends TreeBase {
   selection: TreeSelection;
   /** PhyloStore.speciesSource at load time. */
   matchedFrom: 'loaded' | 'query';
-  /** treeCitationText(...) frozen at load (was PhyloStore.citationText). */
+  /** treeCitationText(...) frozen at load. */
   citation: string;
 }
 
