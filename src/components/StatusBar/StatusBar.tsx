@@ -96,6 +96,8 @@ export function StatusButton({
   return (
     <Tooltip content={content} showArrow openDelay={250} closeDelay={50}>
       <chakra.button
+        // Icon-only cells: the help text doubles as the accessible name.
+        aria-label={typeof content === 'string' ? content : undefined}
         disabled={disabled}
         onClick={disabled ? undefined : onClick}
         w="34px"

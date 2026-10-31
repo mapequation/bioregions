@@ -106,6 +106,12 @@ export default class MapStore {
   width: number = MAX_WIDTH;
   height: number = MAX_WIDTH / ASPECT_RATIO;
   private sizeObserver: ResizeObserver | null = null;
+  // True while the view is the automatic fit-to-data framing (set by fitToData, cleared by any
+  // user pan/zoom or view reset), so a later container resize re-frames the data: d3gl's resize
+  // rescales the projection but keeps the pixel pan, which would leave the data off-centre.
+  private framedToData = false;
+  private applyingFit = false;
+  private fitFrame = 0;
 
   renderType: RenderType = 'records';
   clipToLand: boolean = true;
@@ -286,6 +292,9 @@ export default class MapStore {
   disposeEngine = () => {
     this.sizeObserver?.disconnect();
     this.sizeObserver = null;
+    cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = 0;
+    this.framedToData = false;
     this.pointsHandle = null;
     this.engine?.destroy();
     this.engine = null;
@@ -300,9 +309,10 @@ export default class MapStore {
     if (host === null) return;
     const measure = () => {
       const w = Math.round(host.getBoundingClientRect().width);
-      if (w > 0) {
+      if (w > 0 && w !== this.width) {
         this.width = w;
         this.height = Math.round(w / ASPECT_RATIO);
+        if (this.framedToData) this.scheduleFitToData();
       }
     };
     measure();
@@ -336,7 +346,7 @@ export default class MapStore {
     // One call for every projection: d3gl auto-dispatches drag-to-rotate (versor) for the
     // orthographic globe and affine pan/zoom for flat projections. Hover/click picking
     // inverts screen → data internally, so we no longer track the transform ourselves.
-    engine.enableZoom([1, 18]);
+    engine.enableZoom([1, 18], this.onViewChange);
 
     // Clip-aware picking on the cells layer drives the React tooltip (see WorldMap.MapTooltip).
     engine.on('hover', this.onHover);
@@ -451,6 +461,7 @@ export default class MapStore {
 
   setProjection(projection: Projection) {
     this.projectionName = projection;
+    this.framedToData = false;
     // Re-fit the new projection to the (fixed) viewport and swap it in place: d3gl re-projects
     // the existing layers and re-dispatches the right interaction (globe rotation vs pan/zoom).
     this.projection = fitProjection(
@@ -467,6 +478,102 @@ export default class MapStore {
   // the interaction — the same path setProjection takes, with the projection unchanged.
   resetView() {
     this.setProjection(this.projectionName);
+  }
+
+  /**
+   * Frame the binned data: a flat projection zooms/pans so the grid cells' extent fills the view
+   * (with `padding` as a share of each side, zoom capped at `maxZoom`, and the pan kept on the
+   * world where it covers the view); the globe rotates to face the data. A no-op without cells.
+   */
+  fitToData(padding = 0.1, maxZoom = 8) {
+    const engine = this.engine;
+    const cells = this.rootStore.speciesStore.binner.cells;
+    if (engine === null || cells.length === 0) return;
+    this.applyingFit = true;
+    try {
+      this.frameData(engine, cells, padding, maxZoom);
+      this.framedToData = true;
+    } finally {
+      this.applyingFit = false;
+    }
+  }
+
+  /**
+   * Fit to the data once layout has settled: two animation frames, so the React commit, the
+   * dialog's scroll-lock release and d3gl's own (frame-deferred) resize have all landed and the
+   * fit uses the container's final size. Repeated calls coalesce into one fit.
+   */
+  scheduleFitToData = () => {
+    if (typeof requestAnimationFrame === 'undefined') {
+      this.fitToData();
+      return;
+    }
+    cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = requestAnimationFrame(() => {
+      this.fitFrame = requestAnimationFrame(() => {
+        this.fitFrame = 0;
+        this.fitToData();
+      });
+    });
+  };
+
+  // Any pan/zoom that is not our own fit hands the view to the user (no refit on resize).
+  private onViewChange = () => {
+    if (!this.applyingFit) this.framedToData = false;
+  };
+
+  private frameData(engine: GeoMap, cells: readonly Cell[], padding: number, maxZoom: number) {
+    if ((this.projection.clipAngle() ?? 0) > 0) {
+      const [lon, lat] = d3.geoCentroid({
+        type: 'MultiPoint',
+        coordinates: cells.map((c) => [(c.x1 + c.x2) / 2, (c.y1 + c.y2) / 2]),
+      });
+      this.projection = fitProjection(
+        PROJECTION_FACTORIES[this.projectionName]().precision(0.1).rotate([-lon, -lat]),
+        sphere as GeoJSON.GeoJSON,
+        this.width,
+        this.height,
+      );
+      engine.setProjection(this.projection);
+      return;
+    }
+
+    // Data bounds in projected (untransformed) pixels, from the cell corners.
+    const projection = this.projection;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const c of cells) {
+      for (const corner of [[c.x1, c.y1], [c.x1, c.y2], [c.x2, c.y1], [c.x2, c.y2]] as const) {
+        const p = projection([corner[0], Math.max(-85, Math.min(85, corner[1]))]);
+        if (p === null || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) continue;
+        x0 = Math.min(x0, p[0]);
+        y0 = Math.min(y0, p[1]);
+        x1 = Math.max(x1, p[0]);
+        y1 = Math.max(y1, p[1]);
+      }
+    }
+    if (!Number.isFinite(x0) || !Number.isFinite(y0)) return;
+
+    const { width: W, height: H } = this;
+    const fit = 1 - 2 * padding;
+    const k = Math.max(1, Math.min(maxZoom, (W * fit) / Math.max(x1 - x0, 1), (H * fit) / Math.max(y1 - y0, 1)));
+    // Centre the data, then keep the zoomed world covering the view where it can (no empty
+    // band beyond the world's edge); where the world is narrower than the view, centre it.
+    const [[sx0, sy0], [sx1, sy1]] = d3.geoPath(projection).bounds(sphere);
+    const place = (centre: number, size: number, lo: number, hi: number) => {
+      const min = size - k * hi;
+      const max = -k * lo;
+      return min > max ? size / 2 - (k * (lo + hi)) / 2 : Math.max(min, Math.min(max, size / 2 - k * centre));
+    };
+    engine.setTransform({
+      k,
+      x: place((x0 + x1) / 2, W, sx0, sx1),
+      y: place((y0 + y1) / 2, H, sy0, sy1),
+    });
+    // Re-seed d3-zoom from the engine's transform so the next wheel/drag continues from here.
+    engine.enableZoom([1, 18], this.onViewChange);
   }
 
   // --- Hover tooltip + cross-highlight (native d3gl interaction) ---

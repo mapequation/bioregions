@@ -5,11 +5,11 @@ import {
   computed,
   autorun,
   untracked,
+  runInAction,
   type IReactionDisposer,
 } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree, getAccumulatedTreeData } from '../utils/tree';
-import { loadText } from '../utils/loader';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
 import {
@@ -60,6 +60,45 @@ const PIE_MIN = 3;
 const PIE_MAX = 11;
 const LABEL_GAP = 6;
 const LABEL_H = 14;
+const LABEL_FONT_SIZE = 11; // px, matches the label overlay (setHost)
+// Rectangular trees up to this many tips size their tip labels to the row pitch (down to
+// LABEL_FONT_MIN) so every tip keeps a label; larger trees keep the default size and thinning.
+const LABEL_ALL_MAX = 150;
+const LABEL_FONT_MIN = 8;
+// Rectangular layout: treeLayout's edge padding (time 0 sits at x = RECT_PAD), and the gap kept
+// between the longest tip label and the plot's right edge.
+const RECT_PAD = 40;
+const RECT_PAD_RIGHT = 8;
+// Never squeeze the time axis below this share of the plot width, however long the names are.
+const RECT_MIN_SPAN = 0.4;
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+/** Rendered width of `text` in `font`, via a shared offscreen canvas (estimate without one). */
+function textWidth(text: string, font: string): number {
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  if (measureCtx === null) return text.length * 6.2;
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+
+/**
+ * Rectangular layout: re-scale the time axis so every tip label ends inside the plot. treeLayout
+ * reserves a fixed right margin, which clips long names; here each leaf must satisfy
+ * `RECT_PAD + time·span + LABEL_GAP + labelWidth ≤ width − RECT_PAD_RIGHT`, so the margin equals
+ * the longest label (for an ultrametric tree) measured in the label font.
+ */
+function fitTipLabels(root: LayoutNode, width: number, labelWidth: (name: string) => number) {
+  const full = width - RECT_PAD - RECT_PAD_RIGHT;
+  let span = full;
+  for (const leaf of root.leaves()) {
+    const t = leaf.data.time;
+    if (t > 0) span = Math.min(span, (full - LABEL_GAP - labelWidth(leaf.data.name)) / t);
+  }
+  span = Math.max(span, full * RECT_MIN_SPAN);
+  root.each((n) => {
+    n.y = RECT_PAD + n.data.time * span;
+  });
+}
 const NEUTRAL_STROKE = '#999999';
 
 interface Wedge {
@@ -88,6 +127,46 @@ export interface TreeHoverInfo {
   name: string;
   speciesCount: number;
   regions: HoverRegion[];
+}
+
+/**
+ * Parse and check a Newick tree before anything is changed. The Newick reader never
+ * throws (a CSV or truncated text silently becomes an empty tree), so this requires
+ * balanced parentheses, nothing but an optional root label/length and a terminating `;`
+ * after the root, and at least two leaves. Throws `Not a valid Newick tree: {why}`.
+ */
+export function validateNewick(text: string): PhyloNode {
+  const fail = (why: string) => new Error(`Not a valid Newick tree: ${why}`);
+  // Quoted labels and [comments] may hold any character, so blank them out first.
+  const body = text.replace(/'[^']*'/g, "''").replace(/\[[^\]]*\]/g, '').trim();
+  if (body === '') throw fail('the text is empty');
+  if (!body.startsWith('(')) throw fail('it does not start with "("');
+  let depth = 0;
+  let rootEnd = -1;
+  for (let i = 0; i < body.length; ++i) {
+    const c = body[i];
+    if (c === '(') ++depth;
+    else if (c === ')' && --depth === 0) {
+      rootEnd = i;
+      break;
+    }
+  }
+  if (rootEnd < 0) throw fail('unbalanced parentheses');
+  if (!/^[^(),;:]*(:[^(),;:]*)?(;\s*)?$/.test(body.slice(rootEnd + 1))) {
+    throw fail('unexpected text after the root');
+  }
+  let root: PhyloNode;
+  try {
+    root = prepareTree(parseTree(text));
+  } catch (error) {
+    throw fail(error instanceof Error ? error.message : String(error));
+  }
+  let leaves = 0;
+  visitTreeDepthFirstPreOrder(root, (node) => {
+    if (node.isLeaf) ++leaves;
+  });
+  if (leaves < 2) throw fail('fewer than two leaves');
+  return root;
 }
 
 export default class TreeStore {
@@ -130,6 +209,9 @@ export default class TreeStore {
   hoverInfo: TreeHoverInfo | null = null;
   hoverPos: [number, number] = [0, 0];
 
+  // Tip labels in view that collision thinning dropped (drives the "zoom in" hint).
+  hiddenLabels = 0;
+
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
@@ -155,6 +237,7 @@ export default class TreeStore {
       coords: observable,
       hoverInfo: observable.ref,
       hoverPos: observable.ref,
+      hiddenLabels: observable,
       setHoverInfo: action,
       setLayout: action,
       setCurve: action,
@@ -260,20 +343,28 @@ export default class TreeStore {
     this.isLoaded = isLoaded;
   });
 
+  /**
+   * Load a Newick tree. The text is validated first (`validateNewick` throws), so an
+   * invalid tree changes nothing; a valid one replaces the tree in one action.
+   */
   loadString(tree: string) {
-    this.setIsLoading();
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
-    this.setIsLoaded();
+    const root = validateNewick(tree);
+    runInAction(() => {
+      this.setTreeString(tree);
+      this.setTree(root);
+      this.setIsLoaded();
+    });
   }
 
-  async load(file: File | string) {
-    this.setIsLoading();
-    const tree = await loadText(file);
-    this.setTreeString(tree);
-    this.setTree(prepareTree(parseTree(tree)));
-    this.setIsLoaded();
-  }
+  /** Remove the tree with everything derived from it (`clearData` only nulls `tree`/`treeString`). */
+  reset = action(() => {
+    this.setTree(null);
+    this.treeString = null;
+    this.treeNodeMap = new Map<string, TreeNode>();
+    this.numLeafNodes = 0;
+    this.isLoading = false;
+    this.isLoaded = false;
+  });
 
   clearBioregions() {
     this.treeNodeMap.forEach((node) => {
@@ -392,7 +483,7 @@ export default class TreeStore {
     labelEl.style.inset = '0';
     labelEl.style.pointerEvents = 'none';
     labelEl.style.overflow = 'hidden';
-    labelEl.style.fontSize = '11px';
+    labelEl.style.fontSize = `${LABEL_FONT_SIZE}px`;
     labelEl.style.lineHeight = '14px';
     host.appendChild(labelEl);
     this.labelEl = labelEl;
@@ -432,10 +523,17 @@ export default class TreeStore {
   // the autorun and re-run the full layout + ancestral reconstruction. The zoom callback passes
   // the live transform `t` directly for real-time label placement.
   private updateLabels(view: ViewTransform = untracked(() => this.view)) {
-    this.labels?.update(this.anchors, view, {
-      width: this.width,
-      height: this.height,
-    });
+    const { width, height } = this;
+    this.labels?.update(this.anchors, view, { width, height });
+    // Thinned = anchors on screen minus labels the layer kept (it only keeps nodes it shows).
+    let inView = 0;
+    for (const a of this.anchors) {
+      const x = a.refX * view.k + view.x;
+      const y = a.refY * view.k + view.y;
+      if (x >= 0 && x <= width && y >= 0 && y <= height) inView++;
+    }
+    const hidden = Math.max(0, inView - (this.labelEl?.childElementCount ?? inView));
+    if (hidden !== untracked(() => this.hiddenLabels)) runInAction(() => (this.hiddenLabels = hidden));
   }
 
   /** Dominant region of a node's displayed range (highest-count slice within the set). */
@@ -480,6 +578,40 @@ export default class TreeStore {
     const { layout: mode, curve, coords: sizeMode } = this;
 
     const { root, center } = layoutTree(tree, mode, this.width, this.height);
+    // Small rectangular trees: fit the tip labels to the row pitch so none are thinned out.
+    let fontSize = LABEL_FONT_SIZE;
+    let labelH = LABEL_H;
+    const tips = root.leaves();
+    if (mode === 'rectangular' && tips.length > 1 && tips.length <= LABEL_ALL_MAX) {
+      // Even tip rows (the cluster layout's wider gaps between non-siblings would squeeze the
+      // tightest rows below a readable label); each parent re-centres on its children.
+      const top = tips[0].x;
+      const pitch = (tips[tips.length - 1].x - top) / (tips.length - 1);
+      tips.forEach((n, i) => {
+        n.x = top + i * pitch;
+      });
+      root.eachAfter((n) => {
+        if (n.children) n.x = n.children.reduce((sum, c) => sum + c.x, 0) / n.children.length;
+      });
+      fontSize = Math.max(LABEL_FONT_MIN, Math.min(LABEL_FONT_SIZE, Math.floor(pitch - 0.5)));
+      labelH = Math.min(LABEL_H, Math.max(fontSize, Math.floor(pitch * 10) / 10));
+    }
+    if (this.labelEl) {
+      this.labelEl.style.fontSize = `${fontSize}px`;
+      this.labelEl.style.lineHeight = `${labelH}px`;
+    }
+    // Label widths in the overlay's font (measured, so the margin and collision boxes fit).
+    const font = `${fontSize}px ${this.labelEl ? getComputedStyle(this.labelEl).fontFamily : 'sans-serif'}`;
+    const labelWidths = new Map<string, number>();
+    const labelWidth = (name: string) => {
+      let w = labelWidths.get(name);
+      if (w === undefined) {
+        w = Math.ceil(textWidth(name, font));
+        labelWidths.set(name, w);
+      }
+      return w;
+    };
+    if (mode === 'rectangular') fitTipLabels(root, this.width, labelWidth);
     const links = root.links();
     const leaves = root.leaves();
     const xy = (n: LayoutNode): [number, number] => nodeXY(n, mode, center);
@@ -590,10 +722,10 @@ export default class TreeStore {
         refX: px,
         refY: py,
         text: name,
-        width: name.length * 6.2 + 6,
-        height: LABEL_H,
+        width: labelWidth(name) + 6,
+        height: labelH,
         priority: dataOf(n)?.speciesCount ?? 1,
-        offset: labelOffset(mode, a, LABEL_GAP, LABEL_H),
+        offset: labelOffset(mode, a, LABEL_GAP, labelH),
         // Radial: declare the reading angle and let d3gl derive BOTH the CSS transform and the
         // oriented collision box from it (with the upright flip), so rotated tips pack by their
         // true on-screen footprint and fill the fan — instead of the old hand-written transform,

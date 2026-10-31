@@ -1,0 +1,516 @@
+import { Box, Button, chakra, Flex, HStack, Icon, Skeleton, Text, VisuallyHidden } from '@chakra-ui/react';
+import { observer } from 'mobx-react';
+import { Fragment, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import {
+  LuCircleAlert,
+  LuCircleCheck,
+  LuCircleX,
+  LuInfo,
+  LuPlay,
+  LuRefreshCw,
+  LuRotateCw,
+  LuSearchX,
+  LuTriangleAlert,
+} from 'react-icons/lu';
+import { NumberInputField, NumberInputRoot } from '@/components/ui/number-input';
+import { InfoTip } from '@/components/ui/toggle-tip';
+import { Tooltip } from '@/components/ui/tooltip';
+import { useStore } from '@/store';
+import { explorerJob, NO_MATCHES_REASON } from '@/store/ExplorerStore';
+import { primaryButtonProps, secondaryButtonProps } from '../buttonStyles';
+import { fmtBytes, fmtCompact, fmtInt } from '../format';
+import { acceptedOf } from '../preview/cleaningSteps';
+import LoadProgress from './LoadProgress';
+import { fmtApproxMinutes, modEnterLabel, niceCapAbove, yearsToFitCap } from './loadMath';
+import {
+  CHANGE_QUERY_HINT,
+  continueLabel,
+  continueTip,
+  doneRowText,
+  EMPTY_ROW_TITLE,
+  emptyAction,
+  emptyOutcomeFor,
+  emptyRowReason,
+  LOAD_AGAIN_TIP,
+  TRY_AGAIN_TIP,
+} from './partialText';
+
+const EMPTY_REASON = 'Add a taxon or narrow the area to a region';
+const DUPLICATES_HINT = 'duplicates removed while loading';
+/** Container query for a dock too narrow for the full estimate line on one row. */
+const NARROW = '@container loadEstimate (max-width: 44rem)';
+const MIN_CAP = 1000;
+const SHORTCUT = modEnterLabel(typeof navigator === 'undefined' ? '' : navigator.platform);
+const CAP_TIP =
+  'Most records each source may download. Loading is blocked while the estimated total is above the cap: raise it or narrow the query.';
+
+/** What Load does; the replace sentence only when occurrences are loaded (spec §5.8). */
+function loadTip(replaces: boolean): string {
+  return `Fetch every matching record from the enabled sources (up to the cap) and clean it with the filters above.${
+    replaces ? ' It replaces the loaded occurrences; the tree stays.' : ''
+  } (${SHORTCUT})`;
+}
+
+const Sep = () => (
+  <Box as="span" aria-hidden color="fg.muted" mx={1.5}>
+    ·
+  </Box>
+);
+
+/**
+ * Estimate line: "16,158 species-level records · duplicates removed while loading · 2.4 MB ·
+ * <1 min · 3 requests". The count is what the load requests, so it never over-promises.
+ */
+const EstimateLine = observer(function EstimateLine() {
+  const { explorerStore: ex } = useStore();
+  const { estimate, kpis, previewState, canLoad } = ex;
+  const busy = previewState === 'first' || previewState === 'stale' || ex.plans.state === 'loading';
+
+  if (!canLoad.ok && canLoad.reason === NO_MATCHES_REASON) {
+    return (
+      <HStack
+        gap={2}
+        fontSize="sm"
+        minW={0}
+        opacity={busy ? 0.55 : 1}
+        transition="opacity 0.2s"
+        aria-busy={busy}
+        data-testid="load-estimate"
+        data-state="no-matches"
+      >
+        <Icon as={LuSearchX} boxSize={4} color="fg.muted" flexShrink={0} aria-hidden />
+        <Text truncate>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {NO_MATCHES_REASON}
+          </Box>
+          <Sep />
+          <Box as="span" color="fg.muted">
+            widen the area, years or filters
+          </Box>
+        </Text>
+      </HStack>
+    );
+  }
+
+  if (!estimate && !kpis) {
+    if (previewState === 'first') {
+      return (
+        <Box aria-busy="true" aria-label="Estimating load size">
+          <Skeleton h={4} w="18rem" borderRadius="sm" />
+        </Box>
+      );
+    }
+    const reason = !canLoad.ok && canLoad.reason === EMPTY_REASON ? EMPTY_REASON : 'No estimate yet';
+    return (
+      <HStack gap={2} color="fg.muted" fontSize="sm" minW={0}>
+        <Icon as={LuInfo} boxSize={4} flexShrink={0} />
+        <Text truncate>{reason}</Text>
+      </HStack>
+    );
+  }
+
+  const records = estimate?.records ?? kpis?.records ?? 0;
+  const exact = estimate?.exact ?? false;
+  const what = exact ? 'species-level records' : 'matching records';
+  const full = [
+    `${exact ? '' : '≈'}${fmtInt(records)} ${what}`,
+    DUPLICATES_HINT,
+    ...(estimate
+      ? [
+          fmtBytes(estimate.bytes),
+          fmtApproxMinutes(estimate.seconds),
+          `${fmtInt(estimate.requests)} ${estimate.requests === 1 ? 'request' : 'requests'}`,
+        ]
+      : ['size and time follow once the load is planned']),
+  ].join(' · ');
+  return (
+    <HStack
+      gap={1}
+      minW={0}
+      opacity={busy ? 0.55 : 1}
+      transition="opacity 0.2s"
+      aria-busy={busy}
+      data-testid="load-estimate"
+    >
+      <Text fontSize="sm" color="fg.muted" truncate minW={0} fontVariantNumeric="tabular-nums" title={full}>
+        <Box as="span" color="fg" fontWeight="semibold">
+          {exact ? '' : '≈'}
+          {fmtInt(records)} {what}
+        </Box>
+        {/* In a narrow dock the hint moves into the info tip so the line stays on one row. */}
+        <Box as="span" css={{ [NARROW]: { display: 'none' } }}>
+          <Sep />
+          <span data-testid="load-duplicates-hint">{DUPLICATES_HINT}</span>
+        </Box>
+        {estimate ? (
+          <>
+            <Sep />
+            {fmtBytes(estimate.bytes)}
+            <Sep />
+            {fmtApproxMinutes(estimate.seconds)}
+            <Sep />
+            {fmtInt(estimate.requests)} {estimate.requests === 1 ? 'request' : 'requests'}
+          </>
+        ) : (
+          <>
+            <Sep />
+            size and time follow once the load is planned
+          </>
+        )}
+      </Text>
+      <Box flexShrink={0} display="none" css={{ [NARROW]: { display: 'inline-flex' } }}>
+        <InfoTip>
+          <Box maxW="240px">Duplicates are removed while loading, so the loaded count can be a little lower.</Box>
+        </InfoTip>
+      </Box>
+    </HStack>
+  );
+});
+
+/** Compact dock action with a tooltip that says what it does. */
+function RowAction({ tip, primary, onClick, children, testId }: {
+  tip: string;
+  primary?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  testId: string;
+}) {
+  return (
+    <Tooltip content={tip} openDelay={300}>
+      <Button
+        {...(primary ? primaryButtonProps : secondaryButtonProps)}
+        size="xs"
+        flexShrink={0}
+        onClick={onClick}
+        data-testid={testId}
+      >
+        {children}
+      </Button>
+    </Tooltip>
+  );
+}
+
+/** Done state after a load of the current query: status and its next steps (spec §4.4). */
+const DoneRow = observer(function DoneRow() {
+  const { explorerStore: ex, dataStore } = useStore();
+  const loaded = ex.loaded;
+  if (!loaded) return null;
+  const source = dataStore.occurrence;
+  const query = source?.kind === 'explorer-query' && source.status === 'done' ? source : null;
+  const stop = loaded.stop ?? null;
+  const { title, parts } = doneRowText({
+    accepted: acceptedOf(loaded),
+    species: loaded.kpis.species,
+    partial: loaded.partial,
+    stop,
+  });
+  const partial = loaded.partial != null || stop != null;
+  const continueCap = dataStore.continueCap;
+  return (
+    <HStack gap={2} minH={10} minW={0} data-testid="load-done" data-state={partial ? 'partial' : 'complete'}>
+      <HStack gap={2} flex="1" minW={0} role="status">
+        <Icon
+          as={partial ? LuTriangleAlert : LuCircleCheck}
+          boxSize={4}
+          color={partial ? 'orange.fg' : 'green.fg'}
+          flexShrink={0}
+          aria-hidden
+        />
+        <Text fontSize="sm" color="fg.muted" minW={0} fontVariantNumeric="tabular-nums" lineClamp={2}>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {title}
+          </Box>
+          {parts.map((part, i) => (
+            <Fragment key={part}>
+              <Sep />
+              <Box as="span" color={partial && i === 0 ? 'orange.fg' : undefined}>
+                {part}
+              </Box>
+            </Fragment>
+          ))}
+        </Text>
+      </HStack>
+      {query?.resumable && (
+        <RowAction primary tip={continueTip(stop, continueCap)} onClick={() => void dataStore.continueLoad()} testId="load-continue">
+          <LuPlay /> {continueLabel(stop, continueCap)}
+        </RowAction>
+      )}
+      {query && (
+        <RowAction tip={LOAD_AGAIN_TIP} onClick={() => void dataStore.loadAgain()} testId="load-again">
+          <LuRotateCw /> Load again
+        </RowAction>
+      )}
+    </HStack>
+  );
+});
+
+/** A load of the current query that kept nothing: why, and Try again / Load again when a rerun can help. */
+const EmptyRow = observer(function EmptyRow() {
+  const { explorerStore: ex, dataStore } = useStore();
+  const job = dataStore.job;
+  const outcome = emptyOutcomeFor(job, ex.query);
+  if (!outcome) return null;
+  const reason = outcome.emptyReason;
+  const action = emptyAction(reason);
+  const failed = reason === 'failed';
+  return (
+    <HStack gap={2} minH={10} minW={0} data-testid="load-done" data-state="empty" data-reason={reason}>
+      <HStack gap={2} flex="1" minW={0} role="status">
+        <Icon
+          as={failed ? LuCircleX : LuCircleAlert}
+          boxSize={4}
+          color={failed ? 'red.fg' : reason === 'cancelledEarly' ? 'fg.muted' : 'orange.fg'}
+          flexShrink={0}
+          aria-hidden
+        />
+        <Text fontSize="sm" color="fg.muted" minW={0} lineClamp={2}>
+          <Box as="span" color="fg" fontWeight="semibold">
+            {EMPTY_ROW_TITLE}
+          </Box>
+          <Sep />
+          {emptyRowReason(reason, outcome.stop?.lastError ?? job?.error)}
+          {outcome.previousKept && (
+            <>
+              <Sep />
+              previous data unchanged
+            </>
+          )}
+          {!action && (
+            <>
+              <Sep />
+              {CHANGE_QUERY_HINT}
+            </>
+          )}
+        </Text>
+      </HStack>
+      {action && (
+        <RowAction
+          primary={action === 'tryAgain'}
+          tip={TRY_AGAIN_TIP}
+          onClick={() => void dataStore.retry()}
+          testId={action === 'tryAgain' ? 'load-try-again' : 'load-again'}
+        >
+          <LuRotateCw /> {action === 'tryAgain' ? 'Try again' : 'Load again'}
+        </RowAction>
+      )}
+    </HStack>
+  );
+});
+
+/** Cap number input; commits valid values to the store as the user types. */
+const CapField = observer(function CapField() {
+  const { explorerStore: ex } = useStore();
+  const id = useId();
+  const tipId = useId();
+  const [text, setText] = useState(String(ex.cap));
+  useEffect(() => setText(String(ex.cap)), [ex.cap]);
+  return (
+    <Tooltip content={CAP_TIP} openDelay={300}>
+      <HStack gap={2}>
+        <chakra.label htmlFor={id} fontSize="sm" color="fg.muted">
+          Cap
+        </chakra.label>
+        <NumberInputRoot
+          ids={{ input: id }}
+          size="sm"
+          w="8.5rem"
+          min={MIN_CAP}
+          step={50_000}
+          value={text}
+          formatOptions={{ maximumFractionDigits: 0, useGrouping: true }}
+          onValueChange={(e) => {
+            setText(e.value);
+            if (Number.isFinite(e.valueAsNumber) && e.valueAsNumber >= MIN_CAP) ex.setCap(Math.round(e.valueAsNumber));
+          }}
+          disabled={ex.isLoading}
+          data-testid="load-cap"
+        >
+          <NumberInputField fontVariantNumeric="tabular-nums" aria-label="Record cap" aria-describedby={tipId} />
+        </NumberInputRoot>
+        <VisuallyHidden id={tipId}>{CAP_TIP}</VisuallyHidden>
+      </HStack>
+    </Tooltip>
+  );
+});
+
+/** Amber row with the four over-cap actions. */
+const OverCapRow = observer(function OverCapRow() {
+  const { explorerStore: ex } = useStore();
+  const est = ex.estimate;
+  if (!est?.overCap) return null;
+  const q = ex.query;
+  const hist = ex.mergedYearsAll;
+  const minY = hist.length ? Math.min(...hist.map((b) => b.year)) : null;
+  const maxY = hist.length ? Math.max(...hist.map((b) => b.year)) : null;
+  const from = q.years[0] ?? minY;
+  const to = q.years[1] ?? maxY;
+  const narrowFrom =
+    from != null && to != null && est.records > 0
+      ? yearsToFitCap(hist, [from, to], (ex.cap / est.records) * 0.95)
+      : null;
+  const raiseTo = niceCapAbove(est.records);
+  return (
+    <Flex
+      colorPalette="orange"
+      bg="colorPalette.subtle"
+      color="colorPalette.fg"
+      borderRadius="md"
+      px={3}
+      py={1.5}
+      gap={2}
+      align="center"
+      wrap="wrap"
+      role="status"
+      data-testid="load-overcap"
+    >
+      <HStack gap={2} flex="1 1 18rem" minW={0}>
+        <Icon as={LuTriangleAlert} boxSize={4} flexShrink={0} />
+        <Text fontSize="sm" fontWeight="medium" fontVariantNumeric="tabular-nums">
+          {fmtCompact(est.records)} records exceed the {fmtCompact(ex.cap)} cap (≈{fmtBytes(est.bytes)})
+        </Text>
+      </HStack>
+      <HStack gap={1.5} wrap="wrap">
+        <Button size="xs" variant="outline" onClick={() => ex.setCap(raiseTo)}>
+          Raise cap to {fmtCompact(raiseTo)}
+        </Button>
+        {narrowFrom != null && to != null && narrowFrom > (from ?? -Infinity) && (
+          <Button size="xs" variant="outline" onClick={() => ex.setYears([narrowFrom, to])}>
+            Narrow years to {narrowFrom}–{to}
+          </Button>
+        )}
+        {q.quality.dedupe !== 'cell' && (
+          <Button size="xs" variant="outline" onClick={() => ex.setQuality({ dedupe: 'cell' })}>
+            One per ~1 km cell
+          </Button>
+        )}
+        {q.sources.gbif && (
+          <Button size="xs" variant="outline" onClick={() => ex.setTab('cite')}>
+            Request GBIF download instead
+          </Button>
+        )}
+      </HStack>
+    </Flex>
+  );
+});
+
+/** Bottom dock: estimate, cap and the Load button; becomes LoadProgress (same height) while loading. */
+export default observer(function LoadDock() {
+  const { explorerStore: ex, dataStore, speciesStore } = useStore();
+  const { canLoad, estimate, loaded } = ex;
+  const job = explorerJob(dataStore.job);
+  // The loaded occurrence source a load would replace.
+  const occurrence = dataStore.occurrence?.status === 'done' ? dataStore.occurrence : null;
+  const loading = !!job && (job.state === 'planning' || job.state === 'streaming');
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Height of the dock before the load started: the progress row keeps it, so nothing above moves.
+  const idleHeight = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (!loading && rootRef.current) idleHeight.current = rootRef.current.offsetHeight;
+  });
+
+  if (loading)
+    return (
+      <Flex
+        ref={rootRef}
+        direction="column"
+        justify="center"
+        px={3}
+        py={2}
+        minH={idleHeight.current != null ? `${idleHeight.current}px` : undefined}
+        data-testid="load-dock"
+      >
+        <LoadProgress />
+      </Flex>
+    );
+
+  // A load of this query that kept nothing says why (and offers a rerun) in place of the controls.
+  if (emptyOutcomeFor(dataStore.job, ex.query)) {
+    return (
+      <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
+        <EmptyRow />
+      </Box>
+    );
+  }
+  if (ex.loadedMatchesQuery && job?.state !== 'error') {
+    return (
+      <Box ref={rootRef} px={3} py={2} data-testid="load-dock">
+        <DoneRow />
+      </Box>
+    );
+  }
+
+  const dirty = !!loaded && ex.dirty.size > 0;
+  // The count lives in the estimate line; the button never promises a number.
+  const label = dirty ? 'Reload with changes' : 'Load records';
+  const reason = canLoad.ok ? null : canLoad.reason;
+  // Reasons already said elsewhere in the dock are not repeated next to the button.
+  const inlineReason =
+    reason && reason !== EMPTY_REASON && reason !== NO_MATCHES_REASON && !(estimate?.overCap && reason === 'Over the cap')
+      ? reason
+      : null;
+
+  return (
+    <Flex ref={rootRef} direction="column" gap={2} px={3} py={2} data-testid="load-dock">
+      {job?.state === 'error' && (
+        <Flex
+          colorPalette="red"
+          bg="colorPalette.subtle"
+          color="colorPalette.fg"
+          borderRadius="md"
+          px={3}
+          py={1.5}
+          gap={2}
+          align="center"
+          role="alert"
+        >
+          <Icon as={LuCircleX} boxSize={4} flexShrink={0} />
+          <Text fontSize="sm" flex="1" minW={0} truncate>
+            Load failed{job.error ? `: ${job.error}` : ''}.
+            {speciesStore.numRecords > 0 && ' Your previous data is unchanged.'}
+          </Text>
+        </Flex>
+      )}
+      <OverCapRow />
+      <Flex align="center" gap={{ base: 2, xl: 4 }} rowGap={2} wrap="wrap" minH={10}>
+        <Box flex="1 1 16rem" minW={0} css={{ containerType: 'inline-size', containerName: 'loadEstimate' }}>
+          <EstimateLine />
+        </Box>
+        <HStack gap={4} flexShrink={0}>
+          <CapField />
+        </HStack>
+        <HStack gap={3} flexShrink={0} ms="auto">
+          {inlineReason && (
+            <Text fontSize="sm" color="fg.muted" data-testid="load-disabled-reason">
+              {inlineReason}
+            </Text>
+          )}
+          <Tooltip content={reason ?? loadTip(occurrence != null)} openDelay={300}>
+            <Box as="span" display="inline-flex">
+              <Button
+                {...primaryButtonProps}
+                disabled={!canLoad.ok}
+                onClick={() => ex.load()}
+                aria-keyshortcuts="Control+Enter Meta+Enter"
+                fontVariantNumeric="tabular-nums"
+                data-testid="load-button"
+              >
+                {dirty && <LuRefreshCw />}
+                {label}
+                <Box as="span" aria-hidden fontSize="xs" opacity={0.7} ms={1} fontWeight="normal">
+                  {SHORTCUT}
+                </Box>
+              </Button>
+            </Box>
+          </Tooltip>
+        </HStack>
+      </Flex>
+      {occurrence && (
+        <Text fontSize="xs" color="fg.muted" data-testid="load-replaces">
+          Replaces {occurrence.label}
+          {speciesStore.numRecords > 0 ? ` (${fmtInt(speciesStore.numRecords)} records)` : ''}. To combine taxa, add
+          them to this query.
+        </Text>
+      )}
+    </Flex>
+  );
+});

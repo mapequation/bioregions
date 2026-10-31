@@ -389,11 +389,14 @@ export default observer(
               cell.id,
               cellLinkPoint,
             );
-            return controlPathways.map((controlPoints) => ({
+            return controlPathways.map((controlPoints, pathwayIndex) => ({
               treeNode,
               cell,
               weight: weight / controlPathways.length,
               controlPoints,
+              // An internal node fans out into one pathway per descendant
+              // leaf in the cell, so node + cell alone is not a unique key.
+              key: `${treeNode.data.uid}-${cell.id}-${pathwayIndex}`,
             }));
           });
 
@@ -407,11 +410,12 @@ export default observer(
               stateCell.cellId,
               stateCellPos,
             );
-            return controlPathways.map((controlPoints) => ({
+            return controlPathways.map((controlPoints, pathwayIndex) => ({
               treeNode,
               stateCell,
               weight: weight / controlPathways.length,
               controlPoints,
+              key: `${treeNode.data.uid}-${stateCell.cellStateName}-${pathwayIndex}`,
             }));
           });
 
@@ -456,7 +460,8 @@ export default observer(
                   strokeWidth={0.5}
                   fill="none"
                 >
-                  {networkPhysLinks.map(({ treeNode, cell, weight }) => {
+                  {networkPhysLinks.map(({ treeNode, cell, weight }, i) => {
+                    const linkKey = `${treeNode.data.uid}-${cell.id}-${i}`;
                     const cellPos = projection(cell.center) ?? [0, 0];
                     const cellX = cellPos[0] - cellSize / 2 + 0.5;
                     const cellY = cellPos[1];
@@ -467,7 +472,7 @@ export default observer(
                     ) {
                       return (
                         <line
-                          key={`${treeNode.data.name}-${cell.id}`}
+                          key={linkKey}
                           x1={treeNode.x}
                           y1={treeNode.y}
                           x2={cellX}
@@ -483,7 +488,7 @@ export default observer(
                     // prettier-ignore
                     const d = `M ${treeNode.x} ${treeNode.y} C ${cp1.join(' ')}, ${cp2.join(' ')}, ${cellX} ${cellY}`;
                     return (
-                      <g key={`${treeNode.data.name}-${cell.id}`}>
+                      <g key={linkKey}>
                         <title>
                           {treeNode.data.name} - {cell.id}, weight: {weight}
                         </title>
@@ -501,7 +506,7 @@ export default observer(
                   fill="none"
                 >
                   {networkPhysLinksBundle.map(
-                    ({ treeNode, cell, weight, controlPoints }) => {
+                    ({ treeNode, cell, weight, controlPoints, key }) => {
                       const path = d3.path();
                       const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
                         path,
@@ -513,7 +518,7 @@ export default observer(
                       curveBundle.lineEnd();
                       const d = path.toString();
                       return (
-                        <g key={`${treeNode.data.name}-${cell.id}`}>
+                        <g key={key}>
                           <title>
                             {treeNode.data.name} - {cell.id}, weight: {weight}
                           </title>
@@ -562,7 +567,7 @@ export default observer(
                   fill="none"
                 >
                   {stateTreeLinksBundle.map(
-                    ({ treeNode, stateCell, weight, controlPoints }) => {
+                    ({ treeNode, stateCell, weight, controlPoints, key }) => {
                       const path = d3.path();
                       const curveBundle = d3.curveBundle.beta(beta ?? 0.75)(
                         path,
@@ -574,9 +579,7 @@ export default observer(
                       curveBundle.lineEnd();
                       const d = path.toString();
                       return (
-                        <g
-                          key={`${treeNode.data.name}-${stateCell.cellId}_${stateCell.memTaxonId}`}
-                        >
+                        <g key={key}>
                           <title>
                             {treeNode.data.name} - {stateCell.cellId}_
                             {stateCell.memTaxonId}, weight: {weight}
@@ -595,8 +598,8 @@ export default observer(
                   strokeWidth={0.5}
                   fill="none"
                 >
-                  {stateLinks.map(({ treeNode, stateCell, weight }) => {
-                    const linkKey = `${treeNode.data.name}-${stateCell.cellId}_${stateCell.memTaxonId}`;
+                  {stateLinks.map(({ treeNode, stateCell, weight }, i) => {
+                    const linkKey = `${treeNode.data.uid}-${stateCell.cellStateName}-${i}`;
                     const cellX = stateCell.x - stateCellRadius;
                     const cellY = stateCell.y;
                     if (
