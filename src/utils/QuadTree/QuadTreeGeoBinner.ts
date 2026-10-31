@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, observableRef, computed } from 'mobx';
 import type { BBox, GeoJsonProperties } from '../../types/geojson';
 import type { GeoFeature } from '../../store/SpeciesStore';
 import type SpeciesStore from '../../store/SpeciesStore';
@@ -46,7 +46,7 @@ export default class QuadtreeGeoBinner {
       patchSparseCells: observable,
       cellsNeedUpdate: observable,
       treeNeedUpdate: observable,
-      _cells: observable.ref,
+      _cells: observableRef,
       cells: computed,
     });
 
