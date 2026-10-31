@@ -438,15 +438,15 @@ The classifier is stricter than the zip reader's `dataFormat` (sources/gbif/zip.
 | Data | Files | Requirements |
 |---|---|---|
 | Point occurrences | `.csv`, `.tsv` | A header row and one row per record. You pick the species, latitude and longitude columns next; they are guessed from names containing species/binomial/name, lat, and lng/long. Decimal degrees (WGS84). Delimiter detected automatically. Rows with an empty or "NA" species are skipped. |
-| Range polygons (or points) | Shapefile: a `.zip` with one `.shp` and its `.dbf`, or the loose `.shp` + `.dbf` | Polygon/MultiPolygon or Point/MultiPoint. Coordinates must be longitude/latitude (`.prj` is not read). The species name comes from the first of `binomial`, `species`, `name`, `id` (DataWorker.ts:99-160). |
-| GBIF download | A `.zip` from gbif.org: Simple CSV or Darwin Core Archive | Needs `species`, `decimalLatitude`, `decimalLongitude`. ABSENT rows are skipped. The download key and DOI are kept for citation (zip.ts:60, 140). Loaded as downloaded. |
+| Range polygons (or points) | Shapefile: a `.zip` with one `.shp` and its `.dbf`, or the loose `.shp` + `.dbf` | Polygon/MultiPolygon or Point/MultiPoint. Coordinates must be longitude/latitude (`.prj` is not read). The species name comes from the first of these attribute fields that exists, spelled exactly in lowercase: `binomial`, `species`, `name`, `id` (DataWorker.ts:99-160; the match is case-sensitive). |
+| GBIF download | A `.zip` from gbif.org: Simple CSV or Darwin Core Archive | Recognised by `occurrence.txt` or `<download key>.csv` at the zip's root (classify.ts). Needs `species`, `decimalLatitude`, `decimalLongitude`. ABSENT rows are skipped. The download key and DOI are kept for citation (zip.ts:60, 140). Loaded as downloaded: no de-duplication or area filter (zipLoad.ts:56). |
 | Phylogenetic tree | `.nwk`, `.tre`, `.tree` (Newick) | Tip labels are matched to species names after underscores become spaces and the first letter is capitalised (treeUtilsJS.js:4-6). In the occurrence file, dots also become spaces (names.ts:5), so write tips with underscores, not dots. |
 
 **Flow:**
 
 1. Drop, or press the visible **Choose files** button (keyboard path). Accepts `.csv,.tsv,.zip,.shp,.shx,.dbf,.prj,.nwk,.tre,.tree`.
 2. `inspectFiles` + `classifyFiles`.
-3. A plan list: "Point occurrences · birds.csv", "Tree · birds.nwk", each with "replaces {label}" when that slot is filled. Errors inline in red.
+3. A plan list: "Point occurrences · birds.csv", "Shapefile · ranges.zip", "GBIF download, as downloaded · 0012345-….zip", "Tree · birds.nwk", each with "(replaces {label})" when that slot is filled. Errors inline in red; ignored files under "Not loaded:".
 4. For CSV/TSV, the column mapping: a 5-row preview (`loadPreview`, utils/loader.ts:61) and three labelled selects.
 5. The primary button ("Load", "Load occurrences and tree", "Load tree") calls `dataStore.loadUpload(files, plan, columns)`, then closes the portal. Disabled with "A load is running" while `isLoading`.
 
@@ -660,6 +660,7 @@ Phases: **3.1** U1 alone → **3.2** U2 ‖ U3 ‖ U4 ‖ U5 ‖ U6 (at most 2-3
 - **Owns:** `upload/UploadTab.tsx`, `upload/FormatTable.tsx`, `upload/ColumnMapping.tsx`. The old modal: `git show HEAD:src/components/ControlPanel/Load.tsx`.
 - **Must not touch:** stores, `ControlPanel/*`.
 - **Accept:** `tsc -b`; the format table matches §5.2.
+- **As built:** the drop zone is a plain `Box` with drag handlers plus a hidden `<input type="file" multiple accept={UPLOAD_ACCEPT}>` behind the visible Choose files button, so every dropped file reaches `classifyFiles` (unsupported ones are listed, not silently rejected by a file-upload `accept` filter). On `xl` screens the format table sits in a right-hand column; below that it follows the drop zone, plan and mapping. The column selects are native selects with `Field.Label`s; Load stays disabled until the preview's header is read and while two roles share a column ("Pick a different column for species, latitude and longitude."). Load calls `dataStore.loadUpload` without awaiting it and closes the portal: its synchronous refusals (a load running, plan errors, no columns) are ruled out by the button's disabled state, and later failures land on `dataStore.job`/`treeJob`, which the sidebar (U5) must show. Format-table copy: the shapefile name fields are matched case-sensitively in lowercase, and a GBIF zip is recognised by its root entries (§5.2 table updated).
 
 **U4: Examples tab** (≈35 calls)
 
