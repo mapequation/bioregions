@@ -463,7 +463,7 @@ describe('InfomapStore.abort', () => {
       infomap,
       infomapId: null,
       args: {},
-      updateNetwork: () => ({}),
+      updateNetwork: () => ({ nodes: [], links: [] }),
       setIsRunning: noop,
       setCurrentTrial: noop,
       flushInfomapOutput: noop,

@@ -80,6 +80,54 @@ const defaultArgs: RequiredArgs = {
   output: ['json', 'tree'],
 };
 
+/** Records of the network's species, per species and in all. */
+export type RecordPool = { count: Map<string, number>; total: number };
+
+/** A taxon -> cell link: cell index, taxon bioregion id and link weight. */
+type CellLink = [cellIndex: number, bioregionId: number, weight: number];
+
+/**
+ * The network as Infomap should get it: without vertices (bipartite) or state
+ * nodes that no link touches. Infomap would keep each of them as a zero-flow
+ * singleton module, which shows up as an empty bioregion; left out, their cells
+ * get no bioregion.
+ */
+export function withoutUnlinkedNodes<
+  N extends BioregionsNetwork | BioregionsStateNetwork,
+>(network: N): N {
+  const linked = new Set<number>();
+  for (const { source, target } of network.links) {
+    linked.add(source);
+    linked.add(target);
+  }
+  if ('states' in network) {
+    const states = network.states.filter(({ stateId }) => linked.has(stateId));
+    return states.length === network.states.length
+      ? network
+      : { ...network, states };
+  }
+  const nodes = network.nodes.filter(({ id }) => linked.has(id));
+  return nodes.length === network.nodes.length
+    ? network
+    : { ...network, nodes };
+}
+
+/** Scores are ranked at this many decimals, so scores equal on paper tie. */
+const SCORE_DECIMALS = 9;
+
+/** Most indicative species first: by score, then record count, then name. */
+export function compareIndicative(
+  a: { name: string; count: number; score: number },
+  b: { name: string; count: number; score: number },
+) {
+  const scale = 10 ** SCORE_DECIMALS;
+  return (
+    Math.round(b.score * scale) - Math.round(a.score * scale) ||
+    b.count - a.count ||
+    (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  );
+}
+
 export class Bioregion {
   flow = 0;
   bioregionId = 0;
@@ -199,7 +247,12 @@ export class Bioregion {
     ];
   }
 
-  calcStats(speciesStore: SpeciesStore, treeStore: TreeStore) {
+  /** `pool`: records of the network's species, per species and in all. */
+  calcStats(
+    speciesStore: SpeciesStore,
+    treeStore: TreeStore,
+    pool: RecordPool,
+  ) {
     type Species = string;
     const speciesCount = new Map<Species, number>();
     const speciesCells = new Map<Species, number>();
@@ -234,16 +287,14 @@ export class Bioregion {
     for (const [name, count] of speciesCount.entries()) {
       // Most indicative
       const tf = count / this.numRecords;
-      const idf =
-        (speciesStore.speciesMap.get(name)?.count ?? 0) /
-        speciesStore.numRecords;
+      const idf = (pool.count.get(name) ?? 0) / pool.total;
       const score = tf / idf;
       this.mostIndicative.push({ name, score, count });
       this.mostCommon.push({ name, score, count });
 
       // Share of the species' records found here; specificity is size-normalised later, in
       // calcIndicatorValues, once every bioregion's counts are known.
-      const fidelity = count / (speciesStore.speciesMap.get(name)?.count ?? count);
+      const fidelity = count / (pool.count.get(name) || count);
       const occupancy = (speciesCells.get(name) ?? 0) / this.numGridCells;
       if (fidelity >= 1) ++this.numFoundOnlyHere;
       this.characteristic.push({
@@ -269,11 +320,9 @@ export class Bioregion {
     // member ranking need every bioregion's counts, see calcIndicatorValues.
     for (const member of this.members) {
       const count = speciesCount.get(member.name) ?? 0;
-      member.share = count / (speciesStore.speciesMap.get(member.name)?.count || 1);
+      member.share = count / (pool.count.get(member.name) || 1);
     }
-    this.mostIndicative.sort((a, b) =>
-      isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
-    );
+    this.mostIndicative.sort(compareIndicative);
 
 
     this.calcGeography();
@@ -358,7 +407,10 @@ function calcIndicatorValues(bioregions: Bioregion[], speciesStore: SpeciesStore
       entry.indVal = entry.specificity * entry.occupancy;
     }
     bioregion.characteristic.sort((a, b) =>
-      isEqual(a.indVal, b.indVal) ? b.count - a.count : b.indVal - a.indVal,
+      compareIndicative(
+        { name: a.name, count: a.count, score: a.indVal },
+        { name: b.name, count: b.count, score: b.indVal },
+      ),
     );
 
     // Members: fidelity is their specificity here. Rank by centrality as displayed (share of the
@@ -897,7 +949,7 @@ export default class InfomapStore {
           reject(err);
         })
         .run({
-          network,
+          network: withoutUnlinkedNodes(network),
           args,
         });
     });
@@ -2103,14 +2155,46 @@ export default class InfomapStore {
     })
     console.timeEnd("Connected bioregions");
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
-    }
-    calcIndicatorValues(bioregions, speciesStore);
-    console.timeEnd("Calc bioregion stats")
+    this.calcBioregionStats(bioregions);
 
     this.setBioregions(bioregions);
+  }
+
+  calcBioregionStats(bioregions: Bioregion[]) {
+    const { speciesStore, treeStore } = this.rootStore;
+    // Indicator scores compare against the records of the network's species
+    // (those with a bioregion) over all grid cells
+    const pool: RecordPool = { count: new Map(), total: 0 };
+    for (const cell of this.cells) {
+      for (const { name, count } of cell.speciesTopList) {
+        if (!speciesStore.speciesMap.get(name)?.bioregionId) {
+          continue;
+        }
+        pool.count.set(name, (pool.count.get(name) ?? 0) + count);
+        pool.total += count;
+      }
+    }
+    console.time('Calc bioregion stats');
+    for (const bioregion of bioregions) {
+      bioregion.calcStats(speciesStore, treeStore, pool);
+    }
+    calcIndicatorValues(bioregions, speciesStore);
+    console.timeEnd('Calc bioregion stats');
+  }
+
+  /**
+   * Fill each cell's `connectedBioregions` from its links to taxa, for state
+   * and multilayer networks (`createNonStateBioregions` does it for bipartite).
+   */
+  setConnectedBioregions(links: CellLink[]) {
+    const { cells } = this;
+    for (const [cellIndex, bioregionId, weight] of links) {
+      cells[cellIndex].connectedBioregions.addLink(bioregionId, weight);
+    }
+    for (const cell of cells) {
+      cell.connectedBioregions.setOwnBioregion(cell.bioregionId);
+      cell.connectedBioregions.calcTopBioregions();
+    }
   }
 
   createStateBioregions(tree: OutputStateTree) {
@@ -2174,31 +2258,50 @@ export default class InfomapStore {
         throw new Error(`InfomapStore: state name '${stateName}' has no memory part`);
       }
 
-      cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(
         bioregionId,
         node.flow,
         memTaxonName,
       );
-      bioregion.addCell(cell);
     });
     for (const cell of cells) {
+      // A cell's states can sit in several modules: use the one with most flow,
+      // and count the cell (and its records) in that bioregion only
+      cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
+      if (cell.bioregionId > 0) {
+        bioregions[cell.bioregionId - 1].addCell(cell);
+      }
       cell.overlappingBioregions.calcTopBioregions();
     }
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
+    // Taxon -> cell links, with the bioregion of the taxon's state node
+    const { states, links } = this.network as BioregionsStateNetwork;
+    const stateBioregionIds = new Map<number, number>();
+    for (const node of tree.nodes) {
+      stateBioregionIds.set(node.stateId, node.modules[moduleLevel]);
     }
-    calcIndicatorValues(bioregions, speciesStore);
-    console.timeEnd("Calc bioregion stats")
+    const cellLinks: CellLink[] = [];
+    for (const { source, target, weight } of links) {
+      const cellIndex = states[target].id;
+      if (cellIndex >= cells.length || states[source].id < cells.length) {
+        continue;
+      }
+      cellLinks.push([
+        cellIndex,
+        stateBioregionIds.get(source) ?? 0,
+        weight ?? 1,
+      ]);
+    }
+    this.setConnectedBioregions(cellLinks);
+
+    this.calcBioregionStats(bioregions);
 
     this.setStateBioregions(bioregions);
   }
 
   createMultilayerBioregions(tree: OutputStateTree) {
     const { speciesStore, treeStore } = this.rootStore;
-    const { cells } = this;
+    const { cells, moduleLevel } = this;
     this.rootStore.clearBioregions();
     console.log(
       'Create multilayer bioregions... network:',
@@ -2208,22 +2311,22 @@ export default class InfomapStore {
     tree.layers = this.multilayerNetwork?.layers;
     console.log(tree);
 
-    const bioregions: Bioregion[] = Array.from(
-      { length: tree.numTopModules },
-      () => new Bioregion(),
-    );
-
     if (!tree.nodes) {
       console.error('No nodes!');
       console.log(tree);
       this.addError(`Infomap output error, please report.`);
       return;
     }
+    const numModules =
+      max(tree.nodes, (node) => node.modules[moduleLevel]) ?? 0;
+
+    const bioregions: Bioregion[] = Array.from(
+      { length: numModules },
+      () => new Bioregion(),
+    );
     // Tree nodes are sorted on flow, loop through all to find grid cell nodes
     tree.nodes.forEach((node) => {
-      // TODO: FIX!! node.modules[0] is 1 for all taxon nodes, but path[0] is not!
-      // const bioregionId = node.modules[0];
-      const bioregionId = node.path[0];
+      const bioregionId = node.modules[moduleLevel];
       const bioregion = bioregions[bioregionId - 1];
       bioregion.bioregionId = bioregionId;
       bioregion.flow += node.flow;
@@ -2247,24 +2350,45 @@ export default class InfomapStore {
       const cell = cells[node.id];
       const memTaxonName = `layer-${node.layerId}`;
 
-      cell.bioregionId = bioregionId;
       cell.overlappingBioregions.addStateNode(
         bioregionId,
         node.flow,
         memTaxonName,
       );
-      bioregion.addCell(cell);
     });
     for (const cell of cells) {
+      // A cell's states can sit in several modules: use the one with most flow,
+      // and count the cell (and its records) in that bioregion only
+      cell.bioregionId = cell.overlappingBioregions.dominantBioregionId;
+      if (cell.bioregionId > 0) {
+        bioregions[cell.bioregionId - 1].addCell(cell);
+      }
       cell.overlappingBioregions.calcTopBioregions();
     }
 
-    console.time("Calc bioregion stats")
-    for (const bioregion of bioregions) {
-      bioregion.calcStats(speciesStore, treeStore);
+    // Taxon -> cell links, with the bioregion of the taxon in the link's layer
+    const layerBioregionIds = new Map<string, number>();
+    for (const node of tree.nodes) {
+      layerBioregionIds.set(
+        `${node.layerId} ${node.id}`,
+        node.modules[moduleLevel],
+      );
     }
-    calcIndicatorValues(bioregions, speciesStore);
-    console.timeEnd("Calc bioregion stats")
+    const cellLinks: CellLink[] = [];
+    const intra = this.multilayerNetwork?.intra ?? [];
+    for (const { layerId, source, target, weight } of intra) {
+      if (target >= cells.length || source < cells.length) {
+        continue;
+      }
+      cellLinks.push([
+        target,
+        layerBioregionIds.get(`${layerId} ${source}`) ?? 0,
+        weight ?? 1,
+      ]);
+    }
+    this.setConnectedBioregions(cellLinks);
+
+    this.calcBioregionStats(bioregions);
 
     this.setStateBioregions(bioregions);
   }

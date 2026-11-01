@@ -18,6 +18,9 @@ const requireColor = (specifier: string): D3Color => {
   return color;
 };
 
+/** Colour of cells without a bioregion, such as cells left out of the network. */
+const UNASSIGNED_COLOR = '#ffcccc';
+
 /** The palette: c3's OKLCH hue circle, a d3 color scheme, or the Mural colors */
 export type SchemeName = 'Oklch' | c3SchemeName | 'Mural';
 
@@ -242,8 +245,10 @@ export default class ColorStore {
     );
   }
 
+  /** A bioregion's colour, or `UNASSIGNED_COLOR` for id 0 (no bioregion). */
   get colorBioregion() {
-    return (bioregionId: number) => this.bioregionColors[bioregionId - 1];
+    return (bioregionId: number) =>
+      this.bioregionColors[bioregionId - 1] ?? UNASSIGNED_COLOR;
   }
 
   getCellColorData = (cell: Cell) => {
