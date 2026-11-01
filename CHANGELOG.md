@@ -1,5 +1,51 @@
 # bioregions
 
+## 2.0.0-alpha.21
+
+### Minor Changes
+
+- 607c1dc: Redesign the bioregion list and link it to the map. Each bioregion card now opens
+  with a minimap of where the region lies in the study area and a summary such as
+  "5,124 records of 166 species in 83 cells". Each card lists:
+  
+  - characteristic species: the species Infomap clustered into the bioregion, ranked
+    by map equation centrality;
+  - indicator species, ranked by IndVal;
+  - the most common species, ranked by records.
+  
+  Clicking a map cell, legend chip or card selects a bioregion and dims the others.
+  Minimaps and "Show on map" fly the map to the region. Hovering the map shows
+  bioregion and cell statistics. Also adds species search, sorting, a compact
+  layout, a clickable map legend and locator rings for tiny regions.
+- 3dd2f19: Add a Data portal for occurrence data and phylogenies, opened from the sidebar's "Data…" button or the empty map. Its tabs are Search GBIF & OBIS, Phylogeny, Upload, Examples and Cite, and it keeps your work when you close and reopen it.
+  
+  - **Search GBIF & OBIS:** search taxa by scientific or common name and filter by area (countries, or a box drawn on a world map that you can move and resize, with a control to clear it), years, depth and data quality. A preview shows each filter's record impact, bias checks, a density map and the data's composition. Load streams a cleaned, deduplicated dataset into the app up to a record cap; a stopped load can be continued or loaded again.
+  - **Phylogeny:** find and load a matching synthetic or published tree from the Open Tree of Life, or upload a Newick file.
+  - **Upload:** a format table lists what the app reads (point occurrences as CSV/TSV, range polygons as zipped shapefiles or GeoJSON, Newick trees and GBIF download zips), with column mapping for point files.
+  - **Examples:** example datasets show their record and species counts, source and whether a tree is included.
+  - **Cite:** a methods paragraph and references for the loaded data, a GBIF derived-dataset CSV, and a citable GBIF download (DOI) that can be imported back as a zip.
+  
+  Loading new occurrence data replaces the current data. The sidebar shows one card for the loaded occurrences and one for the tree, each with its actions (edit the query, cite, change, remove, stop a running load), and the citation and methods text always describe what is loaded now.
+  
+  Also fixes: Cancel now stops a running file load, record counters reset between loads, re-running Infomap after loading a tree no longer triggers a "Maximum update depth exceeded" error, the documentation demo no longer logs duplicate React keys, and the icon buttons in the map and tree status bars now have accessible names.
+
+### Patch Changes
+
+- f847bc2: Bioregion colours now come from @mapequation/c3 2 (OKLab-based): colours are more evenly distinct, the Greys scheme no longer gives every bioregion the same grey, and the colour settings swap the HSL saturation range for a Tone choice and an OKLCH lightness range. The default palette is now c3's Oklch hue circle with the strong tone, and a new Colors section in the sidebar holds the palette, tone and the other colour options, with a preview of the bioregion colours.
+- a063445: Clear each species' per-region record counts before a new Infomap run. They used
+  to add up across runs, so after changing settings or the hierarchy level the
+  species pie charts and the tree's ancestral ranges mixed the old and new
+  bioregions.
+- 0983d27: Update Infomap to 2.16.0 and d3gl to 0.13.0, plus minor and patch updates of React,
+  Chakra UI, Turf and the other runtime dependencies. Bioregions, map hover and tree
+  highlight look the same as before; the unused `web-vitals` dependency is removed.
+- 0589207: Update the state management library to MobX 7 for a smaller app bundle.
+- a682bb9: Fix the state network (segregated/overlapping bioregions) being silently
+  truncated at the first link below the weight threshold: the guard returned from
+  the whole builder instead of skipping the link. Networks now also report how many
+  links fell below the threshold, and at full tree weight how many occurrence
+  species have no tip in the tree and are left out of the network.
+
 ## 2.0.0-alpha.20
 
 ### Patch Changes
