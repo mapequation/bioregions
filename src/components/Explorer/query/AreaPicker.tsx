@@ -297,7 +297,6 @@ export default observer(function AreaPicker() {
             variant={explorerUi.drawing ? 'solid' : 'outline'}
             flex="none"
             data-testid="area-draw"
-            aria-pressed={explorerUi.drawing}
             onClick={() => explorerUi.setDrawing(!explorerUi.drawing)}
           >
             <LuSquareDashedMousePointer />

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
 import { LuChevronDown, LuEllipsis } from 'react-icons/lu';
-import { Badge, Box, Button, chakra, HStack, IconButton, Menu, Popover, Portal, Progress, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, Button, chakra, HStack, IconButton, Menu, Popover, Portal, Progress, Stack, Text, VisuallyHidden } from '@chakra-ui/react';
 import { useStore } from '../../store';
 import type { Tab } from '../../store/explorer/types';
 import { Tooltip } from '../ui/tooltip';
@@ -42,6 +42,7 @@ function ActionButton({ action, onRun, full }: { action: CardAction; onRun: () =
 const StopMenu = observer(function StopMenu({ card }: { card: SourceCardModel }) {
   const { dataStore } = useStore();
   const chose = useRef(false);
+  const descId = useId();
   return (
     <Menu.Root
       onOpenChange={(e) => {
@@ -60,11 +61,20 @@ const StopMenu = observer(function StopMenu({ card }: { card: SourceCardModel })
       }}
     >
       {/* The tooltip sits on a wrapper: on the trigger itself it would overwrite the
-          data-scope/part/ownedby attributes the menu finds its anchor by. */}
+          data-scope/part/ownedby attributes the menu finds its anchor by. The button gets
+          its own description, since the tooltip's now points at the wrapper. */}
+      <VisuallyHidden id={descId}>Stop the load: keep what arrived, or cancel it</VisuallyHidden>
       <Tooltip content="Stop the load: keep what arrived, or cancel it" openDelay={300}>
         <chakra.span display="flex" flex="1">
           <Menu.Trigger asChild>
-            <Button size="xs" variant="outline" colorPalette="red" flex="1" data-testid="card-stop">
+            <Button
+              size="xs"
+              variant="outline"
+              colorPalette="red"
+              flex="1"
+              aria-describedby={descId}
+              data-testid="card-stop"
+            >
               Stop <LuChevronDown />
             </Button>
           </Menu.Trigger>

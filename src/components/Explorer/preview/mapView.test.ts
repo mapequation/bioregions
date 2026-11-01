@@ -183,6 +183,22 @@ describe('boxes', () => {
     expect(editBbox(box, 'e', 400, 0)).toEqual([-10, 0, 350, 20]);
   });
 
+  it('keeps the sides a handle does not move exactly', () => {
+    const typed: BBox = [1.23, 4.56, 7.89, 10.11];
+    expect(editBbox(typed, 'e', 1.04, 0)).toEqual([1.23, 4.56, 8.9, 10.11]);
+    expect(editBbox(typed, 'sw', 0, -1)).toEqual([1.2, 3.6, 7.89, 10.11]);
+    // A move rounds the delta, not the sides, so the size is kept.
+    expect(editBbox(typed, 'move', 0.04, 0.16)).toEqual([1.23, 4.76, 7.89, 10.31]);
+    expect(editBbox(typed, 'move', -2.47, 0)).toEqual([-1.27, 4.56, 5.39, 10.11]);
+  });
+
+  it('does not widen a box smaller than the minimum size', () => {
+    const small: BBox = [0, 0, 0.5, 0.25];
+    expect(editBbox(small, 'e', -1, 0)).toEqual([0, 0, 0.5, 0.25]);
+    expect(editBbox(small, 'n', 0, -1)).toEqual([0, 0, 0.5, 0.25]);
+    expect(editBbox(small, 'e', 0.3, 0)).toEqual([0, 0, 0.8, 0.25]);
+  });
+
   it('unions boxes', () => {
     expect(unionBbox([null, [0, 0, 1, 1], [-1, 2, 0, 3]])).toEqual([-1, 0, 1, 3]);
     expect(unionBbox([null])).toBeNull();

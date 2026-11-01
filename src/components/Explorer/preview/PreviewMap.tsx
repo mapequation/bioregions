@@ -516,10 +516,16 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   // area and draw mode stays on until Done or Esc (Esc during a drag undoes that drag).
   // Drag corners in CSS px of the map frame.
   const [drag, setDrag] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
-  /** A handle of the committed box being dragged, from `start` (lon/lat) on `orig`. */
-  const [edit, setEdit] = useState<{ handle: BoxHandle; start: [number, number]; orig: BBox; box: BBox } | null>(
-    null,
-  );
+  /**
+   * A handle of the committed box being dragged from `startPx` (lon/lat `start`) by `d`
+   * (lon/lat). The delta is applied to the current area, so a value typed mid-drag stays.
+   */
+  const [edit, setEdit] = useState<{
+    handle: BoxHandle;
+    startPx: [number, number];
+    start: [number, number];
+    d: [number, number];
+  } | null>(null);
   const [hover, setHover] = useState<BoxHandle | null>(null);
   const gestureRef = useRef(drag ?? edit);
   gestureRef.current = drag ?? edit;
@@ -532,14 +538,13 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
       return;
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      // Capture phase on window: runs before the dialog's own Esc handling.
+      // Capture phase on window: a drag in progress takes Esc before anything else. Without
+      // one, open overlays close first and the portal's Esc handling then ends draw mode.
+      if (e.key !== 'Escape' || !gestureRef.current) return;
       e.preventDefault();
       e.stopPropagation();
-      if (gestureRef.current) {
-        setDrag(null);
-        setEdit(null);
-      } else explorerUi.setDrawing(false);
+      setDrag(null);
+      setEdit(null);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -557,9 +562,20 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     const box = dragBbox(la, lb);
     return box ? wrapBbox(box) : null;
   };
+  /** A pointer travel under this many px is a click, not a drag: it commits nothing. */
+  const MIN_DRAG_PX = 3;
+  const moved = (a: [number, number], b: [number, number]) => Math.hypot(b[0] - a[0], b[1] - a[1]) >= MIN_DRAG_PX;
+  /** Lon/lat under a px for an edit: lon unclamped, so the delta follows the pointer into the margins. */
+  const editLonLat = (p: [number, number]): [number, number] => [
+    view.west + p[0] / view.scale,
+    proj.fromPx(p[0], p[1])[1],
+  ];
+  // A letterboxed world view keeps the overlays on the world, out of the muted margins.
+  const worldBox = !srs && view.east - view.west > 360 ? [proj.toPx(-180, 90), proj.toPx(180, -90)] : null;
+  const areaBox = query.area.kind === 'bbox' ? unwrapBbox(query.area.bbox) : null;
   /** The box being edited (unwrapped lon), shown with handles in draw mode. */
   const editBox: BBox | null =
-    drawing && !drag ? (edit?.box ?? (query.area.kind === 'bbox' ? unwrapBbox(query.area.bbox) : null)) : null;
+    drawing && !drag && areaBox ? (edit ? editBbox(areaBox, edit.handle, edit.d[0], edit.d[1]) : areaBox) : null;
   /** The box's px rectangle and its copies one world west and east, for a box across 180°. */
   const editRects = (box: BBox) =>
     [0, -360, 360].map((dx): [number, number, number, number] => [
@@ -568,6 +584,10 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     ]);
   const handleAt = (p: [number, number]): BoxHandle | null => {
     if (!editBox) return null;
+    // The box's copies reach into the letterbox margins, which are not the map.
+    if (worldBox && (p[0] < worldBox[0][0] || p[0] > worldBox[1][0] || p[1] < worldBox[0][1] || p[1] > worldBox[1][1])) {
+      return null;
+    }
     for (const r of editRects(editBox)) {
       const h = boxHandleAt(p[0], p[1], r);
       if (h) return h;
@@ -579,28 +599,32 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = localPx(e);
     const handle = handleAt(p);
-    if (handle && editBox) setEdit({ handle, start: proj.fromPx(p[0], p[1]), orig: editBox, box: editBox });
+    if (handle) setEdit({ handle, startPx: p, start: editLonLat(p), d: [0, 0] });
     else setDrag({ a: p, b: p });
   };
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const p = localPx(e);
     if (edit) {
-      const [lon, lat] = proj.fromPx(p[0], p[1]);
-      setEdit({ ...edit, box: editBbox(edit.orig, edit.handle, lon - edit.start[0], lat - edit.start[1]) });
+      const [lon, lat] = editLonLat(p);
+      setEdit({ ...edit, d: [lon - edit.start[0], lat - edit.start[1]] });
     } else if (drag) setDrag({ a: drag.a, b: p });
     else if (drawing) setHover(handleAt(p));
   };
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    const p = localPx(e);
     if (edit) {
       setEdit(null);
-      if (edit.box.some((v, i) => v !== edit.orig[i])) {
-        explorerStore.setArea({ kind: 'bbox', bbox: wrapBbox(edit.box) });
-      }
+      // Applied to the area as it is now; a gesture whose area stopped being a box is dropped.
+      if (!areaBox || !moved(edit.startPx, p)) return;
+      const [lon, lat] = editLonLat(p);
+      const box = editBbox(areaBox, edit.handle, lon - edit.start[0], lat - edit.start[1]);
+      if (box.some((v, i) => v !== areaBox[i])) explorerStore.setArea({ kind: 'bbox', bbox: wrapBbox(box) });
       return;
     }
     if (!drag) return;
-    const box = dragArea(drag.a, localPx(e));
     setDrag(null);
+    if (!moved(drag.a, p)) return;
+    const box = dragArea(drag.a, p);
     if (box) explorerStore.setArea({ kind: 'bbox', bbox: box });
   };
   const handle = edit?.handle ?? hover;
@@ -675,8 +699,6 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
   }, [obisCells, obis.max, proj, srs, view.east, obisOutlined]);
   // The density layer is clipped to the area outline; the basemap outside it is dimmed.
   const densityClip = outline && !showWorld ? `path(evenodd, '${outline}')` : undefined;
-  // A letterboxed world view keeps the overlays on the world, out of the muted margins.
-  const worldBox = !srs && view.east - view.west > 360 ? [proj.toPx(-180, 90), proj.toPx(180, -90)] : null;
   const dragPath = useMemo(() => {
     if (!drag) return null;
     if (!srs) {
@@ -1018,8 +1040,8 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
           >
             <Icon as={LuSquareDashed} color="fg.muted" />
             <Text>
-              {editBox
-                ? 'Drag the box or its edges to adjust, or drag elsewhere for a new box · Esc when done'
+              {query.area.kind === 'bbox'
+                ? 'Drag the box or its edges to adjust, or drag elsewhere for a new one · exact values under Coordinates · Esc when done'
                 : 'Drag on the map to draw an area · Esc to cancel'}
             </Text>
           </HStack>
@@ -1059,7 +1081,6 @@ export default observer(function PreviewMap({ faint = false }: PreviewMapProps) 
             size="xs"
             variant={drawing ? 'solid' : 'outline'}
             bg={drawing ? undefined : 'bg'}
-            aria-pressed={drawing}
             onClick={() => explorerUi.setDrawing(!drawing)}
             data-testid="map-draw"
           >

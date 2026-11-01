@@ -219,21 +219,28 @@ export function boxHandleAt(
 
 /**
  * `box` (unwrapped lon/lat) with a handle dragged by (dLon, dLat): a corner or edge
- * resizes, stopping `minDegrees` short of the opposite side and at 360° wide; 'move'
- * shifts the whole box, kept within ±90° latitude. Rounded to 0.1° like `dragBbox`.
+ * resizes, stopping `minDegrees` (or the box's own smaller span) short of the opposite
+ * side and at 360° wide; 'move' shifts the whole box by the delta rounded to 0.1°, kept
+ * within ±90° latitude, so its size is kept. A moved side is rounded to 0.1° like
+ * `dragBbox`; the sides the handle does not move stay exactly as they were.
  */
 export function editBbox(box: BBox, handle: BoxHandle, dLon: number, dLat: number, minDegrees = 1): BBox {
   const r = (v: number) => Math.round(v * 10) / 10;
+  // Shifted sides drop the float noise of the addition (a typed 4.56 + 0.2 stays 4.76).
+  const tidy = (v: number) => Math.round(v * 1e9) / 1e9;
   let [w, s, e, n] = box;
   if (handle === 'move') {
-    const dy = Math.min(90 - n, Math.max(-90 - s, dLat));
-    return [r(w + dLon), r(s + dy), r(e + dLon), r(n + dy)];
+    const dx = r(dLon);
+    const dy = Math.min(90 - n, Math.max(-90 - s, r(dLat)));
+    return [tidy(w + dx), tidy(s + dy), tidy(e + dx), tidy(n + dy)];
   }
-  if (handle.endsWith('w')) w = Math.max(e - 360, Math.min(e - minDegrees, w + dLon));
-  if (handle.endsWith('e')) e = Math.min(w + 360, Math.max(w + minDegrees, e + dLon));
-  if (handle.startsWith('s')) s = Math.max(-90, Math.min(n - minDegrees, s + dLat));
-  if (handle.startsWith('n')) n = Math.min(90, Math.max(s + minDegrees, n + dLat));
-  return [r(w), r(s), r(e), r(n)];
+  const minLon = Math.min(e - w, minDegrees);
+  const minLat = Math.min(n - s, minDegrees);
+  if (handle.endsWith('w')) w = Math.max(e - 360, Math.min(e - minLon, r(w + dLon)));
+  if (handle.endsWith('e')) e = Math.min(w + 360, Math.max(w + minLon, r(e + dLon)));
+  if (handle.startsWith('s')) s = Math.max(-90, Math.min(n - minLat, r(s + dLat)));
+  if (handle.startsWith('n')) n = Math.min(90, Math.max(s + minLat, r(n + dLat)));
+  return [w, s, e, n];
 }
 
 /**
