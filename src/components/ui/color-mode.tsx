@@ -10,8 +10,16 @@ import { LuMoon, LuSun } from "react-icons/lu"
 export interface ColorModeProviderProps extends ThemeProviderProps {}
 
 export function ColorModeProvider(props: ColorModeProviderProps) {
+  // next-themes' inline theme script only runs in server-rendered HTML; this app renders
+  // on the client, where React never executes it. A data-block type keeps React 19.3
+  // from warning about it.
   return (
-    <ThemeProvider attribute="class" disableTransitionOnChange {...props} />
+    <ThemeProvider
+      attribute="class"
+      disableTransitionOnChange
+      scriptProps={{ type: "application/json" }}
+      {...props}
+    />
   )
 }
 
