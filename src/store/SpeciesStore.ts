@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed, runInAction } from 'mobx';
+import { action, makeObservable, observable, observableRef, computed, runInAction } from 'mobx';
 // import { spawn, Thread, Worker } from 'threads';
 import type { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
@@ -130,8 +130,8 @@ export default class SpeciesStore {
       numPolygonsDebounced: observable,
       speed: observable,
       seconds: observable,
-      collection: observable.ref,
-      speciesMap: observable.ref,
+      collection: observableRef,
+      speciesMap: observableRef,
       havePolygons: computed,
       speciesTopList: computed,
       numSpecies: computed,

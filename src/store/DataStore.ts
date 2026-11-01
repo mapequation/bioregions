@@ -2,7 +2,7 @@
 // It holds an occurrence slot and a tree slot, and every load and clear of SpeciesStore
 // and TreeStore goes through it: a load replaces only its own slot, and only when it
 // commits (the first feature, or a validated tree).
-import { action, computed, makeObservable, observable, runInAction, toJS, when } from 'mobx';
+import { action, computed, makeObservable, observable, observableRef, runInAction, toJS, when } from 'mobx';
 import type RootStore from './RootStore';
 import { RecordCleaner } from '../sources/clean';
 import { extension, getName } from '../utils/filename';
@@ -88,7 +88,7 @@ export default class DataStore {
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
     makeObservable<DataStore, 'setSlot'>(this, {
-      sources: observable.ref,
+      sources: observableRef,
       job: observable,
       treeJob: observable,
       reserved: observable,
