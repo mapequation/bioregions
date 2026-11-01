@@ -7,16 +7,23 @@ import Papa, {
 
 export type ParseAsyncConfig<T = unknown, TInput = undefined> = ParseLocalConfig<T, TInput> | ParseRemoteConfig<T>;
 
+/** Papa options for every occurrence-table parse, streamed or whole (`parseOccurrenceTable`).
+ *  Header names are trimmed, so a `species, longitude, latitude` header finds its columns. */
+export const TABLE_CONFIG = {
+  dynamicTyping: true,
+  header: true,
+  skipEmptyLines: true,
+  transformHeader: (header: string) => header.trim(),
+};
+
 function loadLocalFile<T = unknown>(
   file: File,
   args: ParseLocalConfig<T, File> = { complete: () => { } },
 ) {
   Papa.parse<T, File>(file, {
-    dynamicTyping: true,
-    header: true,
+    ...TABLE_CONFIG,
     chunkSize: 1024 * 1024, // 1 MB
     worker: false,
-    skipEmptyLines: true,
     ...args,
   });
 }
@@ -28,11 +35,9 @@ function loadRemoteFile<T = unknown>(
   // @ts-expect-error Papa.parse's overloads don't model the (url, config) remote form precisely
   Papa.parse<T, string>(url, {
     download: true,
-    dynamicTyping: true,
-    header: true,
+    ...TABLE_CONFIG,
     chunkSize: 1024 * 1024, // 1 MB
     worker: false,
-    skipEmptyLines: true,
     ...args,
   });
 }
