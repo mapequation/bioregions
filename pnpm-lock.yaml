@@ -29,9 +29,6 @@ importers:
       '@mapequation/infomap':
         specifier: 2.16.0
         version: 2.16.0(react@19.3.1)
-      '@turf/boolean-intersects':
-        specifier: ^7.4.0
-        version: 7.4.0
       '@turf/turf':
         specifier: ^7.4.0
         version: 7.4.0
