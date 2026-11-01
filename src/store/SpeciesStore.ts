@@ -166,6 +166,8 @@ export default class SpeciesStore {
     });
     this.speciesMap.forEach((species) => {
       species.bioregionId = undefined;
+      // Rebuilt by Bioregion.calcStats on every run; stale counts would mix partitions.
+      species.countPerRegion.clear();
     });
   };
 

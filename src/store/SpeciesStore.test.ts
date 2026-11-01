@@ -204,3 +204,15 @@ describe('SpeciesStore.loadRecords', () => {
     expect(store.name).toBe('data');
   });
 });
+
+describe('SpeciesStore.clearBioregions', () => {
+  it('clears the per-region counts, so the next Infomap run starts from zero', async () => {
+    const { store, commit } = setup();
+    await seed(store, commit);
+    const species = store.speciesMap.get('Old one');
+    expect(species).toBeDefined();
+    species?.countPerRegion.set(1, 3);
+    store.clearBioregions();
+    expect(species?.countPerRegion.size).toBe(0);
+  });
+});
