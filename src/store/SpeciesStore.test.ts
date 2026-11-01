@@ -208,6 +208,19 @@ describe('SpeciesStore.loadRecords', () => {
   });
 });
 
+describe('SpeciesStore file loads', () => {
+  it('switches the map back to the record layer on the first record (#128)', async () => {
+    const { store, mapStore, commit } = setup();
+    // An earlier dataset left the map on its bioregions; the next load must stream records.
+    await seed(store, commit);
+    mapStore.setRenderType.mockClear();
+    await store.loadString('species,longitude,latitude\nNew one,10,50\nNew two,11,51\n', {
+      onFirstRecord: commit('new'),
+    });
+    expect(mapStore.setRenderType.mock.calls[0]).toEqual(['records']);
+  });
+});
+
 describe('SpeciesStore.clearBioregions', () => {
   it('clears the per-region counts, so the next Infomap run starts from zero', async () => {
     const { store, commit } = setup();
