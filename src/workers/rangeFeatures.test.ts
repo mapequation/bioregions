@@ -58,9 +58,30 @@ describe('parseGeoJsonRanges', () => {
 
   it('rejects features without a species key or with other geometry', () => {
     const line = { type: 'LineString', coordinates: [[0, 0], [1, 1]] };
-    expect(() => parseGeoJsonRanges(collection(feature({ area: 1 }, line)), 'r.json')).toThrow(/name key in GeoJSON/);
-    expect(() => parseGeoJsonRanges(collection(feature({ name: 'A a' }, line)), 'r.json')).toThrow(
-      "Unsupported geometry: 'LineString'",
+    const polygon = { type: 'Polygon', coordinates: square };
+    expect(() => parseGeoJsonRanges(collection(feature({ area: 1 }, polygon)), 'r.json')).toThrow(
+      /name key in GeoJSON/,
+    );
+    expect(() =>
+      parseGeoJsonRanges(collection(feature({ name: 'A a' }, polygon), feature({ name: 'B b' }, line)), 'r.json'),
+    ).toThrow("Unsupported geometry 'LineString' in r.json (feature index 1)");
+  });
+
+  it('names species from numeric ids', () => {
+    const polygon = { type: 'Polygon', coordinates: square };
+    const ranges = parseGeoJsonRanges(collection(feature({ id: 42 }, polygon), feature({ id: 7 }, polygon)), 'r.json');
+    expect(ranges.map((f) => f.properties.name)).toEqual(['42', '7']);
+  });
+
+  it('skips features without geometry', () => {
+    const polygon = { type: 'Polygon', coordinates: square };
+    const ranges = parseGeoJsonRanges(
+      collection(feature({ name: 'A a' }, null), null, feature({ name: 'B b' }, polygon)),
+      'r.json',
+    );
+    expect(ranges.map((f) => f.properties.name)).toEqual(['B b']);
+    expect(() => parseGeoJsonRanges(collection(feature({ name: 'A a' }, null)), 'r.json')).toThrow(
+      GEOJSON_COPY.noFeatures('r.json'),
     );
   });
 });

@@ -12,6 +12,8 @@ export const GEOJSON_COPY = {
   notGeoJson: (name: string, type: string) =>
     `${name} is not GeoJSON range data: expected a FeatureCollection or a Feature, found ${type}`,
   noFeatures: (name: string) => `No features found in ${name}`,
+  unsupportedGeometry: (name: string, type: string, index: number) =>
+    `Unsupported geometry '${type}' in ${name} (feature index ${index}): expected Polygon, MultiPolygon, Point or MultiPoint`,
 } as const;
 
 /**
@@ -32,8 +34,10 @@ export function rangeFeatureSplitter(source: string, nameKey?: string) {
       throw new Error(`Can't deduce name key in ${source} from properties: ${JSON.stringify(feature.properties)}`);
     }
 
+    // Numeric ids name species too; a missing value keeps the empty name it had.
+    const raw = feature.properties[key];
     const properties = Object.assign(feature.properties, {
-      name: normalizeSpeciesName(feature.properties[key] as string),
+      name: normalizeSpeciesName(raw == null ? (raw as unknown as string) : String(raw)),
     });
 
     const geometry = feature.geometry;
@@ -49,6 +53,8 @@ export function rangeFeatureSplitter(source: string, nameKey?: string) {
     throw new Error(`Unsupported geometry: '${geometry?.type ?? null}'`);
   };
 }
+
+const SUPPORTED_GEOMETRY = new Set(['Polygon', 'MultiPolygon', 'Point', 'MultiPoint']);
 
 /**
  * The range features of a GeoJSON text (RFC 7946, lon/lat): a FeatureCollection or a
@@ -72,9 +78,19 @@ export function parseGeoJsonRanges(text: string, name: string, nameKey?: string)
     const found = typeof type === 'string' ? `type '${type}'` : Array.isArray(json) ? 'an array' : 'no GeoJSON type';
     throw new Error(GEOJSON_COPY.notGeoJson(name, found));
   }
-  if (features.length === 0) {
+  const split = rangeFeatureSplitter('GeoJSON', nameKey);
+  const ranges: GeometryFeature[] = [];
+  features.forEach((feature, i) => {
+    // Null geometries (allowed by RFC 7946) and non-objects carry no range: skip them.
+    if (feature === null || typeof feature !== 'object' || feature.geometry == null) return;
+    const geometryType = (feature.geometry as { type?: unknown }).type;
+    if (!SUPPORTED_GEOMETRY.has(geometryType as string)) {
+      throw new Error(GEOJSON_COPY.unsupportedGeometry(name, String(geometryType), i));
+    }
+    ranges.push(...split(feature));
+  });
+  if (ranges.length === 0) {
     throw new Error(GEOJSON_COPY.noFeatures(name));
   }
-  const split = rangeFeatureSplitter('GeoJSON', nameKey);
-  return features.flatMap(split);
+  return ranges;
 }
