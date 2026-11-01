@@ -101,7 +101,16 @@ export const TONES: { label: string; value: ToneChoice }[] = [
 
 /** 'auto' only applies to d3 schemes; on Oklch it is the same as "strong" */
 export const tonesFor = (scheme: SchemeName) =>
-  scheme === 'Oklch' ? TONES.filter((t) => t.value !== 'auto') : TONES;
+  scheme === 'Oklch'
+    ? TONES.filter((t) => t.value !== 'auto')
+    : scheme === 'Greys'
+      ? // A named tone's chroma would color the greys
+        TONES.filter((t) => t.value === 'auto')
+      : TONES;
+
+/** The tone a palette starts with: c3's strong on Oklch, the scheme's own tone otherwise */
+export const defaultTone = (scheme: SchemeName): ToneChoice =>
+  scheme === 'Oklch' ? 'strong' : 'auto';
 
 /** Where the first color sits by default, as a fraction of the palette: blue (245°) on Oklch */
 export const defaultOffset = (scheme: SchemeName) =>
@@ -211,6 +220,8 @@ export default class ColorStore {
       setUseFlow: action,
       toggleReverse: action,
       toggleUseFlow: action,
+      hideDominantOverlappingModule: observable,
+      toggleHideDominantOverlappingModule: action,
       bioregionColors: computed,
     });
   }
@@ -418,9 +429,8 @@ export default class ColorStore {
   setScheme = (value: SchemeName) => {
     this.scheme = value;
     this.offset = defaultOffset(value);
-    if (value === 'Oklch' && this.tone === 'auto') {
-      this.setTone('strong');
-    }
+    // Like the offset, the tone starts over: a named tone kept from Oklch would recolor a scheme
+    this.setTone(defaultTone(value));
   };
   setTone = (value: ToneChoice) => {
     this.tone = value;

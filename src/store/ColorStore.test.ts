@@ -125,20 +125,36 @@ describe('ColorStore defaults', () => {
     expect(store.offset).toBe(245 / 360);
   });
 
-  it("swaps the 'auto' tone for strong on Oklch, where it does not apply", () => {
+  it("resets the tone to the palette's own: strong on Oklch, the scheme's on a scheme", () => {
     const store = newStore();
+    store.setTone('pastel');
     store.setScheme('Turbo');
-    store.setTone('auto');
+    expect(store.tone).toBe('auto');
+    store.setTone('vivid');
     store.setScheme('Oklch');
     expect(store.tone).toBe('strong');
     expect(store.lightness).toEqual([...tones.strong.lightness]);
 
-    store.setTone('pastel');
-    store.setScheme('Turbo');
-    store.setScheme('Oklch');
-    expect(store.tone).toBe('pastel');
-
     expect(tonesFor('Oklch').map((t) => t.value)).not.toContain('auto');
     expect(tonesFor('Turbo').map((t) => t.value)).toContain('auto');
+  });
+
+  it('keeps Greys grey when switching from the default palette', () => {
+    const store = newStore();
+    store.setScheme('Greys');
+    expect(store.tone).toBe('auto');
+    expect(tonesFor('Greys').map((t) => t.value)).toEqual(['auto']);
+    const colors = computeBioregionColors(8, undefined, {
+      scheme: store.scheme,
+      tone: store.tone,
+      lightness: store.lightness,
+      offset: store.offset,
+      reverse: store.reverse,
+      strength: store.strength,
+    });
+    for (const hex of colors) {
+      const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+      expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(24);
+    }
   });
 });

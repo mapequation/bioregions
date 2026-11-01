@@ -44,6 +44,7 @@ export default observer(function ColorPicker({
       <DialogTrigger asChild>
         <Button
           onClick={() => setIsOpen(!isOpen)}
+          aria-label={`${label || 'Pick a color'}: ${color}`}
           bg={color}
           w={8}
           h={8}

@@ -84,7 +84,7 @@ export default observer(function ColorSettings() {
         <Select
           id="colorTone"
           label="Tone"
-          disabled={isMural}
+          disabled={isMural || tonesFor(colorStore.scheme).length === 1}
           value={[colorStore.tone]}
           onValueChange={(e) => {
             colorStore.setTone(e.value[0] as ToneChoice);
@@ -103,9 +103,9 @@ export default observer(function ColorSettings() {
           role="img"
           aria-label={`Bioregion colors: ${infomapStore.numBioregions}`}
         >
-          {/* The palette gives distinct colors, so a color is a stable key */}
-          {swatches.map((color) => (
-            <Box key={color} w={4} h={4} borderRadius="sm" bg={color} />
+          {swatches.map((color, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: one swatch per bioregion, in order
+            <Box key={i} w={4} h={4} borderRadius="sm" bg={color} />
           ))}
         </Flex>
       )}
