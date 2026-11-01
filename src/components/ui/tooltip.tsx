@@ -29,7 +29,11 @@ export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
       <ChakraTooltip.Root {...rest}>
         <ChakraTooltip.Trigger asChild>{children}</ChakraTooltip.Trigger>
         <Portal disabled={!portalled} container={portalRef}>
-          <ChakraTooltip.Positioner>
+          {/* Before its first measurement the positioner sits unplaced at its
+              containing block's origin, which can cover the trigger and fire a
+              pointerleave that closes the tooltip. The content sets its own
+              pointer-events, so interactive tooltips keep working. */}
+          <ChakraTooltip.Positioner pointerEvents="none">
             <ChakraTooltip.Content ref={ref} {...contentProps}>
               {showArrow && (
                 <ChakraTooltip.Arrow>
