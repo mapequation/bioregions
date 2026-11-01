@@ -1,4 +1,4 @@
-import { makeObservable, observable, action, computed } from 'mobx';
+import { makeObservable, observable, observableRef, action, computed } from 'mobx';
 import { palette, tones } from '@mapequation/c3';
 import type { SchemeName as c3SchemeName, ToneName } from '@mapequation/c3';
 import type RootStore from './RootStore';
@@ -189,7 +189,7 @@ export default class ColorStore {
       scheme: observable,
       tone: observable,
       setTone: action,
-      lightness: observable.ref,
+      lightness: observableRef,
       strength: observable,
       offset: observable,
       reverse: observable,
