@@ -3,6 +3,11 @@ import { createContext, useContext } from 'react';
 
 const store = new RootStore();
 
+// Dev-only handle for scripted browser checks (e.g. Playwright locating a cell on the map).
+if (import.meta.env.DEV) {
+  (window as unknown as { __store: RootStore }).__store = store;
+}
+
 export const StoreContext = createContext(store);
 
 export const useStore = () => useContext(StoreContext);

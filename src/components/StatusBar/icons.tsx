@@ -261,3 +261,15 @@ export function ResetViewIcon() {
     </Stroke>
   );
 }
+
+/** Fit to data: frame corners closing in on a small cluster of grid cells. */
+export function FitDataIcon() {
+  return (
+    <Stroke>
+      <path d="M3 8 L3 3 8 3 M16 3 L21 3 21 8 M21 16 L21 21 16 21 M8 21 L3 21 3 16" />
+      <rect x="8" y="9" width="4" height="4" fill="currentColor" stroke="none" />
+      <rect x="12" y="9" width="4" height="4" fill="currentColor" stroke="none" opacity="0.55" />
+      <rect x="10" y="13" width="4" height="3" fill="currentColor" stroke="none" opacity="0.8" />
+    </Stroke>
+  );
+}

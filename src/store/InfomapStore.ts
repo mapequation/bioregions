@@ -97,12 +97,56 @@ export class Bioregion {
     count: number;
     score: number;
   }[] = [];
+  // Records-based indicator value (IndVal, Dufrêne & Legendre 1997), sorted by indVal then count:
+  // specificity = the species' mean records per leaf cell here relative to the sum of its means
+  // over all bioregions, occupancy = share of the region's leaf cells with a record of it.
+  // Unlike `score`, it separates species that are all endemic. See calcIndicatorValues.
+  characteristic: {
+    name: string;
+    count: number;
+    specificity: number;
+    occupancy: number;
+    indVal: number;
+  }[] = [];
+  // Species Infomap clustered into this module together with its grid cells (tree ancestors
+  // excluded), ranked by map equation centrality (Infomap's `mec`) with flow as the tie-break.
+  // `share`: the share of the species' records found in this bioregion. `fidelity`: the same,
+  // size-normalised like IndVal specificity (mean records per leaf cell here relative to the sum
+  // of its means over all bioregions), so large bioregions don't win on area alone.
+  members: {
+    name: string;
+    flow: number;
+    mec: number;
+    share: number;
+    fidelity: number;
+  }[] = [];
+  private memberIndex = new Map<string, Bioregion['members'][number]>();
+  numFoundOnlyHere = 0; // species with every record inside this bioregion
+  numLeafCells = 0;
   meanNumSpeciesWithin = 0;
   stddevNumSpeciesWithin = 0.0;
   oldestPhyloNodeTime = 0.0;
+  // Geography, set by calcGeography: total cell area (km²), lon/lat bounds [w, s, e, n] (east may
+  // exceed 180 when the region straddles the antimeridian) and the area-weighted center.
+  area = 0;
+  bbox: [number, number, number, number] = [0, 0, 0, 0];
+  centroid: [number, number] = [0, 0];
 
   addCell(cell: Cell) {
     this.cellMap.set(cell.id, cell);
+  }
+
+  addMember(name: string, flow: number, mec: number) {
+    // A taxon has one physical node, but state networks can still emit several state nodes.
+    const member = this.memberIndex.get(name);
+    if (member) {
+      member.flow += flow;
+      member.mec = Math.max(member.mec, mec ?? 0);
+      return;
+    }
+    const added = { name, flow, mec: mec ?? 0, share: 0, fidelity: 0 };
+    this.memberIndex.set(name, added);
+    this.members.push(added);
   }
 
   get cells() {
@@ -113,9 +157,53 @@ export class Bioregion {
     return this.cellMap.size;
   }
 
+  /** Distinct species with records in the bioregion's cells. */
+  get numSpecies() {
+    return this.mostCommon.length;
+  }
+
+  calcGeography() {
+    let area = 0;
+    let [x, y, z] = [0, 0, 0];
+    let [s, n] = [Infinity, -Infinity];
+    // Track west/east both in [-180, 180] and shifted to [0, 360]; the narrower span wins, so a
+    // region straddling the antimeridian gets a tight box instead of one spanning the globe.
+    let [w1, e1, w2, e2] = [Infinity, -Infinity, Infinity, -Infinity];
+    const rad = Math.PI / 180;
+    for (const cell of this.cells) {
+      area += cell.area;
+      s = Math.min(s, cell.y1);
+      n = Math.max(n, cell.y2);
+      w1 = Math.min(w1, cell.x1);
+      e1 = Math.max(e1, cell.x2);
+      const x1 = cell.x1 < 0 ? cell.x1 + 360 : cell.x1;
+      const x2 = cell.x2 <= 0 ? cell.x2 + 360 : cell.x2;
+      w2 = Math.min(w2, x1);
+      e2 = Math.max(e2, x2);
+      const [lon, lat] = cell.center;
+      const cosLat = Math.cos(lat * rad);
+      x += cell.area * cosLat * Math.cos(lon * rad);
+      y += cell.area * cosLat * Math.sin(lon * rad);
+      z += cell.area * Math.sin(lat * rad);
+    }
+    if (area === 0) return;
+    this.area = area;
+    if (e2 - w2 < e1 - w1) {
+      const shift = w2 > 180 ? 360 : 0;
+      this.bbox = [w2 - shift, s, e2 - shift, n];
+    } else {
+      this.bbox = [w1, s, e1, n];
+    }
+    this.centroid = [
+      Math.atan2(y, x) / rad,
+      Math.atan2(z, Math.sqrt(x * x + y * y)) / rad,
+    ];
+  }
+
   calcStats(speciesStore: SpeciesStore, treeStore: TreeStore) {
     type Species = string;
     const speciesCount = new Map<Species, number>();
+    const speciesCells = new Map<Species, number>();
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of this.cells) {
@@ -123,6 +211,7 @@ export class Bioregion {
         // Don't include patched cells to statistics as all records are on leaf cells
         continue;
       }
+      ++this.numLeafCells;
       for (const { count, name } of cell.speciesTopList) {
         const species = speciesStore.speciesMap.get(name);
         if (species == null) {
@@ -139,6 +228,7 @@ export class Bioregion {
         this.numRecords += count;
         speciesCount.set(name, (speciesCount.get(name) ?? 0) + count,
         );
+        speciesCells.set(name, (speciesCells.get(name) ?? 0) + 1);
       }
     }
     if (numSpeciesWithoutBioregions > 0) {
@@ -157,6 +247,19 @@ export class Bioregion {
       this.mostIndicative.push({ name, score, count });
       this.mostCommon.push({ name, score, count });
 
+      // Share of the species' records found here; specificity is size-normalised later, in
+      // calcIndicatorValues, once every bioregion's counts are known.
+      const fidelity = count / (speciesStore.speciesMap.get(name)?.count ?? count);
+      const occupancy = (speciesCells.get(name) ?? 0) / this.numLeafCells;
+      if (fidelity >= 1) ++this.numFoundOnlyHere;
+      this.characteristic.push({
+        name,
+        count,
+        specificity: fidelity,
+        occupancy,
+        indVal: fidelity * occupancy,
+      });
+
       const species = speciesStore.speciesMap.get(name);
       if (species == null) {
         throw new Error(`InfomapStore: missing species '${name}'`);
@@ -168,10 +271,18 @@ export class Bioregion {
     }
 
     this.mostCommon.sort((a, b) => b.count - a.count);
+    // Share of the species' records found in this bioregion. Fidelity (size-normalised) and the
+    // member ranking need every bioregion's counts, see calcIndicatorValues.
+    for (const member of this.members) {
+      const count = speciesCount.get(member.name) ?? 0;
+      member.share = count / (speciesStore.speciesMap.get(member.name)?.count || 1);
+    }
     this.mostIndicative.sort((a, b) =>
       isEqual(a.score, b.score) ? b.count - a.count : b.score - a.score,
     );
 
+
+    this.calcGeography();
 
     // Bioregion metrics
     const I_c = [];
@@ -241,6 +352,51 @@ export class Bioregion {
     }
   }
 };
+
+/** Size-normalised IndVal specificity (Dufrêne & Legendre 1997): a species' mean records per
+ *  leaf cell in a bioregion, relative to the sum of its means over all bioregions, so large
+ *  bioregions don't win on sampling effort alone. Also ranks each bioregion's members. Needs
+ *  every bioregion's counts, so it runs after calcStats has run for all of them. */
+function calcIndicatorValues(bioregions: Bioregion[], speciesStore: SpeciesStore) {
+  const leafCells = new Map(bioregions.map((b) => [b.bioregionId, b.numLeafCells]));
+  for (const bioregion of bioregions) {
+    const n = bioregion.numLeafCells;
+    for (const entry of bioregion.characteristic) {
+      let sumOfMeans = 0;
+      const species = speciesStore.speciesMap.get(entry.name);
+      for (const [id, count] of species?.countPerRegion ?? []) {
+        const cells = leafCells.get(id);
+        if (cells) sumOfMeans += count / cells;
+      }
+      entry.specificity = n > 0 && sumOfMeans > 0 ? entry.count / n / sumOfMeans : 0;
+      entry.indVal = entry.specificity * entry.occupancy;
+    }
+    bioregion.characteristic.sort((a, b) =>
+      isEqual(a.indVal, b.indVal) ? b.count - a.count : b.indVal - a.indVal,
+    );
+
+    // Members: fidelity is their specificity here. Rank by centrality as displayed (share of the
+    // members' total at two significant digits), so differences too small to show don't decide
+    // the order: species found in nearly every cell tie there and are ordered by fidelity, then
+    // flow, then records.
+    const byName = new Map(bioregion.characteristic.map((c) => [c.name, c]));
+    for (const member of bioregion.members) {
+      member.fidelity = byName.get(member.name)?.specificity ?? 0;
+    }
+    const totalMec = bioregion.members.reduce((sum, m) => sum + m.mec, 0) || 1;
+    const shown = (m: Bioregion['members'][number]) =>
+      Number((m.mec / totalMec).toPrecision(2));
+    const records = (m: Bioregion['members'][number]) =>
+      byName.get(m.name)?.count ?? 0;
+    bioregion.members.sort(
+      (a, b) =>
+        shown(b) - shown(a) ||
+        b.fidelity - a.fidelity ||
+        b.flow - a.flow ||
+        records(b) - records(a),
+    );
+  }
+}
 
 export default class InfomapStore {
   rootStore: RootStore;
@@ -1903,6 +2059,7 @@ export default class InfomapStore {
         const species = speciesStore.speciesMap.get(node.name);
         if (species) {
           species.bioregionId = bioregionId;
+          bioregion.addMember(node.name, node.flow, node.mec ?? 0);
         }
         const treeNode = treeStore.treeNodeMap.get(node.name);
         if (treeNode) {
@@ -1952,6 +2109,7 @@ export default class InfomapStore {
     for (const bioregion of bioregions) {
       bioregion.calcStats(speciesStore, treeStore);
     }
+    calcIndicatorValues(bioregions, speciesStore);
     console.timeEnd("Calc bioregion stats")
 
     this.setBioregions(bioregions);
@@ -1995,6 +2153,7 @@ export default class InfomapStore {
         const species = speciesStore.speciesMap.get(node.name);
         if (species) {
           species.bioregionId = bioregionId;
+          bioregion.addMember(node.name, node.flow, node.mec ?? 0);
         }
         const treeNode = treeStore.treeNodeMap.get(node.name);
         if (treeNode) {
@@ -2033,6 +2192,7 @@ export default class InfomapStore {
     for (const bioregion of bioregions) {
       bioregion.calcStats(speciesStore, treeStore);
     }
+    calcIndicatorValues(bioregions, speciesStore);
     console.timeEnd("Calc bioregion stats")
 
     this.setStateBioregions(bioregions);
@@ -2077,6 +2237,7 @@ export default class InfomapStore {
         const species = speciesStore.speciesMap.get(node.name);
         if (species) {
           species.bioregionId = bioregionId;
+          bioregion.addMember(node.name, node.flow, node.mec ?? 0);
         }
         const treeNode = treeStore.treeNodeMap.get(node.name);
         if (treeNode) {
@@ -2104,6 +2265,7 @@ export default class InfomapStore {
     for (const bioregion of bioregions) {
       bioregion.calcStats(speciesStore, treeStore);
     }
+    calcIndicatorValues(bioregions, speciesStore);
     console.timeEnd("Calc bioregion stats")
 
     this.setStateBioregions(bioregions);

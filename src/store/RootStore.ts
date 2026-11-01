@@ -9,6 +9,7 @@ import SettingsStore from './SettingsStore';
 import DocumentationStore from './DocumentationStore';
 import ExplorerStore from './ExplorerStore';
 import PhyloStore from './PhyloStore';
+import SelectionStore from './SelectionStore';
 
 export interface StoreOptions {
   noLand?: boolean;
@@ -22,6 +23,7 @@ export default class RootStore {
   dataStore: DataStore;
   colorStore: ColorStore;
   settingsStore: SettingsStore;
+  selectionStore: SelectionStore;
   documentationStore?: DocumentationStore;
   explorerStore: ExplorerStore;
   phyloStore: PhyloStore;
@@ -35,6 +37,7 @@ export default class RootStore {
     this.dataStore = new DataStore(this);
     this.colorStore = new ColorStore(this);
     this.settingsStore = new SettingsStore(this);
+    this.selectionStore = new SelectionStore(this);
     if (!demo) {
       this.documentationStore = new DocumentationStore(this);
     }
@@ -43,6 +46,8 @@ export default class RootStore {
   }
 
   clearBioregions() {
+    // Bioregion ids are renumbered by every run/level change, so a selection can't carry over.
+    this.selectionStore.clear();
     this.infomapStore.clearBioregions();
     this.treeStore.clearBioregions();
     this.speciesStore.clearBioregions();

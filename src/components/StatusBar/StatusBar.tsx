@@ -30,6 +30,8 @@ export function StatusBar({
         boxShadow="xs"
         fontSize="11px"
         lineHeight="1.2"
+        // Lets children adapt to the bar's own width (e.g. the map's selection chip).
+        containerType="inline-size"
       >
         {children}
       </Box>
@@ -96,8 +98,10 @@ export function StatusButton({
   return (
     <Tooltip content={content} showArrow openDelay={250} closeDelay={50}>
       <chakra.button
+        type="button"
         // Icon-only cells: the help text doubles as the accessible name.
         aria-label={typeof content === 'string' ? content : undefined}
+        aria-pressed={active || undefined}
         disabled={disabled}
         onClick={disabled ? undefined : onClick}
         w="34px"
@@ -114,6 +118,7 @@ export function StatusButton({
         opacity={disabled ? 0.4 : 1}
         transition="background 0.12s"
         _hover={{ bg: active ? 'blue.subtle' : 'bg.muted' }}
+        _focusVisible={{ outline: '2px solid', outlineColor: 'blue.focusRing', outlineOffset: '-2px' }}
       >
         {children}
       </chakra.button>
