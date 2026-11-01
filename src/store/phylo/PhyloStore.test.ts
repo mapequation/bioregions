@@ -1,4 +1,4 @@
-import { action, observable, when } from 'mobx';
+import { action, observable, observableRef, when } from 'mobx';
 import { describe, expect, it, vi } from 'vitest';
 import * as otol from '@/phylo/otol';
 import { defaultQuery } from '@/sources';
@@ -74,7 +74,7 @@ function fakeRoot() {
   );
   const speciesStore = observable(
     { loaded: false, name: 'data', speciesMap: new Map<string, unknown>(), clearData() {} },
-    { speciesMap: observable.ref, clearData: action },
+    { speciesMap: observableRef, clearData: action },
   );
   const base = {
     explorerStore,

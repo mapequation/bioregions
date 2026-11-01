@@ -2,7 +2,7 @@
 // previews, the decision ledger and bias checks, loading (plans, streams, cleaning), provenance,
 // citation and the query library. Contract: spec section 4 of
 // docs/superpowers/specs/2026-10-30-data-explorer-ui.md.
-import { makeAutoObservable, observable, reaction, runInAction, toJS, when } from 'mobx';
+import { makeAutoObservable, observableRef, reaction, runInAction, toJS, when } from 'mobx';
 import { RecordCleaner, toSpeciesName } from '../sources/clean';
 import { DEDUPE_RULE } from '../sources/methods';
 import { supportsGbif } from '../sources/gbif';
@@ -1006,14 +1006,14 @@ export default class ExplorerStore {
         previewedKey: false,
         gbifCountCache: false,
         disposers: false,
-        rawPlans: observable.ref,
+        rawPlans: observableRef,
         planController: false,
         downloadController: false,
         pollTimer: false,
         zipController: false,
         zipFile: false,
-        examples: observable.ref,
-        zipSummary: observable.ref,
+        examples: observableRef,
+        zipSummary: observableRef,
       },
       { autoBind: true },
     );

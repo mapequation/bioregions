@@ -1,6 +1,6 @@
 // SpeciesStore.loadRecords: the commit on the first record, the no-records path and
 // discard, with the data owner, map and Infomap stores mocked.
-import { action, observable } from 'mobx';
+import { action, observable, observableRef } from 'mobx';
 import { describe, expect, it, vi } from 'vitest';
 import type RootStore from './RootStore';
 import SpeciesStore from './SpeciesStore';
@@ -16,7 +16,7 @@ function setup() {
   };
   const infomapStore = { run: vi.fn(async () => true), clearData: vi.fn() };
   // The data owner: its occurrence source names the data (SpeciesStore.name).
-  const dataStore = observable({ occurrence: null as { exportName: string } | null }, { occurrence: observable.ref });
+  const dataStore = observable({ occurrence: null as { exportName: string } | null }, { occurrence: observableRef });
   const rootStore = { mapStore, infomapStore, dataStore } as unknown as RootStore;
   const store = new SpeciesStore(rootStore);
   rootStore.speciesStore = store;
