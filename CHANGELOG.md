@@ -1,5 +1,133 @@
 # bioregions
 
+## 2.0.0-alpha.22
+
+### Patch Changes
+
+- f50907e: With segregated (state) or multilayer networks, put each grid cell in the
+  bioregion that holds most of its flow. A cell whose state nodes fall in several
+  modules was given the module of whichever state node came last in Infomap's
+  output.
+- f50907e: Order a bioregion's most indicative species consistently: by score, then by
+  record count, then by name. Scores within 1e-6 of each other were compared by
+  count, which is not a consistent order and could rank species differently from
+  run to run.
+- f50907e: Score a bioregion's most indicative species against one pool of records: the
+  records of the species in the network, over all grid cells. The score divided a
+  species' share of the bioregion's records by its share of all loaded records,
+  including species left out of the network and records outside the grid.
+- ef9bc4e: Fix the lineages-through-time curve in the tree view: a node with more than two
+  children now adds all its extra lineages, and tips that end before the present
+  (extinct lineages in a non-ultrametric tree) are no longer subtracted.
+- 917c97f: Fix linear multilayer layer times accumulating floating-point error, so the last
+  layer now sits exactly at the tips.
+- f50907e: Show multilayer bioregions at the selected module level. Multilayer results
+  always used the top level of the hierarchy, whatever level was selected.
+- ef9bc4e: Set negative branch lengths in a tree to 0 (with a console warning) instead of
+  1, so a negative length no longer stretches the branch and shifts node times.
+- 917c97f: Fix NaN link weights: a zero-length branch cut exactly at its time now gives the
+  child all the weight, a grid with a single cell gives species weight 1, and a
+  tree that adds no links no longer makes the tree link weight NaN.
+- ef9bc4e: Read Newick trees more robustly: quoted labels (`'Homo sapiens'`) keep their
+  names, numeric tip labels stay names instead of becoming node ids, `[...]`
+  comments are skipped, and only the first tree in a file is read, so a second
+  tree no longer replaces the first tree's branches. Malformed trees (unbalanced
+  or stray parentheses) are rejected with an error, keeping the current tree,
+  instead of loading as a wrong tree. A tree
+  without branch lengths now gets unit lengths instead of undefined node times.
+- 003eb37: Fix range polygons piling up in large grid cells. A cell that split because it
+  held too many ranges kept accepting new ranges itself, so the same ranges ended
+  up in cells at several sizes and the cell was treated as a leaf when grid cells
+  are partitioned. A split cell now passes later ranges on to its sub-cells, as it
+  does for point records.
+- 003eb37: Fix range polygons sometimes missing from the grid. Points were added to the
+  grid as they loaded but polygons only in a later rebuild, which was skipped if
+  the map had already drawn the grid during loading. Polygons are now added as
+  they load too.
+- 003eb37: Count a range polygon only in the grid cells it overlaps. A range used to count
+  in every cell its border merely touched, including cells that lie in a hole of
+  the range, which inflated species counts along range edges. Binning range
+  polygons is also much faster.
+- 003eb37: Fix mixed point and range-polygon data landing in the wrong grid cells. Polygons
+  and points numbered the four sub-cells of a cell differently, so a point could be
+  added to a neighbouring cell created for a polygon. Both now use the same order.
+- 003eb37: Fix range polygons that reach longitude 180 being counted in a zero-width grid
+  cell on the antimeridian.
+- 31e45ee: Fix records at longitude 180 or latitude 90 being binned into a zero-width
+  cell outside the grid (with zero area). They now belong to the easternmost
+  column and northernmost row of grid cells.
+- cdc06e6: Split grid cells at their unclipped midpoints. Cells on the poles and at
+  lon 180 are clipped to the globe, but they used to split at the midpoint of the
+  clipped cell, so their children were not square and did not line up with the
+  rest of the grid. Cells now split at the midpoint of the full power-of-two cell
+  and keep its width as their size, so the grid is dyadic everywhere and polar
+  children are square.
+- 31e45ee: Fix the adaptive grid dropping occurrence records. When a cell reached its
+  maximum capacity and split, the record that triggered the split was discarded
+  instead of being placed in a child cell, so every split lost one record. The
+  arriving record is now redistributed together with the held ones, so a cell
+  splits exactly when it would hold more than the maximum capacity.
+- cdc06e6: Make grid cells partition the occurrence records when "Patch sparse cells" is
+  on. A patched parent cell used to hold every record of its subtree and was
+  shown together with its own sub-cells, so records and area were counted more
+  than once. Now the records of a cell with fewer than the minimum capacity pass
+  up to its parent, and a parent that collects enough of them becomes a remainder
+  cell that covers its own area minus its sub-cells. Each record is in at most
+  one cell, and records density uses the remainder area. Records that are still
+  too few at the maximum cell size are left out of the grid.
+- 003eb37: Fix shapefiles losing their last features on load. The loader sent features in
+  batches of 101 and dropped the final, partial batch, so up to 100 range
+  polygons, and with them whole species, were missing from the analysis.
+- 003eb37: Fix loading shapefiles whose species name column holds numbers, such as species
+  ids. Loading used to stop silently at the first numeric name.
+- a52dbcb: Skip occurrence rows with an empty, non-numeric or out-of-range coordinate instead of placing them at (0, 0) or in broken grid cells, and show the number of skipped rows in the Data panel.
+- f50907e: Compute grid-cell overlap and relative richness for segregated (state) and
+  multilayer networks. Their cells never recorded which bioregions their taxa
+  belong to, so both metrics were always 0, and module participation colouring
+  ignored the taxa's bioregions.
+- 917c97f: State networks: a tree node whose memory weights sum to less than 1 no longer
+  gets an information weight above 1. The strength counts as at least one cell.
+- 917c97f: Fix whole-tree state networks without uniform tree links: a tree node linked to
+  more (species, cell) pairs than there are cells got a negative weight that was
+  subtracted from other links. Such contributions are now left out.
+- 917c97f: State networks no longer keep taxon nodes and cell states whose links all fell
+  below the link weight threshold.
+- f50907e: With segregated (state) or multilayer networks, count a grid cell and its
+  records in its own bioregion only. A cell with state nodes in several modules
+  was counted in each of them, inflating their grid-cell and record counts and
+  their most common and most indicative species.
+- 917c97f: State networks now also report how many occurrence species have no tip in the
+  tree and are left out of the network at full tree weight.
+- 917c97f: State networks (segregated bioregions) now weight species links by their
+  information weight, as bipartite networks and the Methods do, instead of giving
+  every species link weight 1.
+- 917c97f: Fix state-network link weights depending on the order of children in the Newick
+  file with uniform tree links: each (cell, memory) state now keeps the largest
+  memory weight instead of the first species' weight.
+- cdc06e6: Include remainder cells in the bioregion statistics and cell metrics. Patched
+  parent cells were left out because their records were also counted in their
+  sub-cells. Now that every record is in at most one cell, remainder cells hold
+  records no other cell has, so they count towards species totals, mean species
+  counts, and the relative richness, overlap, endemicity and occupancy heatmaps.
+- c9a9d24: Tooltips stay open while you hover their button instead of flickering on and off, most visibly on the Data button.
+- 9a93276: Record points stream onto the map on every load, also when an earlier dataset left the map on its heatmap or bioregions.
+- 917c97f: Fix taxa named like a grid cell id (for example numeric species keys) being
+  merged with that cell's node in bipartite, state and multilayer networks.
+- 917c97f: Fix time-slice networks on non-ultrametric trees: a tree node now links to the
+  cells of all its descendant species, not only those below children that reach
+  the integration time.
+- 917c97f: Fix time-slice networks cut exactly at a tree node: the node's links were filed
+  under the names of its children instead of under the node itself.
+- 917c97f: Fix tree weight balances just below 1 being treated as 1 in some steps of the
+  network builders but not in others, which reported species as excluded while
+  still linking them and skipped the balance scaling.
+- c4daa3e: Occurrence tables whose header has spaces around the column names, such as `species, longitude, latitude`, load again instead of skipping every row.
+- f50907e: Colour grid cells without a bioregion light red (`#ffcccc`). Cells left out of
+  the network have bioregion id 0, which had no colour.
+- f50907e: Leave grid cells and taxa without links out of the network given to Infomap.
+  Infomap kept each of them as an empty bioregion with zero flow; their cells now
+  get no bioregion.
+
 ## 2.0.0-alpha.21
 
 ### Minor Changes
