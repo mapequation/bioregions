@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { PointFeature } from '../../store/SpeciesStore';
+import type {
+  GeoFeature,
+  PointFeature,
+  PolygonFeature,
+} from '../../store/SpeciesStore';
+import { createPointFeature } from '../../store/SpeciesStore';
 import Cell from './Cell';
 
 const point = (x: number, y: number, name = 'A'): PointFeature => ({
@@ -116,5 +121,141 @@ describe('Cell.add: split at unclipped midpoints (B8)', () => {
     expect(cell.parent?.size).toBe(8);
     expect(cell.parent?.x2).toBe(180);
     expect(cellOf(root, b)).toBe(cell);
+  });
+});
+
+// Polygon binning. An 8x8 degree root is above the 4-degree max cell size
+// (log2 = 2), so it always splits into four 4-degree quadrants, which split
+// further only when they overflow `capacity`.
+const POLYGON_MAX_SIZE_LOG2 = 2;
+const POLYGON_MIN_SIZE_LOG2 = 0;
+
+const rectangle = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  name = 'Range',
+): PolygonFeature => ({
+  type: 'Feature',
+  geometry: {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [x1, y1],
+        [x2, y1],
+        [x2, y2],
+        [x1, y2],
+        [x1, y1],
+      ],
+    ],
+  },
+  properties: { name },
+});
+
+const buildMixed = (
+  features: GeoFeature[],
+  {
+    extent = [0, 0, 8, 8] as [number, number, number, number],
+    capacity = 10,
+  } = {},
+) => {
+  const root = new Cell(extent, POLYGON_MAX_SIZE_LOG2);
+  for (const feature of features) {
+    root.add(feature, POLYGON_MAX_SIZE_LOG2, POLYGON_MIN_SIZE_LOG2, capacity);
+  }
+  return root;
+};
+
+const cellsWith = (root: Cell, feature: GeoFeature) => {
+  const cells: Cell[] = [];
+  root.visit((cell) => {
+    if (cell.features.includes(feature)) cells.push(cell);
+  });
+  return cells;
+};
+
+describe('Cell polygon binning', () => {
+  it('uses the same quadrant indices for points and polygons', () => {
+    const northWestRange = rectangle(1, 5, 2, 6);
+    const southWestPoint = createPointFeature([1, 1], { name: 'Point' });
+    const root = buildMixed([northWestRange, southWestPoint]);
+
+    const [pointCell] = cellsWith(root, southWestPoint);
+    expect(pointCell).toBeDefined();
+    expect(pointCell.extent).toEqual([0, 0, 4, 4]);
+    expect(cellsWith(root, northWestRange).map((cell) => cell.extent)).toEqual([
+      [0, 4, 4, 8],
+    ]);
+  });
+
+  it('turns a cell into an internal node when polygons split it', () => {
+    // One range in each 2-degree sub-cell of the south-west quadrant.
+    const ranges = [
+      rectangle(0.5, 0.5, 1.5, 1.5, 'Range 0'),
+      rectangle(2.5, 0.5, 3.5, 1.5, 'Range 1'),
+      rectangle(2.5, 2.5, 3.5, 3.5, 'Range 2'),
+      rectangle(0.5, 2.5, 1.5, 3.5, 'Range 3'),
+    ];
+    const root = buildMixed(ranges, { capacity: 2 });
+
+    expect(root.isLeaf).toBe(false);
+    const [southWest] = root._children;
+    expect(southWest?.isLeaf).toBe(false);
+    root.visit((cell) => {
+      if (!cell.isLeaf) expect(cell.features).toEqual([]);
+    });
+    // Every range after the split goes into the children instead of refilling
+    // the parent.
+    expect(cellsWith(root, ranges[3]).map((cell) => cell.sizeLog2)).toEqual([1]);
+  });
+
+  it('skips the zero-width cells clamped at longitude 180', () => {
+    // The east half [180, 184] of this root is clamped to [180, 180].
+    const range = rectangle(178, 1, 180, 3);
+    const root = buildMixed([range], { extent: [176, 0, 184, 8] });
+
+    const cells = cellsWith(root, range);
+    expect(cells.map((cell) => cell.extent)).toEqual([[176, 0, 180, 4]]);
+    root.visit((cell) => {
+      expect(cell.x2).toBeGreaterThan(cell.x1);
+    });
+  });
+
+  it('counts a range only in cells whose interior it overlaps', () => {
+    const quadrant = rectangle(0, 0, 4, 4);
+    const corner = rectangle(4, 4, 5, 5);
+    const covering = rectangle(-1, -1, 9, 9);
+    const root = buildMixed([quadrant, corner, covering]);
+
+    expect(cellsWith(root, quadrant).map((cell) => cell.extent)).toEqual([
+      [0, 0, 4, 4],
+    ]);
+    expect(cellsWith(root, corner).map((cell) => cell.extent)).toEqual([
+      [4, 4, 8, 8],
+    ]);
+    expect(cellsWith(root, covering)).toHaveLength(4);
+  });
+
+  it('does not count a range in a cell that lies in one of its holes', () => {
+    const ring = rectangle(-1, -1, 9, 9);
+    ring.geometry.coordinates.push([
+      [0, 0],
+      [0, 4],
+      [4, 4],
+      [4, 0],
+      [0, 0],
+    ]);
+    const root = buildMixed([ring]);
+
+    expect(
+      cellsWith(root, ring)
+        .map((cell) => cell.extent)
+        .sort(),
+    ).toEqual([
+      [0, 4, 4, 8],
+      [4, 0, 8, 4],
+      [4, 4, 8, 8],
+    ]);
   });
 });

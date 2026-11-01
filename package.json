@@ -27,7 +27,6 @@
     "@mapequation/c3": "^2.0.2",
     "@mapequation/d3gl": "^0.13.0",
     "@mapequation/infomap": "2.16.0",
-    "@turf/boolean-intersects": "^7.4.0",
     "@turf/turf": "^7.4.0",
     "assert": "^2.1.0",
     "d3": "^7.9.0",
