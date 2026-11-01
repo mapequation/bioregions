@@ -98,8 +98,8 @@ export class Bioregion {
     score: number;
   }[] = [];
   // Records-based indicator value (IndVal, Dufrêne & Legendre 1997), sorted by indVal then count:
-  // specificity = the species' mean records per leaf cell here relative to the sum of its means
-  // over all bioregions, occupancy = share of the region's leaf cells with a record of it.
+  // specificity = the species' mean records per grid cell here relative to the sum of its means
+  // over all bioregions, occupancy = share of the region's grid cells with a record of it.
   // Unlike `score`, it separates species that are all endemic. See calcIndicatorValues.
   characteristic: {
     name: string;
@@ -111,7 +111,7 @@ export class Bioregion {
   // Species Infomap clustered into this module together with its grid cells (tree ancestors
   // excluded), ranked by map equation centrality (Infomap's `mec`) with flow as the tie-break.
   // `share`: the share of the species' records found in this bioregion. `fidelity`: the same,
-  // size-normalised like IndVal specificity (mean records per leaf cell here relative to the sum
+  // size-normalised like IndVal specificity (mean records per grid cell here relative to the sum
   // of its means over all bioregions), so large bioregions don't win on area alone.
   members: {
     name: string;
@@ -122,7 +122,6 @@ export class Bioregion {
   }[] = [];
   private memberIndex = new Map<string, Bioregion['members'][number]>();
   numFoundOnlyHere = 0; // species with every record inside this bioregion
-  numLeafCells = 0;
   meanNumSpeciesWithin = 0;
   stddevNumSpeciesWithin = 0.0;
   oldestPhyloNodeTime = 0.0;
@@ -207,11 +206,6 @@ export class Bioregion {
 
     let numSpeciesWithoutBioregions = 0;
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
-      ++this.numLeafCells;
       for (const { count, name } of cell.speciesTopList) {
         const species = speciesStore.speciesMap.get(name);
         if (species == null) {
@@ -250,7 +244,7 @@ export class Bioregion {
       // Share of the species' records found here; specificity is size-normalised later, in
       // calcIndicatorValues, once every bioregion's counts are known.
       const fidelity = count / (speciesStore.speciesMap.get(name)?.count ?? count);
-      const occupancy = (speciesCells.get(name) ?? 0) / this.numLeafCells;
+      const occupancy = (speciesCells.get(name) ?? 0) / this.numGridCells;
       if (fidelity >= 1) ++this.numFoundOnlyHere;
       this.characteristic.push({
         name,
@@ -289,10 +283,6 @@ export class Bioregion {
     const I_s = [];
     const { nameToCellIds } = speciesStore.binner;
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
       const { connectedBioregions } = cell;
       const numSpeciesWithin = connectedBioregions.bioregionIds.get(this.bioregionId)?.count ?? 0;
       I_c.push(numSpeciesWithin);
@@ -338,10 +328,6 @@ export class Bioregion {
     }
 
     for (const cell of this.cells) {
-      if (!cell.isLeaf) {
-        // Don't include patched cells to statistics as all records are on leaf cells
-        continue;
-      }
       cell.calcBioregionStats({
         meanNumSpeciesWithin: this.meanNumSpeciesWithin,
         stddevNumSpeciesWithin: this.stddevNumSpeciesWithin,
@@ -354,18 +340,18 @@ export class Bioregion {
 };
 
 /** Size-normalised IndVal specificity (Dufrêne & Legendre 1997): a species' mean records per
- *  leaf cell in a bioregion, relative to the sum of its means over all bioregions, so large
+ *  grid cell in a bioregion, relative to the sum of its means over all bioregions, so large
  *  bioregions don't win on sampling effort alone. Also ranks each bioregion's members. Needs
  *  every bioregion's counts, so it runs after calcStats has run for all of them. */
 function calcIndicatorValues(bioregions: Bioregion[], speciesStore: SpeciesStore) {
-  const leafCells = new Map(bioregions.map((b) => [b.bioregionId, b.numLeafCells]));
+  const gridCells = new Map(bioregions.map((b) => [b.bioregionId, b.numGridCells]));
   for (const bioregion of bioregions) {
-    const n = bioregion.numLeafCells;
+    const n = bioregion.numGridCells;
     for (const entry of bioregion.characteristic) {
       let sumOfMeans = 0;
       const species = speciesStore.speciesMap.get(entry.name);
       for (const [id, count] of species?.countPerRegion ?? []) {
-        const cells = leafCells.get(id);
+        const cells = gridCells.get(id);
         if (cells) sumOfMeans += count / cells;
       }
       entry.specificity = n > 0 && sumOfMeans > 0 ? entry.count / n / sumOfMeans : 0;
