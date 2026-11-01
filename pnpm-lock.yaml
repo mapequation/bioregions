@@ -21,8 +21,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@mapequation/c3':
-        specifier: ^1.1.1
-        version: 1.1.1
+        specifier: ^2.0.2
+        version: 2.0.2
       '@mapequation/d3gl':
         specifier: ^0.13.0
         version: 0.13.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -635,8 +635,8 @@ packages:
     resolution: {integrity: sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ==, tarball: https://registry.npmjs.org/@manypkg/tools/-/tools-2.1.2.tgz}
     engines: {node: '>=20.0.0'}
 
-  '@mapequation/c3@1.1.1':
-    resolution: {integrity: sha512-zIaPZyRZ31rQfCxpBdkbSGieg+37hrCeeMxYgENZe2BlHO+3adpNVFMVAv2eKWs38exA77+SIXEq0Teay4D4vQ==, tarball: https://registry.npmjs.org/@mapequation/c3/-/c3-1.1.1.tgz}
+  '@mapequation/c3@2.0.2':
+    resolution: {integrity: sha512-4XFmyWTYI/TvSjFhNU03hKI51JzHXG59Y+yhSRctXilATlav3LWRpyJmKbVUTdemWnq0yQqoCle2G9vXLPLS4g==, tarball: https://registry.npmjs.org/@mapequation/c3/-/c3-2.0.2.tgz}
 
   '@mapequation/d3gl@0.13.0':
     resolution: {integrity: sha512-1P9eIRkiQl0i0zDiAUmO//JATWDvWhPVflBLBXdVTJjVxIEjcrTY3vrAhwRzIg5a5EFOR4YCsgB7jmvjuhkG+Q==, tarball: https://registry.npmjs.org/@mapequation/d3gl/-/d3gl-0.13.0.tgz}
@@ -3167,7 +3167,7 @@ snapshots:
       tinyglobby: 0.2.17
       yaml: 2.9.1
 
-  '@mapequation/c3@1.1.1':
+  '@mapequation/c3@2.0.2':
     dependencies:
       d3-color: 3.1.0
       d3-scale-chromatic: 3.1.0

@@ -1,6 +1,6 @@
-import { makeObservable, observable, action, computed } from 'mobx';
-import * as c3 from '@mapequation/c3';
-import type { SchemeName as c3SchemeName } from '@mapequation/c3';
+import { makeObservable, observable, observableRef, action, computed } from 'mobx';
+import { palette, tones } from '@mapequation/c3';
+import type { SchemeName as c3SchemeName, ToneName } from '@mapequation/c3';
 import type RootStore from './RootStore';
 import type { Cell } from '../utils/QuadTree';
 import { color as Color, interpolateRgb } from 'd3';
@@ -18,9 +18,17 @@ const requireColor = (specifier: string): D3Color => {
   return color;
 };
 
-export type SchemeName = c3SchemeName | 'Mural';
+/** The palette: c3's OKLCH hue circle, a d3 color scheme, or the Mural colors */
+export type SchemeName = 'Oklch' | c3SchemeName | 'Mural';
+
+/** A c3 tone, or 'auto' for the tone c3 infers from a d3 color scheme */
+export type ToneChoice = 'auto' | ToneName;
+
+/** OKLCH lightness range [min, max] */
+export type LightnessRange = [number, number];
 
 export const COLOR_SCHEMES = [
+  { label: 'Oklch (hue circle)', value: 'Oklch' },
   { label: 'Sinebow', value: 'Sinebow' },
   { label: 'Rainbow', value: 'Rainbow' },
   { label: 'Turbo', value: 'Turbo' },
@@ -30,7 +38,7 @@ export const COLOR_SCHEMES = [
 ];
 
 // Englewood mural (5 first from a plugin to Illustrator, extended with glasbey)
-const MURAL_COLORS = [
+export const MURAL_COLORS = [
   "#afb581",
   "#efab6a",
   "#e78c6e",
@@ -83,6 +91,78 @@ const MURAL_COLORS = [
   "#9a9a61",
 ];
 
+export const TONES: { label: string; value: ToneChoice }[] = [
+  { label: 'Auto (from scheme)', value: 'auto' },
+  ...(Object.keys(tones) as ToneName[]).map((name) => ({
+    label: name.charAt(0).toUpperCase() + name.slice(1),
+    value: name,
+  })),
+];
+
+/** 'auto' only applies to d3 schemes; on Oklch it is the same as "strong" */
+export const tonesFor = (scheme: SchemeName) =>
+  scheme === 'Oklch'
+    ? TONES.filter((t) => t.value !== 'auto')
+    : scheme === 'Greys'
+      ? // A named tone's chroma would color the greys
+        TONES.filter((t) => t.value === 'auto')
+      : TONES;
+
+/** The tone a palette starts with: c3's strong on Oklch, the scheme's own tone otherwise */
+export const defaultTone = (scheme: SchemeName): ToneChoice =>
+  scheme === 'Oklch' ? 'strong' : 'auto';
+
+/** Where the first color sits by default, as a fraction of the palette: blue (245°) on Oklch */
+export const defaultOffset = (scheme: SchemeName) =>
+  scheme === 'Oklch' ? 245 / 360 : 0;
+
+/** The lightness c3 uses for d3 schemes, its default "strong" tone */
+export const DEFAULT_LIGHTNESS: LightnessRange = [...tones.strong.lightness];
+
+/** The lightness range a tone starts with in the UI */
+export const toneLightness = (tone: ToneChoice): LightnessRange =>
+  tone === 'auto' ? [...DEFAULT_LIGHTNESS] : [...tones[tone].lightness];
+
+export type BioregionColorOptions = {
+  scheme: SchemeName;
+  tone: ToneChoice;
+  lightness: LightnessRange;
+  /** Where the first color sits on the palette, as a fraction of it (0-1) */
+  offset: number;
+  reverse: boolean;
+  /** Exponent on the flows used as weights, 0 for equal weights */
+  strength: number;
+};
+
+/**
+ * Colors for `numBioregions` bioregions, in bioregion order.
+ * With flows, the hue space is split by the flows raised to `strength`.
+ * The Mural scheme uses the hand-picked MURAL_COLORS first and extends them with
+ * c3 colors chosen as far from them as possible.
+ */
+export function computeBioregionColors(
+  numBioregions: number,
+  flows: number[] | undefined,
+  { scheme, tone, lightness, offset, reverse, strength }: BioregionColorOptions,
+): string[] {
+  if (scheme === 'Mural') {
+    if (numBioregions <= MURAL_COLORS.length) {
+      return MURAL_COLORS;
+    }
+    // Extend with c3 colors as far as possible from the mural colors
+    const extended = palette(numBioregions, { seeds: MURAL_COLORS });
+    return MURAL_COLORS.concat(extended.slice(MURAL_COLORS.length));
+  }
+
+  const weights = flows ? flows.map((flow) => flow ** strength) : numBioregions;
+  return palette(weights, {
+    hue: scheme,
+    tone: tone === 'auto' ? { lightness } : { ...tones[tone], lightness },
+    offset: offset * 360,
+    reverse,
+  });
+}
+
 export class CellColor {
   color: string = "#cccccc";
   firstColor: string = "#cccccc";
@@ -112,15 +192,11 @@ export class CellColor {
 export default class ColorStore {
   rootStore: RootStore;
 
-  scheme: SchemeName = 'Turbo';
-  saturation: number = 0.55;
-  saturationEnd: number = 0.8;
-  lightness: number = 0.5;
-  lightnessEnd: number = 0.5;
-  midpoint: number = 4.5;
-  steepness: number = 1;
+  scheme: SchemeName = 'Oklch';
+  tone: ToneChoice = 'strong';
+  lightness: LightnessRange = toneLightness('strong');
   strength: number = 0;
-  offset: number = 0;
+  offset: number = defaultOffset('Oklch');
   reverse: boolean = false;
   useFlow: boolean = true;
   hideDominantOverlappingModule: boolean = false;
@@ -130,18 +206,9 @@ export default class ColorStore {
 
     makeObservable(this, {
       scheme: observable,
-      saturation: observable,
-      setSaturation: action,
-      saturationEnd: observable,
-      setSaturationEnd: action,
-      lightness: observable,
-      setLightness: action,
-      lightnessEnd: observable,
-      setLightnessEnd: action,
-      midpoint: observable,
-      setMidpoint: action,
-      steepness: observable,
-      setSteepness: action,
+      tone: observable,
+      setTone: action,
+      lightness: observableRef,
       strength: observable,
       offset: observable,
       reverse: observable,
@@ -153,50 +220,26 @@ export default class ColorStore {
       setUseFlow: action,
       toggleReverse: action,
       toggleUseFlow: action,
+      hideDominantOverlappingModule: observable,
+      toggleHideDominantOverlappingModule: action,
       bioregionColors: computed,
     });
   }
 
   get bioregionColors(): string[] {
     const { bioregions, numBioregions } = this.rootStore.infomapStore;
-    const colorData = this.useFlow
-      ? bioregions.map((r) => r.flow)
-      : numBioregions;
-
-    if (this.scheme === 'Mural') {
-      if (numBioregions <= MURAL_COLORS.length) {
-        return MURAL_COLORS;
-      }
-
-      // Extend from c3 if more colors are needed
-      const c3colors = c3.colors(colorData, {
-        saturation: this.saturation,
-        saturationEnd: this.saturationEnd,
+    return computeBioregionColors(
+      numBioregions,
+      this.useFlow ? bioregions.map((r) => r.flow) : undefined,
+      {
+        scheme: this.scheme,
+        tone: this.tone,
         lightness: this.lightness,
-        lightnessEnd: this.lightnessEnd,
-        midpoint: this.midpoint,
-        steepness: this.steepness,
-        scheme: "Turbo",
         offset: this.offset,
         reverse: this.reverse,
         strength: this.strength,
-      });
-      return MURAL_COLORS.concat(c3colors.slice(MURAL_COLORS.length, numBioregions));
-    }
-
-    const colors = c3.colors(colorData, {
-      saturation: this.saturation,
-      saturationEnd: this.saturationEnd,
-      lightness: this.lightness,
-      lightnessEnd: this.lightnessEnd,
-      midpoint: this.midpoint,
-      steepness: this.steepness,
-      scheme: this.scheme,
-      offset: this.offset,
-      reverse: this.reverse,
-      strength: this.strength,
-    });
-    return colors;
+      },
+    );
   }
 
   get colorBioregion() {
@@ -385,33 +428,17 @@ export default class ColorStore {
 
   setScheme = (value: SchemeName) => {
     this.scheme = value;
+    this.offset = defaultOffset(value);
+    // Like the offset, the tone starts over: a named tone kept from Oklch would recolor a scheme
+    this.setTone(defaultTone(value));
   };
-  setSaturation = (value: number) => {
-    this.saturation = value;
+  setTone = (value: ToneChoice) => {
+    this.tone = value;
+    this.lightness = toneLightness(value);
   };
-  setSaturationEnd = (value: number) => {
-    this.saturationEnd = value;
-  };
-  setSaturationRange = action((value: [number, number]) => {
-    this.saturation = value[0];
-    this.saturationEnd = value[1];
+  setLightnessRange = action((value: LightnessRange) => {
+    this.lightness = [value[0], value[1]];
   })
-  setLightness = (value: number) => {
-    this.lightness = value;
-  };
-  setLightnessEnd = (value: number) => {
-    this.lightnessEnd = value;
-  };
-  setLightnessRange = action((value: [number, number]) => {
-    this.lightness = value[0];
-    this.lightnessEnd = value[1];
-  })
-  setMidpoint = (value: number) => {
-    this.midpoint = value;
-  };
-  setSteepness = (value: number) => {
-    this.steepness = value;
-  };
   setStrength = (value: number) => {
     this.strength = value;
   };
