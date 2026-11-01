@@ -31,16 +31,18 @@ const CLUSTERS: [string, number, number, number][] = [
   ['D', -100.5, 50.5, 3],
   ['E', -100.4, 50.4, 1],
   ['E', -101, 49, 1],
+  ['E', -101.9, 50.9, 1],
   ['B', 100.5, 50.5, 3],
   ['C', 100.5, 50.5, 1],
 ];
 
-/** Cell ids in `binner.cells` order with their records; `2102310` is a patched parent of `21023103`. */
+/** Cell ids in `binner.cells` order with their records; `2102310` is a remainder cell around
+ *  `210231031`, holding the two E records its sparse sub-cells passed up. */
 const CELLS: [string, Record<string, number>][] = [
   ['0320132', { A: 3, B: 1 }],
   ['1231023', { A: 2, C: 2 }],
-  ['2102310', { D: 3, E: 1 }],
-  ['21023103', { D: 3, E: 1 }],
+  ['2102310', { E: 2 }],
+  ['210231031', { D: 3, E: 1 }],
   ['3013201', { B: 3, C: 1 }],
 ];
 
@@ -432,7 +434,8 @@ describe('bioregion statistics', () => {
     const root = oneBioregion();
     const patched = cells(root)[2];
     expect(patched.isLeaf).toBe(false);
-    expect(root.infomapStore.bioregions[0].numRecords).toBe(20);
+    // 18 records: the remainder cell holds its own two, not those of its sub-cell
+    expect(root.infomapStore.bioregions[0].numRecords).toBe(18);
     expect(patched.bioregionMetrics.endemicity).toBe(1);
   });
 
@@ -459,9 +462,9 @@ describe('bioregion statistics', () => {
         score,
       ]),
     );
-    // A: 5 of the 8 records in bioregion 1, and 5 of the 18 network-species records
-    expect(scores.A).toBeCloseTo(5 / 8 / (5 / 18), 12);
-    expect(scores.C).toBeCloseTo(2 / 8 / (3 / 18), 12);
+    // A: 5 of the 8 records in bioregion 1, and 5 of the 15 network-species records
+    expect(scores.A).toBeCloseTo(5 / 8 / (5 / 15), 12);
+    expect(scores.C).toBeCloseTo(2 / 8 / (3 / 15), 12);
   });
 });
 
