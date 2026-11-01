@@ -374,6 +374,9 @@ export default class SpeciesStore {
         if (state.received === 0) {
           onFirstRecord?.();
           this.setIsLoading();
+          // Like `loadRecords`: show the record layer so streamed chunks are drawn, even when
+          // a previous dataset left the map on the heatmap or bioregions.
+          this.rootStore.mapStore.setRenderType('records');
         }
         ++state.received;
         this.addFeature(feature);
