@@ -1,10 +1,19 @@
 [
   {
+    "id": "demo",
     "name": "Demo",
     "speciesFile": "data/demo.csv",
     "treeFile": "data/demo.nwk",
     "size": "140 B",
     "devOnly": true,
+    "taxon": "Synthetic species",
+    "region": "Synthetic",
+    "source": "Synthetic test data",
+    "records": 16,
+    "species": 6,
+    "citation": "Source: Infomap Bioregions example data",
+    "why": "Six made-up species on a tiny grid, for development.",
+    "icon": "map",
     "settings": {
       "minCellSize": 0,
       "maxCellSize": 1,
@@ -13,11 +22,21 @@
     }
   },
   {
+    "id": "sample",
     "name": "Sample",
     "speciesFile": "data/head.csv",
     "treeFile": "data/head.nwk",
     "size": "370 B",
     "devOnly": true,
+    "taxon": "Mammalia",
+    "rank": "class",
+    "region": "Neotropics",
+    "source": "Infomap Bioregions example data",
+    "records": 9,
+    "species": 9,
+    "citation": "Source: Infomap Bioregions example data",
+    "why": "The first rows of the Neotropical mammals, for development.",
+    "icon": "map",
     "settings": {
       "minCellSize": 0,
       "maxCellSize": 1,
@@ -26,10 +45,20 @@
     }
   },
   {
+    "id": "birches",
     "name": "Birches",
     "speciesFile": "data/BIRCHES.zip",
     "size": "2.3 MB",
     "devOnly": true,
+    "taxon": "Betulaceae",
+    "rank": "family",
+    "region": "Northern Hemisphere",
+    "source": "IUCN Red List",
+    "records": 13,
+    "species": 8,
+    "citation": "IUCN. The IUCN Red List of Threatened Species: digital distribution maps (birches and alders, downloaded 2021). https://www.iucnredlist.org",
+    "why": "Range polygons from a zipped shapefile, for development.",
+    "icon": "oak",
     "settings": {
       "minCellSize": 0,
       "maxCellSize": 1,
@@ -38,17 +67,39 @@
     }
   },
   {
+    "id": "mammals-neotropics",
     "name": "Neotropical mammal occurrences",
     "speciesFile": "data/mammals_neotropics.csv",
     "treeFile": "data/mammals_neotropics.nwk",
     "size": "2.8 MB",
+    "taxon": "Mammalia",
+    "rank": "class",
+    "region": "Neotropics",
+    "source": "Infomap Bioregions example data",
+    "records": 81125,
+    "species": 1552,
+    "citation": "Source: Infomap Bioregions example data",
+    "why": "A mid-sized point file with a matching tree: a quick first run, with or without phylogeny.",
+    "icon": "paw",
     "settings": {}
   },
   {
+    "id": "mammals-global",
     "name": "Global mammal occurrences",
     "speciesFile": "data/mammals_global.tsv",
     "treeFile": "data/mammals_global.nwk",
     "size": "56 MB",
-    "settings": { "includeTree": false }
+    "taxon": "Mammalia",
+    "rank": "class",
+    "region": "World",
+    "source": "Infomap Bioregions example data",
+    "records": 1550844,
+    "species": 5005,
+    "citation": "Source: Infomap Bioregions example data",
+    "why": "Five thousand mammal species worldwide: do the classic zoogeographic realms emerge?",
+    "icon": "paw",
+    "settings": {
+      "includeTree": false
+    }
   }
 ]

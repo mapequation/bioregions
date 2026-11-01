@@ -1,4 +1,4 @@
-import { action, makeObservable, observable, computed } from 'mobx';
+import { action, makeObservable, observable, computed, runInAction } from 'mobx';
 // import { spawn, Thread, Worker } from 'threads';
 import type { ParseConfig } from 'papaparse';
 import QuadtreeGeoBinner from '../utils/QuadTree';
@@ -13,10 +13,10 @@ import type {
   Geometry,
   Polygon,
 } from '../types/geojson';
-import { getName } from '../utils/filename';
 import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
 import { normalizeSpeciesName } from '../utils/names';
+import { isAbortError } from '../sources/http';
 
 // export type FeatureProperties = GeoJsonProperties & {
 //   name: string;
@@ -74,9 +74,34 @@ export type Species = {
   numGridCellsWithinModule?: number;
 };
 
+/** Outcome of the file loaders (`load`, `loadString`, `loadShapefile`). */
+export interface FileLoadResult {
+  /** Features added (0 only for a load cancelled before the first one). */
+  received: number;
+}
+
+export interface FileLoadOptions {
+  nameColumn?: string;
+  longColumn?: string;
+  latColumn?: string;
+  /**
+   * Called once, in the same action as the first feature, before it is added: the
+   * data owner's commit (it clears the previous data and swaps the source slot).
+   */
+  onFirstRecord?: () => void;
+}
+
+export const NO_USABLE_ROWS = 'No usable rows (check the species column)';
+export const NO_SHAPEFILE_FEATURES = 'No features found in the shapefile';
+
+/** Outcome of `SpeciesStore.loadRecords`. */
+export interface LoadRecordsResult {
+  /** Records added to the store (0: the previous dataset was left untouched). */
+  received: number;
+}
+
 export default class SpeciesStore {
   rootStore: RootStore;
-  name: string = 'data';
   loaded: boolean = false;
   isLoading: boolean = false;
   numPoints: number = 0;
@@ -91,13 +116,14 @@ export default class SpeciesStore {
   timer = new Timer();
   speed: number = 0;
   seconds: number = 0;
-  dataWorker: Worker | null = null;
+  /** Aborts the running load (file worker or record stream); see `cancelLoad`. */
+  loadController: AbortController | null = null;
 
   constructor(rootStore: RootStore) {
     this.rootStore = rootStore;
 
     makeObservable(this, {
-      name: observable,
+      name: computed,
       loaded: observable,
       isLoading: observable,
       numPointsDebounced: observable,
@@ -119,6 +145,12 @@ export default class SpeciesStore {
   clearData = action(() => {
     this.loaded = false;
     this.isLoading = false;
+    this.numPoints = 0;
+    this.numPolygons = 0;
+    this.setNumPointsDebounced.cancel();
+    this.setNumPolygonsDebounced.cancel();
+    this.numPointsDebounced = 0;
+    this.numPolygonsDebounced = 0;
     this.multiPointCollection = createMultiPointGeometryCollection();
     this.updateCollection(createFeatureCollection());
     this.binner.setTreeNeedUpdate();
@@ -168,6 +200,11 @@ export default class SpeciesStore {
     200,
     { leading: true, trailing: true },
   );
+
+  /** Export and network name: the loaded occurrence source's (file stem or query title). */
+  get name(): string {
+    return this.rootStore.dataStore?.occurrence?.exportName ?? 'data';
+  }
 
   get havePolygons() {
     return this.numPolygons > 0;
@@ -243,87 +280,68 @@ export default class SpeciesStore {
     // }
   });
 
-  private async loadData(
+  /**
+   * Run the data worker with `message`, passing each data chunk to `onData`.
+   * Resolves when the worker completes or the current load is cancelled, and rejects
+   * when the worker reports an error (or fails to run at all).
+   */
+  private runWorker<T>(message: object, onData: (data: T) => void) {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const dataWorker = new Worker(
+          new URL('../workers/DataWorker.ts', import.meta.url),
+          { type: 'module' },
+        );
+        const signal = this.loadController?.signal;
+        const stop = () => {
+          dataWorker.terminate();
+          resolve();
+        };
+        const fail = (message: string) => {
+          signal?.removeEventListener('abort', stop);
+          dataWorker.terminate();
+          reject(new Error(message));
+        };
+        signal?.addEventListener('abort', stop, { once: true });
+
+        dataWorker.addEventListener('error', (event: ErrorEvent) => {
+          event.preventDefault?.();
+          fail(event.message || 'The data worker failed');
+        });
+        dataWorker.addEventListener('message', (event: MessageEvent) => {
+          if (event.data.type === 'status') {
+            if (event.data.status === 'complete') {
+              signal?.removeEventListener('abort', stop);
+              stop();
+            } else if (event.data.status === 'error') {
+              fail(String(event.data.message ?? 'Could not read the file'));
+            }
+          } else if (event.data.type === 'data') {
+            onData(event.data.data);
+          }
+        });
+
+        dataWorker.postMessage(message);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  private loadData(
     file: string | File,
     getItems: (items: { [key: string]: string | number }[]) => void,
     args: ParseConfig = {},
   ) {
-
-    // dataWorker.stream().subscribe(getItems);
-
-    // yield dataWorker.load(file, args);
-
-    return new Promise<void>((resolve, reject) => {
-
-      try {
-        const dataWorker = new Worker(
-          new URL('../workers/DataWorker.ts', import.meta.url),
-          { type: 'module' }
-        );
-
-        dataWorker.addEventListener("message", (event: MessageEvent) => {
-          if (event.data.type === "status") {
-            if (event.data.status === "complete") {
-              dataWorker.terminate();
-              resolve();
-            }
-          }
-          else if (event.data.type === "data") {
-            getItems(event.data.data);
-          }
-        })
-
-        dataWorker.postMessage({ type: "LOAD", file, args })
-      }
-      catch (err) {
-        reject(err);
-      }
-    })
-
-
-    // const res = await Thread.terminate(dataWorker);
-    // this.dataWorker = null;
-    // return res;
+    return this.runWorker({ type: 'LOAD', file, args }, getItems);
   }
 
-  private async loadShapefileInWorker(
+  private loadShapefileInWorker(
     file: string | File | File[],
     onFeatures: (features: GeometryFeature[]) => void,
     nameKey?: string,
   ) {
-
-    // dataWorker.stream().subscribe(onFeatures);
-
-    // yield dataWorker.loadShapefile(file, nameKey);
-
-    // return await Thread.terminate(dataWorker);
-
-    return new Promise<void>((resolve, reject) => {
-
-      try {
-        const dataWorker = new Worker(
-          new URL('../workers/DataWorker.ts', import.meta.url),
-          { type: 'module' }
-        );
-
-        dataWorker.addEventListener("message", (event: MessageEvent) => {
-          if (event.data.type === "status") {
-            if (event.data.status === "complete") {
-              dataWorker.terminate();
-              resolve();
-            }
-          }
-          else if (event.data.type === "data") {
-            onFeatures(event.data.data);
-          }
-        })
-
-        dataWorker.postMessage({ type: "LOAD_SHAPEFILE", file, nameKey })
-      }
-      catch (err) {
-        reject(err);
-      }
-    });
+    return this.runWorker({ type: 'LOAD_SHAPEFILE', file, nameKey }, onFeatures);
   }
 
   loadStart = action(() => {
@@ -335,143 +353,311 @@ export default class SpeciesStore {
     console.timeEnd('load');
   });
 
+  /**
+   * Add the features of one parsed chunk. The first feature of a load first calls
+   * `onFirstRecord` (the owner's commit, which clears the previous data) in the same
+   * action, then marks the store as loading again (the clear reset that flag).
+   */
+  private addFileFeatures(
+    features: GeometryFeature[],
+    state: { received: number },
+    onFirstRecord?: () => void,
+  ) {
+    runInAction(() => {
+      for (const feature of features) {
+        if (state.received === 0) {
+          onFirstRecord?.();
+          this.setIsLoading();
+        }
+        ++state.received;
+        this.addFeature(feature);
+      }
+    });
+  }
+
+  /**
+   * End a file load. Nothing received: the previous data stays as it was (no binning, no
+   * Infomap) and the load rejects with `emptyMessage`, unless it was cancelled. A worker
+   * error after the first record keeps what arrived and rejects after `postLoad`.
+   */
+  private async finishFileLoad(
+    state: { received: number },
+    failure: unknown,
+    wasLoaded: boolean,
+    signal: AbortSignal | undefined,
+    emptyMessage: string,
+  ): Promise<FileLoadResult> {
+    this.loadEnd();
+    if (state.received === 0) {
+      runInAction(() => {
+        this.loadController = null;
+        this.setIsLoaded(wasLoaded);
+      });
+      if (failure) throw failure;
+      if (signal?.aborted) return { received: 0 };
+      throw new Error(emptyMessage);
+    }
+    await this.postLoad();
+    if (failure) throw failure;
+    return { received: state.received };
+  }
+
+  /**
+   * Load point records from CSV text (the documentation demo). Clears nothing itself:
+   * `onFirstRecord` (the owner's commit) runs with the first record.
+   */
   async loadString(
     data: string,
     {
-      add,
       nameColumn = 'species',
       longColumn = 'longitude',
       latColumn = 'latitude',
-    }: {
-      add?: boolean;
-      nameColumn?: string;
-      longColumn?: string;
-      latColumn?: string;
-    } = {},
-  ) {
-    if (!add) {
-      this.clearData();
-    }
-
+      onFirstRecord,
+    }: FileLoadOptions = {},
+  ): Promise<FileLoadResult> {
+    const wasLoaded = this.loaded;
     this.preLoad();
-
-    const records = csvParse(data);
-
-    const mapper = createMapper<string | undefined>(
-      nameColumn,
-      longColumn,
-      latColumn,
-    );
-
-    for (const item of records) {
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
+    const mapper = createMapper<string | undefined>(nameColumn, longColumn, latColumn);
+    const features = csvParse(data).map((item) => {
       const mappedItem = mapper(item);
-      const pointFeature = createPointFeature(
-        [mappedItem.longitude, mappedItem.latitude],
-        { name: normalizeSpeciesName(mappedItem.name) },
-      );
-
-      this.addFeature(pointFeature);
-    }
-
-    this.postLoad();
+      return createPointFeature([mappedItem.longitude, mappedItem.latitude], {
+        name: normalizeSpeciesName(mappedItem.name),
+      });
+    });
+    this.addFileFeatures(features, state, onFirstRecord);
+    return this.finishFileLoad(state, null, wasLoaded, signal, NO_USABLE_ROWS);
   }
 
+  /**
+   * Load a CSV/TSV file (or a zipped shapefile, by its `.zip` name) in the data worker.
+   * Clears nothing itself: `onFirstRecord` (the owner's commit) runs with the first
+   * record. Rejects on a worker error and when no row has a usable name.
+   */
   async load(
     file: string | File,
-    nameColumn = 'species',
-    longColumn = 'longitude',
-    latColumn = 'latitude',
-    clear = true,
-  ) {
-    if (clear) {
-      this.clearData();
-    }
-
+    {
+      nameColumn = 'species',
+      longColumn = 'longitude',
+      latColumn = 'latitude',
+      onFirstRecord,
+    }: FileLoadOptions = {},
+  ): Promise<FileLoadResult> {
     const filename = typeof file === 'string' ? file : file.name;
-    this.name = getName(filename);
-
-    if (filename.endsWith('.zip')) {
-      return this.loadShapefile(file);
+    if (filename.toLowerCase().endsWith('.zip')) {
+      return this.loadShapefile(file, { onFirstRecord });
     }
 
+    const wasLoaded = this.loaded;
     this.preLoad();
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
 
     const { mapStore } = this.rootStore;
     const mapper = createMapper(nameColumn, longColumn, latColumn);
+    let ignoredRows = 0;
 
-    const nameHistogram: { [key: string]: number } = {};
-    const countName = (name: string) => {
-      if (!(name in nameHistogram)) {
-        nameHistogram[name] = 0;
-      }
+    let failure: unknown = null;
+    try {
+      await this.loadData(file, (items) => {
+        const features: PointFeature[] = [];
+        for (const item of items) {
+          const mappedItem = mapper(item);
+          const name = normalizeSpeciesName(mappedItem.name);
+          if (!name || name === 'NA') {
+            ++ignoredRows;
+            continue;
+          }
+          features.push(createPointFeature([mappedItem.longitude, mappedItem.latitude], { name }));
+        }
+        if (features.length === 0) return;
+        this.addFileFeatures(features, state, onFirstRecord);
+        const multiPoint: MultiPoint = {
+          type: 'MultiPoint',
+          coordinates: features.map((feature) => feature.geometry.coordinates),
+        };
+        this.multiPointCollection.geometries.push(multiPoint);
+        mapStore.renderMultiPoint(multiPoint);
+      });
+    } catch (error) {
+      failure = error;
+    }
+    if (ignoredRows > 0) {
+      console.log(`Ignored ${ignoredRows} rows due to no name`);
+    }
 
-      nameHistogram[name]++;
-    };
+    return this.finishFileLoad(state, failure, wasLoaded, signal, NO_USABLE_ROWS);
+  }
 
-    const ignoredRows: { [key: string]: string | number }[] = [];
+  /**
+   * Load a zipped shapefile (or its .shp/.dbf files) in the data worker. Clears nothing
+   * itself: `onFirstRecord` (the owner's commit) runs with the first feature. Rejects on
+   * a worker error and when the shapefile holds no feature.
+   */
+  async loadShapefile(
+    file: string | File | File[],
+    { nameKey, onFirstRecord }: { nameKey?: string; onFirstRecord?: () => void } = {},
+  ): Promise<FileLoadResult> {
+    const wasLoaded = this.loaded;
+    this.preLoad();
+    const signal = this.loadController?.signal;
+    const state = { received: 0 };
+    let failure: unknown = null;
+    try {
+      await this.loadShapefileInWorker(
+        file,
+        (features) => this.addFileFeatures(features, state, onFirstRecord),
+        nameKey,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    return this.finishFileLoad(state, failure, wasLoaded, signal, NO_SHAPEFILE_FEATURES);
+  }
 
-    await this.loadData(file, (items) => {
-      const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
+  /**
+   * Stream parsed point records (e.g. from GBIF or OBIS) into the store, drawing each
+   * batch as it arrives, then bin and run Infomap like `load`. Cancelling (through
+   * `controller` or `cancelLoad`) stops reading and keeps the records received so far.
+   * A failing stream also keeps them, and the error is rethrown after `postLoad`.
+   * Aborting `controller` with the reason `'discard'` drops the records instead and
+   * skips binning and Infomap.
+   *
+   * `onFirstRecord` runs in the same action as the first record, before it is added: the
+   * data owner's commit, which clears the previous data. When no record arrives at all
+   * (or the load is discarded before one does), the previous dataset is left untouched
+   * and neither `postLoad` nor Infomap runs; the result reports `received: 0`. A discard
+   * after the first record skips binning and Infomap and leaves the clearing to the owner.
+   *
+   * `skipBioregions` is asked once the stream has ended (records arrived, not discarded):
+   * when it returns true the records are binned and kept on the map's record layer, but
+   * Infomap does not run (stale bioregions are cleared); `runBioregions()` runs it later.
+   */
+  async loadRecords(
+    batches: AsyncIterable<{ name: string; lon: number; lat: number }[]>,
+    {
+      controller = new AbortController(),
+      skipBioregions,
+      onFirstRecord,
+    }: {
+      controller?: AbortController;
+      skipBioregions?: () => boolean;
+      /** The data owner's commit, called once in the same action as the first record. */
+      onFirstRecord?: () => void;
+    } = {},
+  ): Promise<LoadRecordsResult> {
+    // Restored when nothing arrives, so a dataset that is kept stays marked as loaded.
+    const wasLoaded = this.loaded;
+    this.preLoad(controller);
 
-      for (const item of items) {
-        const mappedItem = mapper(item);
-        const name = normalizeSpeciesName(mappedItem.name);
-        if (!name || name === 'NA') {
-          ignoredRows.push(item);
+    const { mapStore } = this.rootStore;
+    let received = 0;
+    let failure: unknown = null;
+    try {
+      for await (const batch of batches) {
+        if (controller.signal.aborted) {
+          break;
+        }
+        if (batch.length === 0) {
           continue;
         }
-        const pointFeature = createPointFeature(
-          [mappedItem.longitude, mappedItem.latitude],
-          { name },
-        );
-
-        countName(mappedItem.name);
-
-        this.addFeature(pointFeature);
-
-        multiPoint.coordinates.push(pointFeature.geometry.coordinates);
+        const first = received === 0;
+        const multiPoint: MultiPoint = { type: 'MultiPoint', coordinates: [] };
+        runInAction(() => {
+          if (first) {
+            // First record: only now does the data owner replace the previous dataset.
+            onFirstRecord?.();
+            this.setIsLoading();
+          }
+          received += batch.length;
+          for (const record of batch) {
+            const pointFeature = createPointFeature([record.lon, record.lat], {
+              name: record.name,
+            });
+            this.addFeature(pointFeature);
+            multiPoint.coordinates.push(pointFeature.geometry.coordinates);
+          }
+          this.multiPointCollection.geometries.push(multiPoint);
+        });
+        if (first) mapStore.setRenderType('records');
+        mapStore.renderMultiPoint(multiPoint);
       }
-      this.multiPointCollection.geometries.push(multiPoint);
-
-      mapStore.renderMultiPoint(multiPoint);
-    });
-
-    // await (await loader).next();
-    this.loadEnd();
-    console.log(
-      `Ignored ${ignoredRows.length} rows due to no name:`,
-      ignoredRows,
-    );
-
-    await this.postLoad();
-  }
-
-  onFeatures = action((features: GeometryFeature[]) => {
-    features.forEach(this.addFeature);
-  });
-
-  async loadShapefile(file: string | File | File[], nameKey?: string) {
-    this.preLoad();
-
-    await this.loadShapefileInWorker(file, this.onFeatures, nameKey);
-
-    await this.postLoad();
-  }
-
-  cancelLoad = action(async () => {
-    if (this.dataWorker) {
-      this.dataWorker.terminate();
-      this.dataWorker = null;
+    } catch (error) {
+      if (!isAbortError(error)) {
+        failure = error;
+      }
     }
-    await this.postLoad();
+
+    this.loadEnd();
+    if (controller.signal.reason === 'discard' && received > 0) {
+      // Discarded after the commit: skip binning and Infomap; the data owner removes the records.
+      runInAction(() => {
+        this.loadController = null;
+        this.setIsLoaded(false);
+      });
+      return { received };
+    }
+    if (received === 0) {
+      // Nothing arrived: keep the previous dataset as it was and skip binning and Infomap.
+      runInAction(() => {
+        this.loadController = null;
+        this.setIsLoaded(wasLoaded);
+      });
+      // A discard before the first record is not a failure.
+      if (failure && controller.signal.reason !== 'discard') {
+        throw failure;
+      }
+      return { received };
+    }
+    if (skipBioregions?.()) {
+      this.finishWithoutBioregions();
+    } else {
+      await this.postLoad();
+    }
+    if (failure) {
+      throw failure;
+    }
+    return { received };
+  }
+
+  /** Like `postLoad` without Infomap: bin the records and keep the record layer on the map. */
+  finishWithoutBioregions = action(() => {
+    this.loadController = null;
+    this.loadEnd();
+    this.updateCollection();
+    this.setIsLoaded();
+    const { mapStore, infomapStore } = this.rootStore;
+    // Bioregions of an earlier dataset no longer describe these records.
+    infomapStore.clearData();
+    mapStore.setRenderType('records');
+    mapStore.render();
   });
 
-  preLoad = action(() => {
+  /** Run Infomap on the loaded records (after `skipBioregions`) and show the bioregions. */
+  runBioregions = action(async () => {
+    const { mapStore, infomapStore } = this.rootStore;
+    if (!this.loaded) return;
+    mapStore.setRenderType('heatmap');
+    mapStore.render();
+    if (!(await infomapStore.run())) return;
+    mapStore.setRenderType('bioregions');
+    mapStore.render();
+  });
+
+  /** Stop the running load; it finishes with the records received so far. */
+  cancelLoad = action(() => {
+    this.loadController?.abort();
+  });
+
+  preLoad = action((controller: AbortController = new AbortController()) => {
+    this.loadController = controller;
     this.setIsLoading();
     this.loadStart();
   });
 
   postLoad = action(async () => {
+    this.loadController = null;
     this.loadEnd();
     this.updateCollection();
     this.setIsLoaded();
@@ -479,7 +665,7 @@ export default class SpeciesStore {
     const { mapStore, infomapStore } = this.rootStore;
     mapStore.setRenderType('heatmap');
     mapStore.render();
-    await infomapStore.run();
+    if (!(await infomapStore.run())) return;
     mapStore.setRenderType('bioregions');
     mapStore.render();
   });

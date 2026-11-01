@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { observer } from 'mobx-react';
 import {
   Button,
@@ -26,6 +26,33 @@ import {
   NumberInputRoot,
 } from '@/components/ui/number-input';
 
+// Stable references: IntervalSlider re-syncs its internal state whenever the
+// identity of `values` or `value` changes, so they must not be rebuilt on every
+// render of this (frequently re-rendering) observer.
+const MARKOV_TIME_VALUES = rangeArray(0.5, 2, 0.01, { inclusive: true }).map(
+  (v) => Math.round(v * 100) / 100,
+);
+
+// Reads the (large, frequently appended) Infomap log. Kept in its own observer
+// and only mounted while the console modal is open, so streaming output does not
+// re-render the whole Advanced panel.
+const InfomapOutput = observer(function InfomapOutput() {
+  const { infomapStore } = useStore();
+  return (
+    <Box
+      as="pre"
+      fontSize="xs"
+      fontFamily="mono"
+      whiteSpace="pre-wrap"
+      wordBreak="break-word"
+      color="fg"
+    >
+      {infomapStore.infomapOutput ||
+        'Load data and run Infomap to see output here'}
+    </Box>
+  );
+});
+
 export default observer(function Advanced() {
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState(5);
@@ -36,6 +63,10 @@ export default observer(function Advanced() {
 
   const [markovTimeStart, setMarkovTimeStart] = useState(0.8);
   const [markovTimeStop, setMarkovTimeStop] = useState(1.2);
+  const markovTimeInterval = useMemo<[number, number]>(
+    () => [markovTimeStart, markovTimeStop],
+    [markovTimeStart, markovTimeStop],
+  );
 
   const paramSweepIntegrationTime = async () => {
     setIsRunning(true);
@@ -233,12 +264,7 @@ export default observer(function Advanced() {
               scrollBehavior="inside"
               size="xl"
             >
-              <Box maxW="50%" fontSize="0.8rem">
-                <pre>
-                  {infomapStore.infomapOutput ||
-                    'Load data and run Infomap to see output here'}
-                </pre>
-              </Box>
+              {isInfomapOutputOpen && <InfomapOutput />}
             </Modal>
             <VStack>
               <Stat label="Levels">{infomapStore.numLevels}</Stat>
@@ -730,10 +756,8 @@ export default observer(function Advanced() {
                   style={{ display: 'flex' }}
                 >
                   <IntervalSlider
-                    values={rangeArray(0.5, 2, 0.01, { inclusive: true }).map(
-                      (v) => Math.round(v * 100) / 100,
-                    )}
-                    value={[markovTimeStart, markovTimeStop]}
+                    values={MARKOV_TIME_VALUES}
+                    value={markovTimeInterval}
                     onChange={([start, stop]: [number, number]) => {
                       setMarkovTimeStart(start);
                       setMarkovTimeStop(stop);

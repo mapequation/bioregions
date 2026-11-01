@@ -7,6 +7,7 @@ import { controlPanelWidth } from './ControlPanel/ControlPanel';
 import { useStore } from '../store';
 import Statistics from './Statistics';
 import Documentation from './Documentation';
+import { DataPortal } from './Explorer';
 import ColorMode from './ControlPanel/ColorMode';
 import TreeStatusBar from './StatusBar/TreeStatusBar';
 import { formatThousands } from '../utils/formats';
@@ -64,6 +65,33 @@ const TreeTooltip = observer(function _TreeTooltip() {
   );
 });
 
+// Shown only when collision thinning dropped tip labels that are in view (large trees, or a
+// small tree in a short box): says how many and how to reveal them.
+const TreeLabelHint = observer(function _TreeLabelHint() {
+  const { treeStore } = useStore();
+  const hidden = treeStore.hiddenLabels;
+  if (hidden === 0) {
+    return null;
+  }
+  return (
+    <Text
+      position="absolute"
+      left={2}
+      bottom={1}
+      px={1.5}
+      borderRadius="l1"
+      bg="bg/80"
+      color="fg.muted"
+      fontSize="xs"
+      fontVariantNumeric="tabular-nums"
+      pointerEvents="none"
+      data-testid="tree-labels-hidden"
+    >
+      +{formatThousands(hidden)} {hidden === 1 ? 'label' : 'labels'} hidden, zoom in to show
+    </Text>
+  );
+});
+
 const PhyloTree = observer(function _PhyloTree() {
   const { treeStore } = useStore();
   const hostRef = useRef<HTMLDivElement>(null);
@@ -82,13 +110,14 @@ const PhyloTree = observer(function _PhyloTree() {
   }
 
   return (
-    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
+    <Box ml={4} width="calc(100% - var(--chakra-spacing-4))" maxW={`${MAX_WIDTH}px`}>
       <TreeStatusBar />
       {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a 2:1 box
           via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the hover
           tooltip lives in the same coordinate space as the d3gl pointer offsets. */}
       <Box position="relative" width="100%" aspectRatio={ASPECT_RATIO}>
         <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
+        <TreeLabelHint />
         <TreeTooltip />
       </Box>
     </Box>
@@ -114,6 +143,7 @@ export default observer(function App() {
         <Statistics />
         <Documentation />
       </VStack>
+      <DataPortal />
     </Box>
   );
 });

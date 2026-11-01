@@ -53,10 +53,6 @@ export default class DocumentationStore {
   }
 
   async loadData() {
-    // const speciesFile = '/bioregions/data/demo.csv';
-    // const treeFile = '/bioregions/data/demo.nwk';
-    // await this.demoStore.speciesStore.load(speciesFile);
-    await this.demoStore.treeStore.loadString(demoTree);
-    await this.demoStore.speciesStore.loadString(demoRecords);
+    await this.demoStore.dataStore.loadInline({ label: 'Demo', csv: demoRecords, newick: demoTree });
   }
 }

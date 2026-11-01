@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
+import { reaction } from 'mobx';
 import { useStore } from '../store/';
-import { Box, Text } from '@chakra-ui/react';
+import { Box, Button, Stack, Text } from '@chakra-ui/react';
+import { LuArrowRight, LuSearch, LuUpload } from 'react-icons/lu';
+import { primaryButtonProps, secondaryButtonProps } from './Explorer/buttonStyles';
 import { formatThousands } from '../utils/formats';
 import MapStatusBar from './StatusBar/MapStatusBar';
 import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
@@ -70,9 +73,60 @@ const MapTooltip = observer(function _MapTooltip() {
   );
 });
 
+// Centre card on the empty map: the ways to get data in, one full-width button each, so every
+// label keeps its padding at any card width.
+const EmptyMapCta = observer(function EmptyMapCta() {
+  const { dataStore, explorerStore } = useStore();
+  if (dataStore.isLoading || dataStore.occurrence != null) {
+    return null;
+  }
+  return (
+    <Box position="absolute" inset={0} display="flex" alignItems="center" justifyContent="center" pointerEvents="none" zIndex={5}>
+      <Stack
+        pointerEvents="auto"
+        gap={3}
+        p={5}
+        w="340px"
+        maxW="calc(100% - 32px)"
+        bg="bg"
+        borderWidth="1px"
+        borderRadius="lg"
+        boxShadow="md"
+        data-testid="empty-map-cta"
+      >
+        <Box>
+          <Text fontWeight="semibold">No data yet</Text>
+          <Text fontSize="sm" color="fg.muted">
+            Search GBIF and OBIS, upload your own files, or start from an example.
+          </Text>
+        </Box>
+        <Stack gap={2}>
+          <Button {...primaryButtonProps} w="full" onClick={() => explorerStore.open('search')}>
+            <LuSearch /> Search GBIF &amp; OBIS
+          </Button>
+          <Button {...secondaryButtonProps} w="full" onClick={() => explorerStore.open('upload')}>
+            <LuUpload /> Upload files
+          </Button>
+          <Button
+            variant="plain"
+            size="sm"
+            alignSelf="center"
+            color="fg.muted"
+            _hover={{ color: 'fg', textDecoration: 'underline' }}
+            onClick={() => explorerStore.open('examples')}
+          >
+            Try an example <LuArrowRight />
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+});
+
 export default observer(function WorldMap() {
   const hostRef = useRef<HTMLDivElement>(null);
-  const { mapStore } = useStore();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const { mapStore, explorerStore, speciesStore, dataStore } = useStore();
 
   useEffect(() => {
     if (hostRef.current === null) {
@@ -83,8 +137,55 @@ export default observer(function WorldMap() {
     return () => mapStore.disposeEngine();
   }, [mapStore]);
 
+  // Frame every newly loaded dataset (explorer, example or file) once binning is done. The fit
+  // waits for layout to settle (MapStore.scheduleFitToData) and repeats on later resizes until
+  // the user pans or zooms, so the whole loaded extent stays in view.
+  useEffect(
+    () =>
+      reaction(
+        () => speciesStore.isLoading,
+        (loading, wasLoading) => {
+          if (wasLoading && !loading) mapStore.scheduleFitToData();
+        },
+      ),
+    [mapStore, speciesStore],
+  );
+
+  // Closing the explorer after a load ("View bioregions" or close) brings the map back into view
+  // and re-frames it: the page under the dialog may have scrolled or reflowed meanwhile.
+  useEffect(() => {
+    let seenSource = dataStore.occurrence?.id;
+    let frame = 0;
+    const dispose = reaction(
+      () => explorerStore.isOpen,
+      (shown) => {
+        const source = dataStore.occurrence;
+        if (shown || !source || source.id === seenSource) return;
+        seenSource = source.id;
+        if (speciesStore.numRecords === 0) return;
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          const box = frameRef.current;
+          if (box !== null) {
+            const top = box.getBoundingClientRect().top;
+            if (top < 0 || top > window.innerHeight / 2) {
+              const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+              window.scrollTo({ top: Math.max(0, window.scrollY + top - 20), behavior: reduce ? 'auto' : 'smooth' });
+            }
+          }
+          mapStore.scheduleFitToData();
+        });
+      },
+    );
+    return () => {
+      dispose();
+      cancelAnimationFrame(frame);
+    };
+  }, [mapStore, explorerStore, speciesStore, dataStore]);
+
   return (
-    <Box ml={4} width="100%" maxW={`${MAX_WIDTH}px`}>
+    // Width leaves room for the left margin, so the map never runs 16px past the viewport.
+    <Box ref={frameRef} ml={4} width="calc(100% - var(--chakra-spacing-4))" maxW={`${MAX_WIDTH}px`}>
       <MapStatusBar />
       {/* Responsive wrapper: fills the available width (capped at MAX_WIDTH) and keeps a
           2:1 box via aspect-ratio. The d3gl host fills it (inset:0) and resizes in place; the
@@ -93,6 +194,7 @@ export default observer(function WorldMap() {
       <Box position="relative" width="100%" aspectRatio={ASPECT_RATIO}>
         <div ref={hostRef} style={{ position: 'absolute', inset: 0 }} />
         <MapTooltip />
+        <EmptyMapCta />
       </Box>
     </Box>
   );
