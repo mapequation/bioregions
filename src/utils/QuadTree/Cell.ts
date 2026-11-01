@@ -428,39 +428,6 @@ export default class Cell
     for (let i = 0; i < 4; ++i) this.children[i]?.visit(callback);
   }
 
-  patchPartiallyEmptyNodes(maxCellSizeLog2: number) {
-    if (this.isLeaf) return this.features;
-
-    // Already patched if features at non-leaf node.
-    if (this.features.length > 0) {
-      return this.features;
-    }
-
-    const nonEmptyChildren: Cell[] = this.children.filter(
-      (child) => child !== undefined,
-    ) as Cell[];
-
-    const doPatch =
-      this.sizeLog2 <= maxCellSizeLog2 &&
-      this.features.length === 0 &&
-      nonEmptyChildren.length < 4;
-
-    const aggregatedFeatures: GeoFeature[] = []; // FIXME changed from PointFeature
-    nonEmptyChildren.forEach((child: Cell) => {
-      child
-        ?.patchPartiallyEmptyNodes(maxCellSizeLog2)
-        ?.forEach((feature) => {
-          aggregatedFeatures.push(feature);
-        });
-    });
-
-    if (doPatch) {
-      this.features = aggregatedFeatures; // FIXME
-    }
-
-    return aggregatedFeatures;
-  }
-
   /**
    * Decide which nodes of this subtree are emitted as grid cells, bottom-up,
    * so that the cells partition the records (each record is in at most one
