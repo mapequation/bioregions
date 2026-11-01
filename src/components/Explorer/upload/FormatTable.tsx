@@ -19,7 +19,8 @@ const ROWS: { data: string; files: ReactNode; requirements: ReactNode }[] = [
       <>
         A header row and one row per record. You pick the species, latitude and longitude columns next; they are
         guessed from column names containing species/binomial/name, lat, and lng/long. Decimal degrees (WGS84). The
-        delimiter is detected automatically. Rows with an empty or &ldquo;NA&rdquo; species are skipped.
+        delimiter is detected automatically. Rows with an empty or &ldquo;NA&rdquo; species, or with a missing or
+        out-of-range coordinate, are skipped.
       </>
     ),
   },

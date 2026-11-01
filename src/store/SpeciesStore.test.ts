@@ -1,11 +1,12 @@
 // SpeciesStore.loadRecords: the commit on the first record, the no-records path and
 // discard, with the data owner, map and Infomap stores mocked.
 import { action, observable, observableRef } from 'mobx';
+import Papa from 'papaparse';
 import { describe, expect, it, vi } from 'vitest';
 import type Cell from '../utils/QuadTree/Cell';
 import type RootStore from './RootStore';
 import type { GeometryFeature } from './SpeciesStore';
-import SpeciesStore, { createPointFeature } from './SpeciesStore';
+import SpeciesStore, { createPointFeature, NO_USABLE_ROWS } from './SpeciesStore';
 
 type Rec = { name: string; lon: number; lat: number };
 
@@ -255,5 +256,94 @@ describe('SpeciesStore.addFeature', () => {
 
     expect(store.binner.treeNeedUpdate).toBe(false);
     expect(binnedNames(store)).toEqual(['Point', 'Range']);
+  });
+});
+
+const INVALID_ROWS_CSV = [
+  'species,longitude,latitude',
+  'Puma concolor,-60.5,-10.25',
+  'Puma concolor,,-10.25',
+  'Puma concolor,-60.5,',
+  'Puma concolor,abc,-10.25',
+  'Puma concolor,0x10,-10.25',
+  'Puma concolor,Infinity,-10.25',
+  'Puma concolor,-60.5,95',
+  'Puma concolor,190,-10.25',
+  ',-60.5,-10.25',
+  'NA,-60.5,-10.25',
+  'Panthera onca,180,-90',
+].join('\n');
+
+const VALID_POINTS = [
+  { name: 'Puma concolor', coordinates: [-60.5, -10.25] },
+  { name: 'Panthera onca', coordinates: [180, -90] },
+];
+
+function points(store: SpeciesStore) {
+  return store.collection.features.map((feature) => ({
+    name: feature.properties.name,
+    coordinates: feature.geometry.type === 'Point' ? feature.geometry.coordinates : undefined,
+  }));
+}
+
+describe('SpeciesStore occurrence validation', () => {
+  it('loadString skips rows with a missing name or an empty, non-numeric or out-of-range coordinate', async () => {
+    const { store, commit } = setup();
+    await store.loadString(INVALID_ROWS_CSV, { onFirstRecord: commit('table') });
+    expect(points(store)).toEqual(VALID_POINTS);
+    expect(store.numSkippedRecords).toBe(9);
+  });
+
+  it('load skips the same rows in the streamed file path, across chunks', async () => {
+    const { store, commit } = setup();
+    // The worker's chunks: Papa rows with dynamic typing (numbers, null for an empty cell).
+    const rows = Papa.parse<Record<string, unknown>>(INVALID_ROWS_CSV, {
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+    }).data;
+    Object.assign(store, {
+      loadData: async (_file: unknown, onItems: (items: Record<string, unknown>[]) => void) => {
+        // An all-invalid first chunk: nothing is committed until a usable row arrives.
+        onItems(rows.slice(1, 5));
+        onItems(rows.slice(0, 1).concat(rows.slice(5)));
+      },
+    });
+    const result = await store.load('table.csv', { onFirstRecord: commit('table') });
+    expect(result).toEqual({ received: 2 });
+    expect(points(store)).toEqual(VALID_POINTS);
+    expect(store.numSkippedRecords).toBe(9);
+  });
+
+  it('rejects a table without usable rows and keeps the previous data and count', async () => {
+    const { store, commit } = setup();
+    await store.loadString(INVALID_ROWS_CSV, { onFirstRecord: commit('table') });
+    const onFirstRecord = vi.fn(commit('broken'));
+    await expect(
+      store.loadString('species,longitude,latitude\nPuma concolor,,1\n,2,3', { onFirstRecord }),
+    ).rejects.toThrow(NO_USABLE_ROWS);
+    expect(onFirstRecord).not.toHaveBeenCalled();
+    expect(points(store)).toEqual(VALID_POINTS);
+    expect(store.numSkippedRecords).toBe(9);
+  });
+
+  it('resets the skipped count when the next dataset is committed', async () => {
+    const { store, commit } = setup();
+    await store.loadString(INVALID_ROWS_CSV, { onFirstRecord: commit('table') });
+    await store.loadString('species,longitude,latitude\nPuma concolor,1,2', { onFirstRecord: commit('clean') });
+    expect(store.numSkippedRecords).toBe(0);
+  });
+
+  it('creates no inverted cells', async () => {
+    const { store } = setup();
+    Object.assign(store.binner, { minCellCapacity: 1, maxCellCapacity: 1 });
+    await store.loadString(INVALID_ROWS_CSV);
+
+    const { cells } = store.binner;
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      expect(cell.x1).toBeLessThan(cell.x2);
+      expect(cell.y1).toBeLessThan(cell.y2);
+    }
   });
 });

@@ -15,7 +15,7 @@ import type {
 } from '../types/geojson';
 import { Timer } from '../utils/time';
 import throttle from 'lodash/throttle';
-import { normalizeSpeciesName } from '../utils/names';
+import { parseOccurrence } from '../utils/occurrences';
 import { isAbortError } from '../sources/http';
 
 // export type FeatureProperties = GeoJsonProperties & {
@@ -91,7 +91,7 @@ export interface FileLoadOptions {
   onFirstRecord?: () => void;
 }
 
-export const NO_USABLE_ROWS = 'No usable rows (check the species column)';
+export const NO_USABLE_ROWS = 'No usable rows (check the species and coordinate columns)';
 export const NO_SHAPEFILE_FEATURES = 'No features found in the shapefile';
 
 /** Outcome of `SpeciesStore.loadRecords`. */
@@ -108,6 +108,8 @@ export default class SpeciesStore {
   numPointsDebounced: number = 0;
   numPolygons: number = 0;
   numPolygonsDebounced: number = 0;
+  /** Occurrence rows skipped for a missing name or a missing, non-numeric or out-of-range coordinate. */
+  numSkippedRecords: number = 0;
   multiPointCollection: GeometryCollection =
     createMultiPointGeometryCollection();
   collection: GeometryFeatureCollection = createFeatureCollection();
@@ -128,6 +130,7 @@ export default class SpeciesStore {
       isLoading: observable,
       numPointsDebounced: observable,
       numPolygonsDebounced: observable,
+      numSkippedRecords: observable,
       speed: observable,
       seconds: observable,
       collection: observableRef,
@@ -151,6 +154,7 @@ export default class SpeciesStore {
     this.setNumPolygonsDebounced.cancel();
     this.numPointsDebounced = 0;
     this.numPolygonsDebounced = 0;
+    this.numSkippedRecords = 0;
     this.multiPointCollection = createMultiPointGeometryCollection();
     this.updateCollection(createFeatureCollection());
     this.binner.setTreeNeedUpdate();
@@ -378,6 +382,22 @@ export default class SpeciesStore {
   }
 
   /**
+   * Count the rows a file load skipped (no name, or a missing, non-numeric or out-of-range
+   * coordinate). Only once a record arrived: then the owner's commit has already cleared the
+   * previous count, and with nothing received the previous dataset (and its count) stays.
+   */
+  private addSkippedRecords(state: { received: number }, numSkipped: number) {
+    if (numSkipped === 0) return;
+    console.warn(
+      `Skipped ${numSkipped} rows with a missing name or a missing, non-numeric or out-of-range coordinate`,
+    );
+    if (state.received === 0) return;
+    runInAction(() => {
+      this.numSkippedRecords += numSkipped;
+    });
+  }
+
+  /**
    * End a file load. Nothing received: the previous data stays as it was (no binning, no
    * Infomap) and the load rejects with `emptyMessage`, unless it was cancelled. A worker
    * error after the first record keeps what arrived and rejects after `postLoad`.
@@ -421,14 +441,19 @@ export default class SpeciesStore {
     this.preLoad();
     const signal = this.loadController?.signal;
     const state = { received: 0 };
-    const mapper = createMapper<string | undefined>(nameColumn, longColumn, latColumn);
-    const features = csvParse(data).map((item) => {
-      const mappedItem = mapper(item);
-      return createPointFeature([mappedItem.longitude, mappedItem.latitude], {
-        name: normalizeSpeciesName(mappedItem.name),
-      });
-    });
+    const columns = { nameColumn, longColumn, latColumn };
+    const features: PointFeature[] = [];
+    let numSkipped = 0;
+    for (const item of csvParse(data)) {
+      const occurrence = parseOccurrence(item, columns);
+      if (!occurrence) {
+        ++numSkipped;
+        continue;
+      }
+      features.push(createPointFeature(occurrence.coordinates, { name: occurrence.name }));
+    }
     this.addFileFeatures(features, state, onFirstRecord);
+    this.addSkippedRecords(state, numSkipped);
     return this.finishFileLoad(state, null, wasLoaded, signal, NO_USABLE_ROWS);
   }
 
@@ -457,21 +482,20 @@ export default class SpeciesStore {
     const state = { received: 0 };
 
     const { mapStore } = this.rootStore;
-    const mapper = createMapper(nameColumn, longColumn, latColumn);
-    let ignoredRows = 0;
+    const columns = { nameColumn, longColumn, latColumn };
+    let numSkipped = 0;
 
     let failure: unknown = null;
     try {
       await this.loadData(file, (items) => {
         const features: PointFeature[] = [];
         for (const item of items) {
-          const mappedItem = mapper(item);
-          const name = normalizeSpeciesName(mappedItem.name);
-          if (!name || name === 'NA') {
-            ++ignoredRows;
+          const occurrence = parseOccurrence(item, columns);
+          if (!occurrence) {
+            ++numSkipped;
             continue;
           }
-          features.push(createPointFeature([mappedItem.longitude, mappedItem.latitude], { name }));
+          features.push(createPointFeature(occurrence.coordinates, { name: occurrence.name }));
         }
         if (features.length === 0) return;
         this.addFileFeatures(features, state, onFirstRecord);
@@ -485,9 +509,7 @@ export default class SpeciesStore {
     } catch (error) {
       failure = error;
     }
-    if (ignoredRows > 0) {
-      console.log(`Ignored ${ignoredRows} rows due to no name`);
-    }
+    this.addSkippedRecords(state, numSkipped);
 
     return this.finishFileLoad(state, failure, wasLoaded, signal, NO_USABLE_ROWS);
   }
@@ -825,16 +847,4 @@ export default class SpeciesStore {
     return tsvFormatRows(data);
   }
 
-}
-
-function createMapper<ItemType = string | number>(
-  nameColumn: string,
-  longColumn: string,
-  latColumn: string,
-) {
-  return (item: { [key: string]: ItemType }) => ({
-    name: `${item[nameColumn]}`,
-    longitude: +item[longColumn],
-    latitude: +item[latColumn],
-  });
 }

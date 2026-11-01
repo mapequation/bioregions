@@ -34,7 +34,7 @@ import type {
 } from '../src/store/InfomapStore';
 import type { GeoFeature } from '../src/store/SpeciesStore';
 import { createPointFeature } from '../src/store/SpeciesStore';
-import { normalizeSpeciesName } from '../src/utils/names';
+import { parseOccurrenceTable } from '../src/utils/occurrences';
 import { parseTree, prepareTree } from '../src/utils/tree';
 import { buildTreeNodeMap, createHeadlessRoot, setOccurrences } from './stubRoot';
 
@@ -128,8 +128,8 @@ function parseArgs(argv: string[]): Args {
 }
 
 /**
- * Parse a delimited occurrence table into point features, applying the same
- * `normalizeSpeciesName` the app applies, so names match the tree the same way.
+ * Parse a delimited occurrence table into point features the way the app does
+ * (`parseOccurrenceTable`), so rows are skipped and names normalized alike.
  */
 function readOccurrences(
   path: string,
@@ -137,39 +137,20 @@ function readOccurrences(
   lonColumn: string,
   latColumn: string,
 ): { features: GeoFeature[]; numSkipped: number } {
-  const text = readFileSync(path, 'utf8');
-  const delimiter = path.endsWith('.tsv') ? '\t' : ',';
-  const lines = text.split('\n');
-  const unquote = (s: string) => s.trim().replace(/^"(.*)"$/, '$1');
-  const header = (lines[0] ?? '').split(delimiter).map(unquote);
-  const iName = header.indexOf(nameColumn);
-  const iLon = header.indexOf(lonColumn);
-  const iLat = header.indexOf(latColumn);
-  if (iName === -1 || iLon === -1 || iLat === -1) {
-    throw new Error(
-      `Could not find columns '${nameColumn}', '${lonColumn}', '${latColumn}' in header: ${header.join(', ')}`,
-    );
-  }
-
-  const features: GeoFeature[] = [];
-  let numSkipped = 0;
-  for (let i = 1; i < lines.length; ++i) {
-    const line = lines[i];
-    if (!line) continue;
-    const cols = line.split(delimiter);
-    const name = unquote(cols[iName] ?? '');
-    const longitude = Number(unquote(cols[iLon] ?? ''));
-    const latitude = Number(unquote(cols[iLat] ?? ''));
-    if (!name || !Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-      ++numSkipped;
-      continue;
+  const { occurrences, numSkipped, fields } = parseOccurrenceTable(
+    readFileSync(path, 'utf8'),
+    { nameColumn, longColumn: lonColumn, latColumn },
+  );
+  for (const column of [nameColumn, lonColumn, latColumn]) {
+    if (!fields.includes(column)) {
+      throw new Error(
+        `Could not find columns '${nameColumn}', '${lonColumn}', '${latColumn}' in header: ${fields.join(', ')}`,
+      );
     }
-    features.push(
-      createPointFeature([longitude, latitude], {
-        name: normalizeSpeciesName(name),
-      }),
-    );
   }
+  const features: GeoFeature[] = occurrences.map(({ name, coordinates }) =>
+    createPointFeature(coordinates, { name }),
+  );
   return { features, numSkipped };
 }
 
