@@ -530,7 +530,7 @@ export default class MapStore {
       });
       this.projection = fitProjection(
         PROJECTION_FACTORIES[this.projectionName]().precision(0.1).rotate([-lon, -lat]),
-        sphere as GeoJSON.GeoJSON,
+        sphere,
         this.width,
         this.height,
       );
