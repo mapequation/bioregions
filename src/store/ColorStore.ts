@@ -18,15 +18,17 @@ const requireColor = (specifier: string): D3Color => {
   return color;
 };
 
-export type SchemeName = c3SchemeName | 'Mural';
+/** The palette: c3's OKLCH hue circle, a d3 color scheme, or the Mural colors */
+export type SchemeName = 'Oklch' | c3SchemeName | 'Mural';
 
-/** A c3 tone, or 'auto' for the tone c3 infers from the color scheme */
+/** A c3 tone, or 'auto' for the tone c3 infers from a d3 color scheme */
 export type ToneChoice = 'auto' | ToneName;
 
 /** OKLCH lightness range [min, max] */
 export type LightnessRange = [number, number];
 
 export const COLOR_SCHEMES = [
+  { label: 'Oklch (hue circle)', value: 'Oklch' },
   { label: 'Sinebow', value: 'Sinebow' },
   { label: 'Rainbow', value: 'Rainbow' },
   { label: 'Turbo', value: 'Turbo' },
@@ -97,6 +99,14 @@ export const TONES: { label: string; value: ToneChoice }[] = [
   })),
 ];
 
+/** 'auto' only applies to d3 schemes; on Oklch it is the same as "strong" */
+export const tonesFor = (scheme: SchemeName) =>
+  scheme === 'Oklch' ? TONES.filter((t) => t.value !== 'auto') : TONES;
+
+/** Where the first color sits by default, as a fraction of the palette: blue (245°) on Oklch */
+export const defaultOffset = (scheme: SchemeName) =>
+  scheme === 'Oklch' ? 245 / 360 : 0;
+
 /** The lightness c3 uses for d3 schemes, its default "strong" tone */
 export const DEFAULT_LIGHTNESS: LightnessRange = [...tones.strong.lightness];
 
@@ -108,7 +118,7 @@ export type BioregionColorOptions = {
   scheme: SchemeName;
   tone: ToneChoice;
   lightness: LightnessRange;
-  /** Where the first color sits on the scheme, as a fraction of it (0-1) */
+  /** Where the first color sits on the palette, as a fraction of it (0-1) */
   offset: number;
   reverse: boolean;
   /** Exponent on the flows used as weights, 0 for equal weights */
@@ -173,11 +183,11 @@ export class CellColor {
 export default class ColorStore {
   rootStore: RootStore;
 
-  scheme: SchemeName = 'Turbo';
-  tone: ToneChoice = 'auto';
-  lightness: LightnessRange = toneLightness('auto');
+  scheme: SchemeName = 'Oklch';
+  tone: ToneChoice = 'strong';
+  lightness: LightnessRange = toneLightness('strong');
   strength: number = 0;
-  offset: number = 0;
+  offset: number = defaultOffset('Oklch');
   reverse: boolean = false;
   useFlow: boolean = true;
   hideDominantOverlappingModule: boolean = false;
@@ -407,6 +417,10 @@ export default class ColorStore {
 
   setScheme = (value: SchemeName) => {
     this.scheme = value;
+    this.offset = defaultOffset(value);
+    if (value === 'Oklch' && this.tone === 'auto') {
+      this.setTone('strong');
+    }
   };
   setTone = (value: ToneChoice) => {
     this.tone = value;

@@ -4,6 +4,7 @@ import Section from './Section';
 import Resolution from './Resolution';
 import Infomap from './Infomap';
 import MapSettings from './Map';
+import ColorSettings from './ColorSettings';
 import Data from './Data';
 import Export from './Export';
 import Advanced from './Advanced';
@@ -43,6 +44,9 @@ export default observer(function ControlPanel() {
       </Section>
       <Section label="Map">
         <MapSettings />
+      </Section>
+      <Section label="Colors">
+        <ColorSettings />
       </Section>
       <Section label="Export">
         <Export />

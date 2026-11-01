@@ -11,7 +11,6 @@ import {
 import { useStore } from '../../store';
 import type { HeatmapTarget } from '../../store/MapStore';
 import { HEATMAP_TARGETS, HEATMAP_TARGET_NAME } from '../../store/MapStore';
-import ColorSettings from './ColorSettings';
 import Select from './Select';
 import { Switch } from '../ui/switch';
 import { Slider } from '../ui/slider';
@@ -85,8 +84,6 @@ export default observer(function MapSettings() {
           </Flex>
         </Collapsible.Content>
       </Collapsible.Root>
-
-      <ColorSettings />
     </VStack>
   );
 });
