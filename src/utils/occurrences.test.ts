@@ -110,4 +110,11 @@ describe('parseOccurrenceTable', () => {
     expect(occurrences).toEqual([{ name: 'A', coordinates: [1, 2] }]);
     expect(numSkipped).toBe(5);
   });
+
+  it('trims spaces around header names', () => {
+    const csv = ['species, longitude, latitude', 'A b, 1, 2'].join('\n');
+    expect(parseOccurrenceTable(csv, columns).occurrences).toEqual([
+      { name: 'A b', coordinates: [1, 2] },
+    ]);
+  });
 });

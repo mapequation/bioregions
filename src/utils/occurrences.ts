@@ -71,6 +71,8 @@ export function parseOccurrenceTable(
     header: true,
     dynamicTyping: true,
     skipEmptyLines: true,
+    // `species, lon, lat` headers: the harness trimmed header names before it used Papa.
+    transformHeader: (header) => header.trim(),
   });
   const occurrences: Occurrence[] = [];
   let numSkipped = 0;
