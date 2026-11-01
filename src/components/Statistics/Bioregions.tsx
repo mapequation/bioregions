@@ -1,26 +1,77 @@
-import { Box, Button, Popover, Table, Text } from '@chakra-ui/react';
-import { useState } from 'react';
 import {
-  PopoverArrow,
-  PopoverBody,
-  PopoverContent,
-  PopoverHeader,
-  PopoverRoot,
-  PopoverTrigger,
-} from '../ui/popover';
+  Box,
+  Button,
+  Flex,
+  IconButton,
+  Input,
+  NativeSelect,
+  SegmentGroup,
+  Text,
+  VStack,
+} from '@chakra-ui/react';
 import { observer } from 'mobx-react';
-import { format } from 'd3-format';
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { FocusEvent, KeyboardEvent, ReactNode } from 'react';
+import { LuSearch, LuX } from 'react-icons/lu';
 import { useStore } from '../../store';
 import type { Bioregion } from '../../store/InfomapStore';
-import { SpeciesPieChart } from './PieChart';
-// import { InfoOutlineIcon } from '@chakra-ui/icons';
-import { CiCircleInfo } from 'react-icons/ci';
-import { useColorModeValue } from '../ui/color-mode';
+import type {
+  BioregionDensity,
+  BioregionSort,
+} from '../../store/SettingsStore';
+import { InputGroup } from '../ui/input-group';
+import { BioregionCard, frameIfMapVisible } from './BioregionCard';
+import { BioregionRow } from './BioregionRow';
+import { formatInt, plural } from './format';
 
-const formatScore = format('.3r');
-// const formatNumber = format(',');
-// const format2s = format('.2r');
-// const formatPercent = (value: number) => `${format2s(100 * value)}%`;
+// Detailed cards by default up to this many bioregions, compact rows above it.
+const AUTO_DETAILED_MAX = 12;
+// Species names a search may match before we stop collecting them.
+const MAX_MATCHES = 50;
+// Items mounted in the first render; the rest are added in chunks over the next frames so a deep
+// hierarchical level (hundreds of bioregions) never blocks the main thread for long.
+const INITIAL = { detailed: 3, compact: 30 } as const;
+const CHUNK = { detailed: 3, compact: 40 } as const;
+
+const SORT_OPTIONS: { value: BioregionSort; label: string }[] = [
+  { value: 'flow', label: 'Flow' },
+  { value: 'records', label: 'Records' },
+  { value: 'species', label: 'Species' },
+  { value: 'cells', label: 'Cells' },
+  { value: 'area', label: 'Area' },
+  { value: 'onlyHere', label: 'Found only here' },
+];
+
+const SORT_KEY: Record<BioregionSort, (b: Bioregion) => number> = {
+  flow: (b) => b.flow,
+  records: (b) => b.numRecords,
+  species: (b) => b.numSpecies,
+  cells: (b) => b.numGridCells,
+  area: (b) => b.area,
+  onlyHere: (b) => b.numFoundOnlyHere,
+};
+
+const DENSITY_ITEMS: { value: BioregionDensity; label: string }[] = [
+  { value: 'detailed', label: 'Detailed' },
+  { value: 'compact', label: 'Compact' },
+];
+
+type SpeciesSearch = {
+  query: string;
+  names: ReadonlySet<string>;
+  first: string | undefined;
+  total: number;
+  ids: ReadonlySet<number>;
+};
+
+const EMPTY_IDS: ReadonlySet<number> = new Set();
 
 export default observer(function Bioregions() {
   const { infomapStore } = useStore();
@@ -32,167 +83,354 @@ export default observer(function Bioregions() {
   return <BioregionList bioregions={infomapStore.bioregions} />;
 });
 
-// Default number of bioregions to render. Each `BioregionInfo` mounts a Chakra Table plus
-// up to 20 Popover-backed pie charts, so rendering every module at deep hierarchical levels
-// (hundreds of modules) stalls the main thread for many seconds. Cap the default render and
-// let the user opt in to the rest.
-const DEFAULT_VISIBLE = 5;
-
 const BioregionList = observer(function BioregionList({
   bioregions,
 }: {
   bioregions: Bioregion[];
 }) {
-  const [showAll, setShowAll] = useState(false);
+  const store = useStore();
+  const { settingsStore, speciesStore, selectionStore } = store;
+  const { speciesMap } = speciesStore;
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Bioregions are ordered by Infomap flow (largest first), so the head is the top-N.
-  const visible = showAll ? bioregions : bioregions.slice(0, DEFAULT_VISIBLE);
+  // Species search ----------------------------------------------------------------------------
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
 
-  return (
-    <>
-      {visible.map((bioregion: Bioregion) => (
-        <BioregionInfo bioregion={bioregion} key={bioregion.bioregionId} />
-      ))}
-      {bioregions.length > DEFAULT_VISIBLE && (
-        <Button
-          variant="outline"
-          size="sm"
-          alignSelf="center"
-          onClick={() => setShowAll((v) => !v)}
-        >
-          {showAll
-            ? `Show top ${DEFAULT_VISIBLE}`
-            : `Show all ${bioregions.length} bioregions`}
-        </Button>
-      )}
-    </>
-  );
-});
-
-const BioregionInfo = observer(function Bioregion({
-  bioregion,
-}: {
-  bioregion: Bioregion;
-}) {
-  const { colorStore } = useStore();
-  const { colorBioregion } = colorStore;
-  const borderColor = useColorModeValue('blackAlpha.200', 'whiteAlpha.200');
-
-  //const { mostCommon, mostIndicative } = useExampleData();
-
-  const MAX_NUM_ROWS = 10;
-  const numValues = Math.min(
-    Math.min(bioregion.mostCommon.length, bioregion.mostIndicative.length),
-    MAX_NUM_ROWS,
+  const lowerNames = useMemo(
+    () =>
+      Array.from(
+        speciesMap.keys(),
+        (name) => [name.toLowerCase(), name] as const,
+      ),
+    [speciesMap],
   );
 
-  const mostCommon = bioregion.mostCommon.slice(0, numValues);
-  const mostIndicative = bioregion.mostIndicative.slice(0, numValues);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `bioregions` changes whenever countPerRegion is recomputed
+  const search = useMemo((): SpeciesSearch | null => {
+    if (!deferredQuery) return null;
+    const names = new Set<string>();
+    let total = 0;
+    for (const [lower, name] of lowerNames) {
+      if (!lower.includes(deferredQuery)) continue;
+      ++total;
+      if (names.size < MAX_MATCHES) names.add(name);
+    }
+    const ids = new Set<number>();
+    for (const name of names) {
+      for (const [id, count] of speciesMap.get(name)?.countPerRegion ?? []) {
+        if (count > 0) ids.add(id);
+      }
+    }
+    const [first] = names;
+    return { query: deferredQuery, names, first, total, ids };
+  }, [deferredQuery, lowerNames, speciesMap, bioregions]);
+
+  useEffect(() => {
+    selectionStore.setSearchIds(search && search.total > 0 ? search.ids : null);
+  }, [selectionStore, search]);
+  useEffect(() => () => selectionStore.setSearchIds(null), [selectionStore]);
+
+  // Sort, filter, density -----------------------------------------------------------------------
+  const sort = settingsStore.bioregionSort;
+  const sorted = useMemo(() => {
+    const key = SORT_KEY[sort];
+    return [...bioregions].sort(
+      (a, b) => key(b) - key(a) || a.bioregionId - b.bioregionId,
+    );
+  }, [bioregions, sort]);
+
+  const visible = useMemo(
+    () =>
+      search && search.total > 0
+        ? sorted.filter((b) => search.ids.has(b.bioregionId))
+        : sorted,
+    [sorted, search],
+  );
+
+  const maxFlow = useMemo(
+    () => bioregions.reduce((max, b) => Math.max(max, b.flow), 0),
+    [bioregions],
+  );
+
+  const density: BioregionDensity =
+    settingsStore.bioregionDensity ??
+    (bioregions.length <= AUTO_DETAILED_MAX ? 'detailed' : 'compact');
+
+  // Compact rows expanded into cards (several at once, to compare); reset with every new set of
+  // bioregions. Expanding selects the bioregion; collapsing leaves the selection alone.
+  const [expanded, setExpanded] = useState({
+    of: bioregions,
+    ids: EMPTY_IDS,
+  });
+  const expandedIds = expanded.of === bioregions ? expanded.ids : EMPTY_IDS;
+  const pendingFocus = useRef<string | null>(null);
+
+  const setExpandedId = (bioregion: Bioregion, open: boolean) => {
+    const { bioregionId: id } = bioregion;
+    const ids = new Set(expandedIds);
+    if (open) ids.add(id);
+    else ids.delete(id);
+    setExpanded({ of: bioregions, ids });
+    pendingFocus.current = open
+      ? `[data-testid=bioregion-card][data-bioregion-id="${id}"] [data-roving]`
+      : `[data-testid=bioregion-row][data-bioregion-id="${id}"]`;
+    if (open && selectionStore.selectedId !== id) {
+      selectionStore.select(id);
+      frameIfMapVisible(store, bioregion);
+    }
+  };
+
+  // Keep keyboard focus on the item that replaced the one just expanded or collapsed.
+  useLayoutEffect(() => {
+    if (!pendingFocus.current) return;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      pendingFocus.current,
+    );
+    pendingFocus.current = null;
+    if (el) {
+      setRovingStop(listRef.current, el);
+      el.focus({ preventScroll: true });
+    }
+  });
+
+  // Progressive mounting ------------------------------------------------------------------------
+  const [limit, setLimit] = useState({ of: bioregions, n: 0 });
+  const numMounted = Math.max(
+    INITIAL[density],
+    limit.of === bioregions ? limit.n : 0,
+  );
+  useEffect(() => {
+    if (numMounted >= visible.length) return;
+    const timer = window.setTimeout(
+      () => setLimit({ of: bioregions, n: numMounted + CHUNK[density] }),
+      16,
+    );
+    return () => window.clearTimeout(timer);
+  }, [numMounted, visible.length, bioregions, density]);
+
+  // Roving focus: ArrowUp/ArrowDown move between card headers and compact rows ----------------
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const target = event.target as HTMLElement;
+    if (!target.hasAttribute('data-roving')) return;
+    const items = rovingItems(listRef.current);
+    const next =
+      items[items.indexOf(target) + (event.key === 'ArrowDown' ? 1 : -1)];
+    if (!next) return;
+    event.preventDefault();
+    setRovingStop(listRef.current, next);
+    next.focus();
+  };
+  const onFocus = (event: FocusEvent<HTMLDivElement>) => {
+    if (event.target.hasAttribute('data-roving')) {
+      setRovingStop(listRef.current, event.target);
+    }
+  };
+
+  const shown = visible.slice(0, numMounted);
 
   return (
-    <Box
-      p={4}
+    <VStack
+      data-testid="bioregion-list"
+      id="bioregions"
       w="100%"
-      rounded="md"
-      borderColor={borderColor}
-      borderWidth="2px"
-      boxShadow="md"
+      gap="3"
+      align="stretch"
+      // The toolbar hides its bioregion count when narrow (the section heading states it).
+      css={{ containerType: 'inline-size' }}
     >
-      <Box
-        bg={colorBioregion(bioregion.bioregionId)}
-        w="100%"
-        h="100%"
-        rounded="md"
-        textAlign="center"
-        color="white"
-        borderColor="blackAlpha.200"
-        borderWidth="2px"
-        fontWeight={600}
-        py={2}
-        textShadow="1px 1px 2px var(--chakra-colors-blackAlpha-700)"
+      {/* Sticky so search, sort and density stay at hand while scrolling the long list. */}
+      <Flex
+        wrap="wrap"
+        gap="2"
+        align="center"
+        position="sticky"
+        top="0"
+        zIndex={3}
+        bg="bg"
+        py="2"
+        borderBottomWidth="1px"
+        borderColor="border.muted"
       >
-        Bioregion {bioregion.bioregionId}
-      </Box>
+        <InputGroup
+          flex="1 1 160px"
+          minW="140px"
+          maxW="20rem"
+          startElement={<LuSearch />}
+          endElement={
+            query ? (
+              <IconButton
+                aria-label="Clear species search"
+                variant="ghost"
+                size="2xs"
+                me="-1"
+                onClick={() => setQuery('')}
+              >
+                <LuX />
+              </IconButton>
+            ) : undefined
+          }
+        >
+          <Input
+            size="sm"
+            placeholder="Find species…"
+            aria-label="Find bioregions by species"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && query) {
+                e.stopPropagation();
+                setQuery('');
+              }
+            }}
+          />
+        </InputGroup>
+        {/* A visible label so the sort is not mistaken for a ranking of species. */}
+        <Flex align="center" gap="1.5" flexShrink={0}>
+          <Text asChild fontSize="xs" color="fg.muted" whiteSpace="nowrap">
+            <label htmlFor="bioregion-sort">Sort bioregions by</label>
+          </Text>
+          <NativeSelect.Root size="sm" w="auto">
+            <NativeSelect.Field
+              id="bioregion-sort"
+              value={sort}
+              onChange={(e) =>
+                settingsStore.setBioregionSort(
+                  e.currentTarget.value as BioregionSort,
+                )
+              }
+            >
+              {SORT_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+        </Flex>
+        <SegmentGroup.Root
+          size="sm"
+          flexShrink={0}
+          aria-label="List density"
+          value={density}
+          onValueChange={(e) =>
+            settingsStore.setBioregionDensity(e.value as BioregionDensity)
+          }
+        >
+          <SegmentGroup.Indicator />
+          <SegmentGroup.Items items={DENSITY_ITEMS} />
+        </SegmentGroup.Root>
+        <Text
+          ms="auto"
+          fontSize="sm"
+          color="fg.muted"
+          fontVariantNumeric="tabular-nums"
+          aria-live="polite"
+          css={{ '@container (max-width: 999px)': { display: 'none' } }}
+        >
+          {visible.length === bioregions.length
+            ? plural(bioregions.length, 'bioregion')
+            : `${formatInt(visible.length)} of ${plural(bioregions.length, 'bioregion')}`}
+        </Text>
+      </Flex>
 
-      <Table.Root variant="line">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeader colSpan={3} textAlign="center">
-              Most common species
-            </Table.ColumnHeader>
-            <Table.ColumnHeader colSpan={3} textAlign="center">
-              <Text as="div" display="flex" alignItems="center">
-                Most indicative species
-                <PopoverRoot>
-                  <PopoverTrigger>
-                    <Box ml={2}>
-                      <CiCircleInfo />
-                    </Box>
-                  </PopoverTrigger>
-                  <PopoverContent textTransform="none">
-                    <PopoverArrow />
-                    <Popover.CloseTrigger />
-                    <PopoverHeader>Most indicative species</PopoverHeader>
-                    <PopoverBody fontWeight="normal">
-                      The score of a species <em>s</em> in bioregion <em>r</em>{' '}
-                      is defined as the relative abundance of <em>s</em> within{' '}
-                      <em>r</em> divided by the relative abundance of <em>s</em>{' '}
-                      in total.
-                    </PopoverBody>
-                  </PopoverContent>
-                </PopoverRoot>
-              </Text>
-            </Table.ColumnHeader>
-          </Table.Row>
-          <Table.Row>
-            <Table.ColumnHeader>Name</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="right">Count</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="right">Score</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="center">Regions</Table.ColumnHeader>
-            <Table.ColumnHeader>Name</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="right">Count</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="right">Score</Table.ColumnHeader>
-            <Table.ColumnHeader textAlign="center">Regions</Table.ColumnHeader>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {mostCommon.map(
-            (
-              commonSpecies: { name: string; count: number; score: number },
-              index: number,
-            ) => {
-              const indicativeSpecies = mostIndicative[index];
-              return (
-                <Table.Row
-                  key={`${commonSpecies.name}|${indicativeSpecies.name}`}
-                  w="100%"
-                >
-                  <Table.Cell>{commonSpecies.name}</Table.Cell>
-                  <Table.Cell textAlign="right">
-                    {commonSpecies.count.toLocaleString()}
-                  </Table.Cell>
-                  <Table.Cell textAlign="right">
-                    {formatScore(commonSpecies.score)}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <SpeciesPieChart speciesName={commonSpecies.name} />
-                  </Table.Cell>
-                  <Table.Cell>{indicativeSpecies.name}</Table.Cell>
-                  <Table.Cell textAlign="right">
-                    {indicativeSpecies.count}
-                  </Table.Cell>
-                  <Table.Cell textAlign="right">
-                    {formatScore(indicativeSpecies.score)}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <SpeciesPieChart speciesName={indicativeSpecies.name} />
-                  </Table.Cell>
-                </Table.Row>
-              );
-            },
-          )}
-        </Table.Body>
-      </Table.Root>
-    </Box>
+      {search && (
+        <SearchStatus
+          search={search}
+          numShown={visible.length}
+          onClear={() => setQuery('')}
+        />
+      )}
+
+      <VStack
+        ref={listRef}
+        gap={density === 'compact' ? '1.5' : '3'}
+        align="stretch"
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
+      >
+        {shown.map((bioregion, i) =>
+          density === 'detailed' || expandedIds.has(bioregion.bioregionId) ? (
+            <BioregionCard
+              key={bioregion.bioregionId}
+              bioregion={bioregion}
+              highlight={search?.names ?? null}
+              tabIndex={i === 0 ? 0 : -1}
+              onCollapse={
+                density === 'compact'
+                  ? () => setExpandedId(bioregion, false)
+                  : undefined
+              }
+            />
+          ) : (
+            <BioregionRow
+              key={bioregion.bioregionId}
+              bioregion={bioregion}
+              maxFlow={maxFlow}
+              tabIndex={i === 0 ? 0 : -1}
+              onExpand={() => setExpandedId(bioregion, true)}
+            />
+          ),
+        )}
+      </VStack>
+    </VStack>
   );
 });
+
+function rovingItems(list: HTMLElement | null): HTMLElement[] {
+  return list
+    ? Array.from(list.querySelectorAll<HTMLElement>('[data-roving]'))
+    : [];
+}
+
+/** Make `el` the list's single tab stop. */
+function setRovingStop(list: HTMLElement | null, el: HTMLElement) {
+  for (const item of rovingItems(list)) item.tabIndex = item === el ? 0 : -1;
+}
+
+function SearchStatus({
+  search,
+  numShown,
+  onClear,
+}: {
+  search: SpeciesSearch;
+  numShown: number;
+  onClear: () => void;
+}) {
+  const regions = plural(numShown, 'bioregion');
+  let message: ReactNode;
+  if (search.total === 0) {
+    message = <>No species match “{search.query}”</>;
+  } else if (search.total === 1) {
+    message = (
+      <>
+        Showing {regions} where <em>{search.first}</em> occurs
+      </>
+    );
+  } else {
+    message = (
+      <>
+        {formatInt(search.total)} species match “{search.query}”
+        {search.total > MAX_MATCHES && ` (first ${MAX_MATCHES} used)`} · showing{' '}
+        {regions}
+      </>
+    );
+  }
+  return (
+    <Flex
+      align="center"
+      gap="2"
+      fontSize="sm"
+      color="fg.muted"
+      role="status"
+      minH="7"
+    >
+      <Box>{message}</Box>
+      <Button variant="ghost" size="2xs" onClick={onClear}>
+        <LuX /> Clear
+      </Button>
+    </Flex>
+  );
+}

@@ -5,6 +5,7 @@ import {
   action,
   computed,
   autorun,
+  reaction,
   untracked,
   runInAction,
   type IReactionDisposer,
@@ -198,6 +199,10 @@ export default class TreeStore {
   private anchors: LabelAnchor[] = [];
   view: ViewTransform = { k: 1, x: 0, y: 0 };
   private renderDisposer: IReactionDisposer | null = null;
+  // Dims branches/pies of other bioregions while one is selected (see `applyEmphasis`).
+  private emphasisDisposer: IReactionDisposer | null = null;
+  // A branch's dominant bioregion, captured by `renderTree` for `applyEmphasis`.
+  private linkRegion: ((l: LayoutLink) => number | undefined) | null = null;
   private sizeObserver: ResizeObserver | null = null;
 
   // Latest ancestral-range reconstruction (node → ranges/distribution), looked up on hover.
@@ -501,6 +506,13 @@ export default class TreeStore {
 
     // Rebuild whenever the tree, bioregions, colors, or size change (autorun tracks the reads).
     this.renderDisposer = autorun(() => this.renderTree());
+
+    // Mirror the map's selection dimming on the tree (MapStore.applyEmphasis): a style-table
+    // write per layer, no re-layout.
+    this.emphasisDisposer = reaction(
+      () => this.treeEmphasis,
+      () => this.applyEmphasis(),
+    );
   }
 
   disposeEngine = () => {
@@ -509,6 +521,9 @@ export default class TreeStore {
     this.sizeObserver = null;
     this.renderDisposer?.();
     this.renderDisposer = null;
+    this.emphasisDisposer?.();
+    this.emphasisDisposer = null;
+    this.linkRegion = null;
     this.labels?.destroy();
     this.labels = null;
     if (this.labelEl?.parentNode) {
@@ -637,6 +652,7 @@ export default class TreeStore {
       const d = dataOf(n);
       return d ? this.pieSlices(d)[0]?.clusterId : undefined;
     };
+    this.linkRegion = ancestral ? (l: LayoutLink) => topRegion(l.target) : null;
     const branchWidth = (n: LayoutNode): number => {
       const d = dataOf(n);
       return widthScale && d ? widthScale(d.speciesCount) : 0.8;
@@ -740,6 +756,34 @@ export default class TreeStore {
 
     engine.render();
     this.updateLabels();
+    // Layers were re-registered with plain styles; re-apply the selection dimming (untracked so
+    // selection changes don't re-run the whole layout).
+    untracked(() => this.applyEmphasis());
+  }
+
+  /** The bioregions to keep at full strength on the tree: the map's emphasis (selection, list
+   *  preview, search), except while a tree branch is hovered, which already outlines itself. */
+  private get treeEmphasis(): ReadonlySet<number> | null {
+    const { treeIds, emphasized } = this.rootStore.selectionStore;
+    return treeIds !== null && treeIds.size > 0 ? null : emphasized;
+  }
+
+  /** Dim branches whose dominant bioregion and pie wedges whose bioregion are not emphasized. */
+  private applyEmphasis() {
+    const engine = this.engine;
+    if (engine === null) return;
+    const set = this.treeEmphasis;
+    const linkRegion = this.linkRegion;
+    if (set === null || linkRegion === null) {
+      engine.select('links', null);
+      engine.select('pies', null);
+      return;
+    }
+    engine.select('links', (l: LayoutLink) => {
+      const region = linkRegion(l);
+      return region !== undefined && set.has(region);
+    });
+    engine.select('pies', (w: Wedge) => set.has(w.clusterId));
   }
 
   // --- Hover: show a node's ancestral range (tree tooltip + map cross-highlight) ---

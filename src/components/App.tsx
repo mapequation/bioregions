@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { VStack, Box, Text } from '@chakra-ui/react';
+import { useEffect, useRef, useState } from 'react';
+import { VStack, Box, Text, VisuallyHidden } from '@chakra-ui/react';
 import { observer } from 'mobx-react';
+import { reaction } from 'mobx';
 import WorldMap from './WorldMap';
 import ControlPanel from './ControlPanel';
 import { controlPanelWidth } from './ControlPanel/ControlPanel';
@@ -10,6 +11,7 @@ import Documentation from './Documentation';
 import { DataPortal } from './Explorer';
 import ColorMode from './ControlPanel/ColorMode';
 import TreeStatusBar from './StatusBar/TreeStatusBar';
+import SelectionBar from './SelectionBar';
 import { formatThousands } from '../utils/formats';
 import { ASPECT_RATIO, MAX_WIDTH } from '../responsive';
 
@@ -29,23 +31,25 @@ const TreeTooltip = observer(function _TreeTooltip() {
       left={`${x + 12}px`}
       top={`${y + 12}px`}
       pointerEvents="none"
-      bg="rgba(255,255,255,0.96)"
-      border="1px solid #cccccc"
-      borderRadius="3px"
-      px={2}
-      py={1}
+      bg="bg.panel"
+      color="fg"
+      borderWidth="1px"
+      borderColor="border"
+      borderRadius="md"
+      px={2.5}
+      py={2}
       fontSize="xs"
-      lineHeight="1.4"
+      lineHeight="1.45"
       zIndex={10}
-      boxShadow="sm"
-      maxW="240px"
+      boxShadow="md"
+      maxW="300px"
     >
       {info.name && (
         <Text fontWeight="600" truncate>
           {info.name}
         </Text>
       )}
-      <Text color="gray.500" mb={1}>
+      <Text color="fg.muted" mb={1}>
         Ancestral range · {formatThousands(info.speciesCount)} tips
       </Text>
       {info.regions.map((r) => (
@@ -58,7 +62,7 @@ const TreeTooltip = observer(function _TreeTooltip() {
             flexShrink={0}
           />
           <Text flex={1}>Bioregion {r.clusterId}</Text>
-          <Text color="gray.500">{Math.round(r.fraction * 100)}%</Text>
+          <Text color="fg.muted">{Math.round(r.fraction * 100)}%</Text>
         </Box>
       ))}
     </Box>
@@ -124,9 +128,70 @@ const PhyloTree = observer(function _PhyloTree() {
   );
 });
 
+// Where Escape should keep its local meaning (editing text, closing a dialog or popover).
+function escapeIsLocal(ev: KeyboardEvent) {
+  if (ev.defaultPrevented) return true;
+  const el = document.activeElement as HTMLElement | null;
+  if (el && (el.isContentEditable || el.closest('input, textarea, select')))
+    return true;
+  // Chakra keeps closed dialog/popover content mounted, so only count open ones.
+  return (
+    document.querySelector(
+      ':is([role="dialog"], [role="alertdialog"]):not([data-state="closed"]):not([hidden])',
+    ) !== null
+  );
+}
+
+/** Escape clears the bioregion selection (and any list preview) anywhere on the page. */
+function useEscapeClearsSelection() {
+  const { selectionStore } = useStore();
+  useEffect(() => {
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape' || escapeIsLocal(ev)) return;
+      if (
+        selectionStore.selectedId === null &&
+        selectionStore.previewId === null
+      )
+        return;
+      selectionStore.select(null);
+      selectionStore.preview(null);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectionStore]);
+}
+
+/** Screen-reader announcement of selection changes (silent until the first change). */
+function SelectionAnnouncer() {
+  const { selectionStore, infomapStore } = useStore();
+  const [message, setMessage] = useState('');
+  useEffect(
+    () =>
+      reaction(
+        () => selectionStore.selectedId,
+        (id) => {
+          const b = infomapStore.bioregions.find((r) => r.bioregionId === id);
+          setMessage(
+            id === null
+              ? 'Selection cleared'
+              : `Bioregion ${id} selected${b ? `, ${formatThousands(b.numGridCells)} cells` : ''}`,
+          );
+        },
+      ),
+    [selectionStore, infomapStore],
+  );
+  return (
+    <VisuallyHidden aria-live="polite" aria-atomic="true">
+      {message}
+    </VisuallyHidden>
+  );
+}
+
 export default observer(function App() {
+  useEscapeClearsSelection();
   return (
     <Box>
+      <SelectionAnnouncer />
       <Box position="fixed" right={0}>
         <ColorMode />
       </Box>
@@ -135,6 +200,8 @@ export default observer(function App() {
         flex={1}
         alignItems="flex-start"
         ml={controlPanelWidth + 25}
+        // Keep content clear of the fixed color-mode toggle in the top-right corner.
+        pr={10}
         pt={5}
         pb={12}
       >
@@ -144,6 +211,7 @@ export default observer(function App() {
         <Documentation />
       </VStack>
       <DataPortal />
+      <SelectionBar />
     </Box>
   );
 });
