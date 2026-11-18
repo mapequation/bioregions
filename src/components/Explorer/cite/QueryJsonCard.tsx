@@ -1,5 +1,4 @@
 import { Box, Button, Code, Flex, HStack, Input, Text, VisuallyHidden } from '@chakra-ui/react';
-import { toJS } from 'mobx';
 import { observer } from 'mobx-react';
 import { useEffect, useRef, useState } from 'react';
 import { LuBookmarkPlus, LuCheck, LuCopy, LuFileDown } from 'react-icons/lu';
@@ -129,7 +128,7 @@ export const SaveToLibraryButton = observer(function SaveToLibraryButton({
 export default observer(function QueryJsonCard({ query: queryProp }: { query?: OccurrenceQuery }) {
   const { explorerStore } = useStore();
   const query = queryProp ?? explorerStore.query;
-  const json = JSON.stringify(toJS(query), null, 2);
+  const json = explorerStore.exportQueryJson(query);
   const d = describeQuery(query);
   const facts = [
     ['Taxa', d.taxa],

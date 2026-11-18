@@ -51,6 +51,7 @@ import {
   buildObisCitation,
   citingDownload,
 } from './explorer/provenance';
+import { type QueryExport, buildQueryExport } from './explorer/queryExport';
 import { resolveTaxonNames, unknownTaxonLabel } from './explorer/taxonNames';
 import { previewGbifImpact, previewGbifSummary } from '../sources/gbif/preview';
 import { gbifTaxonCount, suggestGbifTaxa } from '../sources/gbif/taxa';
@@ -2397,9 +2398,25 @@ export default class ExplorerStore {
     return { ok: true };
   }
 
-  /** The current query as JSON text. */
-  exportQueryJson(): string {
-    return JSON.stringify(toJS(this.query), null, 2);
+  /**
+   * `query.json` for `query` (default: the current query): the query plus the source
+   * requests, the citing GBIF download and the app version (docs/query-json.md). When the
+   * loaded data was made with this query, the requests are the ones the load sent.
+   */
+  queryExport(query: OccurrenceQuery = this.query): QueryExport {
+    const q = toJS(query);
+    const key = queryKey(q);
+    const load = this.loaded && queryKey(this.loaded.query) === key ? this.loaded : null;
+    const dl = citingDownload(load, this.downloads, key);
+    return buildQueryExport(q, {
+      requests: load?.requests,
+      download: { key: load?.gbifDownloadKey ?? dl?.key, doi: load?.gbifDownloadDoi ?? dl?.doi },
+    });
+  }
+
+  /** The current query as JSON text (`query.json`, see `queryExport`). */
+  exportQueryJson(query?: OccurrenceQuery): string {
+    return JSON.stringify(this.queryExport(query), null, 2);
   }
 
   /** Replace the whole query (a deep copy); previews follow through the query reaction. */
