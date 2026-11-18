@@ -158,9 +158,13 @@ export class RecordCleaner {
     const f = this.state;
     const dropped = f.dropped;
     const { bbox, dedupe, seen } = this;
-    let counts = records.length > 0 ? this.sourceCounts(records[0].source) : null;
+    let counts: { received: number; accepted: number } | null = null;
+    let countsSource: RecordSource | null = null;
     for (const r of records) {
-      if (counts === null || r.source !== records[0].source) counts = this.sourceCounts(r.source);
+      if (counts === null || r.source !== countsSource) {
+        counts = this.sourceCounts(r.source);
+        countsSource = r.source;
+      }
       f.received++;
       counts.received++;
       const name = this.speciesName(r.name);

@@ -97,6 +97,12 @@ describe('RecordCleaner', () => {
     expect(cell.funnel.dropped).toMatchObject({ duplicate: 0, crossSource: 1 });
   });
 
+  it('counts each record under its own source in a mixed batch', () => {
+    const c = new RecordCleaner({ dedupe: 'none' });
+    c.accept([rec('Abra alba', 1, 1), rec('Abra alba', 2, 2, 'obis'), rec('Abra alba', 3, 3), rec('Abra sp.', 4, 4)]);
+    expect(c.funnel.bySource).toEqual({ gbif: { received: 3, accepted: 2 }, obis: { received: 1, accepted: 1 } });
+  });
+
   it('dedupes per cell, never with none, and honours antimeridian boxes', () => {
     const cell = new RecordCleaner({ dedupe: 'cell' });
     expect(cell.accept([rec('Abra alba', 10.001, 5.001), rec('Abra alba', 10.009, 5.009), rec('Abra nitida', 10.001, 5.001)])).toHaveLength(2);
