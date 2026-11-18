@@ -12,6 +12,7 @@ import {
 } from 'mobx';
 import type RootStore from './RootStore';
 import { prepareTree, parseTree, lineagesThroughTime } from '../utils/tree';
+import { speciesNewick } from '../phylo/newickTools';
 import { visitTreeDepthFirstPreOrder } from '../utils/tree';
 import type { PhyloNode } from '../utils/tree';
 import {
@@ -355,6 +356,14 @@ export default class TreeStore {
       this.setTree(root);
       this.setIsLoaded();
     });
+  }
+
+  /**
+   * The loaded tree as Newick for export: tips are the dataset species names and branch
+   * lengths are as loaded (`speciesNewick`). Null without a tree.
+   */
+  get newickForExport(): string | null {
+    return this.treeString ? speciesNewick(parseTree(this.treeString)) : null;
   }
 
   /** Remove the tree with everything derived from it (`clearData` only nulls `tree`/`treeString`). */

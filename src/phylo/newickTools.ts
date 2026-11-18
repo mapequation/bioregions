@@ -9,6 +9,8 @@
 // node shape (`ITree` without `bs`), and `writeNewick` writes labels the app reader
 // understands (spaces as underscores, which `normalizeSpeciesName` turns back).
 
+import { normalizeSpeciesName } from '../utils/names';
+
 /** Same shape as the app reader's `ITree` (minus the optional support value). */
 export interface NewickNode {
   name: string;
@@ -376,4 +378,25 @@ export function ottIdFromLabel(label: string): number | null {
   }
   const match = OTT_SUFFIX.exec(label);
   return match ? Number(match[1]) : null;
+}
+
+/**
+ * Newick for export: tips renamed to the dataset species names (`normalizeSpeciesName`,
+ * as the app matches them), branch lengths and internal labels kept, and labels with
+ * spaces quoted so they read back exactly. Keeps every tip, unlike `relabelTips`. A support
+ * value the app reader parsed into `bs` is written back as the (unlabelled) node's label.
+ */
+export function speciesNewick(tree: NewickNode & { bs?: number }): string {
+  const copies = new Map<NewickNode, NewickNode>();
+  const order = preOrder(tree);
+  for (let k = order.length - 1; k >= 0; k--) {
+    const n = order[k] as NewickNode & { bs?: number };
+    const leaf = n.children.length === 0;
+    copies.set(n, {
+      name: leaf && n.name ? normalizeSpeciesName(n.name) : n.name || (n.bs != null ? String(n.bs) : ''),
+      branchLength: n.branchLength,
+      children: n.children.map((c) => copies.get(c) as NewickNode),
+    });
+  }
+  return writeNewick(copies.get(tree) as NewickNode, { quoteSpaces: true });
 }

@@ -7,8 +7,10 @@ import {
   type NewickNode,
   ottIdFromLabel,
   parseNewick,
+  preOrder,
   pruneToTips,
   relabelTips,
+  speciesNewick,
   tipLabels,
   treeStats,
   writeNewick,
@@ -154,5 +156,29 @@ describe('deep trees', () => {
     expect(treeStats(pruned)).toMatchObject({ tips: 10_000, internalNodes: 9_999 });
     const relabeled = relabelTips(parsed, (label) => label.toUpperCase());
     expect(relabeled.kept).toBe(20_000);
+  });
+});
+
+describe('speciesNewick', () => {
+  const tips = (t: { name: string; branchLength: number | null; children: unknown[] }): [string, number | null][] =>
+    preOrder(t as never)
+      .filter((n) => n.children.length === 0)
+      .map((n) => [n.name, n.branchLength]);
+
+  it('names tips as dataset species and round-trips through the app reader', () => {
+    const text = "((panthera_leo:1.5,'Panthera pardus':2)0.95:0.5,(Lynx lynx:3,'it''s, odd':0.25)Felinae,Puma_concolor);";
+    const out = speciesNewick(read(text));
+    expect(out).toBe("(('Panthera leo':1.5,'Panthera pardus':2)0.95:0.5,('Lynx lynx':3,'It''s, odd':0.25)Felinae,'Puma concolor');");
+    const back = read(out);
+    expect(tips(back)).toEqual([
+      ['Panthera leo', 1.5],
+      ['Panthera pardus', 2],
+      ['Lynx lynx', 3],
+      ["It's, odd", 0.25],
+      ['Puma concolor', null],
+    ]);
+    expect(back.children[0].bs).toBe(0.95);
+    expect(back.children[1].name).toBe('Felinae');
+    expect(speciesNewick(back)).toBe(out);
   });
 });
