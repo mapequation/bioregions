@@ -4,9 +4,9 @@
 // record, and settle its download summary (and, for a Cite-tab "Replace", the loaded query's
 // provenance) at the finish.
 import { runInAction } from 'mobx';
-import { RecordCleaner } from '../../sources/clean';
+import { RecordCleaner, toSpeciesName } from '../../sources/clean';
 import { gbifDownloadPredicate } from '../../sources/gbif/predicate';
-import { type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../../sources/gbif/zip';
+import { type GbifZipOptions, type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../../sources/gbif/zip';
 import type { OccurrenceQuery, OccurrenceRecord } from '../../sources/types';
 import type DataStore from '../DataStore';
 import { JOB_UPDATE_MS, LoadTally, PauseGate, type TallyLabels, etaSeconds } from '../explorer/job';
@@ -20,8 +20,9 @@ export interface ZipLoadOptions {
   origin?: JobOrigin;
   /**
    * A Cite-tab "Replace": the loaded query this download matches. Its cleaning (dedupe,
-   * area, introduced records) applies and the source gets the query's provenance at the
-   * finish. Without it the zip loads as it is (`dedupe: 'none'`) and has no provenance.
+   * area, introduced records, minimum records per species) applies and the source gets the
+   * query's provenance at the finish. Without it the zip loads as it is (`dedupe: 'none'`)
+   * and has no provenance.
    */
   query?: OccurrenceQuery;
   /** What the Cite tab already read from the zip (key and DOI resolved against GBIF). */
@@ -32,6 +33,24 @@ export interface ZipLoadOptions {
 }
 
 const nowIso = () => new Date().toISOString();
+
+/**
+ * Canonical names of the species with fewer than `min` records in the zip. A streamed load
+ * leaves these species out at plan time, from GBIF's record counts under the same predicate
+ * (`applyMinRecords`); the zip holds those records, so one read of it gives the same counts.
+ */
+async function lowCountSpecies(file: Blob, min: number, opts: GbifZipOptions): Promise<Set<string>> {
+  const byRaw = new Map<string, number>();
+  for await (const batch of importGbifZip(file, opts)) {
+    for (const r of batch.records) byRaw.set(r.name, (byRaw.get(r.name) ?? 0) + 1);
+  }
+  const counts = new Map<string, number>();
+  for (const [raw, n] of byRaw) {
+    const name = toSpeciesName(raw);
+    if (name !== null) counts.set(name, (counts.get(name) ?? 0) + n);
+  }
+  return new Set([...counts].filter(([, n]) => n < min).map(([name]) => name));
+}
 
 const fileName = (file: Blob) => ('name' in file && typeof file.name === 'string' ? file.name : '');
 
@@ -53,7 +72,16 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
   const active: ActiveLoad = { job, controller, gate, cancelMode: null, flush: () => {} };
   store.active = active;
 
-  const cleaner = new RecordCleaner(query ? { dedupe: query.quality.dedupe, area: query.area } : { dedupe: 'none' });
+  const minRecords = query?.quality.minRecordsPerSpecies ?? 1;
+  const readOptions: GbifZipOptions = {
+    signal: controller.signal,
+    excludeIntroduced: query?.quality.excludeIntroduced ?? false,
+  };
+  /** Species below the query's minimum records, filled by a first read before any record is cleaned. */
+  const lowCount = new Set<string>();
+  const cleaner = new RecordCleaner(
+    query ? { dedupe: query.quality.dedupe, area: query.area, lowCount: { gbif: lowCount } } : { dedupe: 'none' },
+  );
   const tally = new LoadTally();
   const progress: SourceProgress = {
     source: 'gbif',
@@ -185,10 +213,19 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
 
   async function* accepted(): AsyncGenerator<OccurrenceRecord[]> {
     try {
-      const reader = importGbifZip(file, {
-        signal: controller.signal,
-        excludeIntroduced: query?.quality.excludeIntroduced ?? false,
-      });
+      if (query && minRecords > 1) {
+        // Count the records per species first, as a streamed load's plan does.
+        runInAction(() => {
+          job.state = 'planning';
+        });
+        for (const name of await lowCountSpecies(file, minRecords, readOptions)) lowCount.add(name);
+        if (!controller.signal.aborted) {
+          runInAction(() => {
+            job.state = 'streaming';
+          });
+        }
+      }
+      const reader = importGbifZip(file, readOptions);
       for (;;) {
         const step = await reader.next();
         if (step.done) {
