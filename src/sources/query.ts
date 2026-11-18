@@ -370,6 +370,15 @@ function parseQuality(x: unknown, base: QualityFilters): QualityFilters {
   if (x.dedupe !== undefined) {
     q.dedupe = DEDUPE_MODES.includes(x.dedupe as DedupeMode) ? (x.dedupe as DedupeMode) : fail();
   }
+  if (x.excludeDatasets !== undefined) {
+    const d = x.excludeDatasets;
+    if (!Array.isArray(d) || !d.every((k) => typeof k === 'string' && k)) fail();
+    q.excludeDatasets = [...(d as string[])];
+  }
+  if (x.minRecordsPerSpecies !== undefined) {
+    const m = x.minRecordsPerSpecies;
+    q.minRecordsPerSpecies = isNum(m) && Number.isInteger(m) && m >= 1 ? m : fail();
+  }
   return q;
 }
 
