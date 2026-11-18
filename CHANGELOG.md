@@ -1,5 +1,25 @@
 # bioregions
 
+## 2.0.0-alpha.23
+
+### Patch Changes
+
+- c134356: Keep the same duplicate record whatever order GBIF and OBIS records arrive in. Of
+  records that duplicate each other, a load now keeps the GBIF record over the OBIS one,
+  then the one with the earliest year, then by dataset key, basis of record, coordinate
+  uncertainty, coordinates and country. Before, the first record to arrive was kept, so
+  two loads of the same query could keep different points, cite different datasets and
+  report different duplicate counts. The methods text states the rule.
+- b60e482: Count every record under its own source in the load funnel when one batch mixes GBIF
+  and OBIS records. The app's loads send one source per batch today, so the reported
+  counts were not affected.
+- 0397694: Keep the excluded GBIF datasets and the minimum records per species when a query is
+  imported from `query.json`, a share string or the library. Both were silently reset
+  before, so a re-run query could load a different dataset.
+- 051de69: Apply the minimum records per species when a GBIF download zip replaces a loaded
+  query. The zip kept species below the minimum, so it gave a different species set from
+  the streamed load of the same query while the methods text said they were left out.
+
 ## 2.0.0-alpha.22
 
 ### Patch Changes
