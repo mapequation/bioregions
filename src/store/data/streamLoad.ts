@@ -14,11 +14,11 @@ import { streamObis } from '../../sources/obis/stream';
 import { queryTitle } from '../../sources/query';
 import type { Funnel, OccurrenceQuery, RecordBatch, SourceId, StreamCursor, StreamPlan } from '../../sources/types';
 import type DataStore from '../DataStore';
+import type { RecordMove } from '../SpeciesStore';
 import {
   JOB_UPDATE_MS,
   LoadTally,
   PauseGate,
-  SeededDedupe,
   type TallyLabels,
   etaSeconds,
   mergeBatches,
@@ -313,11 +313,15 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
     dedupe: query.quality.dedupe,
     area: query.area,
     lowCount: { obis: new Set(obisDetail?.lowCountNames ?? []) },
+    ...(target ? { existing: loadedPoints(store) } : {}),
   });
-  const seeded = target ? new SeededDedupe(query.quality.dedupe, loadedPoints(store)) : null;
-  /** This run's funnel (a Continue's counts the seeded duplicates too). */
-  const runFunnel = () => (seeded ? seeded.adjust(cleaner.funnel) : cleaner.funnel);
-  const tally = target ? target.run.tally : new LoadTally();
+  /** This run's funnel (a Continue's counts records matching earlier runs as duplicates). */
+  const runFunnel = () => cleaner.funnel;
+  let tally = target ? target.run.tally : new LoadTally();
+  /** The tally before this run, recounted with the kept records if the cleaner replaces any. */
+  const tallyBefore = target && query.quality.dedupe !== 'none' ? target.run.tally.clone() : null;
+  /** Points to move once the stream ends, where the cleaner kept a later duplicate. */
+  let moves: RecordMove[] = [];
   // The cursors whose records reached SpeciesStore; a Continue starts from the last ones.
   const cursors: Partial<Record<SourceId, StreamCursor>> = { ...target?.run.cursors };
   const progress = new Map<SourceId, SourceProgress>(
@@ -423,6 +427,13 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
     if (finished) return;
     finished = true;
     release();
+    const changes = cleaner.changes();
+    if (changes.length > 0) {
+      // Records drawn on arrival that a later duplicate replaced: count the kept ones instead.
+      tally = tallyBefore ?? new LoadTally();
+      tally.addRecords(cleaner.kept());
+      moves = changes.map(({ index, record }) => ({ index, lon: record.lon, lat: record.lat }));
+    }
     flush(true);
     runInAction(() => {
       const funnel = runFunnel();
@@ -552,8 +563,7 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
           mergeProgress(p, batch.progress);
           p.state = batch.progress.retryAt && batch.progress.retryAt > Date.now() ? 'rateLimited' : 'streaming';
         }
-        const kept = cleaner.accept(batch.records);
-        const records = seeded ? seeded.filter(kept) : kept;
+        const records = cleaner.accept(batch.records);
         tally.add(batch.source, records);
         flush(false);
         // The generator resumes only once SpeciesStore took the batch, so a batch dropped
@@ -574,6 +584,7 @@ async function runStream(store: DataStore, spec: StreamRun): Promise<StartResult
     await store.rootStore.speciesStore.loadRecords(accepted(), {
       controller,
       skipBioregions: () => skipBioregions,
+      settle: () => moves,
       ...(target ? {} : { onFirstRecord }),
     });
   } catch (error) {

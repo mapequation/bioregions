@@ -144,6 +144,15 @@ describe('DataStore.loadGbifZip', () => {
     expect(source.provenance?.funnel.dropped.duplicate).toBe(1);
   });
 
+  it('counts the duplicate the cleaner keeps, not the first to arrive', async () => {
+    mockZip([{ ...rec('Callithrix jacchus', -40, -10), datasetKey: 'd2' }, rec('Callithrix jacchus', -40, -10)]);
+    const { dataStore } = setup();
+    await dataStore.loadGbifZip(file(), { origin: 'search', query: QUERY, download: SUMMARY });
+    const { provenance } = dataStore.occurrence as ZipOccurrences;
+    expect(provenance?.datasetCounts.gbif?.map((d) => d.key)).toEqual(['d1']);
+    expect(provenance?.funnel.dropped.duplicate).toBe(1);
+  });
+
   it('drops species below the query\'s minimum records per species, like a streamed load', async () => {
     mockZip(RECORDS);
     vi.mocked(importGbifZip).mockClear();

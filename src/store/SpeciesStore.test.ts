@@ -48,6 +48,29 @@ async function seed(store: SpeciesStore, commit: (name: string) => () => void) {
 }
 
 describe('SpeciesStore.loadRecords', () => {
+  it('moves the points of this load that settle names, before binning', async () => {
+    const { store, commit } = setup();
+    await seed(store, commit);
+    store.binner.setTreeNeedUpdate(false);
+    // A Continue appends to the loaded data (no commit).
+    await store.loadRecords(stream([[rec('New one', 20, 60)], [rec('New two', 21, 61)]]), {
+      settle: () => [
+        { index: 1, lon: 21.5, lat: 61.5 },
+        { index: 2, lon: 30, lat: 70 },
+      ],
+    });
+    expect(store.collection.features.map((f) => (f.geometry.type === 'Point' ? f.geometry.coordinates : null))).toEqual([
+      [10, 50],
+      [11, 51],
+      [20, 60],
+      [21.5, 61.5],
+    ]);
+    // The record layer draws the same coordinates, and the binner rebuilds its tree.
+    const { geometries } = store.multiPointCollection;
+    expect(geometries[geometries.length - 1]).toEqual({ type: 'MultiPoint', coordinates: [[21.5, 61.5]] });
+    expect(store.binner.treeNeedUpdate).toBe(true);
+  });
+
   it('commits only when the first record arrives, in the same action', async () => {
     const { store, infomapStore, commit } = setup();
     await seed(store, commit);

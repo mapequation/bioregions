@@ -9,6 +9,7 @@ import { gbifDownloadPredicate } from '../../sources/gbif/predicate';
 import { type GbifZipOptions, type GbifZipSummary, downloadKeyFromName, importGbifZip } from '../../sources/gbif/zip';
 import type { OccurrenceQuery, OccurrenceRecord } from '../../sources/types';
 import type DataStore from '../DataStore';
+import type { RecordMove } from '../SpeciesStore';
 import { JOB_UPDATE_MS, LoadTally, PauseGate, type TallyLabels, etaSeconds } from '../explorer/job';
 import type { LoadProvenance } from '../explorer/provenance';
 import type { LedgerRow, SourceProgress } from '../explorer/types';
@@ -82,7 +83,9 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
   const cleaner = new RecordCleaner(
     query ? { dedupe: query.quality.dedupe, area: query.area, lowCount: { gbif: lowCount } } : { dedupe: 'none' },
   );
-  const tally = new LoadTally();
+  let tally = new LoadTally();
+  /** Points to move once the zip is read, where the cleaner kept a later duplicate. */
+  let moves: RecordMove[] = [];
   const progress: SourceProgress = {
     source: 'gbif',
     state: 'streaming',
@@ -136,6 +139,13 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
   const finish = () => {
     if (finished) return;
     finished = true;
+    const changes = cleaner.changes();
+    if (changes.length > 0) {
+      // Records drawn on arrival that a later duplicate replaced: count the kept ones instead.
+      tally = new LoadTally();
+      tally.addRecords(cleaner.kept());
+      moves = changes.map(({ index, record }) => ({ index, lon: record.lon, lat: record.lat }));
+    }
     gate.open();
     if (store.active === active) store.active = null;
     flush(true);
@@ -254,7 +264,7 @@ export async function runZipLoad(store: DataStore, file: Blob, opts: ZipLoadOpti
 
   let failure: unknown = null;
   try {
-    await store.rootStore.speciesStore.loadRecords(accepted(), { controller, onFirstRecord });
+    await store.rootStore.speciesStore.loadRecords(accepted(), { controller, onFirstRecord, settle: () => moves });
   } catch (error) {
     failure = error;
   }

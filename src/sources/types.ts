@@ -279,9 +279,9 @@ export type DropReason =
   | 'invalidCoordinates'
   | 'zeroCoordinates'
   | 'outsideArea'
-  /** Same species at the same site (or ~1 km cell) as a record first seen from the same source. */
+  /** Same species at the same site (or ~1 km cell) as the kept record, from the same source (or loaded before a Continue). */
   | 'duplicate'
-  /** The same record (species and site) already received from another source (GBIF and OBIS). */
+  /** The same record (species and site) as the kept record from another source (an OBIS record that is also in GBIF). */
   | 'crossSource'
   /** Species below `minRecordsPerSpecies` (OBIS and GBIF zip records; a GBIF stream drops them at plan time). */
   | 'lowCount';

@@ -194,13 +194,22 @@ function setup() {
     loadRecords: vi.fn(
       async (
         iter: AsyncIterable<Rec[]>,
-        opts: { controller: AbortController; skipBioregions?: () => boolean; onFirstRecord?: () => void },
+        opts: {
+          controller: AbortController;
+          skipBioregions?: () => boolean;
+          onFirstRecord?: () => void;
+          settle?: () => Iterable<{ index: number; lon: number; lat: number }>;
+        },
       ) => {
         let received = 0;
+        let start = 0;
         for await (const b of iter) {
           if (opts.controller.signal.aborted) break;
           if (b.length === 0) continue;
-          if (received === 0) opts.onFirstRecord?.();
+          if (received === 0) {
+            opts.onFirstRecord?.();
+            start = speciesStore.collection.features.length;
+          }
           consumed.push(b);
           for (const r of b) {
             speciesStore.collection.features.push({
@@ -209,6 +218,12 @@ function setup() {
             });
           }
           received += b.length;
+        }
+        if (received > 0 && opts.controller.signal.reason !== 'discard') {
+          for (const m of opts.settle?.() ?? []) {
+            const f = speciesStore.collection.features[start + m.index] as { geometry: { coordinates: number[] } };
+            f.geometry.coordinates = [m.lon, m.lat];
+          }
         }
         if (received > 0) speciesStore.loaded = true;
         if (received > 0 && opts.controller.signal.reason !== 'discard') speciesStore.skipped = opts.skipBioregions?.() ?? false;
@@ -272,7 +287,7 @@ describe('ExplorerStore.load into the data store', () => {
     expect(last?.ledger.find((r) => r.id === 'duplicates')?.impact).toBe(1);
     expect(last?.ledger.find((r) => r.id === 'crossSource')?.impact).toBe(1);
     expect(store.dedupeLabel).toBe('same species within ~11 m');
-    expect(store.methodsText).toContain('1 duplicates of the same species within about 11 m in one source, 1 records already received');
+    expect(store.methodsText).toContain('1 duplicates of the same species within about 11 m in one source, 1 OBIS records matching a GBIF record');
     expect(store.insightsScope).toEqual({ kind: 'loaded', records: 3, label: 'For the query you loaded · 3 records loaded' });
     store.setYears([1980, 2025]);
     expect(store.loadedMatchesQuery).toBe(false);
@@ -280,6 +295,43 @@ describe('ExplorerStore.load into the data store', () => {
     expect(store.insightsScope.kind).toBe('query');
     store.setQuality({ dedupe: 'cell' });
     expect(store.dedupeLabel).toBe('same species in one ~1 km cell');
+  });
+
+  it('keeps the same records whichever source arrives first', async () => {
+    // One marmoset site in both sources: GBIF dataset d1 is kept, whatever arrives first.
+    const gbif = [record('Callithrix jacchus', -40.00001, -10, 'gbif', 'd2'), record('Callithrix jacchus', -40, -10, 'gbif', 'd1')];
+    const obis = [record('Callithrix jacchus', -40, -10.00002, 'obis', 'o1'), record('Saguinus oedipus', -75, 9, 'obis', 'o1')];
+    const run = async (first: 'gbif' | 'obis') => {
+      const later = new Promise<void>((resolve) => setTimeout(resolve, 20));
+      vi.mocked(streamGbif).mockImplementation(batches('gbif', [gbif], first === 'gbif' ? undefined : later));
+      vi.mocked(streamObis).mockImplementation(batches('obis', [obis], first === 'obis' ? undefined : later));
+      const { store, speciesStore, consumed } = setup();
+      await store.load();
+      const features = speciesStore.collection.features as { geometry: { coordinates: number[] }; properties: { name: string } }[];
+      return {
+        arrived: consumed[0][0].source,
+        result: {
+          points: features.map((f) => [f.properties.name, ...f.geometry.coordinates]),
+          funnel: store.rootStore.dataStore.job?.funnel,
+          kpis: store.loaded?.kpis,
+          datasets: store.loaded?.datasetCounts,
+        },
+      };
+    };
+    const a = await run('gbif');
+    const b = await run('obis');
+    expect([a.arrived, b.arrived]).toEqual(['gbif', 'obis']);
+    expect(b.result).toEqual(a.result);
+    expect(a.result.points).toEqual([
+      ['Callithrix jacchus', -40, -10],
+      ['Saguinus oedipus', -75, 9],
+    ]);
+    expect(a.result.funnel).toMatchObject({
+      accepted: 2,
+      dropped: { duplicate: 1, crossSource: 1 },
+      bySource: { gbif: { received: 2, accepted: 1 }, obis: { received: 2, accepted: 1 } },
+    });
+    expect(a.result.datasets?.gbif?.map((d) => d.key)).toEqual(['d1']);
   });
 
   it('names only sources that contributed records', async () => {

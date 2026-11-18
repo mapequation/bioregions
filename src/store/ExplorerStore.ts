@@ -420,7 +420,7 @@ export interface LedgerInput {
   speciesLevel?: number | null;
   /** Same-source duplicates removed by the last load of this query; null before a load. */
   duplicates?: number | null;
-  /** Records the last load of this query dropped as already received from the other source. */
+  /** Records the last load of this query dropped as matching a record kept from the other source. */
   crossSource?: number | null;
 }
 
