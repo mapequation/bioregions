@@ -51,6 +51,14 @@ export default observer(function Export({ rootStore }: ExportProps) {
       getBlob: async () => treeStore.getImageBlob(),
     },
     {
+      title: 'Tree (Newick)',
+      description: 'Loaded tree, tips named as the dataset species',
+      extension: '_tree.nwk',
+      disabled: !treeStore.haveTree,
+      hide: !treeStore.haveTree,
+      getBlob: async () => stringToBlob(treeStore.newickForExport ?? ''),
+    },
+    {
       title: 'Shapefile',
       extension: '.zip',
       disabled: !infomapStore.network,
