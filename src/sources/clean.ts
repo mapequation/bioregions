@@ -109,7 +109,7 @@ export interface RecordCleanerOptions {
   area?: AreaFilter;
   /**
    * Canonical species names to drop per source as 'lowCount' (species below the
-   * minimum records per species; GBIF leaves them out at plan time already).
+   * minimum records per species; a GBIF stream leaves them out at plan time already).
    */
   lowCount?: Partial<Record<RecordSource, ReadonlySet<string>>>;
   /**

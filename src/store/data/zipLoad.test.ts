@@ -153,6 +153,30 @@ describe('DataStore.loadGbifZip', () => {
     expect(provenance?.funnel.dropped.duplicate).toBe(1);
   });
 
+  it('drops species below the query\'s minimum records per species, like a streamed load', async () => {
+    mockZip(RECORDS);
+    vi.mocked(importGbifZip).mockClear();
+    const { dataStore, speciesStore } = setup();
+    const query = { ...QUERY, quality: { ...QUERY.quality, minRecordsPerSpecies: 2 } };
+    await dataStore.loadGbifZip(file(), { origin: 'search', query, download: SUMMARY });
+    // One read counts the records per species, the second loads them.
+    expect(importGbifZip).toHaveBeenCalledTimes(2);
+    // Saguinus oedipus has one record; the two Callithrix jacchus records dedupe to one.
+    expect(speciesStore.numRecords).toBe(1);
+    const { funnel } = (dataStore.occurrence as ZipOccurrences).provenance ?? {};
+    expect(funnel?.dropped).toMatchObject({ lowCount: 1, duplicate: 1 });
+    expect(dataStore.job?.state).toBe('done');
+  });
+
+  it('reads the zip once without a minimum', async () => {
+    mockZip(RECORDS);
+    vi.mocked(importGbifZip).mockClear();
+    const { dataStore, speciesStore } = setup();
+    await dataStore.loadGbifZip(file(), { origin: 'search', query: { ...QUERY, quality: { ...QUERY.quality, minRecordsPerSpecies: 1 } } });
+    expect(importGbifZip).toHaveBeenCalledTimes(1);
+    expect(speciesStore.numRecords).toBe(2);
+  });
+
   it('refuses while a load runs (I9)', async () => {
     let open = () => {};
     const gate = new Promise<void>((r) => {

@@ -283,7 +283,7 @@ export type DropReason =
   | 'duplicate'
   /** The same record (species and site) as the kept record from another source (an OBIS record that is also in GBIF). */
   | 'crossSource'
-  /** Species below `minRecordsPerSpecies` (OBIS records; GBIF drops them at plan time). */
+  /** Species below `minRecordsPerSpecies` (OBIS and GBIF zip records; a GBIF stream drops them at plan time). */
   | 'lowCount';
 
 export interface Funnel {

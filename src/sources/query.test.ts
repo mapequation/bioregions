@@ -84,6 +84,12 @@ describe('encoding', () => {
     expect(decodeQuery(s)).toEqual(q);
   });
 
+  it('round-trips excluded datasets and the minimum records per species', () => {
+    const q = felids();
+    q.quality = { ...q.quality, excludeDatasets: ['50c9509d-22c7-4a22-a47d-8c48425ef4a7'], minRecordsPerSpecies: 5 };
+    expect(decodeQuery(encodeQuery(q))).toEqual(q);
+  });
+
   it('merges partial queries onto the default', () => {
     const s = Buffer.from(JSON.stringify({ v: 1, q: { years: [1990, null] } })).toString('base64url');
     expect(decodeQuery(s)).toEqual({ ...defaultQuery(), years: [1990, null] });
@@ -103,6 +109,10 @@ describe('encoding', () => {
       enc({ v: 1, q: { years: [1990.5, null] } }),
       enc({ v: 1, q: { quality: { basisOfRecord: ['FOO'] } } }),
       enc({ v: 1, q: { quality: { dedupe: 'all' } } }),
+      enc({ v: 1, q: { quality: { excludeDatasets: 'abc' } } }),
+      enc({ v: 1, q: { quality: { excludeDatasets: [1] } } }),
+      enc({ v: 1, q: { quality: { minRecordsPerSpecies: 0 } } }),
+      enc({ v: 1, q: { quality: { minRecordsPerSpecies: 2.5 } } }),
       enc({ v: 1, q: { sources: { gbif: 'yes' } } }),
     ]) {
       expect(decodeQuery(s)).toBeNull();

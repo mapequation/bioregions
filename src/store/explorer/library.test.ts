@@ -15,6 +15,15 @@ describe('parseQueryText', () => {
     }
   });
 
+  it('keeps excluded datasets and the minimum records per species', () => {
+    const quality = { ...q.quality, excludeDatasets: ['d1', 'd2'], minRecordsPerSpecies: 3 };
+    const full = { ...q, quality };
+    for (const text of [JSON.stringify(full), encodeQuery(full)]) {
+      const r = parseQueryText(text);
+      expect(r.ok && r.query).toEqual(full);
+    }
+  });
+
   it('rejects garbage and invalid fields', () => {
     expect(parseQueryText('').ok).toBe(false);
     expect(parseQueryText('not json').ok).toBe(false);
