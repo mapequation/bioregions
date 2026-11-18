@@ -1,9 +1,8 @@
-// Pure pieces of a running load: merging source streams, seeded deduplication across a
-// Continue's resume boundary, merging funnels, per-source dataset tallies and the ETA.
+// Pure pieces of a running load: merging source streams, merging funnels, per-source
+// dataset tallies and the ETA.
 import { isAbortError } from '../../sources/http';
 import { BASIS_LABELS } from '../../sources/query';
 import type {
-  DedupeMode,
   DropReason,
   FacetBucket,
   Funnel,
@@ -58,61 +57,6 @@ export async function* mergeBatches(
   } finally {
     // Stop streams that are still running when the consumer leaves early.
     for (const i of pending.keys()) void streams[i].stream.return?.(undefined)?.catch(() => {});
-  }
-}
-
-/** The cleaner's dedupe key for a record (see `RecordCleaner.accept`). */
-export function dedupeKey(mode: Exclude<DedupeMode, 'none'>, name: string, lon: number, lat: number): string {
-  return mode === 'exact'
-    ? `${name}|${Math.round(lon * 1e4)}|${Math.round(lat * 1e4)}`
-    : `${name}|${Math.floor(lon * 100)}|${Math.floor(lat * 100)}`;
-}
-
-/**
- * Drops records that duplicate data loaded before a Continue (the run's own cleaner
- * deduplicates within the run; this extends it to the points already loaded).
- */
-export class SeededDedupe {
-  private readonly keys = new Set<string>();
-  /** Records dropped as duplicates of existing data, per source. */
-  readonly dropped: Partial<Record<RecordSource, number>> = {};
-  total = 0;
-  private readonly mode: DedupeMode;
-
-  constructor(mode: DedupeMode, existing: Iterable<{ name: string; lon: number; lat: number }>) {
-    this.mode = mode;
-    if (mode === 'none') return;
-    for (const p of existing) this.keys.add(dedupeKey(mode, p.name, p.lon, p.lat));
-  }
-
-  get size(): number {
-    return this.keys.size;
-  }
-
-  filter(records: OccurrenceRecord[]): OccurrenceRecord[] {
-    const mode = this.mode;
-    if (mode === 'none' || this.keys.size === 0) return records;
-    return records.filter((r) => {
-      if (!this.keys.has(dedupeKey(mode, r.name, r.lon, r.lat))) return true;
-      this.dropped[r.source] = (this.dropped[r.source] ?? 0) + 1;
-      this.total++;
-      return false;
-    });
-  }
-
-  /** The cleaner's funnel with these drops counted as duplicates. */
-  adjust(funnel: Funnel): Funnel {
-    if (this.total === 0) return funnel;
-    const bySource: Funnel['bySource'] = {};
-    for (const [k, v] of Object.entries(funnel.bySource)) {
-      if (v) bySource[k as RecordSource] = { ...v, accepted: v.accepted - (this.dropped[k as RecordSource] ?? 0) };
-    }
-    return {
-      received: funnel.received,
-      accepted: funnel.accepted - this.total,
-      dropped: { ...funnel.dropped, duplicate: funnel.dropped.duplicate + this.total },
-      bySource,
-    };
   }
 }
 
@@ -211,6 +155,44 @@ export class LoadTally {
   private uncertaintyMax = Number.NEGATIVE_INFINITY;
   private uncertaintySum = 0;
   private uncertaintyN = 0;
+
+  /** An independent copy (e.g. the tally before a Continue's run adds to it). */
+  clone(): LoadTally {
+    const t = new LoadTally();
+    for (const [source, map] of Object.entries(this.datasets) as [SourceId, Map<string, number>][]) {
+      t.datasets[source] = new Map(map);
+    }
+    for (const [k, v] of this.species) t.species.set(k, v);
+    Object.assign(t.bySource, this.bySource);
+    for (const [k, v] of this.basis) t.basis.set(k, v);
+    for (const [k, v] of this.years) t.years.set(k, v);
+    for (const [k, v] of this.countries) t.countries.set(k, v);
+    Object.assign(t.withCountry, this.withCountry);
+    t.records = this.records;
+    t.minYear = this.minYear;
+    t.maxYear = this.maxYear;
+    t.uncertaintyMin = this.uncertaintyMin;
+    t.uncertaintyMax = this.uncertaintyMax;
+    t.uncertaintySum = this.uncertaintySum;
+    t.uncertaintyN = this.uncertaintyN;
+    return t;
+  }
+
+  /** Add records of any of the query sources, each under its own source. */
+  addRecords(records: OccurrenceRecord[]): void {
+    const bySource = new Map<SourceId, OccurrenceRecord[]>();
+    for (const r of records) {
+      // Query loads only hold GBIF and OBIS records.
+      const source = r.source as SourceId;
+      let list = bySource.get(source);
+      if (!list) {
+        list = [];
+        bySource.set(source, list);
+      }
+      list.push(r);
+    }
+    for (const [source, list] of bySource) this.add(source, list);
+  }
 
   add(source: SourceId, records: OccurrenceRecord[]): void {
     let map = this.datasets[source];

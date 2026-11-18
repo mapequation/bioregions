@@ -161,14 +161,18 @@ export const DEDUPE_RULE: Record<DedupeMode, string> = {
   cell: 'same species in one ~1 km cell',
 };
 
+/** Which of several duplicates is kept (`compareRecords` in clean.ts). */
+const KEPT_DUPLICATE =
+  'Of duplicate records, the one with the earliest year was kept, then by dataset key, basis of record, smallest coordinate uncertainty, coordinates and country, so the result does not depend on the order in which records were downloaded.';
+
 function dedupeText(mode: DedupeMode, crossSource: boolean): string {
   if (mode === 'none') return ' Duplicate records were kept.';
   const rule =
     mode === 'exact'
       ? 'records of the same species at the same coordinates (rounded to four decimal places, about 11 m) were kept once'
       : 'records were thinned to one per species and 0.01° grid cell (about 1 km)';
-  if (!crossSource) return ` Within each source, ${rule}.`;
-  return ` Duplicates were removed in two steps: within each source, ${rule}; and a record matching one already received from the other source (the same occurrence published to both GBIF and OBIS, by the same rule) was kept once.`;
+  if (!crossSource) return ` Within each source, ${rule}. ${KEPT_DUPLICATE}`;
+  return ` Duplicates were removed in two steps: within each source, ${rule}; and a record matching one from the other source (the same occurrence published to both GBIF and OBIS, by the same rule) was kept once, as the GBIF record. ${KEPT_DUPLICATE}`;
 }
 
 const DROP_TEXT: Record<DropReason, string> = {
@@ -177,7 +181,7 @@ const DROP_TEXT: Record<DropReason, string> = {
   zeroCoordinates: 'at (0, 0)',
   outsideArea: 'outside the study area',
   duplicate: 'duplicates',
-  crossSource: 'records already received from the other source (GBIF and OBIS overlap)',
+  crossSource: 'OBIS records matching a GBIF record (GBIF and OBIS overlap)',
   lowCount: 'of species below the minimum record count',
 };
 

@@ -94,6 +94,13 @@ export interface FileLoadOptions {
 export const NO_USABLE_ROWS = 'No usable rows (check the species and coordinate columns)';
 export const NO_SHAPEFILE_FEATURES = 'No features found in the shapefile';
 
+/** A point of the running record load to move: its position among the records the load received. */
+export interface RecordMove {
+  index: number;
+  lon: number;
+  lat: number;
+}
+
 /** Outcome of `SpeciesStore.loadRecords`. */
 export interface LoadRecordsResult {
   /** Records added to the store (0: the previous dataset was left untouched). */
@@ -567,11 +574,17 @@ export default class SpeciesStore {
       controller = new AbortController(),
       skipBioregions,
       onFirstRecord,
+      settle,
     }: {
       controller?: AbortController;
       skipBioregions?: () => boolean;
       /** The data owner's commit, called once in the same action as the first record. */
       onFirstRecord?: () => void;
+      /**
+       * Once the stream has ended (not on a discard), records of this load to move before
+       * binning: the cleaner kept a later duplicate of a record it had already passed on.
+       */
+      settle?: () => Iterable<RecordMove>;
     } = {},
   ): Promise<LoadRecordsResult> {
     // Restored when nothing arrives, so a dataset that is kept stays marked as loaded.
@@ -580,6 +593,8 @@ export default class SpeciesStore {
 
     const { mapStore } = this.rootStore;
     let received = 0;
+    /** Index in `collection.features` of this load's first record. */
+    let start = 0;
     let failure: unknown = null;
     try {
       for await (const batch of batches) {
@@ -596,6 +611,7 @@ export default class SpeciesStore {
             // First record: only now does the data owner replace the previous dataset.
             onFirstRecord?.();
             this.setIsLoading();
+            start = this.collection.features.length;
           }
           received += batch.length;
           for (const record of batch) {
@@ -637,6 +653,7 @@ export default class SpeciesStore {
       }
       return { received };
     }
+    this.moveRecords(start, received, settle?.() ?? []);
     if (skipBioregions?.()) {
       this.finishWithoutBioregions();
     } else {
@@ -647,6 +664,25 @@ export default class SpeciesStore {
     }
     return { received };
   }
+
+  /**
+   * Move points of a record load (`loadRecords`'s `settle`). The map's record layer shares
+   * the coordinate arrays, and the binner rebuilds its tree from the moved points.
+   */
+  private moveRecords = action((start: number, received: number, moves: Iterable<RecordMove>) => {
+    let moved = false;
+    for (const { index, lon, lat } of moves) {
+      if (index < 0 || index >= received) continue;
+      const geometry = this.collection.features[start + index]?.geometry;
+      if (geometry?.type !== 'Point') continue;
+      const c = geometry.coordinates;
+      if (c[0] === lon && c[1] === lat) continue;
+      c[0] = lon;
+      c[1] = lat;
+      moved = true;
+    }
+    if (moved) this.binner.setTreeNeedUpdate();
+  });
 
   /** Like `postLoad` without Infomap: bin the records and keep the record layer on the map. */
   finishWithoutBioregions = action(() => {

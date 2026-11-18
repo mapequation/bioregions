@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RecordCleaner } from '../../sources/clean';
 import type { OccurrenceRecord, RecordBatch, SourceId } from '../../sources/types';
-import { LoadTally, PauseGate, SeededDedupe, etaSeconds, mergeBatches, mergeFunnels } from './job';
+import { LoadTally, PauseGate, etaSeconds, mergeBatches, mergeFunnels } from './job';
 
 const rec = (name: string, lon: number, lat: number, source: SourceId = 'gbif', extra: Partial<OccurrenceRecord> = {}) => ({
   name,
@@ -54,24 +54,6 @@ describe('mergeBatches', () => {
       // no batches
     }
     expect(errors).toEqual([]);
-  });
-});
-
-describe('SeededDedupe', () => {
-  it('drops records that duplicate loaded points and adjusts the funnel', () => {
-    const cleaner = new RecordCleaner({ dedupe: 'exact' });
-    const seeded = new SeededDedupe('exact', [{ name: 'Aa bb', lon: 10, lat: 20 }]);
-    const out = seeded.filter(cleaner.accept([rec('Aa bb', 10.00001, 20), rec('Aa bb', 11, 20), rec('Cc dd', 10, 20, 'obis')]));
-    expect(out.map((r) => r.name)).toEqual(['Aa bb', 'Cc dd']);
-    const f = seeded.adjust(cleaner.funnel);
-    expect(f.accepted).toBe(2);
-    expect(f.dropped.duplicate).toBe(1);
-    expect(f.bySource.gbif?.accepted).toBe(1);
-  });
-
-  it('keeps everything without dedupe', () => {
-    const seeded = new SeededDedupe('none', [{ name: 'Aa bb', lon: 10, lat: 20 }]);
-    expect(seeded.filter([rec('Aa bb', 10, 20)])).toHaveLength(1);
   });
 });
 
