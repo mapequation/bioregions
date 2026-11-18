@@ -12,7 +12,7 @@ const FIXTURE = new URL('./query.example.json', import.meta.url);
 /** The query behind `query.example.json`: dolphins in the North Atlantic from both sources. */
 const dolphins = (): OccurrenceQuery => ({
   ...defaultQuery(),
-  taxa: [{ name: 'Delphinidae', rank: 'FAMILY', gbifKey: 5406, obisId: 136980 }],
+  taxa: [{ name: 'Delphinidae', rank: 'FAMILY', gbifKey: 5314, obisId: 136980 }],
   area: { kind: 'bbox', bbox: [-80, 20, 0, 66], label: 'North Atlantic' },
   years: [1990, 2024],
   sources: { gbif: true, obis: true },
@@ -61,7 +61,7 @@ describe('query.json export', () => {
 
   it('omits OBIS while a taxon has no AphiaID, and sources that are off', () => {
     const q = dolphins();
-    q.taxa = [{ name: 'Delphinidae', rank: 'FAMILY', gbifKey: 5406 }];
+    q.taxa = [{ name: 'Delphinidae', rank: 'FAMILY', gbifKey: 5314 }];
     expect(Object.keys(queryRequests(q))).toEqual(['gbif']);
     q.sources = { gbif: false, obis: true };
     q.taxa[0].obisId = 136980;

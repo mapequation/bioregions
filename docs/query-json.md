@@ -48,7 +48,7 @@ Example (`src/store/explorer/query.example.json`, kept in sync by
     {
       "name": "Delphinidae",
       "rank": "FAMILY",
-      "gbifKey": 5406,
+      "gbifKey": 5314,
       "obisId": 136980
     }
   ],
@@ -98,7 +98,7 @@ Example (`src/store/explorer/query.example.json`, kept in sync by
         {
           "type": "equals",
           "key": "TAXON_KEY",
-          "value": "5406"
+          "value": "5314"
         },
         {
           "type": "equals",
