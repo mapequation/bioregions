@@ -1,0 +1,335 @@
+{
+  "$comment": "Shared test cases for the record cleaner (RecordCleaner in src/sources/clean.ts). Each case runs a fresh cleaner over records in the given order and expects the accepted records (with canonical names) and the funnel counts. Format: docs/query-json.md#cleaning-cases. Checked by src/sources/clean-cases.test.ts.",
+  "cases": [
+    {
+      "id": "species-names",
+      "description": "Names reduce to a Latin binomial \"Genus epithet\"; genus-only, open nomenclature, uncertain names, placeholders and hybrid formulas are dropped as noSpecies.",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Panthera leo (Linnaeus, 1758)", "lon": 10, "lat": 1, "source": "gbif" },
+        { "name": "panthera_pardus", "lon": 10, "lat": 2, "source": "gbif" },
+        { "name": "Puma (Puma) concolor", "lon": 10, "lat": 3, "source": "gbif" },
+        { "name": "Lynx lynx lynx", "lon": 10, "lat": 4, "source": "gbif" },
+        { "name": "Mentha × piperita", "lon": 10, "lat": 5, "source": "gbif" },
+        { "name": "× Mentha piperita", "lon": 10, "lat": 6, "source": "gbif" },
+        { "name": "Acer pseudo-platanus", "lon": 10, "lat": 7, "source": "gbif" },
+        { "name": "Felis", "lon": 10, "lat": 8, "source": "gbif" },
+        { "name": "Felis sp.", "lon": 10, "lat": 9, "source": "gbif" },
+        { "name": "Felis spp", "lon": 10, "lat": 10, "source": "gbif" },
+        { "name": "Felis cf. catus", "lon": 10, "lat": 11, "source": "gbif" },
+        { "name": "Felis aff. catus", "lon": 10, "lat": 12, "source": "gbif" },
+        { "name": "Felis catus?", "lon": 10, "lat": 13, "source": "gbif" },
+        { "name": "Felis indet", "lon": 10, "lat": 14, "source": "gbif" },
+        { "name": "Incertae sedis", "lon": 10, "lat": 15, "source": "gbif" },
+        { "name": "Unknown species", "lon": 10, "lat": 16, "source": "gbif" },
+        { "name": "Mentha aquatica × Mentha spicata", "lon": 10, "lat": 17, "source": "gbif" },
+        { "name": "Felis Catus", "lon": 10, "lat": 18, "source": "gbif" },
+        { "name": "Felis catus2", "lon": 10, "lat": 19, "source": "gbif" },
+        { "name": "", "lon": 10, "lat": 20, "source": "gbif" },
+        { "name": "Felis", "lon": 0, "lat": 0, "source": "gbif" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Panthera leo", "lon": 10, "lat": 1, "source": "gbif" },
+          { "name": "Panthera pardus", "lon": 10, "lat": 2, "source": "gbif" },
+          { "name": "Puma concolor", "lon": 10, "lat": 3, "source": "gbif" },
+          { "name": "Lynx lynx", "lon": 10, "lat": 4, "source": "gbif" },
+          { "name": "Mentha piperita", "lon": 10, "lat": 5, "source": "gbif" },
+          { "name": "Mentha piperita", "lon": 10, "lat": 6, "source": "gbif" },
+          { "name": "Acer pseudo-platanus", "lon": 10, "lat": 7, "source": "gbif" }
+        ],
+        "funnel": {
+          "received": 21,
+          "accepted": 7,
+          "dropped": { "noSpecies": 14, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 0, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 21, "accepted": 7 }
+          }
+        }
+      }
+    },
+    {
+      "id": "low-count",
+      "description": "Species named in lowCount for a source are dropped as lowCount for that source only, matched on the canonical name. Checked before coordinates.",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "none" },
+      "lowCount": {
+        "obis": [
+          "Delphinus delphis"
+        ]
+      },
+      "records": [
+        { "name": "Delphinus delphis", "lon": -20, "lat": 40, "source": "obis" },
+        { "name": "Delphinus delphis Linnaeus, 1758", "lon": -21, "lat": 40, "source": "obis" },
+        { "name": "Delphinus delphis", "lon": 999, "lat": 40, "source": "obis" },
+        { "name": "Delphinus delphis", "lon": -20, "lat": 40, "source": "gbif" },
+        { "name": "Tursiops truncatus", "lon": -20, "lat": 41, "source": "obis" },
+        { "name": "Delphinus sp.", "lon": -20, "lat": 42, "source": "obis" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Delphinus delphis", "lon": -20, "lat": 40, "source": "gbif" },
+          { "name": "Tursiops truncatus", "lon": -20, "lat": 41, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 6,
+          "accepted": 2,
+          "dropped": { "noSpecies": 1, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 0, "duplicate": 0, "crossSource": 0, "lowCount": 3 },
+          "bySource": {
+            "obis": { "received": 5, "accepted": 1 },
+            "gbif": { "received": 1, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "coordinates",
+      "description": "Missing (null) or out-of-range coordinates are invalidCoordinates; exactly (0, 0) is zeroCoordinates; a point on one zero axis or on the range limits is kept.",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Abra alba", "lon": 10, "lat": 91, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10, "lat": -90.5, "source": "gbif" },
+        { "name": "Abra alba", "lon": 180.0001, "lat": 10, "source": "gbif" },
+        { "name": "Abra alba", "lon": -181, "lat": 10, "source": "gbif" },
+        { "name": "Abra alba", "lon": null, "lat": 10, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10, "lat": null, "source": "obis" },
+        { "name": "Abra alba", "lon": 0, "lat": 0, "source": "gbif" },
+        { "name": "Abra alba", "lon": -0.0, "lat": 0, "source": "obis" },
+        { "name": "Abra alba", "lon": 0, "lat": 5, "source": "gbif" },
+        { "name": "Abra alba", "lon": 5, "lat": 0, "source": "gbif" },
+        { "name": "Abra alba", "lon": 180, "lat": 90, "source": "gbif" },
+        { "name": "Abra alba", "lon": -180, "lat": -90, "source": "obis" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 0, "lat": 5, "source": "gbif" },
+          { "name": "Abra alba", "lon": 5, "lat": 0, "source": "gbif" },
+          { "name": "Abra alba", "lon": 180, "lat": 90, "source": "gbif" },
+          { "name": "Abra alba", "lon": -180, "lat": -90, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 12,
+          "accepted": 4,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 6, "zeroCoordinates": 2, "outsideArea": 0, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 9, "accepted": 3 },
+            "obis": { "received": 3, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "bbox-area",
+      "description": "A bbox area [west, south, east, north] drops points outside it as outsideArea; the edges are inside. (0, 0) is zeroCoordinates even when outside.",
+      "area": {
+        "kind": "bbox",
+        "bbox": [
+          10,
+          40,
+          20,
+          50
+        ]
+      },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Abra alba", "lon": 15, "lat": 45, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10, "lat": 40, "source": "gbif" },
+        { "name": "Abra alba", "lon": 20, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": 20.0001, "lat": 45, "source": "gbif" },
+        { "name": "Abra alba", "lon": 9.9999, "lat": 45, "source": "gbif" },
+        { "name": "Abra alba", "lon": 15, "lat": 50.1, "source": "obis" },
+        { "name": "Abra alba", "lon": 15, "lat": 39, "source": "obis" },
+        { "name": "Abra alba", "lon": 0, "lat": 0, "source": "gbif" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 15, "lat": 45, "source": "gbif" },
+          { "name": "Abra alba", "lon": 10, "lat": 40, "source": "gbif" },
+          { "name": "Abra alba", "lon": 20, "lat": 50, "source": "gbif" }
+        ],
+        "funnel": {
+          "received": 8,
+          "accepted": 3,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 1, "outsideArea": 4, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 6, "accepted": 3 },
+            "obis": { "received": 2, "accepted": 0 }
+          }
+        }
+      }
+    },
+    {
+      "id": "bbox-antimeridian",
+      "description": "A bbox with west > east crosses the antimeridian: inside means lon >= west or lon <= east.",
+      "area": {
+        "kind": "bbox",
+        "bbox": [
+          170,
+          -20,
+          -170,
+          0
+        ]
+      },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Abra alba", "lon": 175, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": -175, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": 180, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": -180, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": 170, "lat": -20, "source": "gbif" },
+        { "name": "Abra alba", "lon": -170, "lat": 0, "source": "obis" },
+        { "name": "Abra alba", "lon": 0, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": 169, "lat": -10, "source": "gbif" },
+        { "name": "Abra alba", "lon": -169, "lat": -10, "source": "obis" },
+        { "name": "Abra alba", "lon": 175, "lat": 5, "source": "obis" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 175, "lat": -10, "source": "gbif" },
+          { "name": "Abra alba", "lon": -175, "lat": -10, "source": "gbif" },
+          { "name": "Abra alba", "lon": 180, "lat": -10, "source": "gbif" },
+          { "name": "Abra alba", "lon": -180, "lat": -10, "source": "gbif" },
+          { "name": "Abra alba", "lon": 170, "lat": -20, "source": "gbif" },
+          { "name": "Abra alba", "lon": -170, "lat": 0, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 10,
+          "accepted": 6,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 4, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 7, "accepted": 5 },
+            "obis": { "received": 3, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "non-bbox-area",
+      "description": "Only bbox areas are checked: country and WKT areas are filtered by the source, so the cleaner keeps points outside them.",
+      "area": {
+        "kind": "countries",
+        "codes": [
+          "SE"
+        ]
+      },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Abra alba", "lon": 150, "lat": -30, "source": "gbif" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 150, "lat": -30, "source": "gbif" }
+        ],
+        "funnel": {
+          "received": 1,
+          "accepted": 1,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 0, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 1, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "dedupe-none",
+      "description": "dedupe \"none\" keeps repeated records.",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "none" },
+      "records": [
+        { "name": "Abra alba", "lon": 10, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10, "lat": 50, "source": "obis" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 10, "lat": 50, "source": "gbif" },
+          { "name": "Abra alba", "lon": 10, "lat": 50, "source": "gbif" },
+          { "name": "Abra alba", "lon": 10, "lat": 50, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 3,
+          "accepted": 3,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 0, "duplicate": 0, "crossSource": 0, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 2, "accepted": 2 },
+            "obis": { "received": 1, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "dedupe-exact",
+      "description": "dedupe \"exact\": key is (canonical name, round(lon * 1e4), round(lat * 1e4)). The first record with a key is kept; a later one is duplicate when its source is that first record's source, else crossSource.",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "exact" },
+      "records": [
+        { "name": "Abra alba", "lon": 10.12344, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10.12341, "lat": 50.00004, "source": "gbif" },
+        { "name": "Abra alba Linnaeus", "lon": 10.1234, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10.1234, "lat": 50, "source": "obis" },
+        { "name": "Abra alba", "lon": 10.12346, "lat": 50, "source": "gbif" },
+        { "name": "Abra nitida", "lon": 10.1234, "lat": 50, "source": "gbif" },
+        { "name": "Abra alba", "lon": -10.12344, "lat": -50.00004, "source": "obis" },
+        { "name": "Abra alba", "lon": -10.12341, "lat": -50, "source": "gbif" },
+        { "name": "Abra alba", "lon": -10.1234, "lat": -50, "source": "obis" },
+        { "name": "Abra alba", "lon": 0, "lat": 0, "source": "gbif" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 10.12344, "lat": 50, "source": "gbif" },
+          { "name": "Abra alba", "lon": 10.12346, "lat": 50, "source": "gbif" },
+          { "name": "Abra nitida", "lon": 10.1234, "lat": 50, "source": "gbif" },
+          { "name": "Abra alba", "lon": -10.12344, "lat": -50.00004, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 10,
+          "accepted": 4,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 1, "outsideArea": 0, "duplicate": 3, "crossSource": 2, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 7, "accepted": 3 },
+            "obis": { "received": 3, "accepted": 1 }
+          }
+        }
+      }
+    },
+    {
+      "id": "dedupe-cell",
+      "description": "dedupe \"cell\": key is (canonical name, floor(lon * 100), floor(lat * 100)), so negative coordinates round down (-0.001 and 0.001 are different cells). First arrival kept; duplicate vs crossSource as for \"exact\".",
+      "area": { "kind": "world" },
+      "quality": { "dedupe": "cell" },
+      "records": [
+        { "name": "Abra alba", "lon": 10.123, "lat": 50.456, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10.129, "lat": 50.451, "source": "gbif" },
+        { "name": "Abra alba", "lon": 10.125, "lat": 50.459, "source": "obis" },
+        { "name": "Abra alba", "lon": 10.131, "lat": 50.456, "source": "gbif" },
+        { "name": "Abra alba", "lon": -10.001, "lat": -0.001, "source": "obis" },
+        { "name": "Abra alba", "lon": -10.009, "lat": -0.009, "source": "obis" },
+        { "name": "Abra alba", "lon": -10.005, "lat": -0.005, "source": "gbif" },
+        { "name": "Abra alba", "lon": -9.999, "lat": -0.001, "source": "gbif" },
+        { "name": "Abra alba", "lon": -9.999, "lat": 0.001, "source": "gbif" },
+        { "name": "Abra nitida", "lon": 10.123, "lat": 50.456, "source": "obis" }
+      ],
+      "expected": {
+        "accepted": [
+          { "name": "Abra alba", "lon": 10.123, "lat": 50.456, "source": "gbif" },
+          { "name": "Abra alba", "lon": 10.131, "lat": 50.456, "source": "gbif" },
+          { "name": "Abra alba", "lon": -10.001, "lat": -0.001, "source": "obis" },
+          { "name": "Abra alba", "lon": -9.999, "lat": -0.001, "source": "gbif" },
+          { "name": "Abra alba", "lon": -9.999, "lat": 0.001, "source": "gbif" },
+          { "name": "Abra nitida", "lon": 10.123, "lat": 50.456, "source": "obis" }
+        ],
+        "funnel": {
+          "received": 10,
+          "accepted": 6,
+          "dropped": { "noSpecies": 0, "invalidCoordinates": 0, "zeroCoordinates": 0, "outsideArea": 0, "duplicate": 2, "crossSource": 2, "lowCount": 0 },
+          "bySource": {
+            "gbif": { "received": 6, "accepted": 4 },
+            "obis": { "received": 4, "accepted": 2 }
+          }
+        }
+      }
+    }
+  ]
+}
